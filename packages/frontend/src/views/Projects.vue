@@ -178,15 +178,14 @@ const handleDropdownSelect = (key: string, projectId: string) => {
               <span class="search-icon">🔍</span>
             </template>
           </NInput>
-          <NButton @click="router.push('/stats')">
-            成本统计
-          </NButton>
-          <NButton @click="router.push('/jobs')">
-            任务中心
-          </NButton>
-          <NButton @click="router.push('/settings')">
-            设置
-          </NButton>
+          <NButtonGroup>
+            <NButton @click="router.push('/jobs')">
+              📋 任务
+            </NButton>
+            <NButton @click="router.push('/stats')">
+              📊 统计
+            </NButton>
+          </NButtonGroup>
           <NButton @click="handleImport" secondary>
             导入剧本
           </NButton>
@@ -210,7 +209,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         icon="🎬"
       >
         <template #action>
-          <NButton type="primary" size="large" @click="handleCreate">
+          <NButton type="primary" @click="handleCreate">
             创建第一个项目
           </NButton>
         </template>
