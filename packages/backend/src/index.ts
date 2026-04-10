@@ -98,4 +98,8 @@ async function start() {
   }
 }
 
-start()
+// Only start server when running directly (not when imported as a module)
+const isMainModule = process.argv[1]?.endsWith('index.ts') || process.argv[1]?.endsWith('index.js')
+if (isMainModule) {
+  start()
+}
