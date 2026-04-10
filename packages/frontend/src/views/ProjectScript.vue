@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
@@ -11,6 +11,7 @@ import { useEpisodeStore } from '@/stores/episode'
 import { importScript } from '@/api'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import { useAutoSave } from '@/composables/useAutoSave'
 
 const route = useRoute()
 const message = useMessage()
@@ -26,6 +27,43 @@ const importContent = ref('')
 const isImporting = ref(false)
 
 const selectedEpisodeId = ref<string | null>(null)
+
+// Auto-save state
+const isAutoSaving = ref(false)
+const lastSaved = ref<Date | null>(null)
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+// Watch for script changes and auto-save
+watch(
+  () => episodeStore.currentEpisode,
+  (episode) => {
+    if (!episode) return
+
+    // Clear existing timer
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer)
+    }
+
+    // Set new timer for auto-save
+    autoSaveTimer = setTimeout(async () => {
+      if (!selectedEpisodeId.value || !episode) return
+
+      isAutoSaving.value = true
+      try {
+        await episodeStore.updateEpisode(selectedEpisodeId.value, {
+          title: episode.title,
+          script: episode.script as any
+        })
+        lastSaved.value = new Date()
+      } catch (error) {
+        console.error('Auto-save failed:', error)
+      } finally {
+        isAutoSaving.value = false
+      }
+    }, 3000)
+  },
+  { deep: true, immediate: true }
+)
 
 onMounted(async () => {
   await episodeStore.fetchEpisodes(projectId.value)
@@ -233,6 +271,8 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
                 class="script-title-input"
               />
               <StatusBadge :status="script ? 'completed' : 'draft'" />
+              <span v-if="isAutoSaving" class="auto-save-hint">保存中...</span>
+              <span v-else-if="lastSaved" class="auto-save-hint">已自动保存</span>
             </div>
             <NSpace>
               <NButton @click="handleSaveScript">保存修改</NButton>
@@ -725,5 +765,10 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
   margin-top: var(--spacing-sm);
+}
+
+.auto-save-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
 }
 </style>
