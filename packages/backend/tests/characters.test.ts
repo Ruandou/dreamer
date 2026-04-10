@@ -43,18 +43,18 @@ vi.mock('@prisma/client', () => ({
   PrismaClient: vi.fn(() => mockPrisma)
 }))
 
-vi.mock('../services/storage.js', () => ({
+vi.mock('../src/services/storage.js', () => ({
   uploadFile: vi.fn().mockResolvedValue('https://storage.example.com/test.jpg'),
   generateFileKey: vi.fn().mockReturnValue('test/key.jpg')
 }))
 
-vi.mock('../plugins/auth.js', () => ({
+vi.mock('../src/plugins/auth.js', () => ({
   verifyCharacterOwnership: vi.fn().mockResolvedValue(true),
   verifyProjectOwnership: vi.fn().mockResolvedValue(true)
 }))
 
 // Import routes after mocks are set up
-import { characterRoutes } from './characters.js'
+import { characterRoutes } from '../src/routes/characters.js'
 
 describe('Character Routes', () => {
   let app: FastifyInstance

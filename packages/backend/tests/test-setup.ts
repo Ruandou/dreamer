@@ -1,5 +1,5 @@
 import { beforeAll, afterAll, afterEach, vi } from 'vitest'
-import { prisma } from './index.js'
+import { PrismaClient } from '@prisma/client'
 
 // Global test setup
 beforeAll(async () => {
@@ -7,7 +7,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await prisma.$disconnect()
+  // Cleanup handled per test
 })
 
 afterEach(async () => {
@@ -21,7 +21,7 @@ export const mockAuth = (userId: string = 'test-user-id') => {
   }
 }
 
-export const createTestUser = async () => {
+export const createTestUser = async (prisma: PrismaClient) => {
   return prisma.user.create({
     data: {
       email: `test-${Date.now()}@example.com`,
@@ -31,7 +31,7 @@ export const createTestUser = async () => {
   })
 }
 
-export const createTestProject = async (userId: string) => {
+export const createTestProject = async (prisma: PrismaClient, userId: string) => {
   return prisma.project.create({
     data: {
       name: 'Test Project',
@@ -40,7 +40,7 @@ export const createTestProject = async (userId: string) => {
   })
 }
 
-export const createTestCharacter = async (projectId: string) => {
+export const createTestCharacter = async (prisma: PrismaClient, projectId: string) => {
   return prisma.character.create({
     data: {
       name: 'Test Character',
@@ -49,7 +49,7 @@ export const createTestCharacter = async (projectId: string) => {
   })
 }
 
-export const createTestEpisode = async (projectId: string, episodeNum: number = 1) => {
+export const createTestEpisode = async (prisma: PrismaClient, projectId: string, episodeNum: number = 1) => {
   return prisma.episode.create({
     data: {
       projectId,
@@ -59,7 +59,7 @@ export const createTestEpisode = async (projectId: string, episodeNum: number = 
   })
 }
 
-export const cleanupTestData = async () => {
+export const cleanupTestData = async (prisma: PrismaClient) => {
   // Clean up in reverse order of dependencies
   await prisma.videoTask.deleteMany({})
   await prisma.scene.deleteMany({})
