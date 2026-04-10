@@ -76,6 +76,8 @@ export interface ProjectCostStats {
   projectId: string
   projectName: string
   totalCost: number
+  aiCost: number
+  videoCost: number
   totalTasks: number
   completedTasks: number
   failedTasks: number
@@ -95,6 +97,8 @@ export interface ProjectCostStats {
 export interface UserCostStats {
   userId: string
   totalCost: number
+  aiCost: number
+  videoCost: number
   totalProjects: number
   totalTasks: number
   projects: ProjectCostStats[]

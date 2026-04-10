@@ -1,6 +1,39 @@
 import OpenAI from 'openai'
 import type { ScriptContent, ScriptScene, Dialogue } from '@shared/types'
 
+// DeepSeek pricing (per 1M tokens)
+const DEEPSEEK_INPUT_COST_PER_1M = 0.27  // USD
+const DEEPSEEK_OUTPUT_COST_PER_1M = 1.07  // USD
+
+export interface DeepSeekCost {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  costUSD: number
+  costCNY: number
+}
+
+function calculateDeepSeekCost(usage: any): DeepSeekCost {
+  const inputTokens = usage?.prompt_tokens || 0
+  const outputTokens = usage?.completion_tokens || 0
+  const totalTokens = usage?.total_tokens || 0
+
+  const costUSD = (inputTokens / 1_000_000) * DEEPSEEK_INPUT_COST_PER_1M +
+                  (outputTokens / 1_000_000) * DEEPSEEK_OUTPUT_COST_PER_1M
+
+  // CNY exchange rate approximation
+  const CNY_RATE = 7.2
+  const costCNY = costUSD * CNY_RATE
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    costUSD,
+    costCNY
+  }
+}
+
 function getDeepSeekClient(): OpenAI {
   return new OpenAI({
     apiKey: process.env.DEEPSEEK_API_KEY,
@@ -88,7 +121,7 @@ function convertDeepSeekResponse(data: any): ScriptContent {
   }
 }
 
-export async function expandScript(summary: string, projectContext?: string): Promise<ScriptContent> {
+export async function expandScript(summary: string, projectContext?: string): Promise<{ script: ScriptContent; cost: DeepSeekCost }> {
   const deepseek = getDeepSeekClient()
   const userPrompt = projectContext
     ? `项目背景：${projectContext}\n\n故事梗概：${summary}`
@@ -109,6 +142,8 @@ export async function expandScript(summary: string, projectContext?: string): Pr
     throw new Error('DeepSeek API 返回为空')
   }
 
+  const cost = calculateDeepSeekCost(completion.usage)
+
   try {
     // 清理返回内容，移除可能的 markdown 代码块
     let cleanContent = content
@@ -127,14 +162,14 @@ export async function expandScript(summary: string, projectContext?: string): Pr
       throw new Error('剧本格式不正确')
     }
 
-    return script
+    return { script, cost }
   } catch (error) {
     console.error('Failed to parse DeepSeek response:', content)
     throw new Error('剧本生成失败，请重试')
   }
 }
 
-export async function optimizePrompt(prompt: string, context?: string): Promise<string> {
+export async function optimizePrompt(prompt: string, context?: string): Promise<{ optimized: string; cost: DeepSeekCost }> {
   const deepseek = getDeepSeekClient()
   const userPrompt = context
     ? `上下文：${context}\n\n原始提示词：${prompt}\n\n请优化这个提示词，使其更适合视频生成模型使用。保持关键视觉元素，移除模糊描述，添加具体细节。`
@@ -150,5 +185,8 @@ export async function optimizePrompt(prompt: string, context?: string): Promise<
     max_tokens: 1000
   })
 
-  return completion.choices[0]?.message?.content || prompt
+  const cost = calculateDeepSeekCost(completion.usage)
+  const optimized = completion.choices[0]?.message?.content || prompt
+
+  return { optimized, cost }
 }

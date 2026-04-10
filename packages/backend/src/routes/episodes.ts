@@ -155,7 +155,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
           : undefined
 
         // Call DeepSeek API
-        const script = await expandScript(summary, projectContext)
+        const { script, cost } = await expandScript(summary, projectContext)
 
         // Save to episode
         const updatedEpisode = await prisma.episode.update({
@@ -185,7 +185,8 @@ export async function episodeRoutes(fastify: FastifyInstance) {
         return {
           episode: updatedEpisode,
           script,
-          scenesCreated: script.scenes?.length || 0
+          scenesCreated: script.scenes?.length || 0,
+          aiCost: cost.costCNY
         }
       } catch (error) {
         console.error('Script expansion failed:', error)

@@ -5,6 +5,8 @@ export interface ProjectCostStats {
   projectId: string
   projectName: string
   totalCost: number
+  aiCost: number
+  videoCost: number
   totalTasks: number
   completedTasks: number
   failedTasks: number
@@ -24,6 +26,8 @@ export interface ProjectCostStats {
 export interface UserCostStats {
   userId: string
   totalCost: number
+  aiCost: number
+  videoCost: number
   totalProjects: number
   totalTasks: number
   projects: ProjectCostStats[]
@@ -48,6 +52,9 @@ export async function statsRoutes(fastify: FastifyInstance) {
                 }
               }
             }
+          },
+          importTasks: {
+            where: { status: 'completed' }
           }
         }
       })
@@ -57,17 +64,24 @@ export async function statsRoutes(fastify: FastifyInstance) {
       }
 
       const tasks = project.episodes.flatMap(e => e.scenes.flatMap(s => s.tasks))
-
       const completedTasks = tasks.filter(t => t.status === 'completed')
       const failedTasks = tasks.filter(t => t.status === 'failed')
 
       const wanTasks = completedTasks.filter(t => t.model === 'wan2.6')
       const seedanceTasks = completedTasks.filter(t => t.model === 'seedance2.0')
 
+      const videoCost = completedTasks.reduce((sum, t) => sum + (t.cost || 0), 0)
+      const aiCost = project.importTasks.reduce((sum, t) => {
+        const result = t.result as any
+        return sum + (result?.aiCost || 0)
+      }, 0)
+
       const stats: ProjectCostStats = {
         projectId: project.id,
         projectName: project.name,
-        totalCost: completedTasks.reduce((sum, t) => sum + (t.cost || 0), 0),
+        totalCost: videoCost + aiCost,
+        aiCost,
+        videoCost,
         totalTasks: tasks.length,
         completedTasks: completedTasks.length,
         failedTasks: failedTasks.length,
@@ -115,6 +129,9 @@ export async function statsRoutes(fastify: FastifyInstance) {
                 }
               }
             }
+          },
+          importTasks: {
+            where: { status: 'completed' }
           }
         }
       })
@@ -131,10 +148,18 @@ export async function statsRoutes(fastify: FastifyInstance) {
         const wanTasks = completed.filter(t => t.model === 'wan2.6')
         const seedanceTasks = completed.filter(t => t.model === 'seedance2.0')
 
+        const videoCost = completed.reduce((sum, t) => sum + (t.cost || 0), 0)
+        const aiCost = project.importTasks.reduce((sum, t) => {
+          const result = t.result as any
+          return sum + (result?.aiCost || 0)
+        }, 0)
+
         return {
           projectId: project.id,
           projectName: project.name,
-          totalCost: completed.reduce((sum, t) => sum + (t.cost || 0), 0),
+          totalCost: videoCost + aiCost,
+          aiCost,
+          videoCost,
           totalTasks: tasks.length,
           completedTasks: completed.length,
           failedTasks: failed.length,
@@ -161,9 +186,19 @@ export async function statsRoutes(fastify: FastifyInstance) {
         }
       })
 
+      const totalVideoCost = completedTasks.reduce((sum, t) => sum + (t.cost || 0), 0)
+      const totalAiCost = projects.reduce((sum, p) => {
+        return sum + p.importTasks.reduce((s, t) => {
+          const result = t.result as any
+          return s + (result?.aiCost || 0)
+        }, 0)
+      }, 0)
+
       const stats: UserCostStats = {
         userId: user.id,
-        totalCost: completedTasks.reduce((sum, t) => sum + (t.cost || 0), 0),
+        totalCost: totalVideoCost + totalAiCost,
+        aiCost: totalAiCost,
+        videoCost: totalVideoCost,
         totalProjects: projects.length,
         totalTasks: allTasks.length,
         projects: projectStats.sort((a, b) => b.totalCost - a.totalCost)

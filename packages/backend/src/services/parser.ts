@@ -1,5 +1,35 @@
 import OpenAI from 'openai'
 
+// DeepSeek pricing (per 1M tokens)
+const DEEPSEEK_INPUT_COST_PER_1M = 0.27  // USD
+const DEEPSEEK_OUTPUT_COST_PER_1M = 1.07  // USD
+const CNY_RATE = 7.2
+
+export interface ParsedScriptCost {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  costUSD: number
+  costCNY: number
+}
+
+function calculateCost(usage: any): ParsedScriptCost {
+  const inputTokens = usage?.prompt_tokens || 0
+  const outputTokens = usage?.completion_tokens || 0
+  const totalTokens = usage?.total_tokens || 0
+
+  const costUSD = (inputTokens / 1_000_000) * DEEPSEEK_INPUT_COST_PER_1M +
+                  (outputTokens / 1_000_000) * DEEPSEEK_OUTPUT_COST_PER_1M
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    costUSD,
+    costCNY: costUSD * CNY_RATE
+  }
+}
+
 function getDeepSeekClient(): OpenAI {
   return new OpenAI({
     apiKey: process.env.DEEPSEEK_API_KEY,
@@ -57,12 +87,12 @@ const PARSER_SYSTEM_PROMPT = `你是一个专业的短剧剧本结构化解析�
 export async function parseScriptDocument(
   content: string,
   type: 'markdown' | 'json'
-): Promise<ParsedScript> {
+): Promise<{ parsed: ParsedScript; cost: ParsedScriptCost | null }> {
   // 如果是 JSON 格式，直接解析
   if (type === 'json') {
     try {
       const parsed = JSON.parse(content)
-      return normalizeParsedData(parsed)
+      return { parsed: normalizeParsedData(parsed), cost: null }
     } catch {
       throw new Error('JSON 格式解析失败')
     }
@@ -86,6 +116,8 @@ export async function parseScriptDocument(
     throw new Error('AI 解析返回为空')
   }
 
+  const cost = calculateCost(completion.usage)
+
   try {
     // 清理返回内容
     let cleanContent = response
@@ -94,7 +126,7 @@ export async function parseScriptDocument(
     }
 
     const parsed = JSON.parse(cleanContent)
-    return normalizeParsedData(parsed)
+    return { parsed: normalizeParsedData(parsed), cost }
   } catch (error) {
     console.error('Failed to parse AI response:', response)
     throw new Error('剧本解析失败，请检查文档格式')

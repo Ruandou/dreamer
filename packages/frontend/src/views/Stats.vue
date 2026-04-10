@@ -176,11 +176,19 @@ import { h } from 'vue'
         </NCard>
 
         <NCard class="stat-card">
-          <NStatistic label="总项目" :value="statsStore.userStats?.totalProjects || 0" />
+          <NStatistic label="AI 成本" :value="formatCurrency(statsStore.userStats?.aiCost || 0)">
+            <template #suffix>
+              <span class="stat-suffix">元</span>
+            </template>
+          </NStatistic>
         </NCard>
 
         <NCard class="stat-card">
-          <NStatistic label="总任务" :value="statsStore.userStats?.totalTasks || 0" />
+          <NStatistic label="视频成本" :value="formatCurrency(statsStore.userStats?.videoCost || 0)">
+            <template #suffix>
+              <span class="stat-suffix">元</span>
+            </template>
+          </NStatistic>
         </NCard>
 
         <NCard class="stat-card">

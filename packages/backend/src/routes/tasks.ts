@@ -149,7 +149,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
         sceneId: task.sceneId,
         taskId: newTask.id,
         prompt: task.prompt,
-        model: task.model
+        model: task.model as 'wan2.6' | 'seedance2.0'
       })
 
       return newTask

@@ -42,7 +42,7 @@ export const importWorker = new Worker<ImportJobData>(
       })
 
       // Parse document
-      const parsed = await parseScriptDocument(content, type)
+      const { parsed, cost } = await parseScriptDocument(content, type)
 
       let targetProjectId = projectId
 
@@ -75,6 +75,7 @@ export const importWorker = new Worker<ImportJobData>(
           result: {
             projectId: targetProjectId,
             projectName: parsed.projectName || '未命名项目',
+            aiCost: cost?.costCNY || 0,
             ...result
           }
         }
@@ -108,7 +109,7 @@ importWorker.on('completed', (job) => {
 })
 
 importWorker.on('failed', (job, err) => {
-  console.log(`Import job ${job.id} has failed with error: ${err.message}`)
+  console.log(`Import job ${job?.id} has failed with error: ${err.message}`)
 })
 
 // Graceful shutdown

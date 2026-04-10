@@ -301,17 +301,17 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         : undefined
 
       try {
-        const optimizedPrompt = await optimizePrompt(targetPrompt, context)
+        const { optimized, cost } = await optimizePrompt(targetPrompt, context)
 
         // Optionally update the scene with optimized prompt
         if (!prompt) {
           await prisma.scene.update({
             where: { id: sceneId },
-            data: { prompt: optimizedPrompt }
+            data: { prompt: optimized }
           })
         }
 
-        return { optimizedPrompt }
+        return { optimizedPrompt: optimized, aiCost: cost.costCNY }
       } catch (error) {
         console.error('Prompt optimization failed:', error)
         return reply.status(500).send({ error: '提示词优化失败' })
