@@ -55,7 +55,52 @@ pnpm db:push      # 同步 schema（只做增量更新）
 - 如果需要添加新字段，先备份数据
 - 绝对不要在生产环境使用 `--force-reset`
 
-## 常见问题
+## 测试要求
+
+### 测试覆盖率目标
+
+在实现功能时，**必须同步编写测试用例**，目标覆盖率：**90%以上**。
+
+### 后端测试规范
+
+1. **测试文件位置**: `packages/backend/tests/`
+2. **测试框架**: Vitest + @vitest/coverage-v8
+3. **运行测试**:
+   ```bash
+   cd packages/backend
+   pnpm test --run           # 运行所有测试
+   pnpm test --run --coverage  # 带覆盖率报告
+   ```
+
+### 编写测试的要求
+
+1. **路由测试** (`*.test.ts`):
+   - Mock `prisma` 数据库操作
+   - Mock 认证插件 (`fastify.authenticate`)
+   - Mock 外部服务 (如 `videoQueue`, `storage`, `ffmpeg`, `fetch`)
+   - 测试正常流程 + 错误边界 (404, 403, 400)
+
+2. **Service 测试**:
+   - Mock 外部依赖
+   - 测试核心逻辑和边界条件
+
+3. **自动执行**:
+   - Git Hook (`.husky/pre-commit`) 会在提交前自动运行相关测试
+   - 后端代码变更 → 运行后端测试
+   - 前端代码变更 → 运行前端测试
+
+### 提交规范
+
+```bash
+# 1. 先运行测试确保通过
+cd packages/backend && pnpm test --run
+
+# 2. 测试通过后再提交
+git add .
+git commit -m "feat: 添加新功能"
+```
+
+### 常见问题
 
 ### DATABASE_URL not found
 
