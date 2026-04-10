@@ -1,11 +1,19 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
-import { prisma } from '../index.js'
-import { parseScriptDocument } from '../services/parser.js'
 
-const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null
-})
+// Lazy initialization to ensure dotenv is loaded first
+let _connection: IORedis | null = null
+let _queue: Queue<any> | null = null
+let _worker: Worker<any> | null = null
+
+function getConnection(): IORedis {
+  if (!_connection) {
+    _connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
+      maxRetriesPerRequest: null
+    })
+  }
+  return _connection
+}
 
 export interface ImportJobData {
   taskId: string
@@ -15,217 +23,69 @@ export interface ImportJobData {
   type: 'markdown' | 'json'
 }
 
-export const importQueue = new Queue<ImportJobData>('import', {
-  connection,
-  defaultJobOptions: {
-    attempts: 2,
-    backoff: {
-      type: 'exponential',
-      delay: 3000
-    }
+export function getImportQueue(): Queue<ImportJobData> {
+  if (!_queue) {
+    _queue = new Queue<ImportJobData>('import', {
+      connection: getConnection(),
+      defaultJobOptions: {
+        attempts: 2,
+        backoff: {
+          type: 'exponential',
+          delay: 3000
+        }
+      }
+    })
+  }
+  return _queue
+}
+
+// Export a proxy that lazily initializes
+export const importQueue = new Proxy({} as Queue<ImportJobData>, {
+  get(_, prop) {
+    const queue = getImportQueue()
+    return (queue as any)[prop]
   }
 })
 
-// Import Worker
-export const importWorker = new Worker<ImportJobData>(
-  'import',
-  async (job) => {
-    const { taskId, projectId, userId, content, type } = job.data
-
-    console.log(`Processing import job ${job.id} for user ${userId}`)
-
-    try {
-      // Update task status to processing
-      await prisma.importTask.update({
-        where: { id: taskId },
-        data: { status: 'processing' }
-      })
-
-      // Parse document
-      const { parsed, cost } = await parseScriptDocument(content, type)
-
-      let targetProjectId = projectId
-
-      // Create new project if not specified
-      if (!targetProjectId) {
-        const project = await prisma.project.create({
-          data: {
-            userId,
-            name: parsed.projectName || '未命名项目',
-            description: parsed.description || ''
-          }
-        })
-        targetProjectId = project.id
-
-        // Update task with projectId
-        await prisma.importTask.update({
-          where: { id: taskId },
-          data: { projectId: project.id }
-        })
-      }
-
-      // Import parsed data
-      const result = await importParsedData(targetProjectId, parsed)
-
-      // Update task as completed
-      await prisma.importTask.update({
-        where: { id: taskId },
-        data: {
-          status: 'completed',
-          result: {
-            projectId: targetProjectId,
-            projectName: parsed.projectName || '未命名项目',
-            aiCost: cost?.costCNY || 0,
-            ...result
-          }
-        }
-      })
-
-      console.log(`Import job ${job.id} completed successfully`)
-
-    } catch (error) {
-      console.error(`Import job ${job.id} failed:`, error)
-
-      let errorMsg = '导入失败'
-      if (error instanceof Error) {
-        if (error.name === 'DeepSeekAuthError') {
-          errorMsg = 'AI 服务认证失败，请检查 API Key'
-        } else if (error.name === 'DeepSeekRateLimitError') {
-          errorMsg = 'AI 服务请求受限，请稍后重试'
-        } else {
-          errorMsg = error.message
-        }
-      }
-
-      // Update task as failed
-      await prisma.importTask.update({
-        where: { id: taskId },
-        data: {
-          status: 'failed',
-          errorMsg
-        }
-      })
-
-      throw error
-    }
-  },
-  {
-    connection,
-    concurrency: 2
+export function createImportWorker(
+  processor: (job: any) => Promise<void>
+): Worker<ImportJobData> {
+  if (_worker) {
+    return _worker
   }
-)
 
-importWorker.on('completed', (job) => {
-  console.log(`Import job ${job.id} has completed`)
-})
+  _worker = new Worker<ImportJobData>(
+    'import',
+    processor,
+    {
+      connection: getConnection(),
+      concurrency: 2
+    }
+  )
 
-importWorker.on('failed', (job, err) => {
-  console.log(`Import job ${job?.id} has failed with error: ${err.message}`)
-})
+  _worker.on('completed', (job) => {
+    console.log(`Import job ${job.id} has completed`)
+  })
+
+  _worker.on('failed', (job, err) => {
+    console.log(`Import job ${job?.id} has failed with error: ${err.message}`)
+  })
+
+  return _worker
+}
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('Shutting down import worker...')
-  await importWorker.close()
-  await connection.quit()
-})
-
-// Helper function to import parsed data
-async function importParsedData(projectId: string, parsed: {
-  projectName?: string
-  description?: string
-  characters: string[]
-  episodes: {
-    episodeNum: number
-    title: string
-    script: any
-    scenes: {
-      sceneNum: number
-      description: string
-      prompt: string
-    }[]
-  }[]
-}) {
-  const results = {
-    episodesCreated: 0,
-    episodesUpdated: 0,
-    charactersCreated: 0,
-    scenesCreated: 0
+export async function closeImportWorker(): Promise<void> {
+  if (_worker) {
+    await _worker.close()
+    _worker = null
   }
-
-  // Create characters
-  const characterMap = new Map<string, string>()
-  for (const charName of parsed.characters) {
-    const char = await prisma.character.create({
-      data: {
-        projectId,
-        name: charName,
-        description: `从剧本导入的角色: ${charName}`
-      }
-    })
-    characterMap.set(charName, char.id)
-    results.charactersCreated++
+  if (_queue) {
+    await _queue.close()
+    _queue = null
   }
-
-  // Create/update episodes
-  for (const episodeData of parsed.episodes) {
-    const existing = await prisma.episode.findFirst({
-      where: {
-        projectId,
-        episodeNum: episodeData.episodeNum
-      },
-      include: { scenes: true }
-    })
-
-    if (existing) {
-      await prisma.episode.update({
-        where: { id: existing.id },
-        data: {
-          title: episodeData.title,
-          script: episodeData.script as any
-        }
-      })
-
-      await prisma.scene.deleteMany({ where: { episodeId: existing.id } })
-
-      for (const scene of episodeData.scenes) {
-        await prisma.scene.create({
-          data: {
-            episodeId: existing.id,
-            sceneNum: scene.sceneNum,
-            description: scene.description,
-            prompt: scene.prompt
-          }
-        })
-        results.scenesCreated++
-      }
-
-      results.episodesUpdated++
-    } else {
-      const episode = await prisma.episode.create({
-        data: {
-          projectId,
-          episodeNum: episodeData.episodeNum,
-          title: episodeData.title,
-          script: episodeData.script as any
-        }
-      })
-
-      for (const scene of episodeData.scenes) {
-        await prisma.scene.create({
-          data: {
-            episodeId: episode.id,
-            sceneNum: scene.sceneNum,
-            description: scene.description,
-            prompt: scene.prompt
-          }
-        })
-        results.scenesCreated++
-      }
-
-      results.episodesCreated++
-    }
+  if (_connection) {
+    await _connection.quit()
+    _connection = null
   }
-
-  return results
 }
