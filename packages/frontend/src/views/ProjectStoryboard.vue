@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import {
   NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
   NSelect, NImage, NTag, NProgress, NAlert, NSwitch, NTooltip, NCheckbox,
-  NScrollbar, useMessage
+  NScrollbar, useMessage, useDialog
 } from 'naive-ui'
 import { useSceneStore, type SceneWithTasks } from '@/stores/scene'
 import { useEpisodeStore } from '@/stores/episode'
@@ -16,6 +16,7 @@ import ProgressRing from '@/components/ProgressRing.vue'
 
 const route = useRoute()
 const message = useMessage()
+const dialog = useDialog()
 const sceneStore = useSceneStore()
 const episodeStore = useEpisodeStore()
 const characterStore = useCharacterStore()
@@ -137,9 +138,17 @@ const handlePreviewVideo = (videoUrl: string, thumbnailUrl?: string) => {
   showVideoPreview.value = true
 }
 
-const handleDeleteScene = async (id: string) => {
-  await sceneStore.deleteScene(id)
-  message.success('分镜已删除')
+const handleDeleteScene = (id: string) => {
+  dialog.warning({
+    title: '确认删除',
+    content: '确定要删除这个分镜吗？此操作不可撤销。',
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      await sceneStore.deleteScene(id)
+      message.success('分镜已删除')
+    }
+  })
 }
 
 const toggleSceneSelection = (sceneId: string) => {

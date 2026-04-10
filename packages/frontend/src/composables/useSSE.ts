@@ -1,5 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useMessage, useNotification } from 'naive-ui'
+import { useNotification } from 'naive-ui'
 
 export interface TaskUpdate {
   taskId: string
@@ -12,7 +12,6 @@ export interface TaskUpdate {
 }
 
 export function useSSE() {
-  const message = useMessage()
   const notification = useNotification()
 
   let eventSource: EventSource | null = null

@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NCard, NButton, NSpace, NGrid, NGi, NEmpty, NModal, NForm, NFormItem,
-  NInput, NInputNumber, NTag, NDropdown, NSelect, useMessage
+  NInput, NInputNumber, NTag, NDropdown, NSelect, useMessage, useDialog
 } from 'naive-ui'
 import type { MenuOption } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
@@ -12,6 +12,7 @@ import StatusBadge from '@/components/StatusBadge.vue'
 
 const router = useRouter()
 const message = useMessage()
+const dialog = useDialog()
 const projectStore = useProjectStore()
 
 const showCreateModal = ref(false)
@@ -53,9 +54,17 @@ const handleProjectClick = (id: string) => {
   router.push(`/project/${id}`)
 }
 
-const handleDelete = async (id: string) => {
-  await projectStore.deleteProject(id)
-  message.success('项目已删除')
+const handleDelete = (id: string) => {
+  dialog.warning({
+    title: '确认删除',
+    content: '确定要删除这个项目吗？此操作不可撤销。',
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      await projectStore.deleteProject(id)
+      message.success('项目已删除')
+    }
+  })
 }
 
 const getProjectStats = (project: any) => {
