@@ -119,11 +119,24 @@ const columns: DataTableColumns<Job> = [
     }
   },
   {
+    title: '开始时间',
+    key: 'createdAt',
+    width: 150,
+    render(row) {
+      return new Date(row.createdAt).toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    }
+  },
+  {
     title: '耗时',
     key: 'duration',
     width: 100,
     render(row) {
-      // 已完成的显示实际耗时，处理中的显示实时计时
       if (row.status === 'completed' || row.status === 'failed') {
         return formatDuration(row.createdAt, row.updatedAt)
       }
