@@ -13,6 +13,12 @@ model User {
   name      String
   password  String
   apiKey    String?
+  // 其他 API Keys
+  atlasApiKey    String?
+  atlasApiUrl    String?
+  volcAccessKey  String?
+  volcSecretKey  String?
+  volcApiUrl     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -185,6 +185,9 @@ const handleDropdownSelect = (key: string, projectId: string) => {
             <NButton @click="router.push('/stats')">
               📊 统计
             </NButton>
+            <NButton @click="router.push('/settings')">
+              ⚙️ 设置
+            </NButton>
           </NButtonGroup>
           <NButton @click="handleImport" secondary>
             导入剧本

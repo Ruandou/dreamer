@@ -17,6 +17,11 @@ export async function settingsRoutes(fastify: FastifyInstance) {
           email: true,
           name: true,
           apiKey: true,
+          atlasApiKey: true,
+          atlasApiUrl: true,
+          volcAccessKey: true,
+          volcSecretKey: true,
+          volcApiUrl: true,
           createdAt: true
         }
       })
@@ -53,23 +58,49 @@ export async function settingsRoutes(fastify: FastifyInstance) {
         },
         hasApiKey,
         balance,
-        balanceError
+        balanceError,
+        apiKeys: {
+          atlasApiKey: dbUser.atlasApiKey,
+          atlasApiUrl: dbUser.atlasApiUrl,
+          volcAccessKey: dbUser.volcAccessKey,
+          volcSecretKey: dbUser.volcSecretKey,
+          volcApiUrl: dbUser.volcApiUrl
+        }
       }
     }
   )
 
   // Update user settings
-  fastify.put<{ Body: { name?: string; apiKey?: string } }>(
+  fastify.put<{
+    Body: {
+      name?: string
+      apiKey?: string
+      apiKeys?: {
+        atlasApiKey?: string
+        atlasApiUrl?: string
+        volcAccessKey?: string
+        volcSecretKey?: string
+        volcApiUrl?: string
+      }
+    }
+  }>(
     '/me',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const user = (request as any).user
-      const { name, apiKey } = request.body
+      const { name, apiKey, apiKeys } = request.body
 
       try {
         const updateData: any = {}
         if (name) updateData.name = name
         if (apiKey !== undefined) updateData.apiKey = apiKey || null
+        if (apiKeys) {
+          if (apiKeys.atlasApiKey !== undefined) updateData.atlasApiKey = apiKeys.atlasApiKey || null
+          if (apiKeys.atlasApiUrl !== undefined) updateData.atlasApiUrl = apiKeys.atlasApiUrl || null
+          if (apiKeys.volcAccessKey !== undefined) updateData.volcAccessKey = apiKeys.volcAccessKey || null
+          if (apiKeys.volcSecretKey !== undefined) updateData.volcSecretKey = apiKeys.volcSecretKey || null
+          if (apiKeys.volcApiUrl !== undefined) updateData.volcApiUrl = apiKeys.volcApiUrl || null
+        }
 
         const updatedUser = await prisma.user.update({
           where: { id: user.id },

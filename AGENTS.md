@@ -44,8 +44,16 @@ pnpm dev:frontend
 确保 PostgreSQL 已启动后再操作数据库：
 ```bash
 pnpm docker:up    # 启动数据库
-pnpm db:push      # 同步 schema
+pnpm db:push      # 同步 schema（只做增量更新）
 ```
+
+### ⚠️ 禁止使用 --force-reset
+
+`prisma db push --force-reset` 会**删除整个数据库**，所有数据都会丢失！
+
+- 只用 `pnpm db:push` 进行增量同步
+- 如果需要添加新字段，先备份数据
+- 绝对不要在生产环境使用 `--force-reset`
 
 ## 常见问题
 

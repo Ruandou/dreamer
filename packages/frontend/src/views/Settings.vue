@@ -3,9 +3,8 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NCard, NButton, NForm, NFormItem, NInput, NSpace, NSpin,
-  NAlert, useMessage
+  NAlert, useMessage, NTag
 } from 'naive-ui'
-import { getAiBalance } from '@/api'
 
 const router = useRouter()
 const message = useMessage()
@@ -19,12 +18,17 @@ const apiKey = ref('')
 const hasApiKey = ref(false)
 const apiKeyInput = ref('')
 
+// 其他 API Keys
+const atlasApiKey = ref('')
+const atlasApiUrl = ref('')
+const volcAccessKey = ref('')
+const volcSecretKey = ref('')
+const volcApiUrl = ref('')
+
 const balance = ref<any>(null)
 const balanceError = ref<string | null>(null)
 const verifyError = ref<string | null>(null)
 const verifySuccess = ref(false)
-
-const showApiKey = ref(false)
 
 onMounted(async () => {
   loading.value = true
@@ -53,6 +57,15 @@ onMounted(async () => {
     }
     if (data.balanceError) {
       balanceError.value = data.balanceError
+    }
+
+    // 加载其他 API 配置
+    if (data.apiKeys) {
+      atlasApiKey.value = data.apiKeys.atlasApiKey || ''
+      atlasApiUrl.value = data.apiKeys.atlasApiUrl || ''
+      volcAccessKey.value = data.apiKeys.volcAccessKey || ''
+      volcSecretKey.value = data.apiKeys.volcSecretKey || ''
+      volcApiUrl.value = data.apiKeys.volcApiUrl || ''
     }
   } catch (error: any) {
     message.error('获取设置失败')
@@ -103,7 +116,16 @@ const saveSettings = async () => {
   saving.value = true
 
   try {
-    const body: any = { name: userName.value }
+    const body: any = {
+      name: userName.value,
+      apiKeys: {
+        atlasApiKey: atlasApiKey.value,
+        atlasApiUrl: atlasApiUrl.value,
+        volcAccessKey: volcAccessKey.value,
+        volcSecretKey: volcSecretKey.value,
+        volcApiUrl: volcApiUrl.value
+      }
+    }
     if (apiKeyInput.value) {
       body.apiKey = apiKeyInput.value
     }
@@ -163,14 +185,11 @@ const formatBalance = (amount: number) => {
             <NFormItem label="用户名">
               <NInput v-model:value="userName" placeholder="输入用户名" />
             </NFormItem>
-            <NFormItem label="用户ID">
-              <span class="text-muted">用户 ID 不可更改</span>
-            </NFormItem>
           </NForm>
         </NCard>
 
-        <!-- API Key Settings -->
-        <NCard title="DeepSeek API Key" class="settings-card">
+        <!-- DeepSeek API -->
+        <NCard title="🤖 DeepSeek（AI 编剧）" class="settings-card">
           <template #header-extra>
             <NTag v-if="hasApiKey" type="success" size="small">已配置</NTag>
             <NTag v-else type="warning" size="small">未配置</NTag>
@@ -207,11 +226,7 @@ const formatBalance = (amount: number) => {
 
             <div class="api-key-actions">
               <NSpace>
-                <NButton
-                  @click="verifyApiKey"
-                  :loading="verifying"
-                  :disabled="!apiKeyInput"
-                >
+                <NButton @click="verifyApiKey" :loading="verifying" :disabled="!apiKeyInput">
                   验证
                 </NButton>
                 <NButton @click="apiKeyInput = ''" tertiary>取消</NButton>
@@ -233,14 +248,46 @@ const formatBalance = (amount: number) => {
           </template>
         </NCard>
 
+        <!-- Atlas API (Wan 2.6) -->
+        <NCard title="🎬 Atlas（视频生成 Wan 2.6）" class="settings-card">
+          <template #header-extra>
+            <NTag v-if="atlasApiKey" type="success" size="small">已配置</NTag>
+            <NTag v-else type="warning" size="small">未配置</NTag>
+          </template>
+
+          <NForm label-placement="left" label-width="120">
+            <NFormItem label="API Key">
+              <NInput v-model:value="atlasApiKey" type="password" placeholder="Atlas API Key" show-password-on="click" />
+            </NFormItem>
+            <NFormItem label="API URL">
+              <NInput v-model:value="atlasApiUrl" placeholder="https://api.atlascloud.com" />
+            </NFormItem>
+          </NForm>
+        </NCard>
+
+        <!-- Volcano Engine API (Seedance 2.0) -->
+        <NCard title="🎥 火山引擎（视频生成 Seedance 2.0）" class="settings-card">
+          <template #header-extra>
+            <NTag v-if="volcAccessKey" type="success" size="small">已配置</NTag>
+            <NTag v-else type="warning" size="small">未配置</NTag>
+          </template>
+
+          <NForm label-placement="left" label-width="120">
+            <NFormItem label="Access Key">
+              <NInput v-model:value="volcAccessKey" type="password" placeholder="火山引擎 Access Key" show-password-on="click" />
+            </NFormItem>
+            <NFormItem label="Secret Key">
+              <NInput v-model:value="volcSecretKey" type="password" placeholder="火山引擎 Secret Key" show-password-on="click" />
+            </NFormItem>
+            <NFormItem label="API URL">
+              <NInput v-model:value="volcApiUrl" placeholder="https://volcbytebytes.example.com" />
+            </NFormItem>
+          </NForm>
+        </NCard>
+
         <!-- Save Button -->
         <div class="settings-actions">
-          <NButton
-            type="primary"
-            size="large"
-            :loading="saving"
-            @click="saveSettings"
-          >
+          <NButton type="primary" size="large" :loading="saving" @click="saveSettings">
             保存设置
           </NButton>
         </div>
