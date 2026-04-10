@@ -13,6 +13,16 @@ export interface DeepSeekCost {
   costCNY: number
 }
 
+export interface DeepSeekBalance {
+  isAvailable: boolean
+  balanceInfos: Array<{
+    currency: string
+    totalBalance: number
+    grantedBalance: number
+    toppedUpBalance: number
+  }>
+}
+
 function calculateDeepSeekCost(usage: any): DeepSeekCost {
   const inputTokens = usage?.prompt_tokens || 0
   const outputTokens = usage?.completion_tokens || 0
@@ -39,6 +49,30 @@ function getDeepSeekClient(): OpenAI {
     apiKey: process.env.DEEPSEEK_API_KEY,
     baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1'
   })
+}
+
+export async function getDeepSeekBalance(): Promise<DeepSeekBalance> {
+  const response = await fetch('https://api.deepseek.com/user/balance', {
+    headers: {
+      'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to get DeepSeek balance: ${response.statusText}`)
+  }
+
+  const data = await response.json()
+
+  return {
+    isAvailable: data.is_available,
+    balanceInfos: (data.balance_infos || []).map((info: any) => ({
+      currency: info.currency,
+      totalBalance: parseFloat(info.total_balance),
+      grantedBalance: parseFloat(info.granted_balance),
+      toppedUpBalance: parseFloat(info.topped_up_balance)
+    }))
+  }
 }
 
 const SYSTEM_PROMPT = `你是一个专业的短剧剧本作家，擅长创作古装穿越/技术流逆袭类短剧。

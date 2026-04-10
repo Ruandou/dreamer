@@ -7,19 +7,27 @@ import {
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { useStatsStore } from '@/stores/stats'
-import type { ProjectCostStats, DailyCost } from '@/api'
+import { getAiBalance } from '@/api'
+import type { ProjectCostStats, DailyCost, AiBalance } from '@/api'
 
 const router = useRouter()
 const message = useMessage()
 const statsStore = useStatsStore()
 
 const selectedDays = ref(30)
+const aiBalance = ref<AiBalance | null>(null)
 
 onMounted(async () => {
   await Promise.all([
     statsStore.fetchUserStats(),
     statsStore.fetchCostTrend(undefined, selectedDays.value)
   ])
+  // Fetch DeepSeek balance
+  try {
+    aiBalance.value = await getAiBalance()
+  } catch (e) {
+    console.error('Failed to fetch AI balance', e)
+  }
 })
 
 const handleDaysChange = async (days: number) => {
@@ -185,6 +193,17 @@ import { h } from 'vue'
 
         <NCard class="stat-card">
           <NStatistic label="视频成本" :value="formatCurrency(statsStore.userStats?.videoCost || 0)">
+            <template #suffix>
+              <span class="stat-suffix">元</span>
+            </template>
+          </NStatistic>
+        </NCard>
+
+        <NCard class="stat-card">
+          <NStatistic label="DeepSeek 余额">
+            <template #default>
+              {{ aiBalance?.balanceInfos.find(b => b.currency === 'CNY')?.totalBalance.toFixed(2) || '--' }}
+            </template>
             <template #suffix>
               <span class="stat-suffix">元</span>
             </template>

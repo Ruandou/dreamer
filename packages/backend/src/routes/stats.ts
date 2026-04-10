@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
+import { getDeepSeekBalance } from '../services/deepseek.js'
 
 export interface ProjectCostStats {
   projectId: string
@@ -271,6 +272,21 @@ export async function statsRoutes(fastify: FastifyInstance) {
       })
 
       return Array.from(dailyCosts.values())
+    }
+  )
+
+  // Get DeepSeek account balance
+  fastify.get(
+    '/ai-balance',
+    { preHandler: [fastify.authenticate] },
+    async () => {
+      try {
+        const balance = await getDeepSeekBalance()
+        return balance
+      } catch (error) {
+        console.error('Failed to get DeepSeek balance:', error)
+        return { isAvailable: false, balanceInfos: [], error: 'Failed to fetch balance' }
+      }
     }
   )
 }

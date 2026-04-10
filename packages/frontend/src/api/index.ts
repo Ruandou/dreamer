@@ -129,4 +129,19 @@ export async function getCostTrend(projectId?: string, days?: number) {
   return res.data
 }
 
+export interface AiBalance {
+  isAvailable: boolean
+  balanceInfos: Array<{
+    currency: string
+    totalBalance: number
+    grantedBalance: number
+    toppedUpBalance: number
+  }>
+}
+
+export async function getAiBalance() {
+  const res = await api.get<AiBalance>('/stats/ai-balance')
+  return res.data
+}
+
 export { api }
