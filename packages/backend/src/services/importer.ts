@@ -1,9 +1,14 @@
 import { prisma } from '../index.js'
 
+export interface ParsedCharacter {
+  name: string
+  description: string  // 角色外貌描述
+}
+
 export interface ParsedScript {
   projectName?: string
   description?: string
-  characters: string[]
+  characters: ParsedCharacter[]
   episodes: {
     episodeNum: number
     title: string
@@ -31,13 +36,13 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
     scenesCreated: 0
   }
 
-  // Create characters
-  for (const charName of parsed.characters) {
+  // Create characters with AI-extracted descriptions
+  for (const char of parsed.characters) {
     await prisma.character.create({
       data: {
         projectId,
-        name: charName,
-        description: `从剧本导入的角色: ${charName}`
+        name: char.name,
+        description: char.description || `从剧本导入的角色: ${char.name}`
       }
     })
     results.charactersCreated++
