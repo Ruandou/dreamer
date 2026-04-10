@@ -37,7 +37,7 @@ export interface DeepSeekBalance {
   }>
 }
 
-function calculateDeepSeekCost(usage: any): DeepSeekCost {
+export function calculateDeepSeekCost(usage: any): DeepSeekCost {
   const inputTokens = usage?.prompt_tokens || 0
   const outputTokens = usage?.completion_tokens || 0
   const totalTokens = usage?.total_tokens || 0
@@ -114,7 +114,7 @@ const SYSTEM_PROMPT = `你是一个专业的短剧剧本作家，擅长创作古
 请直接返回JSON格式，不要包含其他文字。`
 
 // 转换 DeepSeek 返回的格式到内部格式
-function convertDeepSeekResponse(data: any): ScriptContent {
+export function convertDeepSeekResponse(data: any): ScriptContent {
   // 处理 DeepSeek 可能返回的嵌套结构
   let scenesArray: any[] = []
 

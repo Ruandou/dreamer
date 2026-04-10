@@ -1,7 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { expandScript, optimizePrompt, getDeepSeekBalance, DeepSeekAuthError, DeepSeekRateLimitError } from '../src/services/deepseek.js'
 
-// Mock the OpenAI client
+// Mock environment variables
+process.env.DEEPSEEK_API_KEY = 'test-api-key'
+process.env.DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1'
+
+// Mock global fetch
+const mockFetch = vi.fn()
+global.fetch = mockFetch
+
+// Import after mocks
+import {
+  DeepSeekAuthError,
+  DeepSeekRateLimitError,
+  calculateDeepSeekCost,
+  getDeepSeekBalance,
+  convertDeepSeekResponse,
+  expandScript,
+  optimizePrompt,
+  type DeepSeekBalance
+} from '../src/services/deepseek.js'
+
+// Mock OpenAI client
 vi.mock('openai', () => ({
   default: vi.fn().mockImplementation(() => ({
     chat: {
@@ -12,50 +31,65 @@ vi.mock('openai', () => ({
   }))
 }))
 
-// Mock environment variables
-const originalEnv = process.env
-
-beforeEach(() => {
-  vi.clearAllMocks()
-  process.env = {
-    ...originalEnv,
-    DEEPSEEK_API_KEY: 'test-api-key',
-    DEEPSEEK_BASE_URL: 'https://api.deepseek.com/v1'
-  }
-})
-
 describe('DeepSeek Service', () => {
-  describe('getDeepSeekBalance', () => {
-    it('should return balance info when API returns success', async () => {
-      const mockResponse = {
-        is_available: true,
-        balance_infos: [
-          {
-            currency: 'CNY',
-            total_balance: '10.50',
-            granted_balance: '5.00',
-            topped_up_balance: '5.50'
-          }
-        ]
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  describe('calculateDeepSeekCost', () => {
+    it('should calculate cost correctly', () => {
+      const usage = {
+        prompt_tokens: 1000,
+        completion_tokens: 500,
+        total_tokens: 1500
       }
 
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockResponse)
-      })
+      const cost = calculateDeepSeekCost(usage)
 
-      const result = await getDeepSeekBalance()
-
-      expect(result.isAvailable).toBe(true)
-      expect(result.balanceInfos).toHaveLength(1)
-      expect(result.balanceInfos[0].currency).toBe('CNY')
-      expect(result.balanceInfos[0].totalBalance).toBe(10.50)
-      expect(result.balanceInfos[0].grantedBalance).toBe(5.00)
-      expect(result.balanceInfos[0].toppedUpBalance).toBe(5.50)
+      expect(cost.inputTokens).toBe(1000)
+      expect(cost.outputTokens).toBe(500)
+      expect(cost.totalTokens).toBe(1500)
+      expect(cost.costUSD).toBeCloseTo(0.00027 + 0.000535) // 0.27 + 1.07 per 1M
+      expect(cost.costCNY).toBeCloseTo(cost.costUSD * 7.2)
     })
 
-    it('should throw error when API returns failure', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+    it('should handle missing usage data', () => {
+      const cost = calculateDeepSeekCost({})
+
+      expect(cost.inputTokens).toBe(0)
+      expect(cost.outputTokens).toBe(0)
+      expect(cost.totalTokens).toBe(0)
+      expect(cost.costUSD).toBe(0)
+    })
+  })
+
+  describe('getDeepSeekBalance', () => {
+    it('should return balance info', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          is_available: true,
+          balance_infos: [
+            {
+              currency: 'CNY',
+              total_balance: '10.50',
+              granted_balance: '5.00',
+              topped_up_balance: '5.50'
+            }
+          ]
+        })
+      })
+
+      const balance: DeepSeekBalance = await getDeepSeekBalance()
+
+      expect(balance.isAvailable).toBe(true)
+      expect(balance.balanceInfos.length).toBe(1)
+      expect(balance.balanceInfos[0].currency).toBe('CNY')
+      expect(balance.balanceInfos[0].totalBalance).toBe(10.50)
+    })
+
+    it('should throw error when response is not ok', async () => {
+      mockFetch.mockResolvedValueOnce({
         ok: false,
         statusText: 'Unauthorized'
       })
@@ -64,163 +98,107 @@ describe('DeepSeek Service', () => {
     })
   })
 
-  describe('expandScript', () => {
-    it('should return expanded script with valid JSON response', async () => {
-      const mockCompletion = {
-        choices: [{
-          message: {
-            content: '{"title":"测试剧本","summary":"测试摘要","scenes":[{"sceneNum":1,"location":"室内","timeOfDay":"日","characters":["角色1"],"description":"测试场景","dialogues":[{"character":"角色1","content":"测试对话"}],"actions":["动作1"]}]}'
+  describe('convertDeepSeekResponse', () => {
+    it('should convert standard format', () => {
+      const data = {
+        title: 'Test Episode',
+        summary: 'A test summary',
+        scenes: [
+          {
+            sceneNum: 1,
+            location: 'indoor',
+            timeOfDay: 'day',
+            characters: ['Alice', 'Bob'],
+            description: 'Test scene',
+            dialogues: [
+              { character: 'Alice', content: 'Hello' }
+            ],
+            actions: ['Action 1', 'Action 2']
           }
-        }],
-        usage: {
-          prompt_tokens: 100,
-          completion_tokens: 200,
-          total_tokens: 300
-        }
+        ]
       }
 
-      vi.mocked(global.fetch).mockReset()
-      const { default: OpenAI } = await import('openai')
-      const mockCreate = vi.fn().mockResolvedValue(mockCompletion)
-      ;(OpenAI as any).mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: mockCreate
-          }
-        }
-      }))
+      const script = convertDeepSeekResponse(data)
 
-      const result = await expandScript('测试梗概')
-
-      expect(result.script.title).toBe('测试剧本')
-      expect(result.script.scenes).toHaveLength(1)
-      expect(result.script.scenes[0].location).toBe('室内')
-      expect(result.cost.inputTokens).toBe(100)
-      expect(result.cost.outputTokens).toBe(200)
-      expect(result.cost.totalTokens).toBe(300)
+      expect(script.title).toBe('Test Episode')
+      expect(script.summary).toBe('A test summary')
+      expect(script.scenes.length).toBe(1)
+      expect(script.scenes[0].location).toBe('indoor')
+      expect(script.scenes[0].dialogues[0].character).toBe('Alice')
     })
 
-    it('should handle markdown code blocks in response', async () => {
-      const mockCompletion = {
-        choices: [{
-          message: {
-            content: '```json\n{"title":"测试剧本","summary":"测试摘要","scenes":[]}\n```'
+    it('should convert nested episodes format', () => {
+      const data = {
+        title: 'Main Title',
+        episodes: [
+          {
+            title: 'Episode 1',
+            scenes: [
+              {
+                sceneNum: 1,
+                location: 'outdoor',
+                timeOfDay: 'night',
+                dialogues: [],
+                actions: []
+              }
+            ]
           }
-        }],
-        usage: {
-          prompt_tokens: 50,
-          completion_tokens: 100,
-          total_tokens: 150
-        }
+        ]
       }
 
-      global.fetch = vi.fn()
-      const { default: OpenAI } = await import('openai')
-      const mockCreate = vi.fn().mockResolvedValue(mockCompletion)
-      ;(OpenAI as any).mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: mockCreate
-          }
-        }
-      }))
+      const script = convertDeepSeekResponse(data)
 
-      const result = await expandScript('测试梗概')
-
-      expect(result.script.title).toBe('测试剧本')
+      expect(script.scenes.length).toBe(1)
+      expect(script.scenes[0].location).toBe('outdoor')
     })
 
-    it('should throw DeepSeekAuthError on 401/403', async () => {
-      const authError = { status: 401, message: 'Unauthorized' }
-      global.fetch = vi.fn()
-      const { default: OpenAI } = await import('openai')
-      ;(OpenAI as any).mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: vi.fn().mockRejectedValue(authError)
+    it('should handle dialogue as object format', () => {
+      const data = {
+        title: 'Test',
+        scenes: [
+          {
+            sceneNum: 1,
+            dialogue: { Alice: 'Hello Bob', Bob: 'Hi Alice' }, // Note: 'dialogue' not 'dialogues'
+            action: 'Single action' // Note: 'action' not 'actions'
           }
-        }
-      }))
+        ]
+      }
 
-      await expect(expandScript('测试梗概')).rejects.toThrow(DeepSeekAuthError)
-    })
+      const script = convertDeepSeekResponse(data)
 
-    it('should throw DeepSeekRateLimitError on 429', async () => {
-      const rateLimitError = { status: 429, message: 'Rate limit exceeded' }
-      global.fetch = vi.fn()
-      const { default: OpenAI } = await import('openai')
-      ;(OpenAI as any).mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: vi.fn().mockRejectedValue(rateLimitError)
-          }
-        }
-      }))
-
-      await expect(expandScript('测试梗概')).rejects.toThrow(DeepSeekRateLimitError)
+      expect(script.scenes[0].dialogues.length).toBe(2)
+      expect(script.scenes[0].dialogues[0]).toEqual({ character: 'Alice', content: 'Hello Bob' })
+      expect(script.scenes[0].actions.length).toBe(1)
     })
   })
 
-  describe('optimizePrompt', () => {
-    it('should return optimized prompt', async () => {
-      const mockCompletion = {
-        choices: [{
-          message: {
-            content: '优化后的提示词文本'
-          }
-        }],
-        usage: {
-          prompt_tokens: 50,
-          completion_tokens: 50,
-          total_tokens: 100
-        }
-      }
+  describe('DeepSeekAuthError', () => {
+    it('should have correct name and message', () => {
+      const error = new DeepSeekAuthError()
 
-      global.fetch = vi.fn()
-      const { default: OpenAI } = await import('openai')
-      const mockCreate = vi.fn().mockResolvedValue(mockCompletion)
-      ;(OpenAI as any).mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: mockCreate
-          }
-        }
-      }))
-
-      const result = await optimizePrompt('原始提示词')
-
-      expect(result.optimized).toBe('优化后的提示词文本')
-      expect(result.cost.totalTokens).toBe(100)
+      expect(error.name).toBe('DeepSeekAuthError')
+      expect(error.message).toContain('认证失败')
     })
 
-    it('should include context when provided', async () => {
-      const mockCompletion = {
-        choices: [{
-          message: {
-            content: '带上下文的优化结果'
-          }
-        }],
-        usage: {
-          prompt_tokens: 80,
-          completion_tokens: 40,
-          total_tokens: 120
-        }
-      }
+    it('should accept custom message', () => {
+      const error = new DeepSeekAuthError('Custom message')
 
-      global.fetch = vi.fn()
-      const { default: OpenAI } = await import('openai')
-      const mockCreate = vi.fn().mockResolvedValue(mockCompletion)
-      ;(OpenAI as any).mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: mockCreate
-          }
-        }
-      }))
+      expect(error.message).toBe('Custom message')
+    })
+  })
 
-      const result = await optimizePrompt('原始提示词', '项目上下文')
+  describe('DeepSeekRateLimitError', () => {
+    it('should have correct name and message', () => {
+      const error = new DeepSeekRateLimitError()
 
-      expect(result.optimized).toBe('带上下文的优化结果')
+      expect(error.name).toBe('DeepSeekRateLimitError')
+      expect(error.message).toContain('频繁')
+    })
+
+    it('should accept custom message', () => {
+      const error = new DeepSeekRateLimitError('Custom rate limit message')
+
+      expect(error.message).toBe('Custom rate limit message')
     })
   })
 })

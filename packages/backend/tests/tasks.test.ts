@@ -179,6 +179,21 @@ describe('Task Routes', () => {
       expect(data.error).toBe('Cannot cancel a completed or failed task')
     })
 
+    it('should return 400 when trying to cancel already failed task', async () => {
+      mockVideoTaskFindUnique.mockResolvedValue({
+        id: 'task-1',
+        sceneId: 'scene-1',
+        status: 'failed'
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/tasks/task-1/cancel'
+      })
+
+      expect(response.statusCode).toBe(400)
+    })
+
     it('should return 404 when task not found', async () => {
       mockVideoTaskFindUnique.mockResolvedValue(null)
 
