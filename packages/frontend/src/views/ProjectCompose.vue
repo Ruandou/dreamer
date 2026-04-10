@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput, NImage, NTag, NProgress, NAlert, NUpload, NSelect } from 'naive-ui'
-import type { UploadFile } from 'naive-ui'
+import {
+  NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
+  NImage, NTag, NAlert, NUpload, NScrollbar, useMessage
+} from 'naive-ui'
 import { useCompositionStore } from '@/stores/composition'
 import { useSceneStore } from '@/stores/scene'
 import { useEpisodeStore } from '@/stores/episode'
 import VideoPlayer from '@/components/VideoPlayer.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 const route = useRoute()
+const message = useMessage()
 const compositionStore = useCompositionStore()
 const sceneStore = useSceneStore()
 const episodeStore = useEpisodeStore()
@@ -24,8 +29,8 @@ const newComposition = ref({ title: '' })
 const availableSegments = computed(() => {
   const segments: any[] = []
   sceneStore.scenes.forEach(scene => {
-    if (scene.status === 'completed' && scene.tasks) {
-      const selectedTask = scene.tasks.find(t => t.isSelected && t.videoUrl)
+    if (scene.status === 'completed' && (scene as any).tasks) {
+      const selectedTask = (scene as any).tasks.find((t: any) => t.isSelected && t.videoUrl)
       if (selectedTask) {
         segments.push({
           sceneId: scene.id,
@@ -43,7 +48,6 @@ const availableSegments = computed(() => {
 
 // Timeline state
 const timelineSegments = ref<any[]>([])
-const currentTime = ref(0)
 const totalDuration = computed(() =>
   timelineSegments.value.reduce((sum, seg) => sum + (seg.endTime - seg.startTime), 0)
 )
@@ -57,9 +61,14 @@ onMounted(async () => {
 })
 
 const handleCreateComposition = async () => {
+  if (!newComposition.value.title.trim()) {
+    message.warning('请输入作品标题')
+    return
+  }
   await compositionStore.createComposition(projectId.value, newComposition.value.title)
   showCreateModal.value = false
   newComposition.value = { title: '' }
+  message.success('合成创建成功')
 }
 
 const handleSelectComposition = async (composition: any) => {
@@ -91,11 +100,11 @@ const addToTimeline = (segment: any) => {
     videoUrl: segment.videoUrl,
     thumbnailUrl: segment.thumbnailUrl
   })
+  message.success('已添加到时间轴')
 }
 
 const removeFromTimeline = (index: number) => {
   timelineSegments.value.splice(index, 1)
-  // Update order
   timelineSegments.value.forEach((seg, i) => {
     seg.order = i
   })
@@ -135,36 +144,32 @@ const saveTimeline = async () => {
       transition: seg.transition
     }))
   )
+  message.success('时间轴已保存')
 }
 
 const handleUploadAudio = async (type: 'voiceover' | 'bgm', file: File) => {
   if (!compositionStore.currentComposition) return
   await compositionStore.uploadAudio(compositionStore.currentComposition.id, type, file)
+  message.success('音频上传成功')
 }
 
 const handleUploadSubtitles = async (file: File) => {
   if (!compositionStore.currentComposition) return
   await compositionStore.uploadSubtitles(compositionStore.currentComposition.id, file)
+  message.success('字幕上传成功')
 }
 
 const handleExport = async () => {
   if (!compositionStore.currentComposition) return
   await saveTimeline()
   await compositionStore.triggerExport(compositionStore.currentComposition.id)
+  message.info('视频导出中...')
 }
 
 const handlePreviewComposition = () => {
   if (compositionStore.currentComposition?.outputUrl) {
     previewUrl.value = compositionStore.currentComposition.outputUrl
     showPreview.value = true
-  }
-}
-
-const getStatusType = (status: string) => {
-  switch (status) {
-    case 'exported': return 'success'
-    case 'exporting': return 'warning'
-    default: return 'default'
   }
 }
 
@@ -176,63 +181,83 @@ const formatTime = (seconds: number) => {
 </script>
 
 <template>
-  <div class="compose-container">
-    <NCard title="视频合成">
-      <template #header-extra>
-        <NSpace>
-          <NButton @click="showCreateModal = true">新建合成</NButton>
-          <NButton
-            v-if="compositionStore.currentComposition"
-            type="primary"
-            :loading="compositionStore.isExporting"
-            @click="handleExport"
-          >
-            导出视频
-          </NButton>
-        </NSpace>
-      </template>
+  <div class="compose-page">
+    <!-- Header -->
+    <header class="compose-header">
+      <div class="compose-header__left">
+        <h2 class="compose-header__title">视频合成</h2>
+        <span class="compose-header__duration" v-if="totalDuration > 0">
+          总时长 {{ formatTime(totalDuration) }}
+        </span>
+      </div>
+      <div class="compose-header__right">
+        <NButton @click="showCreateModal = true">
+          <template #icon>+</template>
+          新建合成
+        </NButton>
+        <NButton
+          v-if="compositionStore.currentComposition"
+          type="primary"
+          :loading="compositionStore.isExporting"
+          @click="handleExport"
+        >
+          导出视频
+        </NButton>
+      </div>
+    </header>
 
+    <!-- Content -->
+    <div class="compose-content">
       <div class="compose-layout">
-        <!-- Composition List -->
-        <div class="composition-list">
-          <div class="list-header">合成作品</div>
-          <div v-if="compositionStore.compositions.length === 0" class="empty-list">
-            暂无合成
+        <!-- Composition List Sidebar -->
+        <aside class="compose-sidebar">
+          <div class="sidebar-header">
+            <span>合成作品</span>
           </div>
-          <div
-            v-for="comp in compositionStore.compositions"
-            :key="comp.id"
-            :class="['composition-item', { active: compositionStore.currentComposition?.id === comp.id }]"
-            @click="handleSelectComposition(comp)"
-          >
-            <span class="comp-title">{{ comp.title }}</span>
-            <NTag :type="getStatusType(comp.status)" size="tiny">
-              {{ comp.status === 'exported' ? '已导出' : comp.status === 'exporting' ? '导出中' : '草稿' }}
-            </NTag>
-          </div>
-        </div>
+          <NScrollbar>
+            <div v-if="compositionStore.compositions.length === 0" class="sidebar-empty">
+              暂无合成
+            </div>
+            <div
+              v-for="comp in compositionStore.compositions"
+              :key="comp.id"
+              :class="['composition-item', { active: compositionStore.currentComposition?.id === comp.id }]"
+              @click="handleSelectComposition(comp)"
+            >
+              <span class="composition-item__title">{{ comp.title }}</span>
+              <StatusBadge :status="comp.status === 'exported' ? 'completed' : 'draft'" size="small" />
+            </div>
+          </NScrollbar>
+        </aside>
 
-        <!-- Main Area -->
-        <div class="compose-main">
-          <div v-if="!compositionStore.currentComposition" class="no-composition">
-            <NEmpty description="请选择或创建一个合成作品">
-              <template #extra>
-                <NButton type="primary" @click="showCreateModal = true">新建合成</NButton>
-              </template>
-            </NEmpty>
-          </div>
+        <!-- Main Editor -->
+        <main class="compose-main">
+          <EmptyState
+            v-if="!compositionStore.currentComposition"
+            title="选择或创建合成"
+            description="从左侧选择一个合成作品，或创建新的合成"
+            icon="🎞️"
+          >
+            <template #action>
+              <NButton type="primary" @click="showCreateModal = true">
+                新建合成
+              </NButton>
+            </template>
+          </EmptyState>
 
           <div v-else class="composition-editor">
             <!-- Timeline Section -->
-            <div class="timeline-section">
-              <div class="section-header">
-                <span>时间轴</span>
-                <span class="duration">{{ formatTime(totalDuration) }}</span>
+            <section class="editor-section">
+              <div class="editor-section__header">
+                <h4 class="editor-section__title">
+                  <span>🎬</span> 时间轴
+                </h4>
+                <span class="editor-section__duration">{{ formatTime(totalDuration) }}</span>
               </div>
 
               <div class="timeline-content">
                 <div v-if="timelineSegments.length === 0" class="timeline-empty">
-                  从左侧拖拽分镜片段到此处
+                  <p>从右侧拖拽分镜片段到此处</p>
                 </div>
 
                 <div
@@ -244,39 +269,42 @@ const formatTime = (seconds: number) => {
                   @drop="handleDrop($event, index)"
                   @dragover="handleDragOver"
                 >
-                  <div class="segment-thumbnail">
+                  <div class="timeline-segment__thumb">
                     <NImage
                       v-if="segment.thumbnailUrl"
                       :src="segment.thumbnailUrl"
                       width="80"
                       height="45"
                       object-fit="cover"
+                      preview-disabled
                     />
                     <div v-else class="thumb-placeholder">预览</div>
                   </div>
-                  <div class="segment-info">
-                    <span class="segment-title">片段 {{ index + 1 }}</span>
-                    <span class="segment-time">
+                  <div class="timeline-segment__info">
+                    <span class="timeline-segment__title">片段 {{ index + 1 }}</span>
+                    <span class="timeline-segment__time">
                       {{ formatTime(segment.startTime) }} - {{ formatTime(segment.endTime) }}
                     </span>
                   </div>
-                  <div class="segment-actions">
-                    <NButton size="tiny" @click="removeFromTimeline(index)">移除</NButton>
+                  <div class="timeline-segment__actions">
+                    <NButton size="tiny" quaternary @click="removeFromTimeline(index)">
+                      ✕
+                    </NButton>
                   </div>
                 </div>
               </div>
 
-              <div class="timeline-footer">
+              <div class="editor-section__footer">
                 <NButton size="small" @click="saveTimeline">保存时间轴</NButton>
               </div>
-            </div>
+            </section>
 
             <!-- Audio Section -->
-            <div class="audio-section">
-              <div class="section-header">音频</div>
+            <section class="editor-section">
+              <h4 class="editor-section__title">🔊 音频</h4>
               <div class="audio-items">
                 <div class="audio-item">
-                  <span>配音</span>
+                  <span class="audio-item__label">配音</span>
                   <NUpload
                     accept="audio/*"
                     :show-file-list="false"
@@ -286,10 +314,12 @@ const formatTime = (seconds: number) => {
                       {{ compositionStore.currentComposition.voiceover ? '替换' : '上传' }}
                     </NButton>
                   </NUpload>
-                  <span v-if="compositionStore.currentComposition.voiceover" class="audio-loaded">已上传</span>
+                  <NTag v-if="compositionStore.currentComposition.voiceover" size="small" type="success">
+                    已上传
+                  </NTag>
                 </div>
                 <div class="audio-item">
-                  <span>背景音乐</span>
+                  <span class="audio-item__label">背景音乐</span>
                   <NUpload
                     accept="audio/*"
                     :show-file-list="false"
@@ -299,10 +329,12 @@ const formatTime = (seconds: number) => {
                       {{ compositionStore.currentComposition.bgm ? '替换' : '上传' }}
                     </NButton>
                   </NUpload>
-                  <span v-if="compositionStore.currentComposition.bgm" class="audio-loaded">已上传</span>
+                  <NTag v-if="compositionStore.currentComposition.bgm" size="small" type="success">
+                    已上传
+                  </NTag>
                 </div>
                 <div class="audio-item">
-                  <span>字幕</span>
+                  <span class="audio-item__label">字幕</span>
                   <NUpload
                     accept=".srt,.vtt"
                     :show-file-list="false"
@@ -312,64 +344,82 @@ const formatTime = (seconds: number) => {
                       {{ compositionStore.currentComposition.subtitles ? '替换' : '上传' }}
                     </NButton>
                   </NUpload>
-                  <span v-if="compositionStore.currentComposition.subtitles" class="audio-loaded">已上传</span>
+                  <NTag v-if="compositionStore.currentComposition.subtitles" size="small" type="success">
+                    已上传
+                  </NTag>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <!-- Output Preview -->
-            <div v-if="compositionStore.currentComposition.outputUrl" class="output-section">
-              <div class="section-header">成品预览</div>
-              <NButton type="primary" @click="handlePreviewComposition">预览导出视频</NButton>
-            </div>
+            <!-- Export Section -->
+            <section v-if="compositionStore.currentComposition.outputUrl" class="editor-section">
+              <h4 class="editor-section__title">🎉 成品预览</h4>
+              <NButton type="primary" @click="handlePreviewComposition">
+                预览导出视频
+              </NButton>
+            </section>
 
-            <!-- Export Status -->
-            <div v-if="compositionStore.currentComposition.status === 'exporting'" class="exporting-section">
-              <NAlert type="warning">
-                视频正在导出中，请稍候...
-              </NAlert>
-            </div>
+            <!-- Exporting Alert -->
+            <NAlert v-if="compositionStore.currentComposition.status === 'exporting'" type="warning">
+              视频正在导出中，请稍候...
+            </NAlert>
           </div>
-        </div>
+        </main>
 
-        <!-- Available Segments -->
-        <div class="available-segments">
-          <div class="list-header">可用分镜</div>
-          <div v-if="availableSegments.length === 0" class="empty-list">
-            暂无可用的分镜片段
+        <!-- Available Segments Sidebar -->
+        <aside class="compose-sidebar">
+          <div class="sidebar-header">
+            <span>可用分镜</span>
           </div>
-          <div
-            v-for="segment in availableSegments"
-            :key="segment.sceneId"
-            class="segment-source"
-            draggable="true"
-            @dragstart="(e) => { (e.dataTransfer as DataTransfer).setData('application/json', JSON.stringify(segment)); (e.dataTransfer as DataTransfer).effectAllowed = 'copy' }"
-          >
-            <div class="source-thumb">
-              <NImage
-                v-if="segment.thumbnailUrl"
-                :src="segment.thumbnailUrl"
-                width="60"
-                height="34"
-                object-fit="cover"
-              />
-              <div v-else class="thumb-placeholder">预览</div>
+          <NScrollbar>
+            <div v-if="availableSegments.length === 0" class="sidebar-empty">
+              暂无可用分镜
             </div>
-            <div class="source-info">
-              <span class="source-title">#{{ segment.sceneNum }}</span>
-              <span class="source-duration">{{ segment.duration }}秒</span>
+            <div
+              v-for="segment in availableSegments"
+              :key="segment.sceneId"
+              class="segment-source"
+              draggable="true"
+              @dragstart="(e) => {
+                (e.dataTransfer as DataTransfer).setData('application/json', JSON.stringify(segment))
+                ;(e.dataTransfer as DataTransfer).effectAllowed = 'copy'
+              }"
+            >
+              <div class="segment-source__thumb">
+                <NImage
+                  v-if="segment.thumbnailUrl"
+                  :src="segment.thumbnailUrl"
+                  width="60"
+                  height="34"
+                  object-fit="cover"
+                  preview-disabled
+                />
+                <div v-else class="thumb-placeholder">预览</div>
+              </div>
+              <div class="segment-source__info">
+                <span class="segment-source__title">#{{ segment.sceneNum }}</span>
+                <span class="segment-source__duration">{{ segment.duration }}秒</span>
+              </div>
+              <NButton size="tiny" @click="addToTimeline(segment)">+</NButton>
             </div>
-            <NButton size="tiny" @click="addToTimeline(segment)">添加</NButton>
-          </div>
-        </div>
+          </NScrollbar>
+        </aside>
       </div>
-    </NCard>
+    </div>
 
     <!-- Create Modal -->
-    <NModal v-model:show="showCreateModal" preset="card" title="新建合成" style="width: 400px">
-      <NForm :model="newComposition">
+    <NModal
+      v-model:show="showCreateModal"
+      preset="card"
+      title="新建合成"
+      style="width: 400px"
+    >
+      <NForm :model="newComposition" label-placement="top">
         <NFormItem label="作品标题" path="title">
-          <NInput v-model:value="newComposition.title" placeholder="请输入作品标题" />
+          <NInput
+            v-model:value="newComposition.title"
+            placeholder="给合成作品起个名字"
+          />
         </NFormItem>
       </NForm>
       <template #footer>
@@ -389,257 +439,283 @@ const formatTime = (seconds: number) => {
 </template>
 
 <style scoped>
-.compose-container {
+.compose-page {
   height: 100%;
-}
-
-.compose-layout {
-  display: flex;
-  gap: 16px;
-  min-height: 500px;
-}
-
-.composition-list {
-  width: 180px;
-  background: #fafafa;
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.list-header {
-  font-weight: 600;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e8e8e8;
-}
-
-.empty-list {
-  color: #999;
-  font-size: 13px;
-  text-align: center;
-  padding: 16px 0;
-}
-
-.composition-item {
-  padding: 10px 8px;
-  cursor: pointer;
-  border-radius: 4px;
-  margin-bottom: 4px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.composition-item:hover {
-  background: #f0f0f0;
-}
-
-.composition-item.active {
-  background: #e6f4ff;
-}
-
-.comp-title {
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.compose-main {
-  flex: 1;
   display: flex;
   flex-direction: column;
 }
 
-.no-composition {
+.compose-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.compose-header__left {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--spacing-md);
+}
+
+.compose-header__title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.compose-header__duration {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-gray);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+}
+
+.compose-header__right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.compose-content {
+  flex: 1;
+  background: var(--color-bg-white);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  min-height: 0;
+}
+
+.compose-layout {
+  display: flex;
+  gap: var(--spacing-lg);
   height: 100%;
+}
+
+/* Sidebars */
+.compose-sidebar {
+  width: 200px;
+  background: var(--color-bg-gray);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-header {
+  padding: var(--spacing-md);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.sidebar-empty {
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
+.composition-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border-light);
+  transition: all var(--transition-fast);
+}
+
+.composition-item:hover {
+  background: var(--color-bg-white);
+}
+
+.composition-item.active {
+  background: var(--color-primary-light);
+  border-left: 3px solid var(--color-primary);
+}
+
+.composition-item__title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* Main Editor */
+.compose-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .composition-editor {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-md);
 }
 
-.section-header {
-  font-weight: 600;
-  margin-bottom: 12px;
+.editor-section {
+  background: var(--color-bg-gray);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+}
+
+.editor-section__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: var(--spacing-md);
 }
 
-.duration {
-  font-weight: normal;
-  color: #666;
+.editor-section__title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
 
-.timeline-section {
-  background: #fff;
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
-  padding: 16px;
+.editor-section__duration {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
+.editor-section__footer {
+  margin-top: var(--spacing-md);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Timeline */
 .timeline-content {
   min-height: 100px;
-  background: #f5f5f5;
-  border-radius: 4px;
-  padding: 12px;
+  background: var(--color-bg-white);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--spacing-sm);
   align-content: flex-start;
 }
 
 .timeline-empty {
   width: 100%;
   text-align: center;
-  color: #999;
-  padding: 24px;
+  color: var(--color-text-tertiary);
+  padding: var(--spacing-xl);
 }
 
 .timeline-segment {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: #fff;
-  padding: 8px;
-  border-radius: 4px;
+  gap: var(--spacing-sm);
+  background: var(--color-bg-gray);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm);
   cursor: grab;
-  border: 1px solid #e8e8e8;
+  transition: all var(--transition-fast);
 }
 
 .timeline-segment:hover {
-  border-color: #1890ff;
+  border-color: var(--color-primary);
 }
 
-.segment-thumbnail {
-  border-radius: 4px;
+.timeline-segment__thumb {
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .thumb-placeholder {
   width: 80px;
   height: 45px;
-  background: #e8e8e8;
+  background: var(--color-bg-gray);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  color: #999;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
 }
 
-.segment-info {
+.timeline-segment__info {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.segment-title {
-  font-weight: 500;
-  font-size: 13px;
+.timeline-segment__title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
 }
 
-.segment-time {
-  font-size: 11px;
-  color: #666;
+.timeline-segment__time {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
-.segment-actions {
+.timeline-segment__actions {
   margin-left: auto;
 }
 
-.timeline-footer {
-  margin-top: 12px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.audio-section {
-  background: #fff;
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
-  padding: 16px;
-}
-
+/* Audio Items */
 .audio-items {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-md);
 }
 
 .audio-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-md);
 }
 
-.audio-item span:first-child {
+.audio-item__label {
   width: 80px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
-.audio-loaded {
-  color: #52c41a;
-  font-size: 12px;
-}
-
-.output-section {
-  background: #fff;
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
-  padding: 16px;
-}
-
-.exporting-section {
-  margin-top: 12px;
-}
-
-.available-segments {
-  width: 200px;
-  background: #fafafa;
-  border-radius: 8px;
-  padding: 12px;
-}
-
+/* Segment Sources */
 .segment-source {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
-  background: #fff;
-  border: 1px solid #e8e8e8;
-  border-radius: 4px;
-  margin-bottom: 8px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border-light);
   cursor: grab;
+  transition: all var(--transition-fast);
 }
 
 .segment-source:hover {
-  border-color: #1890ff;
+  background: var(--color-bg-white);
 }
 
-.source-thumb {
-  border-radius: 4px;
+.segment-source__thumb {
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
-.source-info {
+.segment-source__info {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.source-title {
-  font-weight: 500;
-  font-size: 12px;
+.segment-source__title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
 }
 
-.source-duration {
-  font-size: 11px;
-  color: #666;
+.segment-source__duration {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 </style>
