@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "concurrently -n backend,worker,frontend -c blue,green,yellow \"npm run dev:backend\" \"npm run dev:worker\" \"npm run dev:frontend\"",
     "dev:backend": "npm run dev -w packages/backend",
     "dev:worker": "npm run dev:worker -w packages/backend",
     "dev:frontend": "npm run dev -w packages/frontend",
