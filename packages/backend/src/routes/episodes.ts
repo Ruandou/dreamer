@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { expandScript } from '../services/deepseek.js'
+import { verifyEpisodeOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 import type { ScriptContent } from '@shared/types'
 
 export async function episodeRoutes(fastify: FastifyInstance) {
@@ -8,8 +9,15 @@ export async function episodeRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { projectId: string } }>(
     '/',
     { preHandler: [fastify.authenticate] },
-    async (request) => {
+    async (request, reply) => {
+      const userId = (request as any).user.id
       const { projectId } = request.query
+
+      // Verify project ownership
+      if (!(await verifyProjectOwnership(userId, projectId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+      }
+
       return prisma.episode.findMany({
         where: { projectId },
         orderBy: { episodeNum: 'asc' }
@@ -22,8 +30,15 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
+      const episodeId = request.params.id
+
+      if (!(await verifyEpisodeOwnership(userId, episodeId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
+      }
+
       const episode = await prisma.episode.findUnique({
-        where: { id: request.params.id },
+        where: { id: episodeId },
         include: { scenes: true }
       })
 
@@ -40,7 +55,13 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
       const { projectId, episodeNum, title } = request.body
+
+      // Verify project ownership
+      if (!(await verifyProjectOwnership(userId, projectId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+      }
 
       const episode = await prisma.episode.create({
         data: { projectId, episodeNum, title }
@@ -55,10 +76,17 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
+      const episodeId = request.params.id
+
+      if (!(await verifyEpisodeOwnership(userId, episodeId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
+      }
+
       const { title, script } = request.body
 
       const episode = await prisma.episode.update({
-        where: { id: request.params.id },
+        where: { id: episodeId },
         data: { title, script }
       })
 
@@ -71,7 +99,20 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      await prisma.episode.delete({ where: { id: request.params.id } })
+      const userId = (request as any).user.id
+      const episodeId = request.params.id
+
+      if (!(await verifyEpisodeOwnership(userId, episodeId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
+      }
+
+      // Check if exists first
+      const episode = await prisma.episode.findUnique({ where: { id: episodeId } })
+      if (!episode) {
+        return reply.status(404).send({ error: 'Episode not found' })
+      }
+
+      await prisma.episode.delete({ where: { id: episodeId } })
       return reply.status(204).send()
     }
   )
@@ -81,8 +122,14 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/:id/expand',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
       const { summary } = request.body
       const episodeId = request.params.id
+
+      // Verify ownership
+      if (!(await verifyEpisodeOwnership(userId, episodeId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
+      }
 
       // Verify episode exists
       const episode = await prisma.episode.findUnique({
@@ -125,14 +172,14 @@ export async function episodeRoutes(fastify: FastifyInstance) {
           await prisma.scene.deleteMany({ where: { episodeId } })
 
           // Create new scenes
-          await prisma.scene.createMany({
-            data: script.scenes.map((scene, index) => ({
-              episodeId,
-              sceneNum: scene.sceneNum || index + 1,
-              description: `${scene.location} - ${scene.timeOfDay}`,
-              prompt: buildScenePrompt(scene, script.title || '')
-            }))
-          })
+          const scenesData = script.scenes.map((scene) => ({
+            episodeId,
+            sceneNum: scene.sceneNum || 1,
+            description: scene.description || `${scene.location} - ${scene.timeOfDay}`,
+            prompt: buildScenePrompt(scene, script.title || '')
+          }))
+
+          await prisma.scene.createMany({ data: scenesData })
         }
 
         return {

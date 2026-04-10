@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
+import { verifyTaskOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 
 export async function taskRoutes(fastify: FastifyInstance) {
   // Get task by ID
@@ -7,8 +8,15 @@ export async function taskRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
+      const taskId = request.params.id
+
+      if (!(await verifyTaskOwnership(userId, taskId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this task' })
+      }
+
       const task = await prisma.videoTask.findUnique({
-        where: { id: request.params.id }
+        where: { id: taskId }
       })
 
       if (!task) {
@@ -24,7 +32,13 @@ export async function taskRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
       const { projectId } = request.query
+
+      // Verify project ownership
+      if (!(await verifyProjectOwnership(userId, projectId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+      }
 
       const scenes = await prisma.scene.findMany({
         where: {
@@ -54,8 +68,15 @@ export async function taskRoutes(fastify: FastifyInstance) {
     '/:id/cancel',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
+      const taskId = request.params.id
+
+      if (!(await verifyTaskOwnership(userId, taskId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this task' })
+      }
+
       const task = await prisma.videoTask.findUnique({
-        where: { id: request.params.id }
+        where: { id: taskId }
       })
 
       if (!task) {
@@ -68,7 +89,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
 
       // Update task status
       const updatedTask = await prisma.videoTask.update({
-        where: { id: request.params.id },
+        where: { id: taskId },
         data: { status: 'failed', errorMsg: 'Cancelled by user' }
       })
 
@@ -77,8 +98,6 @@ export async function taskRoutes(fastify: FastifyInstance) {
         where: { id: task.sceneId },
         data: { status: 'pending' }
       })
-
-      // TODO: Also remove from BullMQ queue if it's still queued
 
       return updatedTask
     }
@@ -89,8 +108,15 @@ export async function taskRoutes(fastify: FastifyInstance) {
     '/:id/retry',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
+      const taskId = request.params.id
+
+      if (!(await verifyTaskOwnership(userId, taskId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this task' })
+      }
+
       const task = await prisma.videoTask.findUnique({
-        where: { id: request.params.id }
+        where: { id: taskId }
       })
 
       if (!task) {

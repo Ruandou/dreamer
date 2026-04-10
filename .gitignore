@@ -5,10 +5,12 @@ node_modules/
 dist/
 packages/*/dist/
 
-# Environment files
+# Environment files - NEVER COMMIT THESE
 .env
 .env.local
 .env.*.local
+# Exception: allow .env.example for documentation
+!.env.example
 
 # IDE
 .idea/
@@ -40,3 +42,9 @@ docker/data/
 # Auto-generated types
 packages/frontend/src/auto-imports.d.ts
 packages/frontend/src/components.d.ts
+
+# Credentials and secrets (if accidentally committed)
+*.pem
+*.key
+credentials.json
+secrets.json

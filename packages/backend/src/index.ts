@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
@@ -25,8 +26,10 @@ const fastify = Fastify({
 async function start() {
   try {
     // Register plugins
+    // CORS 配置：生产环境应设置具体域名
+    const corsOrigin = process.env.CORS_ORIGIN || true
     await fastify.register(cors, {
-      origin: true,
+      origin: corsOrigin,
       credentials: true
     })
 

@@ -1,14 +1,22 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
+import { verifyCharacterOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 
 export async function characterRoutes(fastify: FastifyInstance) {
   // List characters for a project
   fastify.get<{ Querystring: { projectId: string } }>(
     '/',
     { preHandler: [fastify.authenticate] },
-    async (request) => {
+    async (request, reply) => {
+      const userId = (request as any).user.id
       const { projectId } = request.query
+
+      // Verify project ownership
+      if (!(await verifyProjectOwnership(userId, projectId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+      }
+
       return prisma.character.findMany({
         where: { projectId },
         orderBy: { createdAt: 'asc' }
@@ -21,8 +29,15 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
+      const characterId = request.params.id
+
+      if (!(await verifyCharacterOwnership(userId, characterId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+      }
+
       const character = await prisma.character.findUnique({
-        where: { id: request.params.id }
+        where: { id: characterId }
       })
 
       if (!character) {
@@ -38,7 +53,13 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
       const { projectId, name, description, avatarUrl } = request.body
+
+      // Verify project ownership
+      if (!(await verifyProjectOwnership(userId, projectId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+      }
 
       const character = await prisma.character.create({
         data: { projectId, name, description, avatarUrl }
@@ -53,10 +74,17 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
+      const characterId = request.params.id
+
+      if (!(await verifyCharacterOwnership(userId, characterId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+      }
+
       const { name, description, avatarUrl, versions } = request.body
 
       const character = await prisma.character.update({
-        where: { id: request.params.id },
+        where: { id: characterId },
         data: { name, description, avatarUrl, versions }
       })
 
@@ -69,7 +97,19 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      await prisma.character.delete({ where: { id: request.params.id } })
+      const userId = (request as any).user.id
+      const characterId = request.params.id
+
+      if (!(await verifyCharacterOwnership(userId, characterId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+      }
+
+      const character = await prisma.character.findUnique({ where: { id: characterId } })
+      if (!character) {
+        return reply.status(404).send({ error: 'Character not found' })
+      }
+
+      await prisma.character.delete({ where: { id: characterId } })
       return reply.status(204).send()
     }
   )
@@ -79,7 +119,12 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/:id/avatar',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
       const characterId = request.params.id
+
+      if (!(await verifyCharacterOwnership(userId, characterId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+      }
 
       const character = await prisma.character.findUnique({
         where: { id: characterId }
@@ -127,7 +172,13 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/:id/versions',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
+      const userId = (request as any).user.id
       const characterId = request.params.id
+
+      if (!(await verifyCharacterOwnership(userId, characterId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+      }
+
       const { name, description } = request.body
 
       const character = await prisma.character.findUnique({
