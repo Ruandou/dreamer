@@ -19,7 +19,7 @@ fi
 # 如果后端代码有变更，运行后端测试
 if [ "$BACKEND_CHANGED" = true ]; then
   echo "🔬 后端代码变更，运行测试..."
-  cd packages/backend && pnpm test --run
+  cd packages/backend && pnpm exec vitest run
   if [ $? -ne 0 ]; then
     echo "❌ 后端测试失败，提交被阻止"
     exit 1
