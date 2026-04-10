@@ -43,6 +43,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
+        name: 'ProjectHome',
         redirect: (to) => ({ name: 'ProjectScript', params: { id: to.params.id } })
       },
       {
