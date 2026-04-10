@@ -17,6 +17,7 @@ import { compositionRoutes } from './routes/compositions.js'
 import { authRoutes } from './routes/auth.js'
 import { statsRoutes } from './routes/stats.js'
 import { importRoutes } from './routes/import.js'
+import { settingsRoutes } from './routes/settings.js'
 
 export const prisma = new PrismaClient()
 
@@ -70,6 +71,7 @@ async function start() {
     await fastify.register(compositionRoutes, { prefix: '/api/compositions' })
     await fastify.register(statsRoutes, { prefix: '/api/stats' })
     await fastify.register(importRoutes, { prefix: '/api/import' })
+    await fastify.register(settingsRoutes, { prefix: '/api/settings' })
 
     // Health check
     fastify.get('/health', async () => ({ status: 'ok' }))

@@ -111,6 +111,9 @@ const handleDropdownSelect = (key: string, projectId: string) => {
           <NButton @click="router.push('/stats')">
             成本统计
           </NButton>
+          <NButton @click="router.push('/settings')">
+            设置
+          </NButton>
           <NButton @click="handleCreate" type="primary">
             <template #icon>
               <span>+</span>
