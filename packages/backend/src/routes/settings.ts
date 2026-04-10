@@ -17,6 +17,7 @@ export async function settingsRoutes(fastify: FastifyInstance) {
           email: true,
           name: true,
           apiKey: true,
+          deepseekApiUrl: true,
           atlasApiKey: true,
           atlasApiUrl: true,
           volcAccessKey: true,
@@ -60,6 +61,7 @@ export async function settingsRoutes(fastify: FastifyInstance) {
         balance,
         balanceError,
         apiKeys: {
+          deepseekApiUrl: dbUser.deepseekApiUrl,
           atlasApiKey: dbUser.atlasApiKey,
           atlasApiUrl: dbUser.atlasApiUrl,
           volcAccessKey: dbUser.volcAccessKey,
@@ -76,6 +78,7 @@ export async function settingsRoutes(fastify: FastifyInstance) {
       name?: string
       apiKey?: string
       apiKeys?: {
+        deepseekApiUrl?: string
         atlasApiKey?: string
         atlasApiUrl?: string
         volcAccessKey?: string
@@ -95,6 +98,7 @@ export async function settingsRoutes(fastify: FastifyInstance) {
         if (name) updateData.name = name
         if (apiKey !== undefined) updateData.apiKey = apiKey || null
         if (apiKeys) {
+          if (apiKeys.deepseekApiUrl !== undefined) updateData.deepseekApiUrl = apiKeys.deepseekApiUrl || null
           if (apiKeys.atlasApiKey !== undefined) updateData.atlasApiKey = apiKeys.atlasApiKey || null
           if (apiKeys.atlasApiUrl !== undefined) updateData.atlasApiUrl = apiKeys.atlasApiUrl || null
           if (apiKeys.volcAccessKey !== undefined) updateData.volcAccessKey = apiKeys.volcAccessKey || null

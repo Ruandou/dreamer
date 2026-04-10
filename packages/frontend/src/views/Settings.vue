@@ -19,6 +19,7 @@ const hasApiKey = ref(false)
 const apiKeyInput = ref('')
 
 // 其他 API Keys
+const deepseekApiUrl = ref('')
 const atlasApiKey = ref('')
 const atlasApiUrl = ref('')
 const volcAccessKey = ref('')
@@ -61,6 +62,7 @@ onMounted(async () => {
 
     // 加载其他 API 配置
     if (data.apiKeys) {
+      deepseekApiUrl.value = data.apiKeys.deepseekApiUrl || ''
       atlasApiKey.value = data.apiKeys.atlasApiKey || ''
       atlasApiUrl.value = data.apiKeys.atlasApiUrl || ''
       volcAccessKey.value = data.apiKeys.volcAccessKey || ''
@@ -119,6 +121,7 @@ const saveSettings = async () => {
     const body: any = {
       name: userName.value,
       apiKeys: {
+        deepseekApiUrl: deepseekApiUrl.value,
         atlasApiKey: atlasApiKey.value,
         atlasApiUrl: atlasApiUrl.value,
         volcAccessKey: volcAccessKey.value,
@@ -220,6 +223,12 @@ const formatBalance = (amount: number) => {
                   type="password"
                   placeholder="sk-xxxxxxxxxxxxxxxx"
                   show-password-on="click"
+                />
+              </NFormItem>
+              <NFormItem label="API URL">
+                <NInput
+                  v-model:value="deepseekApiUrl"
+                  placeholder="https://api.deepseek.com/v1（可选）"
                 />
               </NFormItem>
             </NForm>

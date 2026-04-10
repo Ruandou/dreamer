@@ -13,6 +13,7 @@ model User {
   name      String
   password  String
   apiKey    String?
+  deepseekApiUrl String?
   // 其他 API Keys
   atlasApiKey    String?
   atlasApiUrl    String?
