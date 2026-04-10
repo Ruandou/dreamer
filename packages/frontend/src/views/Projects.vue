@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import {
   NCard, NButton, NSpace, NGrid, NGi, NEmpty, NModal, NForm, NFormItem,
   NInput, NInputNumber, NTag, NDropdown, NSelect, NUpload, NUploadDragger,
-  useMessage, useDialog, NAlert, NSpin, NText
+  useMessage, useDialog, NAlert, NText
 } from 'naive-ui'
 import type { MenuOption, UploadFileInfo } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
@@ -27,7 +27,6 @@ const viewMode = ref<'grid' | 'list'>('grid')
 const importContent = ref('')
 const importType = ref<'markdown' | 'json'>('markdown')
 const isImporting = ref(false)
-const importPreview = ref<any>(null)
 
 onMounted(() => {
   projectStore.fetchProjects()
@@ -51,7 +50,6 @@ const handleCreate = () => {
 const handleImport = () => {
   showImportModal.value = true
   importContent.value = ''
-  importPreview.value = null
 }
 
 const handleFileChange = (options: { file: UploadFileInfo }) => {
@@ -69,23 +67,6 @@ const handleFileChange = (options: { file: UploadFileInfo }) => {
     }
   }
   reader.readAsText(file.file)
-}
-
-const handlePreview = async () => {
-  if (!importContent.value.trim()) {
-    message.warning('请输入或上传剧本内容')
-    return
-  }
-
-  try {
-    const res = await api.post('/import/preview', {
-      content: importContent.value,
-      type: importType.value
-    })
-    importPreview.value = res.data.preview
-  } catch (error: any) {
-    message.error(error.response?.data?.error || '预览失败')
-  }
 }
 
 const handleImportProject = async () => {
@@ -364,29 +345,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
               style="width: 200px"
             />
           </NFormItem>
-          <NButton @click="handlePreview" :disabled="!importContent.trim()">
-            预览解析结果
-          </NButton>
         </NForm>
-
-        <!-- Preview -->
-        <div v-if="importPreview" class="import-preview">
-          <NText strong>预览结果：</NText>
-          <div class="preview-card">
-            <p><NText strong>项目名称：</NText>{{ importPreview.projectName }}</p>
-            <p><NText strong>描述：</NText>{{ importPreview.description || '无' }}</p>
-            <p><NText strong>角色数：</NText>{{ importPreview.characters?.length || 0 }}</p>
-            <p><NText strong>集数：</NText>{{ importPreview.episodes?.length || 0 }}</p>
-            <div v-if="importPreview.episodes?.length" class="preview-episodes">
-              <p><NText strong>分集预览：</NText></p>
-              <div v-for="ep in importPreview.episodes" :key="ep.episodeNum" class="preview-episode">
-                <NTag size="small">第{{ ep.episodeNum }}集</NTag>
-                <NText>{{ ep.title }}</NText>
-                <NText type="secondary" style="font-size: 12px">{{ ep.sceneCount }} 个场景</NText>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
       <template #footer>
         <NSpace justify="end">
@@ -552,34 +511,5 @@ const handleDropdownSelect = (key: string, projectId: string) => {
 
 .import-form {
   margin-top: var(--spacing-md);
-}
-
-.import-preview {
-  margin-top: var(--spacing-md);
-  padding: var(--spacing-md);
-  background: var(--color-bg-base);
-  border-radius: var(--radius-md);
-}
-
-.preview-card {
-  margin-top: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: var(--color-bg-white);
-  border-radius: var(--radius-sm);
-}
-
-.preview-card p {
-  margin: var(--spacing-xs) 0;
-}
-
-.preview-episodes {
-  margin-top: var(--spacing-sm);
-}
-
-.preview-episode {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-xs);
 }
 </style>
