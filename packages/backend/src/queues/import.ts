@@ -52,8 +52,27 @@ export const importWorker = new Worker<ImportJobData>(
       // Parse the document
       const { parsed } = await parseScriptDocument(content, type)
 
+      // If no projectId provided, create a new project
+      let targetProjectId = projectId
+      if (!targetProjectId) {
+        const project = await prisma.project.create({
+          data: {
+            name: parsed.projectName || '未命名项目',
+            description: parsed.description || '',
+            userId
+          }
+        })
+        targetProjectId = project.id
+
+        // Update task with projectId
+        await prisma.importTask.update({
+          where: { id: taskId },
+          data: { projectId: targetProjectId }
+        })
+      }
+
       // Import to database
-      const results = await importParsedData(projectId!, parsed)
+      const results = await importParsedData(targetProjectId, parsed)
 
       // Update task as completed
       await prisma.importTask.update({
