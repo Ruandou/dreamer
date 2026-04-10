@@ -15,7 +15,13 @@ const message = useMessage()
 const statsStore = useStatsStore()
 
 const selectedDays = ref(30)
+const selectedCard = ref<string | null>(null)
 const aiBalance = ref<AiBalance | null>(null)
+
+const toggleCard = (cardId: string) => {
+  selectedCard.value = selectedCard.value === cardId ? null : cardId
+  message.success(`已选中: ${cardId}`)
+}
 
 onMounted(async () => {
   await Promise.all([
@@ -175,7 +181,11 @@ import { h } from 'vue'
     <NSpin :show="statsStore.isLoading">
       <!-- Overview Stats -->
       <div class="stats-overview">
-        <NCard class="stat-card stat-card--primary">
+        <NCard
+          class="stat-card stat-card--primary"
+          :class="{ 'stat-card--selected': selectedCard === 'total' }"
+          @click="toggleCard('total')"
+        >
           <NStatistic label="总成本" :value="formatCurrency(statsStore.userStats?.totalCost || 0)">
             <template #suffix>
               <span class="stat-suffix">元</span>
@@ -183,7 +193,11 @@ import { h } from 'vue'
           </NStatistic>
         </NCard>
 
-        <NCard class="stat-card">
+        <NCard
+          class="stat-card"
+          :class="{ 'stat-card--selected': selectedCard === 'ai' }"
+          @click="toggleCard('ai')"
+        >
           <NStatistic label="AI 成本" :value="formatCurrency(statsStore.userStats?.aiCost || 0)">
             <template #suffix>
               <span class="stat-suffix">元</span>
@@ -191,7 +205,11 @@ import { h } from 'vue'
           </NStatistic>
         </NCard>
 
-        <NCard class="stat-card">
+        <NCard
+          class="stat-card"
+          :class="{ 'stat-card--selected': selectedCard === 'video' }"
+          @click="toggleCard('video')"
+        >
           <NStatistic label="视频成本" :value="formatCurrency(statsStore.userStats?.videoCost || 0)">
             <template #suffix>
               <span class="stat-suffix">元</span>
@@ -199,7 +217,11 @@ import { h } from 'vue'
           </NStatistic>
         </NCard>
 
-        <NCard class="stat-card">
+        <NCard
+          class="stat-card"
+          :class="{ 'stat-card--selected': selectedCard === 'balance' }"
+          @click="toggleCard('balance')"
+        >
           <NStatistic label="DeepSeek 余额">
             <template #default>
               {{ aiBalance?.balanceInfos.find(b => b.currency === 'CNY')?.totalBalance.toFixed(2) || '--' }}
@@ -210,7 +232,11 @@ import { h } from 'vue'
           </NStatistic>
         </NCard>
 
-        <NCard class="stat-card">
+        <NCard
+          class="stat-card"
+          :class="{ 'stat-card--selected': selectedCard === 'rate' }"
+          @click="toggleCard('rate')"
+        >
           <NStatistic label="完成率">
             <template #default>
               {{
@@ -363,6 +389,15 @@ import { h } from 'vue'
 .stat-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card--selected {
+  border: 2px solid var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.stat-card--selected :deep(.n-statistic__value) {
+  color: var(--color-primary) !important;
 }
 
 .stat-card--primary {
