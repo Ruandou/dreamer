@@ -1,4 +1,7 @@
-import 'dotenv/config'
+import { config } from 'dotenv'
+// Load .env from project root BEFORE any other imports that depend on env vars
+config({ path: '../../.env' })
+
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
@@ -20,6 +23,7 @@ import { statsRoutes } from './routes/stats.js'
 import { importRoutes } from './routes/import.js'
 import { settingsRoutes } from './routes/settings.js'
 
+// Initialize Prisma with explicit DATABASE_URL
 export const prisma = new PrismaClient()
 
 const fastify = Fastify({
