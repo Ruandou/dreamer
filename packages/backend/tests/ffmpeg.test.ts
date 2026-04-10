@@ -1,40 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// Mock child_process
-vi.mock('child_process', () => ({
-  spawn: vi.fn()
-}))
-
-// Mock fs
-vi.mock('fs', async () => {
-  const actual = await vi.importActual('fs')
-  return {
-    ...actual,
-    promises: {
-      ...actual.promises,
-      writeFile: vi.fn().mockResolvedValue(undefined),
-      unlink: vi.fn().mockResolvedValue(undefined),
-      readFile: vi.fn().mockResolvedValue(Buffer.from('mock video data'))
-    }
-  }
-})
-
-// Mock storage
-vi.mock('../src/services/storage.js', () => ({
-  uploadFile: vi.fn().mockResolvedValue('https://minio.example.com/videos/test.mp4'),
-  generateFileKey: vi.fn().mockReturnValue('videos/test.mp4')
-}))
-
-// Mock fetch
-global.fetch = vi.fn().mockResolvedValue({
-  arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(1024))
-})
-
 describe('FFmpeg Service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
