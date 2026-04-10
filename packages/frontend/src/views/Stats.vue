@@ -15,7 +15,7 @@ const message = useMessage()
 const statsStore = useStatsStore()
 
 const selectedDays = ref(30)
-const selectedCard = ref<string | null>(null)
+const selectedCard = ref<string>('total')
 const aiBalance = ref<AiBalance | null>(null)
 
 const toggleCard = (cardId: string) => {
