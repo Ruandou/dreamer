@@ -133,29 +133,50 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
       }
 
-      // Get uploaded file first
-      const file = await request.file()
-      if (!file) {
+      // Parse multipart form - collect fields first
+      let name = ''
+      let parentId: string | undefined
+      let type: string | undefined
+      let description: string | undefined
+      let fileBuffer: Buffer | null = null
+      let fileMimeType = ''
+
+      const parts = request.parts()
+      for await (const part of parts) {
+        if (part.type === 'file') {
+          const buffers: Buffer[] = []
+          for await (const chunk of part.file) {
+            buffers.push(chunk)
+          }
+          fileBuffer = Buffer.concat(buffers)
+          fileMimeType = part.mimetype
+        } else {
+          // field
+          const value = await part.value
+          if (part.fieldname === 'name') name = value as string
+          else if (part.fieldname === 'parentId') parentId = value as string || undefined
+          else if (part.fieldname === 'type') type = value as string || undefined
+          else if (part.fieldname === 'description') description = value as string || undefined
+        }
+      }
+
+      if (!fileBuffer) {
         return reply.status(400).send({ error: 'No file uploaded' })
       }
 
-      // Get non-file fields - they are available after consuming the file
-      const fields = request.body as Record<string, any>
-      const name = fields?.name as string
-      const parentId = fields?.parentId as string | undefined
-      const type = fields?.type as string | undefined
-      const description = fields?.description as string | undefined
+      if (!name) {
+        return reply.status(400).send({ error: 'Name is required' })
+      }
 
       // Validate file type
       const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
-      if (!allowedTypes.includes(file.mimetype)) {
+      if (!allowedTypes.includes(fileMimeType)) {
         return reply.status(400).send({ error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.' })
       }
 
       // Generate key and upload
-      const key = generateFileKey('assets', file.filename)
-      const buffer = await file.toBuffer()
-      const avatarUrl = await uploadFile('assets', key, buffer, file.mimetype)
+      const key = generateFileKey('assets', `upload_${Date.now()}.png`)
+      const avatarUrl = await uploadFile('assets', key, fileBuffer, fileMimeType)
 
       // Get max order for siblings
       const maxOrder = await prisma.characterImage.aggregate({
