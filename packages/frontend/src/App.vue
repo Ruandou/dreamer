@@ -1,26 +1,33 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { NConfigProvider, NMessageProvider, NDialogProvider, NNotificationProvider, darkTheme, lightTheme } from 'naive-ui'
-import { RouterView, useRouter } from 'vue-router'
+import { RouterView } from 'vue-router'
 import { useSSE } from '@/composables/useSSE'
 
-const router = useRouter()
 const isDark = ref(false)
-const { connected, connect, disconnect } = useSSE()
+
+// SSE will be initialized after mount to ensure providers are ready
+let sseConnect: (() => void) | null = null
+let sseDisconnect: (() => void) | null = null
 
 // Watch for token changes to connect/disconnect SSE
 watch(() => localStorage.getItem('token'), (token) => {
-  if (token) {
-    connect()
-  } else {
-    disconnect()
+  if (token && sseConnect) {
+    sseConnect()
+  } else if (!token && sseDisconnect) {
+    sseDisconnect()
   }
-}, { immediate: true })
+})
 
 onMounted(() => {
+  // Initialize SSE after providers are mounted
+  const sse = useSSE()
+  sseConnect = sse.connect
+  sseDisconnect = sse.disconnect
+
   const token = localStorage.getItem('token')
   if (token) {
-    connect()
+    sseConnect()
   }
 })
 
