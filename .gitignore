@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+packages/*/dist/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Prisma
+packages/backend/prisma/migrations/
+
+# MinIO data
+docker/data/
+
+# Temporary files
+*.tmp
+*.temp
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Auto-generated types
+packages/frontend/src/auto-imports.d.ts
+packages/frontend/src/components.d.ts

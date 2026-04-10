@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects Project[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  episodes     Episode[]
+  characters   Character[]
+  compositions Composition[]
+
+  @@index([userId])
+}
+
+model Episode {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episodeNum Int
+  title      String?
+  script     Json?    // 存储结构化剧本JSON
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  scenes Scene[]
+
+  @@unique([projectId, episodeNum])
+  @@index([projectId])
+}
+
+model Character {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  avatarUrl   String?
+  versions    Json?    // 存储不同服装版本的参考图
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model Scene {
+  id          String   @id @default(cuid())
+  episodeId   String
+  episode     Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  sceneNum    Int
+  description String?
+  prompt      String
+  status      String   @default("pending") // pending/processing/completed/failed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks VideoTask[]
+
+  @@unique([episodeId, sceneNum])
+  @@index([episodeId])
+}
+
+model VideoTask {
+  id           String   @id @default(cuid())
+  sceneId      String
+  scene        Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  model        String
+  status       String   @default("queued") // queued/processing/completed/failed
+  prompt       String
+  cost         Float?
+  duration     Int?     // 生成耗时（秒）
+  videoUrl     String?
+  thumbnailUrl String?
+  errorMsg     String?
+  isSelected   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([sceneId])
+}
+
+model Composition {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title      String
+  duration   Int      @default(0)
+  width      Int      @default(1080)
+  height     Int      @default(1920)
+  status     String   @default("draft") // draft/composing/exporting/exported
+  voiceover  String?
+  bgm        String?
+  subtitles  String?
+  outputUrl  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  segments Segment[]
+
+  @@index([projectId])
+}
+
+model Segment {
+  id            String      @id @default(cuid())
+  compositionId String
+  composition   Composition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+  sceneId       String
+  order         Int
+  startTime     Float
+  endTime       Float
+  transition    String?
+
+  @@index([compositionId])
+}

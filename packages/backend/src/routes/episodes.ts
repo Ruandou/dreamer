@@ -1,0 +1,166 @@
+import { FastifyInstance } from 'fastify'
+import { prisma } from '../index.js'
+import { expandScript } from '../services/deepseek.js'
+import type { ScriptContent } from '@shared/types'
+
+export async function episodeRoutes(fastify: FastifyInstance) {
+  // List episodes for a project
+  fastify.get<{ Querystring: { projectId: string } }>(
+    '/',
+    { preHandler: [fastify.authenticate] },
+    async (request) => {
+      const { projectId } = request.query
+      return prisma.episode.findMany({
+        where: { projectId },
+        orderBy: { episodeNum: 'asc' }
+      })
+    }
+  )
+
+  // Get episode
+  fastify.get<{ Params: { id: string } }>(
+    '/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const episode = await prisma.episode.findUnique({
+        where: { id: request.params.id },
+        include: { scenes: true }
+      })
+
+      if (!episode) {
+        return reply.status(404).send({ error: 'Episode not found' })
+      }
+
+      return episode
+    }
+  )
+
+  // Create episode
+  fastify.post<{ Body: { projectId: string; episodeNum: number; title?: string } }>(
+    '/',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { projectId, episodeNum, title } = request.body
+
+      const episode = await prisma.episode.create({
+        data: { projectId, episodeNum, title }
+      })
+
+      return reply.status(201).send(episode)
+    }
+  )
+
+  // Update episode (including script content)
+  fastify.put<{ Params: { id: string }; Body: { title?: string; script?: any } }>(
+    '/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { title, script } = request.body
+
+      const episode = await prisma.episode.update({
+        where: { id: request.params.id },
+        data: { title, script }
+      })
+
+      return episode
+    }
+  )
+
+  // Delete episode
+  fastify.delete<{ Params: { id: string } }>(
+    '/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      await prisma.episode.delete({ where: { id: request.params.id } })
+      return reply.status(204).send()
+    }
+  )
+
+  // Expand script with AI (DeepSeek)
+  fastify.post<{ Params: { id: string }; Body: { summary: string } }>(
+    '/:id/expand',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { summary } = request.body
+      const episodeId = request.params.id
+
+      // Verify episode exists
+      const episode = await prisma.episode.findUnique({
+        where: { id: episodeId }
+      })
+
+      if (!episode) {
+        return reply.status(404).send({ error: 'Episode not found' })
+      }
+
+      try {
+        // Get project context (characters, existing episodes)
+        const project = await prisma.project.findUnique({
+          where: { id: episode.projectId },
+          include: {
+            characters: { select: { name: true, description: true } },
+            episodes: { select: { title: true, episodeNum: true } }
+          }
+        })
+
+        const projectContext = project
+          ? `项目名称: ${project.name}\n已有角色: ${project.characters.map(c => c.name).join(', ') || '暂无'}\n已有集数: ${project.episodes.length}集`
+          : undefined
+
+        // Call DeepSeek API
+        const script = await expandScript(summary, projectContext)
+
+        // Save to episode
+        const updatedEpisode = await prisma.episode.update({
+          where: { id: episodeId },
+          data: {
+            title: script.title || episode.title,
+            script: script as any
+          }
+        })
+
+        // Auto-create scenes from script
+        if (script.scenes && script.scenes.length > 0) {
+          // Delete existing scenes
+          await prisma.scene.deleteMany({ where: { episodeId } })
+
+          // Create new scenes
+          await prisma.scene.createMany({
+            data: script.scenes.map((scene, index) => ({
+              episodeId,
+              sceneNum: scene.sceneNum || index + 1,
+              description: `${scene.location} - ${scene.timeOfDay}`,
+              prompt: buildScenePrompt(scene, script.title || '')
+            }))
+          })
+        }
+
+        return {
+          episode: updatedEpisode,
+          script,
+          scenesCreated: script.scenes?.length || 0
+        }
+      } catch (error) {
+        console.error('Script expansion failed:', error)
+        return reply.status(500).send({
+          error: '剧本生成失败',
+          message: error instanceof Error ? error.message : '未知错误'
+        })
+      }
+    }
+  )
+}
+
+// Helper function to build video prompt from scene
+function buildScenePrompt(scene: any, scriptTitle: string): string {
+  const parts = [
+    scriptTitle,
+    scene.location,
+    scene.timeOfDay,
+    scene.description,
+    scene.actions?.join(' ') || '',
+    scene.dialogues?.map((d: any) => `${d.character}: ${d.content}`).join(' ') || ''
+  ].filter(Boolean)
+
+  return parts.join(', ')
+}
