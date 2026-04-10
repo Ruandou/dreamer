@@ -341,5 +341,31 @@ describe('Composition Routes', () => {
 
       expect(response.statusCode).toBe(500)
     })
+
+    it('should return 500 when export fails', async () => {
+      mockCompositionFindUnique.mockResolvedValue({
+        id: 'comp-1',
+        title: 'Composition 1',
+        segments: [
+          { id: 'seg-1', sceneId: 'scene-1', order: 0, startTime: 0, endTime: 5, isSelected: true }
+        ]
+      })
+      mockVideoTaskFindFirst.mockResolvedValue({
+        id: 'task-1',
+        videoUrl: 'https://cdn.example.com/video.mp4',
+        status: 'completed',
+        isSelected: true
+      })
+      // Mock composeVideo to throw
+      const { composeVideo } = await import('../src/services/ffmpeg.js')
+      vi.mocked(composeVideo).mockRejectedValueOnce(new Error('FFmpeg error'))
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/compositions/comp-1/export'
+      })
+
+      expect(response.statusCode).toBe(500)
+    })
   })
 })
