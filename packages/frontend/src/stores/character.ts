@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Character } from '@shared/types'
+import type { Character, CharacterImage } from '@shared/types'
 import { api } from '@/api'
 
 export const useCharacterStore = defineStore('character', () => {
@@ -42,63 +42,40 @@ export const useCharacterStore = defineStore('character', () => {
     characters.value = characters.value.filter(c => c.id !== id)
   }
 
-  async function uploadAvatar(characterId: string, file: File) {
-    const formData = new FormData()
-    formData.append('file', file)
-
-    const res = await api.post<Character>(
-      `/characters/${characterId}/avatar`,
-      formData,
-      {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      }
-    )
-
-    const index = characters.value.findIndex(c => c.id === characterId)
-    if (index !== -1) {
-      characters.value[index] = res.data
-    }
-    return res.data
-  }
-
-  async function uploadVersion(characterId: string, file: File, name: string, description?: string) {
+  // Image management
+  async function addImage(characterId: string, file: File, name: string, parentId?: string, type?: string, description?: string) {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('name', name)
-    if (description) {
-      formData.append('description', description)
-    }
+    if (parentId) formData.append('parentId', parentId)
+    if (type) formData.append('type', type)
+    if (description) formData.append('description', description)
 
-    const res = await api.post<Character>(
-      `/characters/${characterId}/versions`,
+    const res = await api.post<CharacterImage>(
+      `/characters/${characterId}/images`,
       formData,
-      {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      }
+      { headers: { 'Content-Type': 'multipart/form-data' } }
     )
 
-    const index = characters.value.findIndex(c => c.id === characterId)
-    if (index !== -1) {
-      characters.value[index] = res.data
-    }
+    // Refresh character to get updated images
+    await fetchCharacters(characters.value.find(c => c.id === characterId)?.projectId || '')
     return res.data
   }
 
-  async function deleteVersion(characterId: string, versionId: string) {
-    const res = await api.delete<Character>(`/characters/${characterId}/versions/${versionId}`)
-    const index = characters.value.findIndex(c => c.id === characterId)
-    if (index !== -1) {
-      characters.value[index] = res.data
-    }
+  async function updateImage(characterId: string, imageId: string, data: Partial<CharacterImage>) {
+    const res = await api.put<CharacterImage>(`/characters/${characterId}/images/${imageId}`, data)
+    await fetchCharacters(characters.value.find(c => c.id === characterId)?.projectId || '')
     return res.data
   }
 
-  async function setVersionAsAvatar(characterId: string, versionId: string) {
-    const res = await api.put<Character>(`/characters/${characterId}/versions/${versionId}`)
-    const index = characters.value.findIndex(c => c.id === characterId)
-    if (index !== -1) {
-      characters.value[index] = res.data
-    }
+  async function deleteImage(characterId: string, imageId: string) {
+    await api.delete(`/characters/${characterId}/images/${imageId}`)
+    await fetchCharacters(characters.value.find(c => c.id === characterId)?.projectId || '')
+  }
+
+  async function moveImage(characterId: string, imageId: string, parentId?: string) {
+    const res = await api.put<CharacterImage>(`/characters/${characterId}/images/${imageId}/move`, { parentId })
+    await fetchCharacters(characters.value.find(c => c.id === characterId)?.projectId || '')
     return res.data
   }
 
@@ -110,9 +87,9 @@ export const useCharacterStore = defineStore('character', () => {
     createCharacter,
     updateCharacter,
     deleteCharacter,
-    uploadAvatar,
-    uploadVersion,
-    deleteVersion,
-    setVersionAsAvatar
+    addImage,
+    updateImage,
+    deleteImage,
+    moveImage
   }
 })

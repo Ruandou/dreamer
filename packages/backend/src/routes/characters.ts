@@ -4,7 +4,7 @@ import { uploadFile, generateFileKey } from '../services/storage.js'
 import { verifyCharacterOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 
 export async function characterRoutes(fastify: FastifyInstance) {
-  // List characters for a project
+  // List characters for a project (with images)
   fastify.get<{ Querystring: { projectId: string } }>(
     '/',
     { preHandler: [fastify.authenticate] },
@@ -12,19 +12,25 @@ export async function characterRoutes(fastify: FastifyInstance) {
       const userId = (request as any).user.id
       const { projectId } = request.query
 
-      // Verify project ownership
       if (!(await verifyProjectOwnership(userId, projectId))) {
         return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
       }
 
-      return prisma.character.findMany({
+      const characters = await prisma.character.findMany({
         where: { projectId },
+        include: {
+          images: {
+            orderBy: { order: 'asc' }
+          }
+        },
         orderBy: { createdAt: 'asc' }
       })
+
+      return characters
     }
   )
 
-  // Get character
+  // Get character with images tree
   fastify.get<{ Params: { id: string } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
@@ -37,7 +43,12 @@ export async function characterRoutes(fastify: FastifyInstance) {
       }
 
       const character = await prisma.character.findUnique({
-        where: { id: characterId }
+        where: { id: characterId },
+        include: {
+          images: {
+            orderBy: { order: 'asc' }
+          }
+        }
       })
 
       if (!character) {
@@ -49,20 +60,19 @@ export async function characterRoutes(fastify: FastifyInstance) {
   )
 
   // Create character
-  fastify.post<{ Body: { projectId: string; name: string; description?: string; avatarUrl?: string } }>(
+  fastify.post<{ Body: { projectId: string; name: string; description?: string } }>(
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const { projectId, name, description, avatarUrl } = request.body
+      const { projectId, name, description } = request.body
 
-      // Verify project ownership
       if (!(await verifyProjectOwnership(userId, projectId))) {
         return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
       }
 
       const character = await prisma.character.create({
-        data: { projectId, name, description, avatarUrl }
+        data: { projectId, name, description }
       })
 
       return reply.status(201).send(character)
@@ -70,7 +80,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
   )
 
   // Update character
-  fastify.put<{ Params: { id: string }; Body: { name?: string; description?: string; avatarUrl?: string; versions?: any } }>(
+  fastify.put<{ Params: { id: string }; Body: { name?: string; description?: string } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
@@ -81,11 +91,11 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
       }
 
-      const { name, description, avatarUrl, versions } = request.body
+      const { name, description } = request.body
 
       const character = await prisma.character.update({
         where: { id: characterId },
-        data: { name, description, avatarUrl, versions }
+        data: { name, description }
       })
 
       return character
@@ -104,19 +114,16 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
       }
 
-      const character = await prisma.character.findUnique({ where: { id: characterId } })
-      if (!character) {
-        return reply.status(404).send({ error: 'Character not found' })
-      }
-
       await prisma.character.delete({ where: { id: characterId } })
       return reply.status(204).send()
     }
   )
 
-  // Upload avatar (定妆照)
-  fastify.post<{ Params: { id: string } }>(
-    '/:id/avatar',
+  // ===== Image Management =====
+
+  // Add image to character
+  fastify.post<{ Params: { id: string }; Body: { name: string; parentId?: string; type?: string; description?: string } }>(
+    '/:id/images',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
@@ -126,13 +133,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
       }
 
-      const character = await prisma.character.findUnique({
-        where: { id: characterId }
-      })
-
-      if (!character) {
-        return reply.status(404).send({ error: 'Character not found' })
-      }
+      const { name, parentId, type, description } = request.body
 
       // Get uploaded file
       const data = await request.file()
@@ -149,143 +150,126 @@ export async function characterRoutes(fastify: FastifyInstance) {
       // Generate key and upload
       const key = generateFileKey('assets', data.filename)
       const buffer = await data.toBuffer()
+      const avatarUrl = await uploadFile('assets', key, buffer, data.mimetype)
 
-      const avatarUrl = await uploadFile(
-        'assets',
-        key,
-        buffer,
-        data.mimetype
-      )
-
-      // Update character
-      const updatedCharacter = await prisma.character.update({
-        where: { id: characterId },
-        data: { avatarUrl }
+      // Get max order for siblings
+      const maxOrder = await prisma.characterImage.aggregate({
+        where: { characterId, parentId: parentId || null },
+        _max: { order: true }
       })
 
-      return updatedCharacter
+      const image = await prisma.characterImage.create({
+        data: {
+          characterId,
+          name,
+          parentId: parentId || null,
+          type: type || 'base',
+          description,
+          avatarUrl,
+          order: (maxOrder._max.order || 0) + 1
+        }
+      })
+
+      return reply.status(201).send(image)
     }
   )
 
-  // Upload character version (服装版本)
-  fastify.post<{ Params: { id: string }; Body: { name: string; description?: string } }>(
-    '/:id/versions',
+  // Update image
+  fastify.put<{ Params: { id: string; imageId: string }; Body: { name?: string; type?: string; description?: string; order?: number } }>(
+    '/:id/images/:imageId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const characterId = request.params.id
+      const { id: characterId, imageId } = request.params
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
       }
 
-      const { name, description } = request.body
+      const { name, type, description, order } = request.body
 
-      const character = await prisma.character.findUnique({
-        where: { id: characterId }
+      const image = await prisma.characterImage.update({
+        where: { id: imageId },
+        data: { name, type, description, order }
       })
 
-      if (!character) {
-        return reply.status(404).send({ error: 'Character not found' })
-      }
-
-      // Get uploaded file
-      const data = await request.file()
-      if (!data) {
-        return reply.status(400).send({ error: 'No file uploaded' })
-      }
-
-      // Generate key and upload
-      const key = generateFileKey('assets', data.filename)
-      const buffer = await data.toBuffer()
-
-      const avatarUrl = await uploadFile(
-        'assets',
-        key,
-        buffer,
-        data.mimetype
-      )
-
-      // Add to versions
-      const versions = (character.versions as any[]) || []
-      versions.push({
-        id: `v${Date.now()}`,
-        name,
-        description,
-        avatarUrl
-      })
-
-      const updatedCharacter = await prisma.character.update({
-        where: { id: characterId },
-        data: { versions }
-      })
-
-      return updatedCharacter
+      return image
     }
   )
 
-  // Delete a version
-  fastify.delete<{
-    Params: { id: string; versionId: string }
-  }>(
-    '/:id/versions/:versionId',
+  // Delete image (and its children)
+  fastify.delete<{ Params: { id: string; imageId: string } }>(
+    '/:id/images/:imageId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const { id: characterId, versionId } = request.params
+      const userId = (request as any).user.id
+      const { id: characterId, imageId } = request.params
 
-      const character = await prisma.character.findUnique({
-        where: { id: characterId }
-      })
-
-      if (!character) {
-        return reply.status(404).send({ error: 'Character not found' })
+      if (!(await verifyCharacterOwnership(userId, characterId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
       }
 
-      const versions = (character.versions as any[]) || []
-      const filteredVersions = versions.filter((v: any) => v.id !== versionId)
+      // Delete children first (recursive)
+      const deleteChildren = async (parentId: string) => {
+        const children = await prisma.characterImage.findMany({
+          where: { parentId }
+        })
+        for (const child of children) {
+          await deleteChildren(child.id)
+          await prisma.characterImage.delete({ where: { id: child.id } })
+        }
+      }
 
-      const updatedCharacter = await prisma.character.update({
-        where: { id: characterId },
-        data: { versions: filteredVersions }
-      })
+      await deleteChildren(imageId)
+      await prisma.characterImage.delete({ where: { id: imageId } })
 
-      return updatedCharacter
+      return reply.status(204).send()
     }
   )
 
-  // Set version as main avatar
-  fastify.put<{
-    Params: { id: string; versionId: string }
-  }>(
-    '/:id/versions/:versionId',
+  // Move image to new parent (re-parent)
+  fastify.put<{ Params: { id: string; imageId: string }; Body: { parentId?: string } }>(
+    '/:id/images/:imageId/move',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const { id: characterId, versionId } = request.params
+      const userId = (request as any).user.id
+      const { id: characterId, imageId } = request.params
 
-      const character = await prisma.character.findUnique({
-        where: { id: characterId }
+      if (!(await verifyCharacterOwnership(userId, characterId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+      }
+
+      const { parentId } = request.body
+
+      // Prevent circular reference
+      if (parentId) {
+        const checkAncestor = async (id: string, targetId: string): Promise<boolean> => {
+          if (id === targetId) return true
+          const image = await prisma.characterImage.findUnique({ where: { id } })
+          if (!image || !image.parentId) return false
+          return checkAncestor(image.parentId, targetId)
+        }
+
+        if (await checkAncestor(parentId, imageId)) {
+          return reply.status(400).send({ error: 'Cannot move image under its own descendant' })
+        }
+      }
+
+      // Get max order for new siblings
+      const maxOrder = await prisma.characterImage.aggregate({
+        where: { characterId, parentId: parentId || null },
+        _max: { order: true }
       })
 
-      if (!character) {
-        return reply.status(404).send({ error: 'Character not found' })
-      }
-
-      const versions = (character.versions as any[]) || []
-      const version = versions.find((v: any) => v.id === versionId)
-
-      if (!version) {
-        return reply.status(404).send({ error: 'Version not found' })
-      }
-
-      const updatedCharacter = await prisma.character.update({
-        where: { id: characterId },
+      const image = await prisma.characterImage.update({
+        where: { id: imageId },
         data: {
-          avatarUrl: version.avatarUrl,
-          versions
+          parentId: parentId || null,
+          order: (maxOrder._max.order || 0) + 1
         }
       })
 
-      return updatedCharacter
+      return image
     }
   )
 }

@@ -56,17 +56,22 @@ export interface Character {
   projectId: string
   name: string
   description?: string
-  avatarUrl?: string // 定妆照URL
-  versions?: CharacterVersion[] // 不同服装版本
   createdAt: Date
   updatedAt: Date
+  images?: CharacterImage[] // 形象列表
 }
 
-export interface CharacterVersion {
+export interface CharacterImage {
   id: string
-  name: string // 版本名称，如"日常装"、"战损版"
-  avatarUrl: string
+  characterId: string
+  name: string
+  avatarUrl?: string
+  parentId?: string  // 父节点，null 为基础形象
+  type: string       // base/outfit/expression/pose
   description?: string
+  order: number
+  createdAt: Date
+  updatedAt: Date
 }
 
 // ============ Scene / Storyboard Types ============

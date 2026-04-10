@@ -4,12 +4,12 @@ import { useRoute } from 'vue-router'
 import {
   NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
   NGrid, NGi, NImage, NImageGroup, NUpload, NPopconfirm, NTag, NTooltip,
-  NAvatar, NScrollbar, useMessage
+  NAvatar, NScrollbar, useMessage, NIcon, NTree, NButtonGroup, NDropdown
 } from 'naive-ui'
-import type { UploadFile } from 'naive-ui'
+import type { UploadFile, TreeOption } from 'naive-ui'
 import { useCharacterStore } from '@/stores/character'
 import EmptyState from '@/components/EmptyState.vue'
-import StatusBadge from '@/components/StatusBadge.vue'
+import type { Character, CharacterImage } from '@shared/types'
 
 const route = useRoute()
 const message = useMessage()
@@ -19,11 +19,18 @@ const projectId = computed(() => route.params.id as string)
 
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
-const showVersionModal = ref(false)
+const showImageModal = ref(false)
 const newCharacter = ref({ name: '', description: '' })
-const editCharacter = ref<any>(null)
-const versionForm = ref({ name: '', description: '' })
+const editCharacter = ref<Character | null>(null)
+const imageForm = ref({
+  name: '',
+  type: 'base',
+  parentId: undefined as string | undefined,
+  description: ''
+})
 const currentCharacterId = ref<string | null>(null)
+const expandedCharacterIds = ref<string[]>([])
+const selectedImageId = ref<string | null>(null)
 
 onMounted(async () => {
   await characterStore.fetchCharacters(projectId.value)
@@ -44,7 +51,7 @@ const handleCreateCharacter = async () => {
   message.success('角色创建成功')
 }
 
-const handleEditCharacter = (character: any) => {
+const handleEditCharacter = (character: Character) => {
   editCharacter.value = { ...character }
   showEditModal.value = true
 }
@@ -64,33 +71,46 @@ const handleDeleteCharacter = async (id: string) => {
   message.success('角色已删除')
 }
 
-const handleAvatarUpload = async (file: File) => {
-  if (!currentCharacterId.value) return
-  await characterStore.uploadAvatar(currentCharacterId.value, file)
-}
-
-const openVersionModal = (characterId: string) => {
+const openImageModal = (characterId: string, parentId?: string) => {
   currentCharacterId.value = characterId
-  showVersionModal.value = true
+  imageForm.value = {
+    name: '',
+    type: parentId ? 'outfit' : 'base',
+    parentId,
+    description: ''
+  }
+  showImageModal.value = true
 }
 
-const handleVersionUpload = async (options: { file: UploadFile }) => {
-  if (!currentCharacterId.value || !versionForm.value.name) {
-    message.warning('请输入版本名称')
+const handleImageUpload = async (options: { file: UploadFile }) => {
+  if (!currentCharacterId.value || !imageForm.value.name) {
+    message.warning('请输入形象名称')
     return
   }
   const file = options.file.file
   if (file) {
-    await characterStore.uploadVersion(
+    await characterStore.addImage(
       currentCharacterId.value,
       file,
-      versionForm.value.name,
-      versionForm.value.description
+      imageForm.value.name,
+      imageForm.value.parentId,
+      imageForm.value.type,
+      imageForm.value.description
     )
-    showVersionModal.value = false
-    versionForm.value = { name: '', description: '' }
-    message.success('版本添加成功')
+    showImageModal.value = false
+    imageForm.value = { name: '', type: 'base', parentId: undefined, description: '' }
+    message.success('形象添加成功')
   }
+}
+
+const handleDeleteImage = async (characterId: string, imageId: string) => {
+  await characterStore.deleteImage(characterId, imageId)
+  message.success('形象已删除')
+}
+
+const handleMoveImage = async (characterId: string, imageId: string, newParentId?: string) => {
+  await characterStore.moveImage(characterId, imageId, newParentId)
+  message.success('形象已移动')
 }
 
 const getCharacterInitials = (name: string) => {
@@ -103,18 +123,105 @@ const getAvatarBgColor = (name: string) => {
   return colors[index]
 }
 
-const handleDeleteVersion = async (characterId: string, versionId: string) => {
-  await characterStore.deleteVersion(characterId, versionId)
-  message.success('版本已删除')
+const buildImageTree = (images: CharacterImage[]): TreeOption[] => {
+  const imageMap = new Map<string, TreeOption>()
+  const roots: TreeOption[] = []
+
+  // First pass: create all nodes
+  images.forEach(img => {
+    imageMap.set(img.id, {
+      key: img.id,
+      label: img.name,
+      data: img,
+      children: []
+    })
+  })
+
+  // Second pass: build tree
+  images.forEach(img => {
+    const node = imageMap.get(img.id)!
+    if (img.parentId) {
+      const parent = imageMap.get(img.parentId)
+      if (parent) {
+        parent.children = parent.children || []
+        parent.children.push(node)
+      }
+    } else {
+      roots.push(node)
+    }
+  })
+
+  return roots
 }
 
-const handleSetAsAvatar = async (characterId: string, versionId: string) => {
-  await characterStore.setVersionAsAvatar(characterId, versionId)
-  message.success('已设为主形象')
+const getBaseImages = (images: CharacterImage[]) => {
+  return images.filter(img => !img.parentId)
 }
 
-const previewVersion = (avatarUrl: string) => {
-  window.open(avatarUrl, '_blank')
+const getDerivedImages = (images: CharacterImage[], parentId: string) => {
+  return images.filter(img => img.parentId === parentId)
+}
+
+const getTypeLabel = (type: string) => {
+  const map: Record<string, string> = {
+    base: '基础',
+    outfit: '服装',
+    expression: '表情',
+    pose: '姿态'
+  }
+  return map[type] || type
+}
+
+const getTypeTagType = (type: string): 'default' | 'info' | 'success' | 'warning' => {
+  const map: Record<string, 'default' | 'info' | 'success' | 'warning'> = {
+    base: 'success',
+    outfit: 'info',
+    expression: 'warning',
+    pose: 'default'
+  }
+  return map[type] || 'default'
+}
+
+const imageActionOptions = (characterId: string, imageId: string, images: CharacterImage[]) => {
+  const options = [
+    { label: '添加子形象', key: 'add-child' },
+    { label: '删除', key: 'delete' }
+  ]
+
+  // If has children, offer "移出树"
+  const image = images.find(i => i.id === imageId)
+  if (image?.parentId) {
+    options.unshift({ label: '设为独立形象', key: 'detach' })
+  }
+
+  return options
+}
+
+const handleImageAction = (key: string, characterId: string, imageId: string, images: CharacterImage[]) => {
+  switch (key) {
+    case 'add-child':
+      openImageModal(characterId, imageId)
+      break
+    case 'delete':
+      handleDeleteImage(characterId, imageId)
+      break
+    case 'detach':
+      handleMoveImage(characterId, imageId, undefined)
+      break
+  }
+}
+
+const toggleCharacterExpand = (characterId: string) => {
+  const idx = expandedCharacterIds.value.indexOf(characterId)
+  if (idx >= 0) {
+    expandedCharacterIds.value.splice(idx, 1)
+  } else {
+    expandedCharacterIds.value.push(characterId)
+  }
+}
+
+const isCharacterExpanded = (characterId: string) => {
+  return expandedCharacterIds.value.includes(characterId)
 }
 </script>
 
@@ -160,24 +267,74 @@ const previewVersion = (avatarUrl: string) => {
           class="character-card"
           hoverable
         >
-          <!-- Avatar Section -->
+          <!-- Avatar Section - Base Images -->
           <div class="character-card__avatar">
-            <NImage
-              v-if="character.avatarUrl"
-              :src="character.avatarUrl"
-              width="100%"
-              height="200"
-              object-fit="cover"
-              preview
-            />
-            <div
-              v-else
-              class="character-avatar-placeholder"
-              :style="{ background: getAvatarBgColor(character.name) }"
-            >
-              <NAvatar :size="64" round>
-                {{ getCharacterInitials(character.name) }}
-              </NAvatar>
+            <div v-if="getBaseImages(character.images || []).length === 0" class="avatar-placeholder-container">
+              <div
+                class="character-avatar-placeholder"
+                :style="{ background: getAvatarBgColor(character.name) }"
+              >
+                <NAvatar :size="64" round>
+                  {{ getCharacterInitials(character.name) }}
+                </NAvatar>
+              </div>
+              <NButton
+                size="small"
+                class="add-base-image-btn"
+                @click.stop="openImageModal(character.id)"
+              >
+                添加基础形象
+              </NButton>
+            </div>
+            <div v-else class="base-images-grid">
+              <div
+                v-for="baseImage in getBaseImages(character.images || [])"
+                :key="baseImage.id"
+                class="base-image-item"
+                :class="{ 'base-image-item--selected': selectedImageId === baseImage.id }"
+                @click="selectedImageId = baseImage.id"
+              >
+                <NImage
+                  v-if="baseImage.avatarUrl"
+                  :src="baseImage.avatarUrl"
+                  width="100%"
+                  height="140"
+                  object-fit="cover"
+                  preview
+                />
+                <div class="base-image-info">
+                  <span class="base-image-name">{{ baseImage.name }}</span>
+                  <NDropdown
+                    trigger="click"
+                    :options="imageActionOptions(character.id, baseImage.id, character.images || [])"
+                    @select="(key) => handleImageAction(key, character.id, baseImage.id, character.images || [])"
+                  >
+                    <NButton size="tiny" quaternary @click.stop>⋯</NButton>
+                  </NDropdown>
+                </div>
+                <div class="derived-images" v-if="getDerivedImages(character.images || [], baseImage.id).length > 0">
+                  <NTooltip
+                    v-for="derived in getDerivedImages(character.images || [], baseImage.id)"
+                    :key="derived.id"
+                  >
+                    <template #trigger>
+                      <div class="derived-image-thumb" @click.stop="selectedImageId = derived.id">
+                        <NImage
+                          v-if="derived.avatarUrl"
+                          :src="derived.avatarUrl"
+                          width="32"
+                          height="32"
+                          object-fit="cover"
+                        />
+                      </div>
+                    </template>
+                    <div>{{ derived.name }} ({{ getTypeLabel(derived.type) }})</div>
+                  </NTooltip>
+                </div>
+              </div>
+              <div class="add-base-image-cell" @click="openImageModal(character.id)">
+                <span>+ 添加形象</span>
+              </div>
             </div>
           </div>
 
@@ -189,55 +346,11 @@ const previewVersion = (avatarUrl: string) => {
             </p>
           </div>
 
-          <!-- Versions Section -->
-          <div v-if="character.versions?.length" class="character-card__versions">
-            <div class="versions-header">
-              <span class="versions-label">服装版本</span>
-              <NTag size="small" round>{{ (character.versions as any[]).length }}</NTag>
-            </div>
-            <NImageGroup>
-              <NSpace>
-                <div
-                  v-for="version in (character.versions as any[])"
-                  :key="version.id"
-                  class="version-item"
-                >
-                  <NImage
-                    :src="version.avatarUrl"
-                    width="48"
-                    height="48"
-                    object-fit="cover"
-                    preview
-                    style="border-radius: 8px; cursor: pointer;"
-                    @click="previewVersion(version.avatarUrl)"
-                  />
-                  <div class="version-actions">
-                    <NTooltip trigger="hover">
-                      <template #trigger>
-                        <button class="version-btn" @click="handleSetAsAvatar(character.id, version.id)">⭐</button>
-                      </template>
-                      设为主形象
-                    </NTooltip>
-                    <NTooltip trigger="hover">
-                      <template #trigger>
-                        <button class="version-btn" @click="handleDeleteVersion(character.id, version.id)">🗑️</button>
-                      </template>
-                      删除
-                    </NTooltip>
-                  </div>
-                </div>
-              </NSpace>
-            </NImageGroup>
-          </div>
-
           <!-- Actions -->
           <div class="character-card__actions">
             <NSpace>
               <NButton size="small" @click="handleEditCharacter(character)">
                 编辑
-              </NButton>
-              <NButton size="small" @click="openVersionModal(character.id)">
-                添加版本
               </NButton>
               <NPopconfirm
                 @positive-click="handleDeleteCharacter(character.id)"
@@ -305,26 +418,6 @@ const previewVersion = (avatarUrl: string) => {
             :rows="4"
           />
         </NFormItem>
-        <NFormItem label="定妆照" path="avatar">
-          <NUpload
-            :action="`/api/characters/${editCharacter.id}/avatar`"
-            :headers="{ Authorization: `Bearer ${localStorage.getItem('token')}` }"
-            :show-file-list="false"
-            accept="image/*"
-            @finish="(file: any) => { editCharacter.avatarUrl = file.response?.data?.avatarUrl; handleSaveEdit() }"
-          >
-            <NButton>上传定妆照</NButton>
-          </NUpload>
-          <div v-if="editCharacter.avatarUrl" class="edit-avatar-preview">
-            <NImage
-              :src="editCharacter.avatarUrl"
-              width="120"
-              height="120"
-              object-fit="cover"
-              style="border-radius: 8px;"
-            />
-          </div>
-        </NFormItem>
       </NForm>
       <template #footer>
         <NSpace justify="end">
@@ -334,30 +427,58 @@ const previewVersion = (avatarUrl: string) => {
       </template>
     </NModal>
 
-    <!-- Add Version Modal -->
+    <!-- Add Image Modal -->
     <NModal
-      v-model:show="showVersionModal"
+      v-model:show="showImageModal"
       preset="card"
-      title="添加服装版本"
+      :title="imageForm.parentId ? '添加衍生形象' : '添加基础形象'"
       style="width: 480px"
     >
-      <NForm :model="versionForm" label-placement="top">
-        <NFormItem label="版本名称" path="name">
-          <NInput v-model:value="versionForm.name" placeholder="如：日常装、古装、战损版" />
+      <NForm :model="imageForm" label-placement="top">
+        <NFormItem label="形象名称" path="name">
+          <NInput v-model:value="imageForm.name" placeholder="如：日常装、战斗版、微笑表情" />
         </NFormItem>
-        <NFormItem label="版本描述" path="description">
+        <NFormItem label="类型" path="type">
+          <NSpace>
+            <NTag
+              :type="imageForm.type === 'base' ? 'success' : 'default'"
+              :bordered="imageForm.type !== 'base'"
+              checkable
+              @click="imageForm.type = 'base'"
+            >基础</NTag>
+            <NTag
+              :type="imageForm.type === 'outfit' ? 'info' : 'default'"
+              :bordered="imageForm.type !== 'outfit'"
+              checkable
+              @click="imageForm.type = 'outfit'"
+            >服装</NTag>
+            <NTag
+              :type="imageForm.type === 'expression' ? 'warning' : 'default'"
+              :bordered="imageForm.type !== 'expression'"
+              checkable
+              @click="imageForm.type = 'expression'"
+            >表情</NTag>
+            <NTag
+              :type="imageForm.type === 'pose' ? 'default' : 'default'"
+              :bordered="imageForm.type !== 'pose'"
+              checkable
+              @click="imageForm.type = 'pose'"
+            >姿态</NTag>
+          </NSpace>
+        </NFormItem>
+        <NFormItem v-if="imageForm.parentId" label="衍生形象说明" path="description">
           <NInput
-            v-model:value="versionForm.description"
+            v-model:value="imageForm.description"
             type="textarea"
-            placeholder="描述该服装版本的特点..."
-            :rows="3"
+            placeholder="描述该衍生形象的特点..."
+            :rows="2"
           />
         </NFormItem>
         <NFormItem label="参考图" path="file">
           <NUpload
             accept="image/*"
             :max="1"
-            @change="(options: any) => handleVersionUpload(options)"
+            @change="(options: any) => handleImageUpload(options)"
           >
             <NButton>选择图片</NButton>
           </NUpload>
@@ -365,7 +486,7 @@ const previewVersion = (avatarUrl: string) => {
       </NForm>
       <template #footer>
         <NSpace justify="end">
-          <NButton @click="showVersionModal = false">取消</NButton>
+          <NButton @click="showImageModal = false">取消</NButton>
         </NSpace>
       </template>
     </NModal>
@@ -413,7 +534,7 @@ const previewVersion = (avatarUrl: string) => {
 
 .characters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: var(--spacing-md);
 }
 
@@ -430,20 +551,117 @@ const previewVersion = (avatarUrl: string) => {
 .character-card__avatar {
   margin: calc(var(--spacing-md) * -1);
   margin-bottom: var(--spacing-md);
-  height: 160px;
-  overflow: hidden;
+  min-height: 160px;
   background: var(--color-bg-gray);
 }
 
+.avatar-placeholder-container {
+  height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+}
+
 .character-avatar-placeholder {
-  width: 100%;
-  height: 100%;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 48px;
+  font-size: 32px;
   font-weight: var(--font-weight-bold);
+}
+
+.add-base-image-btn {
+  opacity: 0.8;
+}
+
+.base-images-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+}
+
+.base-image-item {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.base-image-item:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-md);
+}
+
+.base-image-item--selected {
+  outline: 2px solid var(--color-primary);
+}
+
+.base-image-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: white;
+}
+
+.base-image-name {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.derived-images {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: white;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.derived-image-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.derived-image-thumb:hover {
+  opacity: 1;
+}
+
+.add-base-image-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: var(--font-size-sm);
+}
+
+.add-base-image-cell:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
 }
 
 .character-card__info {
@@ -468,63 +686,8 @@ const previewVersion = (avatarUrl: string) => {
   min-height: 40px;
 }
 
-.character-card__versions {
-  margin-bottom: var(--spacing-md);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border-light);
-}
-
-.versions-header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-sm);
-}
-
-.versions-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  font-weight: var(--font-weight-medium);
-}
-
-.version-item {
-  position: relative;
-  display: inline-block;
-}
-
-.version-actions {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  display: none;
-  gap: 2px;
-}
-
-.version-item:hover .version-actions {
-  display: flex;
-}
-
-.version-btn {
-  background: rgba(0, 0, 0, 0.6);
-  border: none;
-  border-radius: 4px;
-  padding: 2px 4px;
-  cursor: pointer;
-  font-size: 10px;
-  color: white;
-  transition: background 0.2s;
-}
-
-.version-btn:hover {
-  background: rgba(0, 0, 0, 0.8);
-}
-
 .character-card__actions {
   padding-top: var(--spacing-md);
   border-top: 1px solid var(--color-border-light);
-}
-
-.edit-avatar-preview {
-  margin-top: var(--spacing-md);
 }
 </style>
