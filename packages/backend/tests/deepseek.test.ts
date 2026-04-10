@@ -21,11 +21,15 @@ import {
 } from '../src/services/deepseek.js'
 
 // Mock OpenAI client
+const { mockCreate } = vi.hoisted(() => ({
+  mockCreate: vi.fn()
+}))
+
 vi.mock('openai', () => ({
   default: vi.fn().mockImplementation(() => ({
     chat: {
       completions: {
-        create: vi.fn()
+        create: mockCreate
       }
     }
   }))
@@ -199,6 +203,130 @@ describe('DeepSeek Service', () => {
       const error = new DeepSeekRateLimitError('Custom rate limit message')
 
       expect(error.message).toBe('Custom rate limit message')
+    })
+  })
+
+  describe('expandScript', () => {
+    it('should expand script with project context', async () => {
+      const { expandScript } = await import('../src/services/deepseek.js')
+
+      mockCreate.mockResolvedValueOnce({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              title: 'Expanded Script',
+              summary: 'A great story',
+              scenes: [{
+                sceneNum: 1,
+                location: 'indoor',
+                timeOfDay: 'day',
+                description: 'Scene description',
+                dialogues: [],
+                actions: []
+              }]
+            })
+          }
+        }],
+        usage: { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 }
+      })
+
+      const result = await expandScript('A story', 'Test Project')
+
+      expect(result.script.title).toBe('Expanded Script')
+      expect(result.cost.inputTokens).toBe(100)
+    })
+
+    it('should expand script without project context', async () => {
+      const { expandScript } = await import('../src/services/deepseek.js')
+
+      mockCreate.mockResolvedValueOnce({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              title: 'Expanded Script',
+              summary: 'A great story',
+              scenes: [{
+                sceneNum: 1,
+                location: 'outdoor',
+                timeOfDay: 'night',
+                description: 'Scene description',
+                dialogues: [],
+                actions: []
+              }]
+            })
+          }
+        }],
+        usage: { prompt_tokens: 50, completion_tokens: 100, total_tokens: 150 }
+      })
+
+      const result = await expandScript('A story')
+
+      expect(result.script.title).toBe('Expanded Script')
+    })
+
+    it('should throw DeepSeekAuthError on 401', async () => {
+      const { expandScript } = await import('../src/services/deepseek.js')
+
+      const authError = new Error('Unauthorized')
+      authError.status = 401
+      mockCreate.mockRejectedValueOnce(authError)
+
+      await expect(expandScript('A story')).rejects.toThrow(DeepSeekAuthError)
+    })
+
+    it('should throw error on API failure', async () => {
+      const { expandScript } = await import('../src/services/deepseek.js')
+
+      mockCreate.mockRejectedValueOnce(new Error('API Error'))
+
+      await expect(expandScript('A story')).rejects.toThrow()
+    })
+  })
+
+  describe('optimizePrompt', () => {
+    it('should optimize prompt with context', async () => {
+      const { optimizePrompt } = await import('../src/services/deepseek.js')
+
+      mockCreate.mockResolvedValueOnce({
+        choices: [{
+          message: {
+            content: 'Optimized: A beautiful sunset over the ocean, golden hour lighting, cinematic wide shot'
+          }
+        }],
+        usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80 }
+      })
+
+      const result = await optimizePrompt('A sunset', 'Ocean scene')
+
+      expect(result.optimized).toContain('Optimized')
+      expect(result.cost.inputTokens).toBe(50)
+    })
+
+    it('should optimize prompt without context', async () => {
+      const { optimizePrompt } = await import('../src/services/deepseek.js')
+
+      mockCreate.mockResolvedValueOnce({
+        choices: [{
+          message: {
+            content: 'Optimized: A person walking in the park, sunny day, tracking shot'
+          }
+        }],
+        usage: { prompt_tokens: 20, completion_tokens: 25, total_tokens: 45 }
+      })
+
+      const result = await optimizePrompt('A person walking')
+
+      expect(result.optimized).toContain('Optimized')
+    })
+
+    it('should throw DeepSeekAuthError on 401', async () => {
+      const { optimizePrompt } = await import('../src/services/deepseek.js')
+
+      const authError = new Error('Unauthorized')
+      authError.status = 401
+      mockCreate.mockRejectedValueOnce(authError)
+
+      await expect(optimizePrompt('A prompt')).rejects.toThrow(DeepSeekAuthError)
     })
   })
 })
