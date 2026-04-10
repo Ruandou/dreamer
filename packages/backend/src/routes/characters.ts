@@ -176,18 +176,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
       })
 
       // Return plain object to avoid Prisma serialization issues with self-reference
-      return reply.status(201).send({
-        id: image.id,
-        characterId: image.characterId,
-        name: image.name,
-        avatarUrl: image.avatarUrl,
-        parentId: image.parentId,
-        type: image.type,
-        description: image.description,
-        order: image.order,
-        createdAt: image.createdAt,
-        updatedAt: image.updatedAt
-      })
+      return reply.status(201).send(JSON.parse(JSON.stringify(image)))
     }
   )
 
