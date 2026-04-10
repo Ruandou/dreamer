@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import {
   NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
   NSelect, NImage, NTag, NProgress, NAlert, NSwitch, NTooltip, NCheckbox,
-  NScrollbar, useMessage, useDialog
+  NScrollbar, useMessage, useDialog, NDropdown, NPopconfirm
 } from 'naive-ui'
 import { useSceneStore, type SceneWithTasks } from '@/stores/scene'
 import { useEpisodeStore } from '@/stores/episode'
@@ -160,6 +160,45 @@ const toggleSceneSelection = (sceneId: string) => {
   selectedScenes.value = new Set(selectedScenes.value)
 }
 
+const toggleSelectAll = (checked: boolean) => {
+  if (checked) {
+    selectedScenes.value = new Set(sceneStore.scenes.map(s => s.id))
+  } else {
+    selectedScenes.value.clear()
+    selectedScenes.value = new Set(selectedScenes.value)
+  }
+}
+
+const batchOptions = [
+  { label: '批量生成', key: 'generate' },
+  { label: '批量删除', key: 'delete' }
+]
+
+const handleBatchAction = (key: string) => {
+  if (key === 'generate') {
+    handleBatchGenerate()
+  } else if (key === 'delete') {
+    handleBatchDelete()
+  }
+}
+
+const handleBatchDelete = () => {
+  dialog.warning({
+    title: '确认删除',
+    content: `确定要删除选中的 ${selectedScenes.value.size} 个分镜吗？此操作不可撤销。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      for (const sceneId of selectedScenes.value) {
+        await sceneStore.deleteScene(sceneId)
+      }
+      selectedScenes.value.clear()
+      selectedScenes.value = new Set(selectedScenes.value)
+      message.success('批量删除完成')
+    }
+  })
+}
+
 const handleDragStart = (e: DragEvent, index: number) => {
   (e.dataTransfer as DataTransfer).setData('text/plain', index.toString())
 }
@@ -201,6 +240,15 @@ const getSceneTasks = (scene: SceneWithTasks) => {
         </div>
       </div>
       <div class="storyboard-header__right">
+        <NCheckbox
+          v-if="sceneStore.scenes.length > 0"
+          :checked="selectedScenes.size === sceneStore.scenes.length && sceneStore.scenes.length > 0"
+          :indeterminate="selectedScenes.size > 0 && selectedScenes.size < sceneStore.scenes.length"
+          @update:checked="toggleSelectAll"
+        >
+          {{ selectedScenes.size > 0 ? `已选 ${selectedScenes.size}/${sceneStore.scenes.length}` : '全选' }}
+        </NCheckbox>
+
         <NSelect
           v-model:value="selectedModel"
           :options="modelOptions"
@@ -210,12 +258,23 @@ const getSceneTasks = (scene: SceneWithTasks) => {
           <template #icon>+</template>
           添加分镜
         </NButton>
+        <NDropdown
+          v-if="selectedScenes.size > 0"
+          trigger="click"
+          :options="batchOptions"
+          @select="handleBatchAction"
+        >
+          <NButton type="primary">
+            批量操作 ({{ selectedScenes.size }})
+          </NButton>
+        </NDropdown>
         <NButton
+          v-else
           type="primary"
           :disabled="selectedScenes.size === 0"
           @click="handleBatchGenerate"
         >
-          批量生成 ({{ selectedScenes.size }})
+          批量生成
         </NButton>
       </div>
     </header>
