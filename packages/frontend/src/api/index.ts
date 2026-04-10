@@ -39,4 +39,18 @@ api.postFormData = async <T>(url: string, formData: FormData): Promise<AxiosResp
   })
 }
 
+// Import script document
+export async function importScript(
+  projectId: string,
+  content: string,
+  type: 'markdown' | 'json' = 'markdown'
+) {
+  const res = await api.post('/import/script', {
+    projectId,
+    content,
+    type
+  })
+  return res.data
+}
+
 export { api }

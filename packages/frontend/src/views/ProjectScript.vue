@@ -1,17 +1,22 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput, NSelect, NSpin, NAlert, NCollapse, NCollapseItem, NTag } from 'naive-ui'
+import { NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput, NSelect, NSpin, NAlert, NCollapse, NCollapseItem, NTag, NUpload, useMessage, type UploadFileInfo } from 'naive-ui'
 import { useEpisodeStore } from '@/stores/episode'
+import { importScript } from '@/api'
 
 const route = useRoute()
+const message = useMessage()
 const episodeStore = useEpisodeStore()
 
 const projectId = computed(() => route.params.id as string)
 const showCreateModal = ref(false)
 const showExpandModal = ref(false)
+const showImportModal = ref(false)
 const newEpisode = ref({ episodeNum: 1, title: '' })
 const summary = ref('')
+const importContent = ref('')
+const isImporting = ref(false)
 
 const selectedEpisodeId = ref<string | null>(null)
 
@@ -59,6 +64,41 @@ const handleSaveScript = async () => {
   })
 }
 
+const handleImportScript = async () => {
+  if (!importContent.value.trim()) {
+    message.warning('请输入或粘贴剧本内容')
+    return
+  }
+
+  isImporting.value = true
+  try {
+    const result = await importScript(projectId.value, importContent.value, 'markdown')
+    message.success(`导入成功！创建了 ${result.episodesCreated} 集，更新了 ${result.episodesUpdated} 集`)
+    showImportModal.value = false
+    importContent.value = ''
+    // 刷新剧本列表
+    await episodeStore.fetchEpisodes(projectId.value)
+  } catch (error: any) {
+    message.error(error.response?.data?.error || '导入失败')
+  } finally {
+    isImporting.value = false
+  }
+}
+
+const handleFileChange = (file: File) => {
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    importContent.value = e.target?.result as string || ''
+    message.info(`已读取文件: ${file.name}`)
+  }
+  reader.onerror = () => {
+    message.error('文件读取失败')
+  }
+  reader.readAsText(file)
+}
+
 const script = computed(() => episodeStore.currentEpisode?.script as any)
 </script>
 
@@ -67,6 +107,7 @@ const script = computed(() => episodeStore.currentEpisode?.script as any)
     <NCard title="AI编剧">
       <template #header-extra>
         <NSpace>
+          <NButton @click="showImportModal = true">导入文档</NButton>
           <NButton @click="showCreateModal = true">新建剧本</NButton>
           <NButton type="primary" @click="showExpandModal = true" :disabled="!selectedEpisodeId">
             AI扩写
@@ -225,6 +266,46 @@ const script = computed(() => episodeStore.currentEpisode?.script as any)
         </NSpace>
       </template>
     </NModal>
+
+    <!-- Import Script Modal -->
+    <NModal v-model:show="showImportModal" preset="card" title="导入剧本文档" style="width: 800px">
+      <NAlert type="info" class="expand-info">
+        选择文件或粘贴完整的剧本文档（支持 Markdown 或 JSON 格式），AI 将自动解析并导入到项目中。
+      </NAlert>
+      <NForm>
+        <NFormItem label="选择文件" path="file">
+          <NUpload
+            accept=".md,.markdown,.json,.txt"
+            :max-size="10 * 1024 * 1024"
+            :show-file-list="false"
+            @change="(options: { file: UploadFileInfo }) => handleFileChange(options.file.file as File)"
+          >
+            <NButton type="primary" dashed>选择文件</NButton>
+          </NUpload>
+          <div class="file-hint">支持 .md, .json, .txt 格式，单文件不超过 10MB</div>
+        </NFormItem>
+        <NFormItem label="剧本内容" path="content">
+          <NInput
+            v-model:value="importContent"
+            type="textarea"
+            placeholder="或直接粘贴完整的剧本文档内容..."
+            :rows="15"
+          />
+        </NFormItem>
+      </NForm>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="showImportModal = false">取消</NButton>
+          <NButton
+            type="primary"
+            :loading="isImporting"
+            @click="handleImportScript"
+          >
+            开始导入
+          </NButton>
+        </NSpace>
+      </template>
+    </NModal>
   </div>
 </template>
 
@@ -376,5 +457,11 @@ const script = computed(() => episodeStore.currentEpisode?.script as any)
 
 .expand-info {
   margin-bottom: 16px;
+}
+
+.file-hint {
+  color: #999;
+  font-size: 12px;
+  margin-top: 8px;
 }
 </style>
