@@ -20,7 +20,6 @@ const aiBalance = ref<AiBalance | null>(null)
 
 const toggleCard = (cardId: string) => {
   selectedCard.value = selectedCard.value === cardId ? null : cardId
-  message.success(`已选中: ${cardId}`)
 }
 
 onMounted(async () => {
