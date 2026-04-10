@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
+import axios, { type AxiosInstance, type AxiosResponse } from 'axios'
 
 const api: AxiosInstance = axios.create({
   baseURL: '/api',
@@ -31,7 +31,7 @@ api.interceptors.response.use(
 )
 
 // Helper for form data requests (file uploads)
-api.postFormData = async <T>(url: string, formData: FormData): Promise<AxiosResponse<T>> => {
+;(api as any).postFormData = async <T>(url: string, formData: FormData): Promise<AxiosResponse<T>> => {
   return api.post<T>(url, formData, {
     headers: {
       'Content-Type': 'multipart/form-data'

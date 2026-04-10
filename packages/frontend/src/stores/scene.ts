@@ -3,9 +3,12 @@ import { ref } from 'vue'
 import type { Scene, VideoTask } from '@shared/types'
 import { api } from '@/api'
 
+// Extended Scene type with tasks (from API response)
+export type SceneWithTasks = Scene & { tasks?: VideoTask[] }
+
 export const useSceneStore = defineStore('scene', () => {
   const scenes = ref<Scene[]>([])
-  const currentScene = ref<Scene | null>(null)
+  const currentScene = ref<SceneWithTasks | null>(null)
   const isLoading = ref(false)
   const isGenerating = ref(false)
 

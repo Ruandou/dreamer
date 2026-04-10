@@ -66,7 +66,7 @@ export const useCompositionStore = defineStore('composition', () => {
     const formData = new FormData()
     formData.append(type, file)
 
-    const res = await api.postFormData<Composition>(`/compositions/${id}/audio`, formData)
+    const res = await (api as any).postFormData(`/compositions/${id}/audio`, formData)
     currentComposition.value = res.data
     return res.data
   }
@@ -75,7 +75,7 @@ export const useCompositionStore = defineStore('composition', () => {
     const formData = new FormData()
     formData.append('file', file)
 
-    const res = await api.postFormData<Composition>(`/compositions/${id}/subtitles`, formData)
+    const res = await (api as any).postFormData(`/compositions/${id}/subtitles`, formData)
     currentComposition.value = res.data
     return res.data
   }

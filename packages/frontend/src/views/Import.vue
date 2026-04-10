@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NButton, NSpace, NUpload, NInput, NResult, NSpin, NText } from 'naive-ui'
+import { NCard, NButton, NSpace, NUpload, NInput, NResult, NSpin, NText, NAlert } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
 import { importProject, getImportTaskStatus } from '@/api'
+import EmptyState from '@/components/EmptyState.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 const router = useRouter()
 const fileContent = ref('')
@@ -11,6 +13,7 @@ const isImporting = ref(false)
 const importResult = ref<any>(null)
 const errorMsg = ref('')
 const currentTaskId = ref<string | null>(null)
+const taskStatus = ref<'pending' | 'processing' | 'completed' | 'failed'>('pending')
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const handleFileChange = (options: { file: UploadFileInfo }) => {
@@ -28,9 +31,12 @@ const handleFileChange = (options: { file: UploadFileInfo }) => {
 
 const startPolling = (taskId: string) => {
   currentTaskId.value = taskId
+  taskStatus.value = 'pending'
   pollTimer = setInterval(async () => {
     try {
       const task = await getImportTaskStatus(taskId)
+      taskStatus.value = task.status
+
       if (task.status === 'completed') {
         stopPolling()
         importResult.value = task.result
@@ -40,13 +46,12 @@ const startPolling = (taskId: string) => {
         errorMsg.value = task.errorMsg || '导入失败'
         isImporting.value = false
       }
-      // else pending/processing, continue polling
     } catch (error: any) {
       stopPolling()
       errorMsg.value = error?.response?.data?.message || '查询任务状态失败'
       isImporting.value = false
     }
-  }, 2000) // poll every 2 seconds
+  }, 2000)
 }
 
 const stopPolling = () => {
@@ -68,7 +73,6 @@ const handleImport = async () => {
 
   try {
     const result = await importProject(fileContent.value, 'markdown')
-    // Start polling for task status
     startPolling(result.taskId)
   } catch (error: any) {
     errorMsg.value = error?.response?.data?.message || error.message || '导入失败'
@@ -88,6 +92,7 @@ const handleReset = () => {
   errorMsg.value = ''
   stopPolling()
   currentTaskId.value = null
+  taskStatus.value = 'pending'
 }
 
 onUnmounted(() => {
@@ -96,22 +101,68 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="import-container">
-    <div class="import-header">
-      <h1>导入项目</h1>
-      <p class="subtitle">导入短剧剧本，自动创建项目并解析结构</p>
-    </div>
+  <div class="import-page">
+    <div class="import-container">
+      <!-- Header -->
+      <header class="import-header">
+        <h1>导入项目</h1>
+        <p class="import-subtitle">导入短剧剧本，AI 自动解析并创建项目</p>
+      </header>
 
-    <NCard v-if="!importResult" class="import-card">
-      <template v-if="isImporting">
+      <!-- Loading State -->
+      <NCard v-if="isImporting" class="import-card">
         <div class="importing-section">
           <NSpin size="large" />
-          <p class="importing-text">AI 正在解析文档...</p>
-          <p class="importing-hint">大文档可能需要较长时间，请耐心等待</p>
+          <h3 class="importing-title">AI 正在解析文档...</h3>
+          <p class="importing-hint">
+            <StatusBadge :status="taskStatus" />
+            <span v-if="taskStatus === 'pending'">等待处理</span>
+            <span v-else-if="taskStatus === 'processing'">解析中，请稍候</span>
+          </p>
         </div>
-      </template>
-      <template v-else>
+      </NCard>
+
+      <!-- Success Result -->
+      <NCard v-else-if="importResult" class="result-card">
+        <NResult
+          status="success"
+          title="导入成功！"
+          :description="`已创建项目：${importResult.projectName}`"
+        >
+          <template #footer>
+            <NSpace justify="center">
+              <NButton @click="handleReset">继续导入</NButton>
+              <NButton type="primary" @click="goToProject">前往项目</NButton>
+            </NSpace>
+          </template>
+        </NResult>
+
+        <div class="result-stats">
+          <div class="stat-item">
+            <span class="stat-value">{{ importResult.episodesCreated || 0 }}</span>
+            <span class="stat-label">集</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ importResult.charactersCreated || 0 }}</span>
+            <span class="stat-label">角色</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ importResult.scenesCreated || 0 }}</span>
+            <span class="stat-label">场景</span>
+          </div>
+        </div>
+      </NCard>
+
+      <!-- Import Form -->
+      <NCard v-else class="import-card">
+        <!-- Error Alert -->
+        <NAlert v-if="errorMsg" type="error" class="error-alert">
+          {{ errorMsg }}
+        </NAlert>
+
+        <!-- Upload Section -->
         <div class="upload-section">
+          <div class="upload-section__icon">📄</div>
           <NUpload
             accept=".md,.txt,.json"
             :max="1"
@@ -122,27 +173,25 @@ onUnmounted(() => {
               选择文件
             </NButton>
           </NUpload>
-          <NText depth="3" style="margin-top: 8px">支持 .md, .txt, .json 格式</NText>
+          <NText depth="3" class="upload-hint">支持 .md, .txt, .json 格式</NText>
         </div>
 
         <div class="divider">
-          <span>或</span>
+          <span>或者</span>
         </div>
 
+        <!-- Paste Section -->
         <div class="paste-section">
           <NInput
             v-model:value="fileContent"
             type="textarea"
             placeholder="粘贴剧本文档内容..."
-            :rows="12"
+            :rows="10"
             @input="errorMsg = ''"
           />
         </div>
 
-        <div v-if="errorMsg" class="error-msg">
-          {{ errorMsg }}
-        </div>
-
+        <!-- Action Section -->
         <div class="action-section">
           <NSpace justify="end">
             <NButton @click="router.push('/projects')">取消</NButton>
@@ -151,82 +200,84 @@ onUnmounted(() => {
             </NButton>
           </NSpace>
         </div>
-      </template>
-    </NCard>
+      </NCard>
 
-    <NCard v-else class="result-card">
-      <NResult
-        status="success"
-        title="导入成功"
-        :description="`已创建项目：${importResult.projectName}`"
-      >
-        <template #footer>
-          <NSpace justify="center">
-            <NButton @click="handleReset">继续导入</NButton>
-            <NButton type="primary" @click="goToProject">前往项目</NButton>
-          </NSpace>
-        </template>
-      </NResult>
-
-      <div class="result-stats">
-        <div class="stat-item">
-          <span class="stat-value">{{ importResult.episodesCreated || 0 }}</span>
-          <span class="stat-label">集</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-value">{{ importResult.charactersCreated || 0 }}</span>
-          <span class="stat-label">角色</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-value">{{ importResult.scenesCreated || 0 }}</span>
-          <span class="stat-label">场景</span>
-        </div>
+      <!-- Help Section -->
+      <div class="import-help">
+        <h4>导入说明</h4>
+        <ul>
+          <li>支持 Markdown、JSON 格式的剧本文档</li>
+          <li>文档应包含剧本标题、角色列表、集数及场景描述</li>
+          <li>AI 将自动识别并创建对应的项目结构</li>
+        </ul>
       </div>
-    </NCard>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.import-container {
+.import-page {
   min-height: 100vh;
-  padding: 48px 24px;
-  background: #f5f5f5;
+  padding: var(--spacing-2xl);
+  background: var(--color-bg-base);
 }
 
-.import-header {
-  text-align: center;
-  margin-bottom: 32px;
-}
-
-.import-header h1 {
-  font-size: 28px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.subtitle {
-  color: #666;
-  font-size: 14px;
-}
-
-.import-card {
+.import-container {
   max-width: 700px;
   margin: 0 auto;
 }
 
+.import-header {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.import-header h1 {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.import-subtitle {
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+}
+
+.import-card,
+.result-card {
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Upload Section */
 .upload-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px;
+  padding: var(--spacing-xl);
+  background: var(--color-bg-gray);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-lg);
 }
 
+.upload-section__icon {
+  font-size: 48px;
+  margin-bottom: var(--spacing-md);
+}
+
+.upload-hint {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+}
+
+/* Divider */
 .divider {
   display: flex;
   align-items: center;
-  margin: 24px 0;
-  color: #999;
-  font-size: 14px;
+  gap: var(--spacing-md);
+  margin: var(--spacing-lg) 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
 }
 
 .divider::before,
@@ -234,41 +285,57 @@ onUnmounted(() => {
   content: '';
   flex: 1;
   height: 1px;
-  background: #eee;
+  background: var(--color-border);
 }
 
-.divider {
-  gap: 16px;
-}
-
+/* Paste Section */
 .paste-section {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-md);
 }
 
-.error-msg {
-  color: #d03050;
-  font-size: 14px;
-  margin-bottom: 16px;
-  text-align: center;
-}
-
+/* Action Section */
 .action-section {
-  padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-light);
 }
 
-.result-card {
-  max-width: 500px;
-  margin: 0 auto;
+/* Error Alert */
+.error-alert {
+  margin-bottom: var(--spacing-lg);
 }
 
+/* Importing Section */
+.importing-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-2xl);
+}
+
+.importing-title {
+  margin-top: var(--spacing-lg);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.importing-hint {
+  margin-top: var(--spacing-md);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* Result Stats */
 .result-stats {
   display: flex;
   justify-content: center;
-  gap: 48px;
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid #f0f0f0;
+  gap: var(--spacing-2xl);
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-xl);
+  border-top: 1px solid var(--color-border-light);
 }
 
 .stat-item {
@@ -278,33 +345,47 @@ onUnmounted(() => {
 }
 
 .stat-value {
-  font-size: 32px;
-  font-weight: 600;
-  color: #18a058;
+  font-size: 36px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
 }
 
 .stat-label {
-  font-size: 14px;
-  color: #999;
-  margin-top: 4px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-xs);
 }
 
-.importing-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 48px 24px;
+/* Help Section */
+.import-help {
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  background: var(--color-bg-white);
+  border-radius: var(--radius-lg);
 }
 
-.importing-text {
-  margin-top: 16px;
-  font-size: 16px;
-  color: #333;
+.import-help h4 {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-md);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.importing-hint {
-  margin-top: 8px;
-  font-size: 14px;
-  color: #999;
+.import-help ul {
+  margin: 0;
+  padding-left: var(--spacing-lg);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.import-help li {
+  margin-bottom: var(--spacing-xs);
+}
+
+.import-help li:last-child {
+  margin-bottom: 0;
 }
 </style>
