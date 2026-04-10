@@ -12,8 +12,6 @@ export interface TaskUpdate {
 }
 
 export function useSSE() {
-  const notification = useNotification()
-
   let eventSource: EventSource | null = null
   const connected = ref(false)
 
@@ -51,6 +49,7 @@ export function useSSE() {
   }
 
   const handleTaskUpdate = (data: TaskUpdate) => {
+    const notification = useNotification()
     switch (data.status) {
       case 'completed':
         notification.success({
@@ -73,6 +72,7 @@ export function useSSE() {
   }
 
   const handleProjectUpdate = (data: any) => {
+    const notification = useNotification()
     notification.info({
       title: '项目更新',
       content: data.message || '项目有新更新',
