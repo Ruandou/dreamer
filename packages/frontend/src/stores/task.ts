@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { VideoTask } from '@shared/types'
+import type { VideoTask } from '@dreamer/shared/types'
 import { api } from '@/api'
 
 export const useTaskStore = defineStore('task', () => {

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Scene, VideoTask } from '@shared/types'
+import type { Scene, VideoTask } from '@dreamer/shared/types'
 import { api } from '@/api'
 
 // Extended Scene type with tasks (from API response)

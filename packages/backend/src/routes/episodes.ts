@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { expandScript } from '../services/deepseek.js'
 import { verifyEpisodeOwnership, verifyProjectOwnership } from '../plugins/auth.js'
-import type { ScriptContent } from '@shared/types'
+import type { ScriptContent } from '@dreamer/shared/types'
 
 export async function episodeRoutes(fastify: FastifyInstance) {
   // List episodes for a project

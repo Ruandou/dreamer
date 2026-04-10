@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Character, CharacterImage } from '@shared/types'
+import type { Character, CharacterImage } from '@dreamer/shared/types'
 import { api } from '@/api'
 
 export const useCharacterStore = defineStore('character', () => {

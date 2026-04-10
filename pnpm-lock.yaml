@@ -29,6 +29,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.525.0
         version: 3.1028.0
+      '@dreamer/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@fastify/cors':
         specifier: ^9.0.1
         version: 9.0.1
@@ -99,6 +102,9 @@ importers:
 
   packages/frontend:
     dependencies:
+      '@dreamer/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@vicons/ionicons5':
         specifier: ^0.12.0
         version: 0.12.0

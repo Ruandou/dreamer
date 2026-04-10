@@ -10,7 +10,7 @@ import {
 import type { UploadFile, TreeOption } from 'naive-ui'
 import { useCharacterStore } from '@/stores/character'
 import EmptyState from '@/components/EmptyState.vue'
-import type { Character, CharacterImage } from '@shared/types'
+import type { Character, CharacterImage } from '@dreamer/shared/types'
 
 const route = useRoute()
 const router = useRouter()

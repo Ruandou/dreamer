@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import type { ScriptContent, ScriptScene, Dialogue } from '@shared/types'
+import type { ScriptContent, ScriptScene, Dialogue } from '@dreamer/shared/types'
 
 // DeepSeek pricing (per 1M tokens)
 const DEEPSEEK_INPUT_COST_PER_1M = 0.27  // USD

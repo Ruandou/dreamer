@@ -3,7 +3,7 @@ import { prisma } from '../index.js'
 import { videoQueue } from '../queues/video.js'
 import { optimizePrompt } from '../services/deepseek.js'
 import { verifySceneOwnership, verifyEpisodeOwnership } from '../plugins/auth.js'
-import type { VideoModel } from '@shared/types'
+import type { VideoModel } from '@dreamer/shared/types'
 
 export async function sceneRoutes(fastify: FastifyInstance) {
   // List scenes for an episode

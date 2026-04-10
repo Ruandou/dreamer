@@ -1,7 +1,7 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
 import { prisma } from '../index.js'
-import type { VideoJobData } from '@shared/types'
+import type { VideoJobData } from '@dreamer/shared/types'
 import { submitWan26Task, waitForWan26Completion, calculateWan26Cost } from '../services/wan26.js'
 import { submitSeedanceTask, waitForSeedanceCompletion, calculateSeedanceCost } from '../services/seedance.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'

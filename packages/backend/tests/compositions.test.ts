@@ -323,5 +323,23 @@ describe('Composition Routes', () => {
 
       expect(response.statusCode).toBe(200)
     })
+
+    it('should return 500 when no selected video for scene', async () => {
+      mockCompositionFindUnique.mockResolvedValue({
+        id: 'comp-1',
+        title: 'Composition 1',
+        segments: [
+          { id: 'seg-1', sceneId: 'scene-1', order: 0, startTime: 0, endTime: 5 }
+        ]
+      })
+      mockVideoTaskFindFirst.mockResolvedValue(null) // No selected video
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/compositions/comp-1/export'
+      })
+
+      expect(response.statusCode).toBe(500)
+    })
   })
 })

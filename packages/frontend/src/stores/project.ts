@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Project } from '@shared/types'
+import type { Project } from '@dreamer/shared/types'
 import { api } from '@/api'
 
 export const useProjectStore = defineStore('project', () => {

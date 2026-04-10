@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Episode, ScriptContent } from '@shared/types'
+import type { Episode, ScriptContent } from '@dreamer/shared/types'
 import { api } from '@/api'
 
 export const useEpisodeStore = defineStore('episode', () => {

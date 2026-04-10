@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Composition, Segment } from '@shared/types'
+import type { Composition, Segment } from '@dreamer/shared/types'
 import { api } from '@/api'
 
 export const useCompositionStore = defineStore('composition', () => {
