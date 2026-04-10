@@ -33,6 +33,17 @@ interface Job {
   errorMsg?: string
 }
 
+// 计算任务运行时长
+function formatDuration(startTime: string, endTime?: string): string {
+  const start = new Date(startTime).getTime()
+  const end = endTime ? new Date(endTime).getTime() : Date.now()
+  const diff = Math.floor((end - start) / 1000)
+
+  if (diff < 60) return `${diff}秒`
+  if (diff < 3600) return `${Math.floor(diff / 60)}分${diff % 60}秒`
+  return `${Math.floor(diff / 3600)}时${Math.floor((diff % 3600) / 60)}分`
+}
+
 const router = useRouter()
 const activeTab = ref('all')
 const jobs = ref<Job[]>([])
@@ -108,11 +119,18 @@ const columns: DataTableColumns<Job> = [
     }
   },
   {
-    title: '时间',
-    key: 'createdAt',
-    width: 160,
+    title: '耗时',
+    key: 'duration',
+    width: 100,
     render(row) {
-      return new Date(row.createdAt).toLocaleString('zh-CN')
+      // 已完成的显示实际耗时，处理中的显示实时计时
+      if (row.status === 'completed' || row.status === 'failed') {
+        return formatDuration(row.createdAt, row.updatedAt)
+      }
+      if (row.status === 'processing' || row.status === 'queued' || row.status === 'pending') {
+        return h('span', { style: { color: '#18a058' } }, formatDuration(row.createdAt))
+      }
+      return '-'
     }
   },
   {
