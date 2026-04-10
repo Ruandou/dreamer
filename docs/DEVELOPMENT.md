@@ -115,10 +115,12 @@ dreamer/
 ### Phase 3: 核心功能开发
 - [x] 项目管理 (CRUD)
 - [x] AI 编剧 (DeepSeek 集成)
-- [ ] 角色管理
-- [ ] 分镜设计
+- [x] 角色管理 (CRUD + 形象上传)
+- [x] 分镜设计
 - [ ] 视频生成 (Wan 2.6, Seedance 2.0)
 - [ ] 视频合成 (FFmpeg)
+- [x] 任务中心 (统一查看所有任务)
+- [x] 剧本导入 (ImportTask + Worker 异步处理)
 
 ### Phase 4: 基础设施完善
 - [ ] SSE 实时进度推送
@@ -209,6 +211,15 @@ dreamer/
 |------|------|------|
 | GET | /api/stats/cost | 获取成本统计 |
 
+### 导入任务
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | /api/import/preview | 预览解析结果（不保存） |
+| POST | /api/import/project | 一键导入到新项目（异步） |
+| POST | /api/import/:projectId | 导入到现有项目（异步） |
+| GET | /api/import/task/:id | 获取单个任务状态 |
+| GET | /api/import/tasks | 获取用户所有导入任务列表 |
+
 ---
 
 ## 环境变量
@@ -285,11 +296,13 @@ pnpm db:push
 ### 5. 启动开发服务器
 
 ```bash
-# 启动后端 (端口 4000)
-pnpm dev:backend
+# 同时启动后端、Worker 和前端
+pnpm dev
 
-# 启动前端 (端口 3000)
-pnpm dev:frontend
+# 或单独启动
+pnpm dev:backend  # API 服务器 (端口 4000)
+pnpm dev:worker   # 后台任务处理器 (导入、视频生成)
+pnpm dev:frontend # 前端 (端口 3000)
 ```
 
 ### 6. 访问应用
@@ -325,6 +338,53 @@ pnpm dev:frontend
 
 ### Segment
 - 时间轴片段
+
+### ImportTask
+- 剧本导入任务（异步处理状态跟踪）
+
+---
+
+## 任务中心
+
+任务中心页面 (`/jobs`) 统一展示所有后台任务：
+
+- **视频生成任务** - 来自各项目的分镜视频生成
+- **导入任务** - 剧本导入任务
+
+功能特性：
+- Tab 分类筛选（全部 / 视频 / 导入）
+- 实时轮询更新处理中的任务
+- 跳转到对应项目或重试失败任务
+
+---
+
+## 后台任务架构
+
+系统使用 BullMQ + Redis 处理异步任务：
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   API       │────▶│   Redis     │────▶│   Worker    │
+│   Server    │     │   Queue     │     │  (Backend)  │
+└─────────────┘     └─────────────┘     └─────────────┘
+                                               │
+                                               ▼
+                                        ┌─────────────┐
+                                        │  Database   │
+                                        │  (Prisma)  │
+                                        └─────────────┘
+```
+
+### Worker 进程
+- 独立进程，通过 `pnpm dev:worker` 启动
+- 处理两种队列：
+  - `import` - 剧本导入任务
+  - `video-generation` - 视频生成任务
+- 支持并发处理（导入 2 并发，视频 5 并发）
+
+### 启动流程
+1. API Server (`index.ts`) - 处理 HTTP 请求
+2. Worker (`worker.ts`) - 处理后台任务（独立端口监听）
 
 ---
 
