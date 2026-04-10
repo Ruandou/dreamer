@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NForm, NFormItem, NInput, NButton, NSpace, NMessageProvider, useMessage } from 'naive-ui'
+import { NCard, NForm, NFormItem, NInput, NButton, NSpace, useMessage } from 'naive-ui'
 import { api } from '@/api'
 
 const router = useRouter()
@@ -37,29 +37,28 @@ const handleLogin = async () => {
 </script>
 
 <template>
-  <NMessageProvider>
-    <div class="login-container">
-      <NCard title="登录" style="width: 400px">
-        <NForm :model="formValue">
-          <NFormItem label="邮箱" path="email">
-            <NInput v-model:value="formValue.email" placeholder="请输入邮箱" @keyup.enter="handleLogin" />
-          </NFormItem>
-          <NFormItem label="密码" path="password">
-            <NInput
-              v-model:value="formValue.password"
-              type="password"
-              placeholder="请输入密码"
-              @keyup.enter="handleLogin"
-            />
-          </NFormItem>
-          <NSpace justify="space-between" style="width: 100%">
-            <NButton @click="$router.push('/register')">注册</NButton>
-            <NButton type="primary" :loading="isLoading" @click="handleLogin">登录</NButton>
-          </NSpace>
-        </NForm>
-      </NCard>
-    </div>
-  </NMessageProvider>
+  <div class="login-container">
+    <NCard title="登录" style="width: 400px">
+      <NForm :model="formValue">
+        <NFormItem label="邮箱" path="email">
+          <NInput v-model:value="formValue.email" placeholder="请输入邮箱" autocomplete="email" @keyup.enter="handleLogin" />
+        </NFormItem>
+        <NFormItem label="密码" path="password">
+          <NInput
+            v-model:value="formValue.password"
+            type="password"
+            placeholder="请输入密码"
+            autocomplete="current-password"
+            @keyup.enter="handleLogin"
+          />
+        </NFormItem>
+        <NSpace justify="space-between" style="width: 100%">
+          <NButton @click="$router.push('/register')">注册</NButton>
+          <NButton type="primary" :loading="isLoading" @click="handleLogin">登录</NButton>
+        </NSpace>
+      </NForm>
+    </NCard>
+  </div>
 </template>
 
 <style scoped>

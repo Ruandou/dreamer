@@ -3,9 +3,11 @@ import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NCard, NButton, NSpace, NEmpty, NTag, NSpin,
-  NDataTable, NTabs, NTabPane, type DataTableColumns
+  NDataTable, NTabs, NTabPane, type DataTableColumns, useMessage
 } from 'naive-ui'
 import { api } from '@/api'
+
+const message = useMessage()
 
 // 统一任务类型
 interface Job {
@@ -115,7 +117,14 @@ const columns: DataTableColumns<Job> = [
       if (row.status === 'failed') {
         const msg = row.errorMsg || '未知错误'
         const shortMsg = msg.length > 20 ? msg.slice(0, 20) + '...' : msg
-        return h('span', { style: { color: 'red', fontSize: '12px' }, title: msg }, shortMsg)
+        return h('div', { style: { display: 'flex', alignItems: 'center', gap: '4px' } }, [
+          h('span', { style: { color: 'red', fontSize: '12px', title: msg }, title: msg }, shortMsg),
+          h(NButton, {
+            size: 'tiny',
+            quaternary: true,
+            onClick: (e: MouseEvent) => { e.stopPropagation(); copyError(msg) }
+          }, () => '📋')
+        ])
       }
       return '-'
     }
@@ -250,6 +259,15 @@ const fetchJobs = async () => {
 
 const handleRetry = (job: Job) => {
   console.log('Retry job:', job.id)
+}
+
+const copyError = async (msg: string) => {
+  try {
+    await navigator.clipboard.writeText(msg)
+    message.success('已复制到剪贴板')
+  } catch {
+    message.error('复制失败')
+  }
 }
 
 const startPolling = () => {

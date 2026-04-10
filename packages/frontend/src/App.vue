@@ -1,17 +1,53 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { NConfigProvider, NMessageProvider, NDialogProvider, NNotificationProvider, darkTheme, lightTheme } from 'naive-ui'
-import { RouterView } from 'vue-router'
+import { NConfigProvider, NMessageProvider, NDialogProvider, NNotificationProvider, darkTheme, NButton, NDropdown, NAvatar } from 'naive-ui'
+import { RouterView, useRouter } from 'vue-router'
 import { useSSE } from '@/composables/useSSE'
+import { api } from '@/api'
 
+const router = useRouter()
 const isDark = ref(false)
+const isLoggedIn = ref(!!localStorage.getItem('token'))
 
 // SSE will be initialized after mount to ensure providers are ready
 let sseConnect: (() => void) | null = null
 let sseDisconnect: (() => void) | null = null
 
+// 用户信息
+const userName = ref('')
+const userMenuOptions = ref([
+  {
+    label: '退出登录',
+    key: 'logout'
+  }
+])
+
+const handleUserMenuSelect = (key: string) => {
+  if (key === 'logout') {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    isLoggedIn.value = false
+    router.push('/login')
+  }
+}
+
+// 获取用户信息
+const fetchUserInfo = async () => {
+  try {
+    const res = await api.get('/settings/me', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    })
+    if (res.data?.user) {
+      userName.value = res.data.user.name
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
 // Watch for token changes to connect/disconnect SSE
 watch(() => localStorage.getItem('token'), (token) => {
+  isLoggedIn.value = !!token
   if (token && sseConnect) {
     sseConnect()
   } else if (!token && sseDisconnect) {
@@ -28,6 +64,7 @@ onMounted(() => {
   const token = localStorage.getItem('token')
   if (token) {
     sseConnect()
+    fetchUserInfo()
   }
 })
 
@@ -117,9 +154,58 @@ const themeOverrides = {
     <NMessageProvider>
       <NDialogProvider>
         <NNotificationProvider>
+          <!-- 顶部导航栏 -->
+          <header v-if="isLoggedIn" class="app-header">
+            <div class="app-header-left">
+              <h2 @click="router.push('/projects')" class="app-logo">🎭 AI短剧工作台</h2>
+            </div>
+            <div class="app-header-right">
+              <NDropdown :options="userMenuOptions" @select="handleUserMenuSelect">
+                <NButton quaternary size="large" style="display: flex; align-items: center; gap: 8px;">
+                  <NAvatar round size="small" :style="{ backgroundColor: '#6366f1', flexShrink: 0 }">
+                    {{ userName ? userName.charAt(0).toUpperCase() : '?' }}
+                  </NAvatar>
+                  {{ userName || '用户' }}
+                  <span style="opacity: 0.5; font-size: 12px;">▾</span>
+                </NButton>
+              </NDropdown>
+            </div>
+          </header>
           <RouterView />
         </NNotificationProvider>
       </NDialogProvider>
     </NMessageProvider>
   </NConfigProvider>
 </template>
+
+<style>
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.app-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.app-logo {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  cursor: pointer;
+  margin: 0;
+}
+
+.app-header-right {
+  display: flex;
+  align-items: center;
+}
+</style>
