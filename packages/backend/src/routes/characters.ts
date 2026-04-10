@@ -122,7 +122,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
   // ===== Image Management =====
 
   // Add image to character
-  fastify.post<{ Params: { id: string }; Body: { name: string; parentId?: string; type?: string; description?: string } }>(
+  fastify.post<{ Params: { id: string } }>(
     '/:id/images',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
@@ -133,24 +133,29 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
       }
 
-      const { name, parentId, type, description } = request.body
-
-      // Get uploaded file
-      const data = await request.file()
-      if (!data) {
+      // Get uploaded file first
+      const file = await request.file()
+      if (!file) {
         return reply.status(400).send({ error: 'No file uploaded' })
       }
 
+      // Get non-file fields - they are available after consuming the file
+      const fields = request.body as Record<string, any>
+      const name = fields?.name as string
+      const parentId = fields?.parentId as string | undefined
+      const type = fields?.type as string | undefined
+      const description = fields?.description as string | undefined
+
       // Validate file type
       const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
-      if (!allowedTypes.includes(data.mimetype)) {
+      if (!allowedTypes.includes(file.mimetype)) {
         return reply.status(400).send({ error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.' })
       }
 
       // Generate key and upload
-      const key = generateFileKey('assets', data.filename)
-      const buffer = await data.toBuffer()
-      const avatarUrl = await uploadFile('assets', key, buffer, data.mimetype)
+      const key = generateFileKey('assets', file.filename)
+      const buffer = await file.toBuffer()
+      const avatarUrl = await uploadFile('assets', key, buffer, file.mimetype)
 
       // Get max order for siblings
       const maxOrder = await prisma.characterImage.aggregate({
@@ -170,7 +175,19 @@ export async function characterRoutes(fastify: FastifyInstance) {
         }
       })
 
-      return reply.status(201).send(image)
+      // Return plain object to avoid Prisma serialization issues with self-reference
+      return reply.status(201).send({
+        id: image.id,
+        characterId: image.characterId,
+        name: image.name,
+        avatarUrl: image.avatarUrl,
+        parentId: image.parentId,
+        type: image.type,
+        description: image.description,
+        order: image.order,
+        createdAt: image.createdAt,
+        updatedAt: image.updatedAt
+      })
     }
   )
 

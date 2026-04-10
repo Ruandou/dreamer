@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
   NGrid, NGi, NImage, NImageGroup, NUpload, NPopconfirm, NTag, NTooltip,
@@ -12,16 +12,15 @@ import EmptyState from '@/components/EmptyState.vue'
 import type { Character, CharacterImage } from '@shared/types'
 
 const route = useRoute()
+const router = useRouter()
 const message = useMessage()
 const characterStore = useCharacterStore()
 
 const projectId = computed(() => route.params.id as string)
 
 const showCreateModal = ref(false)
-const showEditModal = ref(false)
 const showImageModal = ref(false)
 const newCharacter = ref({ name: '', description: '' })
-const editCharacter = ref<Character | null>(null)
 const imageForm = ref({
   name: '',
   type: 'base',
@@ -49,21 +48,6 @@ const handleCreateCharacter = async () => {
   showCreateModal.value = false
   newCharacter.value = { name: '', description: '' }
   message.success('角色创建成功')
-}
-
-const handleEditCharacter = (character: Character) => {
-  editCharacter.value = { ...character }
-  showEditModal.value = true
-}
-
-const handleSaveEdit = async () => {
-  if (!editCharacter.value) return
-  await characterStore.updateCharacter(editCharacter.value.id, {
-    name: editCharacter.value.name,
-    description: editCharacter.value.description
-  })
-  showEditModal.value = false
-  message.success('角色更新成功')
 }
 
 const handleDeleteCharacter = async (id: string) => {
@@ -349,7 +333,7 @@ const isCharacterExpanded = (characterId: string) => {
           <!-- Actions -->
           <div class="character-card__actions">
             <NSpace>
-              <NButton size="small" @click="handleEditCharacter(character)">
+              <NButton size="small" @click="router.push(`/project/${projectId}/characters/${character.id}`)">
                 编辑
               </NButton>
               <NPopconfirm
@@ -395,34 +379,6 @@ const isCharacterExpanded = (characterId: string) => {
         <NSpace justify="end">
           <NButton @click="showCreateModal = false">取消</NButton>
           <NButton type="primary" @click="handleCreateCharacter">创建</NButton>
-        </NSpace>
-      </template>
-    </NModal>
-
-    <!-- Edit Character Modal -->
-    <NModal
-      v-model:show="showEditModal"
-      preset="card"
-      title="编辑角色"
-      style="width: 480px"
-    >
-      <NForm v-if="editCharacter" :model="editCharacter" label-placement="top">
-        <NFormItem label="角色名称" path="name">
-          <NInput v-model:value="editCharacter.name" placeholder="输入角色名称" />
-        </NFormItem>
-        <NFormItem label="角色描述" path="description">
-          <NInput
-            v-model:value="editCharacter.description"
-            type="textarea"
-            placeholder="描述角色的外貌、性格、背景等..."
-            :rows="4"
-          />
-        </NFormItem>
-      </NForm>
-      <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showEditModal = false">取消</NButton>
-          <NButton type="primary" @click="handleSaveEdit">保存</NButton>
         </NSpace>
       </template>
     </NModal>
