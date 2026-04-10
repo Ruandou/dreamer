@@ -349,13 +349,20 @@ import { h } from 'vue'
 /* Overview Stats */
 .stats-overview {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-lg);
 }
 
 .stat-card {
   text-align: center;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .stat-card--primary {
@@ -370,9 +377,23 @@ import { h } from 'vue'
   color: rgba(255, 255, 255, 0.9) !important;
 }
 
+.stat-card--primary .stat-suffix {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.stat-card :deep(.n-statistic__value) {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.stat-card :deep(.n-card__content) {
+  padding: 16px;
+}
+
 .stat-suffix {
   font-size: var(--font-size-sm);
   margin-left: 4px;
+  color: var(--color-text-secondary);
 }
 
 /* Model Stats */
@@ -500,6 +521,12 @@ import { h } from 'vue'
 }
 
 /* Responsive */
+@media (max-width: 1200px) {
+  .stats-overview {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 @media (max-width: 1024px) {
   .stats-overview {
     grid-template-columns: repeat(2, 1fr);
