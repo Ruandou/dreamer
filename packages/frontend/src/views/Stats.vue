@@ -182,7 +182,7 @@ import { h } from 'vue'
       <!-- Overview Stats -->
       <div class="stats-overview">
         <NCard
-          class="stat-card stat-card--primary"
+          class="stat-card"
           :class="{ 'stat-card--selected': selectedCard === 'total' }"
           @click="toggleCard('total')"
         >
@@ -398,22 +398,6 @@ import { h } from 'vue'
 
 .stat-card--selected :deep(.n-statistic__value) {
   color: var(--color-primary) !important;
-}
-
-.stat-card--primary {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #8b5cf6 100%);
-}
-
-.stat-card--primary :deep(.n-statistic__value) {
-  color: white !important;
-}
-
-.stat-card--primary :deep(.n-statistic__label) {
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-
-.stat-card--primary .stat-suffix {
-  color: rgba(255, 255, 255, 0.8);
 }
 
 .stat-card :deep(.n-statistic__value) {
