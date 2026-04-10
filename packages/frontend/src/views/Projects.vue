@@ -3,10 +3,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NCard, NButton, NSpace, NGrid, NGi, NEmpty, NModal, NForm, NFormItem,
-  NInput, NInputNumber, NTag, NDropdown, NSelect, useMessage, useDialog
+  NInput, NInputNumber, NTag, NDropdown, NSelect, NUpload, NUploadDragger,
+  useMessage, useDialog, NAlert, NSpin, NText
 } from 'naive-ui'
-import type { MenuOption } from 'naive-ui'
+import type { MenuOption, UploadFileInfo } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
+import { api } from '@/api'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 
@@ -16,9 +18,16 @@ const dialog = useDialog()
 const projectStore = useProjectStore()
 
 const showCreateModal = ref(false)
+const showImportModal = ref(false)
 const newProject = ref({ name: '', description: '' })
 const searchQuery = ref('')
 const viewMode = ref<'grid' | 'list'>('grid')
+
+// Import state
+const importContent = ref('')
+const importType = ref<'markdown' | 'json'>('markdown')
+const isImporting = ref(false)
+const importPreview = ref<any>(null)
 
 onMounted(() => {
   projectStore.fetchProjects()
@@ -37,6 +46,77 @@ const filteredProjects = computed(() => {
 
 const handleCreate = () => {
   showCreateModal.value = true
+}
+
+const handleImport = () => {
+  showImportModal.value = true
+  importContent.value = ''
+  importPreview.value = null
+}
+
+const handleFileChange = (options: { file: UploadFileInfo }) => {
+  const file = options.file
+  if (!file.file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    importContent.value = e.target?.result as string
+    // Auto-detect type
+    if (file.name.endsWith('.json')) {
+      importType.value = 'json'
+    } else {
+      importType.value = 'markdown'
+    }
+  }
+  reader.readAsText(file.file)
+}
+
+const handlePreview = async () => {
+  if (!importContent.value.trim()) {
+    message.warning('请输入或上传剧本内容')
+    return
+  }
+
+  try {
+    const res = await api.post('/import/preview', {
+      content: importContent.value,
+      type: importType.value
+    })
+    importPreview.value = res.data.preview
+  } catch (error: any) {
+    message.error(error.response?.data?.error || '预览失败')
+  }
+}
+
+const handleImportProject = async () => {
+  if (!importContent.value.trim()) {
+    message.warning('请输入或上传剧本内容')
+    return
+  }
+
+  isImporting.value = true
+  try {
+    const res = await api.post('/import/project', {
+      content: importContent.value,
+      type: importType.value
+    })
+
+    message.success('导入任务已创建，正在后台处理...')
+
+    // 跳转到任务页面或等待完成
+    // 这里简化处理，直接跳转到项目列表刷新
+    showImportModal.value = false
+    await projectStore.fetchProjects()
+
+    // 提示用户查看新导入的项目
+    if (projectStore.projects.length > 0) {
+      message.info('请在项目列表中查看导入的项目')
+    }
+  } catch (error: any) {
+    message.error(error.response?.data?.error || '导入失败')
+  } finally {
+    isImporting.value = false
+  }
 }
 
 const handleSubmit = async () => {
@@ -122,6 +202,9 @@ const handleDropdownSelect = (key: string, projectId: string) => {
           </NButton>
           <NButton @click="router.push('/settings')">
             设置
+          </NButton>
+          <NButton @click="handleImport" secondary>
+            导入剧本
           </NButton>
           <NButton @click="handleCreate" type="primary">
             <template #icon>
@@ -227,6 +310,95 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         <NSpace justify="end">
           <NButton @click="showCreateModal = false">取消</NButton>
           <NButton type="primary" @click="handleSubmit">创建项目</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+
+    <!-- Import Modal -->
+    <NModal
+      v-model:show="showImportModal"
+      preset="card"
+      title="导入剧本"
+      style="width: 700px"
+      :bordered="false"
+    >
+      <div class="import-modal">
+        <NAlert type="info" class="import-alert">
+          支持 Markdown 和 JSON 格式的剧本文件。上传后将自动解析并创建项目。
+        </NAlert>
+
+        <NUpload
+          class="import-upload"
+          :multiple="false"
+          accept=".md,.markdown,.json"
+          :show-file-list="false"
+          @change="handleFileChange"
+        >
+          <NUploadDragger>
+            <div class="upload-content">
+              <span class="upload-icon">📄</span>
+              <NText>点击或拖拽文件到此处上传</NText>
+              <NText type="secondary" style="font-size: 12px">
+                支持 .md, .markdown, .json 格式
+              </NText>
+            </div>
+          </NUploadDragger>
+        </NUpload>
+
+        <NForm :model="{ importContent, importType }" label-placement="top" class="import-form">
+          <NFormItem label="剧本内容" path="importContent">
+            <NInput
+              v-model:value="importContent"
+              type="textarea"
+              placeholder="或者直接粘贴剧本内容..."
+              :rows="6"
+            />
+          </NFormItem>
+          <NFormItem label="格式" path="importType">
+            <NSelect
+              v-model:value="importType"
+              :options="[
+                { label: 'Markdown', value: 'markdown' },
+                { label: 'JSON', value: 'json' }
+              ]"
+              style="width: 200px"
+            />
+          </NFormItem>
+          <NButton @click="handlePreview" :disabled="!importContent.trim()">
+            预览解析结果
+          </NButton>
+        </NForm>
+
+        <!-- Preview -->
+        <div v-if="importPreview" class="import-preview">
+          <NText strong>预览结果：</NText>
+          <div class="preview-card">
+            <p><NText strong>项目名称：</NText>{{ importPreview.projectName }}</p>
+            <p><NText strong>描述：</NText>{{ importPreview.description || '无' }}</p>
+            <p><NText strong>角色数：</NText>{{ importPreview.characters?.length || 0 }}</p>
+            <p><NText strong>集数：</NText>{{ importPreview.episodes?.length || 0 }}</p>
+            <div v-if="importPreview.episodes?.length" class="preview-episodes">
+              <p><NText strong>分集预览：</NText></p>
+              <div v-for="ep in importPreview.episodes" :key="ep.episodeNum" class="preview-episode">
+                <NTag size="small">第{{ ep.episodeNum }}集</NTag>
+                <NText>{{ ep.title }}</NText>
+                <NText type="secondary" style="font-size: 12px">{{ ep.sceneCount }} 个场景</NText>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="showImportModal = false">取消</NButton>
+          <NButton
+            type="primary"
+            @click="handleImportProject"
+            :disabled="!importContent.trim()"
+            :loading="isImporting"
+          >
+            一键导入
+          </NButton>
         </NSpace>
       </template>
     </NModal>
@@ -348,5 +520,66 @@ const handleDropdownSelect = (key: string, projectId: string) => {
 
 .search-icon {
   font-size: 14px;
+}
+
+/* Import Modal Styles */
+.import-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.import-alert {
+  margin-bottom: var(--spacing-sm);
+}
+
+.import-upload {
+  margin-bottom: var(--spacing-md);
+}
+
+.upload-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-lg);
+}
+
+.upload-icon {
+  font-size: 32px;
+  margin-bottom: var(--spacing-xs);
+}
+
+.import-form {
+  margin-top: var(--spacing-md);
+}
+
+.import-preview {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--color-bg-base);
+  border-radius: var(--radius-md);
+}
+
+.preview-card {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-bg-white);
+  border-radius: var(--radius-sm);
+}
+
+.preview-card p {
+  margin: var(--spacing-xs) 0;
+}
+
+.preview-episodes {
+  margin-top: var(--spacing-sm);
+}
+
+.preview-episode {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
 }
 </style>
