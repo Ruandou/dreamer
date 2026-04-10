@@ -1,20 +1,24 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NButton, NSpace, NUpload, NInput, NResult, NSpin, NText, NAlert } from 'naive-ui'
+import { NCard, NButton, NSpace, NUpload, NInput, NResult, NSpin, NText, NAlert, NModal, NDescriptions, NDescriptionsItem, NTag, NCollapse, NCollapseItem } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
-import { importProject, getImportTaskStatus } from '@/api'
+import { importProject, getImportTaskStatus, previewImport, type PreviewResult } from '@/api'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 
 const router = useRouter()
 const fileContent = ref('')
 const isImporting = ref(false)
+const isPreviewing = ref(false)
 const importResult = ref<any>(null)
 const errorMsg = ref('')
 const currentTaskId = ref<string | null>(null)
 const taskStatus = ref<'pending' | 'processing' | 'completed' | 'failed'>('pending')
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+const showPreviewModal = ref(false)
+const previewData = ref<PreviewResult | null>(null)
 
 const handleFileChange = (options: { file: UploadFileInfo }) => {
   const file = options.file.file
@@ -61,6 +65,25 @@ const stopPolling = () => {
   }
 }
 
+const handlePreview = async () => {
+  if (!fileContent.value.trim()) {
+    errorMsg.value = '请选择或粘贴文档内容'
+    return
+  }
+
+  isPreviewing.value = true
+  errorMsg.value = ''
+
+  try {
+    previewData.value = await previewImport(fileContent.value, 'markdown')
+    showPreviewModal.value = true
+  } catch (error: any) {
+    errorMsg.value = error?.response?.data?.message || error.message || '预览失败'
+  } finally {
+    isPreviewing.value = false
+  }
+}
+
 const handleImport = async () => {
   if (!fileContent.value.trim()) {
     errorMsg.value = '请选择或粘贴文档内容'
@@ -78,6 +101,11 @@ const handleImport = async () => {
     errorMsg.value = error?.response?.data?.message || error.message || '导入失败'
     isImporting.value = false
   }
+}
+
+const confirmImport = () => {
+  showPreviewModal.value = false
+  handleImport()
 }
 
 const goToProject = () => {
@@ -195,12 +223,79 @@ onUnmounted(() => {
         <div class="action-section">
           <NSpace justify="end">
             <NButton @click="router.push('/projects')">取消</NButton>
-            <NButton type="primary" @click="handleImport">
+            <NButton @click="handlePreview" :loading="isPreviewing" :disabled="!fileContent.trim()">
+              预览
+            </NButton>
+            <NButton type="primary" @click="handleImport" :disabled="!fileContent.trim()">
               开始导入
             </NButton>
           </NSpace>
         </div>
       </NCard>
+
+      <!-- Preview Modal -->
+      <NModal
+        v-model:show="showPreviewModal"
+        preset="card"
+        title="导入预览"
+        style="max-width: 700px;"
+      >
+        <div v-if="previewData" class="preview-content">
+          <NAlert type="info" class="preview-alert">
+            AI 解析预览，实际导入结果可能略有差异。预计 AI 成本：¥{{ previewData.aiCost.toFixed(4) }}
+          </NAlert>
+
+          <NDescriptions label-placement="top" bordered>
+            <NDescriptionsItem label="项目名称">
+              {{ previewData.preview.projectName || '未命名项目' }}
+            </NDescriptionsItem>
+            <NDescriptionsItem label="项目描述">
+              {{ previewData.preview.description || '无' }}
+            </NDescriptionsItem>
+          </NDescriptions>
+
+          <div class="preview-section">
+            <h4>角色列表 ({{ previewData.preview.characters.length }}个)</h4>
+            <div class="character-tags">
+              <NTag v-for="char in previewData.preview.characters" :key="char" size="small">
+                {{ char }}
+              </NTag>
+            </div>
+          </div>
+
+          <div class="preview-section">
+            <h4>集数 ({{ previewData.preview.episodes.length }}集)</h4>
+            <NCollapse>
+              <NCollapseItem
+                v-for="ep in previewData.preview.episodes"
+                :key="ep.episodeNum"
+                :title="`第${ep.episodeNum}集：${ep.title}`"
+                :name="ep.episodeNum"
+              >
+                <template #header-extra>
+                  {{ ep.sceneCount }} 个场景
+                </template>
+                <div v-for="scene in ep.scenes" :key="scene.sceneNum" class="scene-item">
+                  <span class="scene-num">场景 {{ scene.sceneNum }}</span>
+                  <span class="scene-desc">{{ scene.description }}</span>
+                </div>
+                <div v-if="ep.sceneCount > 3" class="scene-more">
+                  还有 {{ ep.sceneCount - 3 }} 个场景...
+                </div>
+              </NCollapseItem>
+            </NCollapse>
+          </div>
+        </div>
+
+        <template #footer>
+          <NSpace justify="end">
+            <NButton @click="showPreviewModal = false">取消</NButton>
+            <NButton type="primary" @click="confirmImport">
+              确认导入
+            </NButton>
+          </NSpace>
+        </template>
+      </NModal>
 
       <!-- Help Section -->
       <div class="import-help">
@@ -387,5 +482,60 @@ onUnmounted(() => {
 
 .import-help li:last-child {
   margin-bottom: 0;
+}
+
+/* Preview Modal */
+.preview-content {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.preview-alert {
+  margin-bottom: var(--spacing-lg);
+}
+
+.preview-section {
+  margin-top: var(--spacing-lg);
+}
+
+.preview-section h4 {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-md);
+}
+
+.character-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.scene-item {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.scene-item:last-child {
+  border-bottom: none;
+}
+
+.scene-num {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+  min-width: 70px;
+}
+
+.scene-desc {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.scene-more {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  padding-top: var(--spacing-xs);
 }
 </style>

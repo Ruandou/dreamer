@@ -2,8 +2,55 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { verifyProjectOwnership } from '../plugins/auth.js'
 import { importQueue } from '../queues/import.js'
+import { parseScriptDocument } from '../services/parser.js'
 
 export async function importRoutes(fastify: FastifyInstance) {
+  // 预览解析结果（不保存到数据库）
+  fastify.post<{
+    Body: {
+      content: string
+      type: 'markdown' | 'json'
+    }
+  }>(
+    '/preview',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { content, type } = request.body
+
+      if (!content) {
+        return reply.status(400).send({ error: '缺少必要参数' })
+      }
+
+      try {
+        const { parsed, cost } = await parseScriptDocument(content, type)
+
+        return {
+          success: true,
+          preview: {
+            projectName: parsed.projectName,
+            description: parsed.description,
+            characters: parsed.characters,
+            episodes: parsed.episodes.map(ep => ({
+              episodeNum: ep.episodeNum,
+              title: ep.title,
+              sceneCount: ep.scenes.length,
+              scenes: ep.scenes.slice(0, 3).map(s => ({
+                sceneNum: s.sceneNum,
+                description: s.description.slice(0, 100) + (s.description.length > 100 ? '...' : '')
+              }))
+            }))
+          },
+          aiCost: cost?.costCNY || 0
+        }
+      } catch (error) {
+        console.error('Preview failed:', error)
+        return reply.status(400).send({
+          error: '解析预览失败',
+          message: error instanceof Error ? error.message : '未知错误'
+        })
+      }
+    }
+  )
   // 导入剧本文档到已有项目（异步任务）
   fastify.post<{
     Body: {

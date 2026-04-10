@@ -71,6 +71,33 @@ export async function getImportTaskStatus(taskId: string) {
   return res.data
 }
 
+// Preview import without saving
+export interface ImportPreview {
+  projectName?: string
+  description?: string
+  characters: string[]
+  episodes: Array<{
+    episodeNum: number
+    title: string
+    sceneCount: number
+    scenes: Array<{
+      sceneNum: number
+      description: string
+    }>
+  }>
+}
+
+export interface PreviewResult {
+  success: boolean
+  preview: ImportPreview
+  aiCost: number
+}
+
+export async function previewImport(content: string, type: 'markdown' | 'json' = 'markdown') {
+  const res = await api.post<PreviewResult>('/import/preview', { content, type })
+  return res.data
+}
+
 // Stats API
 export interface ProjectCostStats {
   projectId: string
