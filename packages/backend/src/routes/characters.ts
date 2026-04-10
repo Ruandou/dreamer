@@ -223,4 +223,69 @@ export async function characterRoutes(fastify: FastifyInstance) {
       return updatedCharacter
     }
   )
+
+  // Delete a version
+  fastify.delete<{
+    Params: { id: string; versionId: string }
+  }>(
+    '/:id/versions/:versionId',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { id: characterId, versionId } = request.params
+
+      const character = await prisma.character.findUnique({
+        where: { id: characterId }
+      })
+
+      if (!character) {
+        return reply.status(404).send({ error: 'Character not found' })
+      }
+
+      const versions = (character.versions as any[]) || []
+      const filteredVersions = versions.filter((v: any) => v.id !== versionId)
+
+      const updatedCharacter = await prisma.character.update({
+        where: { id: characterId },
+        data: { versions: filteredVersions }
+      })
+
+      return updatedCharacter
+    }
+  )
+
+  // Set version as main avatar
+  fastify.put<{
+    Params: { id: string; versionId: string }
+  }>(
+    '/:id/versions/:versionId',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const { id: characterId, versionId } = request.params
+
+      const character = await prisma.character.findUnique({
+        where: { id: characterId }
+      })
+
+      if (!character) {
+        return reply.status(404).send({ error: 'Character not found' })
+      }
+
+      const versions = (character.versions as any[]) || []
+      const version = versions.find((v: any) => v.id === versionId)
+
+      if (!version) {
+        return reply.status(404).send({ error: 'Version not found' })
+      }
+
+      const updatedCharacter = await prisma.character.update({
+        where: { id: characterId },
+        data: {
+          avatarUrl: version.avatarUrl,
+          versions
+        }
+      })
+
+      return updatedCharacter
+    }
+  )
 }

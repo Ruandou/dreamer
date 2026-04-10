@@ -102,6 +102,20 @@ const getAvatarBgColor = (name: string) => {
   const index = name.charCodeAt(0) % colors.length
   return colors[index]
 }
+
+const handleDeleteVersion = async (characterId: string, versionId: string) => {
+  await characterStore.deleteVersion(characterId, versionId)
+  message.success('版本已删除')
+}
+
+const handleSetAsAvatar = async (characterId: string, versionId: string) => {
+  await characterStore.setVersionAsAvatar(characterId, versionId)
+  message.success('已设为主形象')
+}
+
+const previewVersion = (avatarUrl: string) => {
+  window.open(avatarUrl, '_blank')
+}
 </script>
 
 <template>
@@ -183,16 +197,35 @@ const getAvatarBgColor = (name: string) => {
             </div>
             <NImageGroup>
               <NSpace>
-                <NImage
+                <div
                   v-for="version in (character.versions as any[])"
                   :key="version.id"
-                  :src="version.avatarUrl"
-                  width="48"
-                  height="48"
-                  object-fit="cover"
-                  preview
-                  style="border-radius: 8px; cursor: pointer;"
-                />
+                  class="version-item"
+                >
+                  <NImage
+                    :src="version.avatarUrl"
+                    width="48"
+                    height="48"
+                    object-fit="cover"
+                    preview
+                    style="border-radius: 8px; cursor: pointer;"
+                    @click="previewVersion(version.avatarUrl)"
+                  />
+                  <div class="version-actions">
+                    <NTooltip trigger="hover">
+                      <template #trigger>
+                        <button class="version-btn" @click="handleSetAsAvatar(character.id, version.id)">⭐</button>
+                      </template>
+                      设为主形象
+                    </NTooltip>
+                    <NTooltip trigger="hover">
+                      <template #trigger>
+                        <button class="version-btn" @click="handleDeleteVersion(character.id, version.id)">🗑️</button>
+                      </template>
+                      删除
+                    </NTooltip>
+                  </div>
+                </div>
               </NSpace>
             </NImageGroup>
           </div>
@@ -452,6 +485,38 @@ const getAvatarBgColor = (name: string) => {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   font-weight: var(--font-weight-medium);
+}
+
+.version-item {
+  position: relative;
+  display: inline-block;
+}
+
+.version-actions {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: none;
+  gap: 2px;
+}
+
+.version-item:hover .version-actions {
+  display: flex;
+}
+
+.version-btn {
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 4px;
+  padding: 2px 4px;
+  cursor: pointer;
+  font-size: 10px;
+  color: white;
+  transition: background 0.2s;
+}
+
+.version-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
 }
 
 .character-card__actions {

@@ -84,6 +84,24 @@ export const useCharacterStore = defineStore('character', () => {
     return res.data
   }
 
+  async function deleteVersion(characterId: string, versionId: string) {
+    const res = await api.delete<Character>(`/characters/${characterId}/versions/${versionId}`)
+    const index = characters.value.findIndex(c => c.id === characterId)
+    if (index !== -1) {
+      characters.value[index] = res.data
+    }
+    return res.data
+  }
+
+  async function setVersionAsAvatar(characterId: string, versionId: string) {
+    const res = await api.put<Character>(`/characters/${characterId}/versions/${versionId}`)
+    const index = characters.value.findIndex(c => c.id === characterId)
+    if (index !== -1) {
+      characters.value[index] = res.data
+    }
+    return res.data
+  }
+
   return {
     characters,
     isLoading,
@@ -93,6 +111,8 @@ export const useCharacterStore = defineStore('character', () => {
     updateCharacter,
     deleteCharacter,
     uploadAvatar,
-    uploadVersion
+    uploadVersion,
+    deleteVersion,
+    setVersionAsAvatar
   }
 })
