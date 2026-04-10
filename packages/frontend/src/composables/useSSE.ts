@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useNotification } from 'naive-ui'
 
 export interface TaskUpdate {
@@ -18,12 +18,13 @@ export function useSSE() {
   const connected = ref(false)
 
   const connect = () => {
+    // Don't connect if already connected
+    if (eventSource) return
+
     const token = localStorage.getItem('token')
     if (!token) return
 
-    eventSource = new EventSource(`/api/sse`, {
-      // @ts-ignore
-    })
+    eventSource = new EventSource(`/api/sse`)
 
     eventSource.addEventListener('connected', () => {
       connected.value = true
@@ -42,6 +43,8 @@ export function useSSE() {
 
     eventSource.onerror = () => {
       connected.value = false
+      eventSource?.close()
+      eventSource = null
       console.log('SSE disconnected, reconnecting...')
       setTimeout(connect, 5000)
     }
@@ -84,10 +87,6 @@ export function useSSE() {
       connected.value = false
     }
   }
-
-  onMounted(() => {
-    connect()
-  })
 
   onUnmounted(() => {
     disconnect()
