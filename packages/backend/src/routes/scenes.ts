@@ -314,6 +314,15 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return { optimizedPrompt: optimized, aiCost: cost.costCNY }
       } catch (error) {
         console.error('Prompt optimization failed:', error)
+
+        if (error instanceof Error && error.name === 'DeepSeekAuthError') {
+          return reply.status(401).send({ error: 'AI 服务认证失败', message: error.message })
+        }
+
+        if (error instanceof Error && error.name === 'DeepSeekRateLimitError') {
+          return reply.status(429).send({ error: 'AI 服务请求受限', message: error.message })
+        }
+
         return reply.status(500).send({ error: '提示词优化失败' })
       }
     }

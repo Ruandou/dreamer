@@ -86,12 +86,23 @@ export const importWorker = new Worker<ImportJobData>(
     } catch (error) {
       console.error(`Import job ${job.id} failed:`, error)
 
+      let errorMsg = '导入失败'
+      if (error instanceof Error) {
+        if (error.name === 'DeepSeekAuthError') {
+          errorMsg = 'AI 服务认证失败，请检查 API Key'
+        } else if (error.name === 'DeepSeekRateLimitError') {
+          errorMsg = 'AI 服务请求受限，请稍后重试'
+        } else {
+          errorMsg = error.message
+        }
+      }
+
       // Update task as failed
       await prisma.importTask.update({
         where: { id: taskId },
         data: {
           status: 'failed',
-          errorMsg: error instanceof Error ? error.message : 'Unknown error'
+          errorMsg
         }
       })
 

@@ -190,6 +190,21 @@ export async function episodeRoutes(fastify: FastifyInstance) {
         }
       } catch (error) {
         console.error('Script expansion failed:', error)
+
+        if (error instanceof Error && error.name === 'DeepSeekAuthError') {
+          return reply.status(401).send({
+            error: 'AI 服务认证失败',
+            message: error.message
+          })
+        }
+
+        if (error instanceof Error && error.name === 'DeepSeekRateLimitError') {
+          return reply.status(429).send({
+            error: 'AI 服务请求受限',
+            message: error.message
+          })
+        }
+
         return reply.status(500).send({
           error: '剧本生成失败',
           message: error instanceof Error ? error.message : '未知错误'

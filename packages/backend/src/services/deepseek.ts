@@ -13,6 +13,20 @@ export interface DeepSeekCost {
   costCNY: number
 }
 
+export class DeepSeekAuthError extends Error {
+  constructor(message: string = 'DeepSeek API 认证失败，请检查 API Key') {
+    super(message)
+    this.name = 'DeepSeekAuthError'
+  }
+}
+
+export class DeepSeekRateLimitError extends Error {
+  constructor(message: string = 'DeepSeek API 请求过于频繁，请稍后重试') {
+    super(message)
+    this.name = 'DeepSeekRateLimitError'
+  }
+}
+
 export interface DeepSeekBalance {
   isAvailable: boolean
   balanceInfos: Array<{
@@ -161,46 +175,75 @@ export async function expandScript(summary: string, projectContext?: string): Pr
     ? `项目背景：${projectContext}\n\n故事梗概：${summary}`
     : `故事梗概：${summary}`
 
-  const completion = await deepseek.chat.completions.create({
-    model: 'deepseek-chat',
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt }
-    ],
-    temperature: 0.7,
-    max_tokens: 4000
-  })
+  let lastError: Error | null = null
 
-  const content = completion.choices[0]?.message?.content
-  if (!content) {
-    throw new Error('DeepSeek API 返回为空')
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const completion = await deepseek.chat.completions.create({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 4000
+      })
+
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('DeepSeek API 返回为空')
+      }
+
+      const cost = calculateDeepSeekCost(completion.usage)
+
+      // 清理返回内容，移除可能的 markdown 代码块
+      let cleanContent = content
+      if (content.includes('```json')) {
+        cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      }
+
+      // 尝试解析JSON
+      const rawScript = JSON.parse(cleanContent)
+
+      // 转换格式
+      const script = convertDeepSeekResponse(rawScript)
+
+      // 验证结构
+      if (!script.title || !Array.isArray(script.scenes)) {
+        throw new Error('剧本格式不正确')
+      }
+
+      return { script, cost }
+    } catch (error: any) {
+      lastError = error
+
+      // Handle specific errors
+      if (error?.status === 401 || error?.status === 403) {
+        throw new DeepSeekAuthError()
+      }
+
+      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
+        if (attempt < 2) {
+          await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
+          continue
+        }
+        throw new DeepSeekRateLimitError()
+      }
+
+      // For content parsing errors, don't retry
+      if (error.message === '剧本格式不正确' || error.message === 'DeepSeek API 返回为空') {
+        throw error
+      }
+
+      // Other errors, retry once
+      if (attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        continue
+      }
+    }
   }
 
-  const cost = calculateDeepSeekCost(completion.usage)
-
-  try {
-    // 清理返回内容，移除可能的 markdown 代码块
-    let cleanContent = content
-    if (content.includes('```json')) {
-      cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    }
-
-    // 尝试解析JSON
-    const rawScript = JSON.parse(cleanContent)
-
-    // 转换格式
-    const script = convertDeepSeekResponse(rawScript)
-
-    // 验证结构
-    if (!script.title || !Array.isArray(script.scenes)) {
-      throw new Error('剧本格式不正确')
-    }
-
-    return { script, cost }
-  } catch (error) {
-    console.error('Failed to parse DeepSeek response:', content)
-    throw new Error('剧本生成失败，请重试')
-  }
+  throw lastError || new Error('剧本生成失败')
 }
 
 export async function optimizePrompt(prompt: string, context?: string): Promise<{ optimized: string; cost: DeepSeekCost }> {
@@ -209,18 +252,45 @@ export async function optimizePrompt(prompt: string, context?: string): Promise<
     ? `上下文：${context}\n\n原始提示词：${prompt}\n\n请优化这个提示词，使其更适合视频生成模型使用。保持关键视觉元素，移除模糊描述，添加具体细节。`
     : `原始提示词：${prompt}\n\n请优化这个提示词，使其更适合视频生成模型使用。保持关键视觉元素，移除模糊描述，添加具体细节。`
 
-  const completion = await deepseek.chat.completions.create({
-    model: 'deepseek-chat',
-    messages: [
-      { role: 'system', content: '你是一个专业的AI视频提示词优化专家。' },
-      { role: 'user', content: userPrompt }
-    ],
-    temperature: 0.5,
-    max_tokens: 1000
-  })
+  let lastError: Error | null = null
 
-  const cost = calculateDeepSeekCost(completion.usage)
-  const optimized = completion.choices[0]?.message?.content || prompt
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const completion = await deepseek.chat.completions.create({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: '你是一个专业的AI视频提示词优化专家。' },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.5,
+        max_tokens: 1000
+      })
 
-  return { optimized, cost }
+      const cost = calculateDeepSeekCost(completion.usage)
+      const optimized = completion.choices[0]?.message?.content || prompt
+
+      return { optimized, cost }
+    } catch (error: any) {
+      lastError = error
+
+      if (error?.status === 401 || error?.status === 403) {
+        throw new DeepSeekAuthError()
+      }
+
+      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
+        if (attempt < 2) {
+          await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
+          continue
+        }
+        throw new DeepSeekRateLimitError()
+      }
+
+      if (attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        continue
+      }
+    }
+  }
+
+  throw lastError || new Error('提示词优化失败')
 }

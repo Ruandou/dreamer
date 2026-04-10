@@ -5,6 +5,20 @@ const DEEPSEEK_INPUT_COST_PER_1M = 0.27  // USD
 const DEEPSEEK_OUTPUT_COST_PER_1M = 1.07  // USD
 const CNY_RATE = 7.2
 
+export class DeepSeekAuthError extends Error {
+  constructor(message: string = 'DeepSeek API 认证失败，请检查 API Key') {
+    super(message)
+    this.name = 'DeepSeekAuthError'
+  }
+}
+
+export class DeepSeekRateLimitError extends Error {
+  constructor(message: string = 'DeepSeek API 请求过于频繁，请稍后重试') {
+    super(message)
+    this.name = 'DeepSeekRateLimitError'
+  }
+}
+
 export interface ParsedScriptCost {
   inputTokens: number
   outputTokens: number
@@ -100,37 +114,64 @@ export async function parseScriptDocument(
 
   // Markdown 格式，调用 AI 解析
   const deepseek = getDeepSeekClient()
+  let lastError: Error | null = null
 
-  const completion = await deepseek.chat.completions.create({
-    model: 'deepseek-chat',
-    messages: [
-      { role: 'system', content: PARSER_SYSTEM_PROMPT },
-      { role: 'user', content: `请解析以下剧本文档：\n\n${content}` }
-    ],
-    temperature: 0.3,
-    max_tokens: 8000
-  })
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const completion = await deepseek.chat.completions.create({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: PARSER_SYSTEM_PROMPT },
+          { role: 'user', content: `请解析以下剧本文档：\n\n${content}` }
+        ],
+        temperature: 0.3,
+        max_tokens: 8000
+      })
 
-  const response = completion.choices[0]?.message?.content
-  if (!response) {
-    throw new Error('AI 解析返回为空')
-  }
+      const response = completion.choices[0]?.message?.content
+      if (!response) {
+        throw new Error('AI 解析返回为空')
+      }
 
-  const cost = calculateCost(completion.usage)
+      const cost = calculateCost(completion.usage)
 
-  try {
-    // 清理返回内容
-    let cleanContent = response
-    if (response.includes('```json')) {
-      cleanContent = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      // 清理返回内容
+      let cleanContent = response
+      if (response.includes('```json')) {
+        cleanContent = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      }
+
+      const parsed = JSON.parse(cleanContent)
+      return { parsed: normalizeParsedData(parsed), cost }
+    } catch (error: any) {
+      lastError = error
+
+      if (error?.status === 401 || error?.status === 403) {
+        throw new DeepSeekAuthError()
+      }
+
+      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
+        if (attempt < 2) {
+          await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
+          continue
+        }
+        throw new DeepSeekRateLimitError()
+      }
+
+      // For parsing errors, don't retry
+      if (error.message === '剧本解析失败，请检查文档格式' || error.message === 'AI 解析返回为空') {
+        throw error
+      }
+
+      if (attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        continue
+      }
     }
-
-    const parsed = JSON.parse(cleanContent)
-    return { parsed: normalizeParsedData(parsed), cost }
-  } catch (error) {
-    console.error('Failed to parse AI response:', response)
-    throw new Error('剧本解析失败，请检查文档格式')
   }
+
+  console.error('Failed to parse AI response after retries')
+  throw lastError || new Error('剧本解析失败，请检查文档格式')
 }
 
 function normalizeParsedData(data: any): ParsedScript {
