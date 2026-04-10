@@ -30,6 +30,7 @@ model Project {
   episodes     Episode[]
   characters   Character[]
   compositions Composition[]
+  importTasks  ImportTask[]
 
   @@index([userId])
 }
@@ -132,4 +133,20 @@ model Segment {
   transition    String?
 
   @@index([compositionId])
+}
+
+model ImportTask {
+  id          String   @id @default(cuid())
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  userId      String
+  status      String   @default("pending") // pending/processing/completed/failed
+  content     String
+  type        String   @default("markdown")
+  result      Json?
+  errorMsg    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
 }

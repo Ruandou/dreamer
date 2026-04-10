@@ -1,10 +1,10 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { verifyProjectOwnership } from '../plugins/auth.js'
-import { parseScriptDocument } from '../services/parser.js'
+import { importQueue } from '../queues/import.js'
 
 export async function importRoutes(fastify: FastifyInstance) {
-  // 导入剧本文档
+  // 导入剧本文档到已有项目（异步任务）
   fastify.post<{
     Body: {
       projectId: string
@@ -26,24 +26,100 @@ export async function importRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
       }
 
-      try {
-        // 解析文档
-        const parsed = await parseScriptDocument(content, type)
-
-        // 批量创建/更新数据
-        const result = await importParsedData(projectId, parsed)
-
-        return {
-          success: true,
-          ...result
+      // 创建导入任务
+      const task = await prisma.importTask.create({
+        data: {
+          userId,
+          projectId,
+          content,
+          type,
+          status: 'pending'
         }
-      } catch (error) {
-        console.error('Import failed:', error)
-        return reply.status(500).send({
-          error: '文档导入失败',
-          message: error instanceof Error ? error.message : '未知错误'
-        })
+      })
+
+      // 加入队列
+      await importQueue.add('import-script', {
+        taskId: task.id,
+        projectId,
+        userId,
+        content,
+        type
+      })
+
+      return {
+        success: true,
+        taskId: task.id,
+        status: 'pending'
       }
+    }
+  )
+
+  // 一键导入：创建新项目并导入剧本（异步任务）
+  fastify.post<{
+    Body: {
+      content: string
+      type: 'markdown' | 'json'
+    }
+  }>(
+    '/project',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request as any).user.id
+      const { content, type } = request.body
+
+      if (!content) {
+        return reply.status(400).send({ error: '缺少必要参数' })
+      }
+
+      // 创建导入任务（projectId 稍后由 worker 更新）
+      const task = await prisma.importTask.create({
+        data: {
+          userId,
+          content,
+          type,
+          status: 'pending'
+        }
+      })
+
+      // 加入队列
+      await importQueue.add('import-project', {
+        taskId: task.id,
+        userId,
+        content,
+        type
+      })
+
+      return {
+        success: true,
+        taskId: task.id,
+        status: 'pending'
+      }
+    }
+  )
+
+  // 获取导入任务状态
+  fastify.get<{
+    Params: { id: string }
+  }>(
+    '/task/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request as any).user.id
+      const taskId = request.params.id
+
+      const task = await prisma.importTask.findUnique({
+        where: { id: taskId }
+      })
+
+      if (!task) {
+        return reply.status(404).send({ error: '任务不存在' })
+      }
+
+      if (task.userId !== userId) {
+        return reply.status(403).send({ error: '无权限访问此任务' })
+      }
+
+      return task
     }
   )
 }

@@ -32,7 +32,10 @@ const handleProjectClick = (id: string) => {
   <div class="projects-container">
     <header class="projects-header">
       <h1>我的项目</h1>
-      <NButton type="primary" @click="handleCreate">新建项目</NButton>
+      <NSpace>
+        <NButton @click="router.push('/import')">导入项目</NButton>
+        <NButton type="primary" @click="handleCreate">新建项目</NButton>
+      </NSpace>
     </header>
 
     <div class="projects-content">

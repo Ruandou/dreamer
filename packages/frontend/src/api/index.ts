@@ -39,7 +39,7 @@ api.postFormData = async <T>(url: string, formData: FormData): Promise<AxiosResp
   })
 }
 
-// Import script document
+// Import script document to existing project (async task)
 export async function importScript(
   projectId: string,
   content: string,
@@ -50,6 +50,24 @@ export async function importScript(
     content,
     type
   })
+  return res.data
+}
+
+// Import and create new project from document (async task)
+export async function importProject(
+  content: string,
+  type: 'markdown' | 'json' = 'markdown'
+) {
+  const res = await api.post('/import/project', {
+    content,
+    type
+  })
+  return res.data
+}
+
+// Get import task status
+export async function getImportTaskStatus(taskId: string) {
+  const res = await api.get(`/import/task/${taskId}`)
   return res.data
 }
 
