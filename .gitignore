@@ -43,6 +43,9 @@ docker/data/
 packages/frontend/src/auto-imports.d.ts
 packages/frontend/src/components.d.ts
 
+# Test coverage
+packages/*/coverage/
+
 # Credentials and secrets (if accidentally committed)
 *.pem
 *.key
