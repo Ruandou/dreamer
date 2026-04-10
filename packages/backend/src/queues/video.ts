@@ -5,6 +5,7 @@ import type { VideoJobData } from '@shared/types'
 import { submitWan26Task, waitForWan26Completion, calculateWan26Cost } from '../services/wan26.js'
 import { submitSeedanceTask, waitForSeedanceCompletion, calculateSeedanceCost } from '../services/seedance.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
+import { sendTaskUpdate } from '../plugins/sse.js'
 
 const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null
@@ -31,12 +32,24 @@ export const videoWorker = new Worker<VideoJobData>(
 
     const effectiveDuration = duration || 5
 
+    // Get userId for SSE notification
+    const task = await prisma.videoTask.findUnique({
+      where: { id: taskId },
+      include: { scene: { include: { episode: { include: { project: true } } } } }
+    })
+    const userId = task?.scene.episode.project.userId
+
     try {
       // Update task status to processing
       await prisma.videoTask.update({
         where: { id: taskId },
         data: { status: 'processing' }
       })
+
+      // Send SSE notification
+      if (userId) {
+        sendTaskUpdate(userId, taskId, 'processing', { sceneId })
+      }
 
       // Update scene status
       await prisma.scene.update({
@@ -132,6 +145,16 @@ export const videoWorker = new Worker<VideoJobData>(
         data: { status: 'completed' }
       })
 
+      // Send SSE notification
+      if (userId) {
+        sendTaskUpdate(userId, taskId, 'completed', {
+          sceneId,
+          videoUrl: uploadedVideoUrl,
+          thumbnailUrl: uploadedThumbnailUrl,
+          cost
+        })
+      }
+
       console.log(`Video job ${job.id} completed successfully with URL: ${uploadedVideoUrl}`)
 
     } catch (error) {
@@ -151,6 +174,14 @@ export const videoWorker = new Worker<VideoJobData>(
         where: { id: sceneId },
         data: { status: 'failed' }
       })
+
+      // Send SSE notification
+      if (userId) {
+        sendTaskUpdate(userId, taskId, 'failed', {
+          sceneId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
 
       throw error
     }

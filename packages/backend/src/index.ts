@@ -8,6 +8,7 @@ import swagger from '@fastify/swagger'
 import swaggerUI from '@fastify/swagger-ui'
 import { PrismaClient } from '@prisma/client'
 import { authPlugin } from './plugins/auth.js'
+import { ssePlugin } from './plugins/sse.js'
 import { projectRoutes } from './routes/projects.js'
 import { episodeRoutes } from './routes/episodes.js'
 import { characterRoutes } from './routes/characters.js'
@@ -56,6 +57,14 @@ async function start() {
 
     await fastify.register(swaggerUI, {
       routePrefix: '/docs'
+    })
+
+    // Register SSE plugin and routes
+    await fastify.register(ssePlugin)
+
+    // SSE endpoint
+    fastify.get('/api/sse', async (request, reply) => {
+      await fastify.sse.subscribe(request, reply)
     })
 
     // Register auth plugin

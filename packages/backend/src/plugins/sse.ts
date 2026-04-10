@@ -45,11 +45,15 @@ declare module 'fastify' {
 export const ssePlugin = fp(async (fastify: FastifyInstance) => {
   fastify.decorate('sse', {
     subscribe: async function (request: FastifyRequest, reply: FastifyReply) {
-      // Get user from token
+      // Get user from JWT token in Authorization header or query param
       let userId = 'anonymous'
       try {
-        const decoded = await request.jwtVerify()
-        userId = (decoded as any).id || 'anonymous'
+        // Try to get token from query string for SSE
+        const token = (request.query as any)?.subscribe || request.headers.authorization?.replace('Bearer ', '')
+        if (token) {
+          const decoded = await fastify.jwt.verify(token)
+          userId = (decoded as any).id || 'anonymous'
+        }
       } catch (e) {
         // Allow anonymous SSE connections for public updates
       }

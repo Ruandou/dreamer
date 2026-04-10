@@ -1,9 +1,28 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { NConfigProvider, NMessageProvider, NDialogProvider, NNotificationProvider, darkTheme, lightTheme } from 'naive-ui'
-import { RouterView } from 'vue-router'
+import { RouterView, useRouter } from 'vue-router'
+import { useSSE } from '@/composables/useSSE'
 
+const router = useRouter()
 const isDark = ref(false)
+const { connected, connect, disconnect } = useSSE()
+
+// Watch for token changes to connect/disconnect SSE
+watch(() => localStorage.getItem('token'), (token) => {
+  if (token) {
+    connect()
+  } else {
+    disconnect()
+  }
+}, { immediate: true })
+
+onMounted(() => {
+  const token = localStorage.getItem('token')
+  if (token) {
+    connect()
+  }
+})
 
 const themeOverrides = {
   common: {

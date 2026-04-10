@@ -1,0 +1,102 @@
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useMessage, useNotification } from 'naive-ui'
+
+export interface TaskUpdate {
+  taskId: string
+  status: 'processing' | 'completed' | 'failed'
+  sceneId: string
+  videoUrl?: string
+  thumbnailUrl?: string
+  cost?: number
+  error?: string
+}
+
+export function useSSE() {
+  const message = useMessage()
+  const notification = useNotification()
+
+  let eventSource: EventSource | null = null
+  const connected = ref(false)
+
+  const connect = () => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+
+    eventSource = new EventSource(`/api/sse`, {
+      // @ts-ignore
+    })
+
+    eventSource.addEventListener('connected', () => {
+      connected.value = true
+      console.log('SSE connected')
+    })
+
+    eventSource.addEventListener('task-update', (event) => {
+      const data: TaskUpdate = JSON.parse(event.data)
+      handleTaskUpdate(data)
+    })
+
+    eventSource.addEventListener('project-update', (event) => {
+      const data = JSON.parse(event.data)
+      handleProjectUpdate(data)
+    })
+
+    eventSource.onerror = () => {
+      connected.value = false
+      console.log('SSE disconnected, reconnecting...')
+      setTimeout(connect, 5000)
+    }
+  }
+
+  const handleTaskUpdate = (data: TaskUpdate) => {
+    switch (data.status) {
+      case 'completed':
+        notification.success({
+          title: '视频生成完成',
+          content: `场景任务已完成${data.cost ? `，成本 ¥${data.cost.toFixed(2)}` : ''}`,
+          duration: 5000
+        })
+        break
+      case 'failed':
+        notification.error({
+          title: '视频生成失败',
+          content: data.error || '请稍后重试',
+          duration: 8000
+        })
+        break
+      case 'processing':
+        console.log('Task processing:', data.taskId)
+        break
+    }
+  }
+
+  const handleProjectUpdate = (data: any) => {
+    notification.info({
+      title: '项目更新',
+      content: data.message || '项目有新更新',
+      duration: 3000
+    })
+  }
+
+  const disconnect = () => {
+    if (eventSource) {
+      eventSource.close()
+      eventSource = null
+      connected.value = false
+    }
+  }
+
+  onMounted(() => {
+    connect()
+  })
+
+  onUnmounted(() => {
+    disconnect()
+  })
+
+  return {
+    connected,
+    connect,
+    disconnect
+  }
+}
