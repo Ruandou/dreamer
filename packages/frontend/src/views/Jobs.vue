@@ -113,7 +113,9 @@ const columns: DataTableColumns<Job> = [
         return `${r.episodesCreated || 0} 集, ${r.charactersCreated || 0} 角色`
       }
       if (row.status === 'failed') {
-        return h('span', { style: { color: 'red', fontSize: '12px' } }, row.errorMsg || '未知错误')
+        const msg = row.errorMsg || '未知错误'
+        const shortMsg = msg.length > 20 ? msg.slice(0, 20) + '...' : msg
+        return h('span', { style: { color: 'red', fontSize: '12px' }, title: msg }, shortMsg)
       }
       return '-'
     }
