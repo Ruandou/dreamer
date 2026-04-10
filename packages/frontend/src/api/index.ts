@@ -71,4 +71,58 @@ export async function getImportTaskStatus(taskId: string) {
   return res.data
 }
 
+// Stats API
+export interface ProjectCostStats {
+  projectId: string
+  projectName: string
+  totalCost: number
+  totalTasks: number
+  completedTasks: number
+  failedTasks: number
+  tasksByModel: {
+    wan2dot6: { count: number; cost: number }
+    seedance2dot0: { count: number; cost: number }
+  }
+  recentTasks: Array<{
+    id: string
+    model: string
+    cost: number
+    status: string
+    createdAt: Date
+  }>
+}
+
+export interface UserCostStats {
+  userId: string
+  totalCost: number
+  totalProjects: number
+  totalTasks: number
+  projects: ProjectCostStats[]
+}
+
+export interface DailyCost {
+  date: string
+  wanCost: number
+  seedanceCost: number
+  total: number
+}
+
+export async function getUserStats() {
+  const res = await api.get<UserCostStats>('/stats/me')
+  return res.data
+}
+
+export async function getProjectStats(projectId: string) {
+  const res = await api.get<ProjectCostStats>(`/stats/projects/${projectId}`)
+  return res.data
+}
+
+export async function getCostTrend(projectId?: string, days?: number) {
+  const params = new URLSearchParams()
+  if (projectId) params.append('projectId', projectId)
+  if (days) params.append('days', days.toString())
+  const res = await api.get<DailyCost[]>(`/stats/trend?${params}`)
+  return res.data
+}
+
 export { api }

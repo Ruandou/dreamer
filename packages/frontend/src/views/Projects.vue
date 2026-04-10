@@ -108,6 +108,9 @@ const handleDropdownSelect = (key: string, projectId: string) => {
               <span class="search-icon">🔍</span>
             </template>
           </NInput>
+          <NButton @click="router.push('/stats')">
+            成本统计
+          </NButton>
           <NButton @click="handleCreate" type="primary">
             <template #icon>
               <span>+</span>
