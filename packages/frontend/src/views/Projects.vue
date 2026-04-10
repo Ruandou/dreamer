@@ -181,8 +181,8 @@ const handleDropdownSelect = (key: string, projectId: string) => {
           <NButton @click="router.push('/stats')">
             成本统计
           </NButton>
-          <NButton @click="router.push('/tasks')">
-            导入任务
+          <NButton @click="router.push('/jobs')">
+            任务中心
           </NButton>
           <NButton @click="router.push('/settings')">
             设置
