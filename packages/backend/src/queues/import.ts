@@ -1,11 +1,11 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
+import { prisma } from '../index.js'
+import { parseScriptDocument } from '../services/parser.js'
+import { importParsedData } from '../services/importer.js'
 
-// Lazy initialization to ensure dotenv is loaded first
+// Connection - lazy init
 let _connection: IORedis | null = null
-let _queue: Queue<any> | null = null
-let _worker: Worker<any> | null = null
-
 function getConnection(): IORedis {
   if (!_connection) {
     _connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
@@ -23,67 +23,80 @@ export interface ImportJobData {
   type: 'markdown' | 'json'
 }
 
-export function getImportQueue(): Queue<ImportJobData> {
-  if (!_queue) {
-    _queue = new Queue<ImportJobData>('import', {
-      connection: getConnection(),
-      defaultJobOptions: {
-        attempts: 2,
-        backoff: {
-          type: 'exponential',
-          delay: 3000
-        }
-      }
-    })
-  }
-  return _queue
-}
-
-// Export a proxy that lazily initializes
-export const importQueue = new Proxy({} as Queue<ImportJobData>, {
-  get(_, prop) {
-    const queue = getImportQueue()
-    return (queue as any)[prop]
+// Queue
+export const importQueue = new Queue<ImportJobData>('import', {
+  connection: getConnection(),
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: {
+      type: 'exponential',
+      delay: 3000
+    }
   }
 })
 
-export function createImportWorker(
-  processor: (job: any) => Promise<void>
-): Worker<ImportJobData> {
-  if (_worker) {
-    return _worker
-  }
+// Worker
+export const importWorker = new Worker<ImportJobData>(
+  'import',
+  async (job) => {
+    const { taskId, projectId, userId, content, type } = job.data
+    console.log(`Processing import job ${job.id}, taskId: ${taskId}`)
 
-  _worker = new Worker<ImportJobData>(
-    'import',
-    processor,
-    {
-      connection: getConnection(),
-      concurrency: 2
+    try {
+      // Update task status to processing
+      await prisma.importTask.update({
+        where: { id: taskId },
+        data: { status: 'processing' }
+      })
+
+      // Parse the document
+      const { parsed } = await parseScriptDocument(content, type)
+
+      // Import to database
+      const results = await importParsedData(projectId!, parsed)
+
+      // Update task as completed
+      await prisma.importTask.update({
+        where: { id: taskId },
+        data: {
+          status: 'completed',
+          result: results as any
+        }
+      })
+
+      console.log(`Import job ${job.id} completed successfully`)
+    } catch (error: any) {
+      console.error(`Import job ${job.id} failed:`, error.message)
+
+      await prisma.importTask.update({
+        where: { id: taskId },
+        data: {
+          status: 'failed',
+          errorMsg: error.message
+        }
+      })
+
+      throw error
     }
-  )
+  },
+  {
+    connection: getConnection(),
+    concurrency: 2
+  }
+)
 
-  _worker.on('completed', (job) => {
-    console.log(`Import job ${job.id} has completed`)
-  })
+importWorker.on('completed', (job) => {
+  console.log(`Import job ${job.id} has completed`)
+})
 
-  _worker.on('failed', (job, err) => {
-    console.log(`Import job ${job?.id} has failed with error: ${err.message}`)
-  })
-
-  return _worker
-}
+importWorker.on('failed', (job, err) => {
+  console.log(`Import job ${job?.id} has failed with error: ${err.message}`)
+})
 
 // Graceful shutdown
 export async function closeImportWorker(): Promise<void> {
-  if (_worker) {
-    await _worker.close()
-    _worker = null
-  }
-  if (_queue) {
-    await _queue.close()
-    _queue = null
-  }
+  await importWorker.close()
+  await importQueue.close()
   if (_connection) {
     await _connection.quit()
     _connection = null
