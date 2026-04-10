@@ -169,6 +169,32 @@ export async function importRoutes(fastify: FastifyInstance) {
       return task
     }
   )
+
+  // 获取用户所有导入任务列表
+  fastify.get<{
+    Querystring: { limit?: number; offset?: number }
+  }>(
+    '/tasks',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request as any).user.id
+      const limit = request.query.limit || 50
+      const offset = request.query.offset || 0
+
+      const tasks = await prisma.importTask.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset
+      })
+
+      const total = await prisma.importTask.count({
+        where: { userId }
+      })
+
+      return { tasks, total }
+    }
+  )
 }
 
 async function importParsedData(projectId: string, parsed: ParsedScript) {
