@@ -15,10 +15,13 @@
     "db:install": "npm run db:generate -w packages/backend && npm run db:push -w packages/backend",
     "docker:up": "cd docker && docker compose up -d",
     "docker:down": "cd docker && docker compose down",
-    "start": "npm run start -w packages/backend"
+    "start": "npm run start -w packages/backend",
+    "prepare": "husky"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "typescript": "^5.4.0",
     "vitest": "1.6.0"
   },
