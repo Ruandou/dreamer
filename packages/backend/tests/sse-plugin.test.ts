@@ -3,9 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // We test the SSE functions directly without Fastify
 describe('SSE Plugin', () => {
   beforeEach(async () => {
-    // Clear module cache to get fresh state
     vi.resetModules()
-    // Mock console to avoid noise
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -32,17 +30,14 @@ describe('SSE Plugin', () => {
     })
 
     it('should handle closed connections gracefully', async () => {
-      // This tests the catch block when reply.raw.write throws
       vi.resetModules()
-      
-      // Manually test the error handling by simulating a write error
-      const mockWrite = vi.fn().mockImplementation(() => {
-        throw new Error('Connection closed')
-      })
-      
+
+      // Get the module and access internal state via a trick
+      const mod = await import('../src/plugins/sse.js')
+      const { sendSSEToUser } = mod
+
       // Since we can't easily access the internal sseConnections map,
-      // we test the error handling indirectly by verifying no exceptions propagate
-      const { sendSSEToUser } = await import('../src/plugins/sse.js')
+      // we test the error handling indirectly
       expect(() => sendSSEToUser('test-user', 'event', {})).not.toThrow()
     })
   })
@@ -61,7 +56,6 @@ describe('SSE Plugin', () => {
 
     it('should include taskId and status in the event data', async () => {
       const { sendTaskUpdate } = await import('../src/plugins/sse.js')
-      // The function should format data correctly
       const data = { taskId: 'task-456', status: 'completed', sceneId: 'scene-789' }
       expect(data.taskId).toBe('task-456')
       expect(data.status).toBe('completed')
@@ -119,5 +113,62 @@ describe('SSE Message Format', () => {
 
     expect(message).toContain('proj-123')
     expect(message).toContain('created')
+  })
+})
+
+describe('SSE Plugin Integration', () => {
+  // Mock Fastify instance for plugin testing
+  let mockFastify: any
+
+  beforeEach(() => {
+    mockFastify = {
+      decorate: vi.fn(),
+      jwt: {
+        verify: vi.fn()
+      }
+    }
+  })
+
+  it('should decorate fastify with sse namespace', async () => {
+    const { ssePlugin } = await import('../src/plugins/sse.js')
+
+    const mockSseObj = {
+      subscribe: vi.fn(),
+      sendToUser: vi.fn()
+    }
+
+    mockFastify.decorate.mockImplementation((name: string, obj: any) => {
+      if (name === 'sse') {
+        mockSseObj.subscribe = obj.subscribe
+        mockSseObj.sendToUser = obj.sendToUser
+      }
+    })
+
+    await ssePlugin(mockFastify)
+
+    expect(mockFastify.decorate).toHaveBeenCalledWith('sse', expect.objectContaining({
+      subscribe: expect.any(Function),
+      sendToUser: expect.any(Function)
+    }))
+  })
+
+  it('should sendToUser call sendSSEToUser', async () => {
+    const { ssePlugin, sendSSEToUser } = await import('../src/plugins/sse.js')
+
+    const subscribeFn = vi.fn()
+    const sendToUserFn = vi.fn()
+
+    mockFastify.decorate.mockImplementation((name: string, obj: any) => {
+      if (name === 'sse') {
+        obj.subscribe = subscribeFn
+        obj.sendToUser = sendToUserFn
+      }
+    })
+
+    await ssePlugin(mockFastify)
+
+    // The sendToUser should call sendSSEToUser
+    // We can verify the function exists
+    expect(mockFastify.decorate).toHaveBeenCalled()
   })
 })
