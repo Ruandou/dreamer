@@ -1,16 +1,18 @@
 import OpenAI from 'openai'
 import type { ScriptContent, ScriptScene, Dialogue } from '@dreamer/shared/types'
 
-// DeepSeek pricing (per 1M tokens)
-const DEEPSEEK_INPUT_COST_PER_1M = 0.27  // USD
-const DEEPSEEK_OUTPUT_COST_PER_1M = 1.07  // USD
+// DeepSeek pricing (per 1M tokens) - 人民币定价
+// 来源：https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
+const DEEPSEEK_INPUT_COST_PER_1M_CACHE_HIT = 0.2     // 元/百万tokens（缓存命中）
+const DEEPSEEK_INPUT_COST_PER_1M_CACHE_MISS = 2.0    // 元/百万tokens（缓存未命中）
+const DEEPSEEK_OUTPUT_COST_PER_1M = 3.0              // 元/百万tokens
 
 export interface DeepSeekCost {
   inputTokens: number
   outputTokens: number
   totalTokens: number
-  costUSD: number
-  costCNY: number
+  costCNY: number  // 人民币成本
+  cacheHit?: boolean  // 是否缓存命中
 }
 
 export class DeepSeekAuthError extends Error {
@@ -37,24 +39,26 @@ export interface DeepSeekBalance {
   }>
 }
 
-export function calculateDeepSeekCost(usage: any): DeepSeekCost {
+export function calculateDeepSeekCost(usage: any, cacheHit: boolean = false): DeepSeekCost {
   const inputTokens = usage?.prompt_tokens || 0
   const outputTokens = usage?.completion_tokens || 0
   const totalTokens = usage?.total_tokens || 0
 
-  const costUSD = (inputTokens / 1_000_000) * DEEPSEEK_INPUT_COST_PER_1M +
-                  (outputTokens / 1_000_000) * DEEPSEEK_OUTPUT_COST_PER_1M
+  // 根据缓存状态选择输入成本
+  const inputCostPerMillion = cacheHit 
+    ? DEEPSEEK_INPUT_COST_PER_1M_CACHE_HIT 
+    : DEEPSEEK_INPUT_COST_PER_1M_CACHE_MISS
 
-  // CNY exchange rate approximation
-  const CNY_RATE = 7.2
-  const costCNY = costUSD * CNY_RATE
+  // 计算人民币成本（直接使用人民币定价）
+  const costCNY = (inputTokens / 1_000_000) * inputCostPerMillion +
+                  (outputTokens / 1_000_000) * DEEPSEEK_OUTPUT_COST_PER_1M
 
   return {
     inputTokens,
     outputTokens,
     totalTokens,
-    costUSD,
-    costCNY
+    costCNY,
+    cacheHit
   }
 }
 

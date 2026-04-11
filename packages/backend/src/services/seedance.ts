@@ -1,17 +1,19 @@
-// Seedance 2.0 API integration (火山引擎/ByteDance)
+// Seedance 2.0 API integration (火山方舟/ByteDance)
+// 使用 Seedance 2.0-fast 模型，默认 720p 分辨率
 
-import { createHmac, createHash } from 'crypto'
-
-const VOLC_ACCESS_KEY = process.env.VOLC_ACCESS_KEY || ''
-const VOLC_SECRET_KEY = process.env.VOLC_SECRET_KEY || ''
-const VOLC_API_URL = process.env.VOLC_API_URL || 'https://live.volcengineapi.com'
+const ARK_API_KEY = process.env.ARK_API_KEY || ''
+const ARK_API_URL = process.env.ARK_API_URL || 'https://ark.cn-beijing.volces.com/api/v3'
+// 锁定模型：Seedance 2.0-fast
+const SEEDANCE_MODEL = 'doubao-seedance-2-0-fast-260128'
+// 默认分辨率：720p
+const DEFAULT_RESOLUTION = '720p'
 
 export interface SeedanceGenerateRequest {
   prompt: string
   imageUrls?: string[]  // 参考图片 URL 数组，最多 9 张
   duration?: number // seconds, default 5, range 4-15
-  aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9'
-  quality?: '480p' | '720p' | '1080p'
+  aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive'
+  resolution?: '480p' | '720p'
   generateAudio?: boolean
 }
 
@@ -28,66 +30,61 @@ export interface SeedanceStatusResponse {
   error?: string
 }
 
-interface VolcSignedRequest {
-  taskId: string
-}
-
-// 火山引擎签名认证
-function signVolcRequest(method: string, path: string, body: string): { signature: string; timestamp: string; signedHeaders: string } {
-  const timestamp = Math.floor(Date.now() / 1000).toString()
-
-  // 构造签名字符串
-  const stringToSign = [
-    method.toUpperCase(),
-    path,
-    timestamp,
-    body
-  ].join('\n')
-
-  // HMAC-SHA256 签名
-  const signature = createHmac('sha256', VOLC_SECRET_KEY)
-    .update(stringToSign)
-    .digest('hex')
-
+// 构建火山方舟格式的请求体
+function buildArkRequest(request: SeedanceGenerateRequest): any {
+  const content = []
+  
+  // 添加文本提示
+  let promptText = request.prompt
+  
+  // 添加参数到提示词中（火山方舟格式）
+  if (request.aspectRatio) {
+    promptText += ` --ratio ${request.aspectRatio}`
+  }
+  promptText += ` --fps 24 --dur ${request.duration || 5}`
+  
+  content.push({
+    type: 'text',
+    text: promptText
+  })
+  
+  // 添加参考图片（如果有）
+  if (request.imageUrls && request.imageUrls.length > 0) {
+    request.imageUrls.forEach(url => {
+      content.push({
+        type: 'image_url',
+        image_url: { url }
+      })
+    })
+  }
+  
   return {
-    signature,
-    timestamp,
-    signedHeaders: 'host'
+    model: SEEDANCE_MODEL,
+    content,
+    duration: request.duration || 5,
+    resolution: request.resolution || DEFAULT_RESOLUTION,
+    ratio: request.aspectRatio || '9:16',
+    generate_audio: request.generateAudio ?? true,
+    watermark: false
   }
 }
 
-function getAuthHeaders(method: string, path: string, body: string = ''): Record<string, string> {
-  const { signature, timestamp, signedHeaders } = signVolcRequest(method, path, body)
-
-  // 构造 Authorization header
-  const credential = `${VOLC_ACCESS_KEY}/${timestamp}/${signedHeaders}`
-  const authorization = `HMAC-SHA256 Credential=${credential}, SignedHeaders=${signedHeaders}, Signature=${signature}`
-
+// 获取认证头（Bearer Token）
+function getAuthHeaders(): Record<string, string> {
   return {
-    'Authorization': authorization,
     'Content-Type': 'application/json',
-    'X-Date': timestamp
+    'Authorization': `Bearer ${ARK_API_KEY}`
   }
 }
 
 export async function submitSeedanceTask(request: SeedanceGenerateRequest): Promise<SeedanceGenerateResponse> {
-  const body = JSON.stringify({
-    model: 'seedance-2.0',
-    prompt: request.prompt,
-    image_urls: request.imageUrls || [],
-    duration: request.duration || 5,
-    aspect_ratio: request.aspectRatio || '9:16',
-    quality: request.quality || '720p',
-    generate_audio: request.generateAudio ?? true
-  })
-
-  const path = '/v1/videos/generations'
-  const headers = getAuthHeaders('POST', path, body)
-
-  const response = await fetch(`${VOLC_API_URL}${path}`, {
+  const body = buildArkRequest(request)
+  const headers = getAuthHeaders()
+  
+  const response = await fetch(`${ARK_API_URL}/contents/generations/tasks`, {
     method: 'POST',
     headers,
-    body
+    body: JSON.stringify(body)
   })
 
   if (!response.ok) {
@@ -96,19 +93,17 @@ export async function submitSeedanceTask(request: SeedanceGenerateRequest): Prom
   }
 
   const data = await response.json()
-
-  // 火山引擎返回格式可能是 { id: "task-xxx", status: "pending" }
+  
   return {
-    taskId: data.id || data.task_id || data.job_id,
+    taskId: data.id,
     status: 'queued'
   }
 }
 
 export async function pollSeedanceStatus(taskId: string): Promise<SeedanceStatusResponse> {
-  const path = `/v1/videos/generations/${taskId}`
-  const headers = getAuthHeaders('GET', path)
-
-  const response = await fetch(`${VOLC_API_URL}${path}`, {
+  const headers = getAuthHeaders()
+  
+  const response = await fetch(`${ARK_API_URL}/contents/generations/tasks/${taskId}`, {
     method: 'GET',
     headers
   })
@@ -119,14 +114,13 @@ export async function pollSeedanceStatus(taskId: string): Promise<SeedanceStatus
   }
 
   const data = await response.json()
-
-  // 映射火山引擎响应格式
+  
   return {
-    taskId: data.id || taskId,
+    taskId: data.id,
     status: mapStatus(data.status),
-    videoUrl: data.output?.video_url || data.video_url || data.url,
-    thumbnailUrl: data.output?.thumbnail_url || data.thumbnail_url,
-    error: data.error?.message || data.error || data.message
+    videoUrl: data.content?.video_url,
+    thumbnailUrl: data.content?.thumbnail_url,
+    error: data.error?.message || data.error
   }
 }
 
@@ -145,7 +139,6 @@ function mapStatus(status: string): 'queued' | 'processing' | 'completed' | 'fai
       return 'completed'
     case 'failed':
     case 'error':
-    case 'failed':
       return 'failed'
     default:
       return 'processing'
@@ -173,17 +166,19 @@ export async function waitForSeedanceCompletion(
       throw new Error(`Seedance 2.0 task failed: ${status.error || 'Unknown error'}`)
     }
 
-    // 等待后继续轮询
     await new Promise(resolve => setTimeout(resolve, pollInterval))
   }
 
   throw new Error('Seedance 2.0 task timeout')
 }
 
-// Cost calculation (火山引擎定价: 大约 14 credits/秒)
+// 成本计算（基于火山方舟官方定价）
+// 注意：成本按人民币计算，不是美元
 export function calculateSeedanceCost(durationSeconds: number): number {
-  const CREDITS_PER_SECOND = 14
-  // 假设 1 credit = $0.01 (需要根据实际定价调整)
-  const CREDIT_TO_USD = 0.01
-  return durationSeconds * CREDITS_PER_SECOND * CREDIT_TO_USD
+  // Seedance 2.0-fast 定价：5.81 PTC/百万tokens（输入不含视频）
+  // 官方估算：15秒视频约30.888万tokens，成本约 ¥15
+  // 简化计算：¥1/秒
+  const CNY_PER_SECOND = 1.0
+  
+  return durationSeconds * CNY_PER_SECOND
 }

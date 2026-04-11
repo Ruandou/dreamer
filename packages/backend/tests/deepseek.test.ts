@@ -53,8 +53,10 @@ describe('DeepSeek Service', () => {
       expect(cost.inputTokens).toBe(1000)
       expect(cost.outputTokens).toBe(500)
       expect(cost.totalTokens).toBe(1500)
-      expect(cost.costUSD).toBeCloseTo(0.00027 + 0.000535) // 0.27 + 1.07 per 1M
-      expect(cost.costCNY).toBeCloseTo(cost.costUSD * 7.2)
+      // 新定价：输入2元/百万tokens，输出3元/百万tokens
+      // 1000 tokens = 0.001百万tokens，500 tokens = 0.0005百万tokens
+      // 成本 = (0.001 * 2) + (0.0005 * 3) = 0.002 + 0.0015 = 0.0035元
+      expect(cost.costCNY).toBeCloseTo(0.0035, 4)
     })
 
     it('should handle missing usage data', () => {
@@ -63,7 +65,7 @@ describe('DeepSeek Service', () => {
       expect(cost.inputTokens).toBe(0)
       expect(cost.outputTokens).toBe(0)
       expect(cost.totalTokens).toBe(0)
-      expect(cost.costUSD).toBe(0)
+      expect(cost.costCNY).toBe(0)
     })
   })
 

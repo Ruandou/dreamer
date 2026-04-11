@@ -4,9 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockFetch = vi.hoisted(() => vi.fn())
 
 // Mock environment variables
-process.env.VOLC_ACCESS_KEY = 'test-access-key'
-process.env.VOLC_SECRET_KEY = 'test-secret-key'
-process.env.VOLC_API_URL = 'https://api.volc.example.com'
+process.env.ARK_API_KEY = 'test-ark-api-key'
+process.env.ARK_API_URL = 'https://ark.test.example.com/api/v3'
 
 // Mock global fetch
 vi.stubGlobal('fetch', mockFetch)
@@ -28,13 +27,14 @@ describe('Seedance Service', () => {
   describe('calculateSeedanceCost', () => {
     it('should calculate cost correctly for 5 second video', () => {
       const cost = calculateSeedanceCost(5)
-      // 5 seconds * 14 credits/sec * $0.01 = $0.7
-      expect(cost).toBeCloseTo(0.7)
+      // 5秒 * ¥1/秒 = ¥5
+      expect(cost).toBe(5)
     })
 
     it('should calculate cost correctly for 10 second video', () => {
       const cost = calculateSeedanceCost(10)
-      expect(cost).toBeCloseTo(1.4)
+      // 10秒 * ¥1/秒 = ¥10
+      expect(cost).toBe(10)
     })
   })
 
@@ -79,7 +79,7 @@ describe('Seedance Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          taskId: 'task-123',
+          id: 'task-123',
           status: 'processing'
         })
       })
@@ -96,7 +96,7 @@ describe('Seedance Service', () => {
         json: async () => ({
           id: 'task-123',
           status: 'succeeded',
-          output: {
+          content: {
             video_url: 'https://example.com/video.mp4',
             thumbnail_url: 'https://example.com/thumb.jpg'
           }
@@ -127,7 +127,7 @@ describe('Seedance Service', () => {
         json: async () => ({
           id: 'task-123',
           status: 'succeeded',
-          output: { video_url: 'https://example.com/video.mp4' }
+          content: { video_url: 'https://example.com/video.mp4' }
         })
       })
 

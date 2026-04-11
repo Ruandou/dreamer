@@ -40,6 +40,13 @@ export const videoWorker = new Worker<VideoJobData>(
     })
     const userId = task?.scene.episode.project.userId
 
+    // 在try-catch外部声明变量，确保在catch块中可访问
+    let videoUrl: string = ''
+    let thumbnailUrl: string = ''
+    let cost: number = 0
+    let externalTaskId: string = ''
+    let apiCallId: string = ''
+
     try {
       // Update task status to processing
       await prisma.videoTask.update({
@@ -57,12 +64,6 @@ export const videoWorker = new Worker<VideoJobData>(
         where: { id: sceneId },
         data: { status: 'processing' }
       })
-
-      let videoUrl: string
-      let thumbnailUrl: string
-      let cost: number
-      let externalTaskId: string
-      let apiCallId: string
 
       if (model === 'wan2.6') {
         // Wan 2.6 API call

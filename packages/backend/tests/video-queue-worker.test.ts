@@ -17,6 +17,8 @@ const {
   mockWorkerOn,
   mockWorkerClose,
   mockQueueClose,
+  mockLogApiCall,
+  mockUpdateApiCall,
   capturedProcessor
 } = vi.hoisted(() => ({
   mockVideoTaskFindUnique: vi.fn(),
@@ -34,6 +36,8 @@ const {
   mockWorkerOn: vi.fn(),
   mockWorkerClose: vi.fn().mockResolvedValue(undefined),
   mockQueueClose: vi.fn().mockResolvedValue(undefined),
+  mockLogApiCall: vi.fn(),
+  mockUpdateApiCall: vi.fn(),
   capturedProcessor: { current: null as ((job: any) => Promise<any>) | null }
 }))
 
@@ -100,6 +104,12 @@ vi.mock('../src/services/storage.js', () => ({
   generateFileKey: mockGenerateFileKey
 }))
 
+// Mock api-logger
+vi.mock('../src/services/api-logger.js', () => ({
+  logApiCall: mockLogApiCall,
+  updateApiCall: mockUpdateApiCall
+}))
+
 // Mock fetch for video download
 global.fetch = vi.fn()
 
@@ -145,6 +155,8 @@ describe('Video Queue Worker', () => {
       mockCalculateWan26Cost.mockReturnValue(0.5)
       mockUploadFile.mockResolvedValue('https://minio.example.com/videos/task-123.mp4')
       mockGenerateFileKey.mockReturnValue('videos/task-123.mp4')
+      // Mock logApiCall to return an object with an id property
+      mockLogApiCall.mockResolvedValue({ id: 'api-call-123' })
 
       const mockJob = {
         id: 'job-1',
@@ -179,6 +191,8 @@ describe('Video Queue Worker', () => {
       mockCalculateSeedanceCost.mockReturnValue(1.0)
       mockUploadFile.mockResolvedValue('https://minio.example.com/videos/task-123.mp4')
       mockGenerateFileKey.mockReturnValue('videos/task-123.mp4')
+      // Mock logApiCall to return an object with an id property
+      mockLogApiCall.mockResolvedValue({ id: 'api-call-456' })
 
       const mockJob = {
         id: 'job-2',

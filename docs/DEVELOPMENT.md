@@ -252,10 +252,10 @@ DEEPSEEK_BASE_URL="https://api.deepseek.com/v1"
 ATLAS_API_KEY="your-atlas-api-key"
 ATLAS_API_URL="https://api.atlascloud.com"
 
-# 火山引擎 API (Seedance 2.0)
-VOLC_ACCESS_KEY="your-volc-access-key"
-VOLC_SECRET_KEY="your-volc-secret-key"
-VOLC_API_URL="https://volcbytebytes.example.com"
+# 火山方舟 API (Seedance 2.0-fast)
+ARK_API_KEY="your-ark-api-key"
+ARK_API_URL="https://ark.cn-beijing.volces.com/api/v3"
+# 已锁定模型：Seedance 2.0-fast，默认 720p 分辨率
 
 # CORS（可选，生产环境设置具体域名）
 CORS_ORIGIN="http://localhost:3000"
