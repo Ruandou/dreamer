@@ -129,6 +129,24 @@ git add .
 git commit -m "feat: 添加新功能"
 ```
 
+## 任务中心规则
+
+### 必须显示所有任务类型
+
+任务中心（`/jobs`）**必须**显示所有类型的任务，包括：
+
+| 类型 | 说明 | API 来源 |
+|------|------|----------|
+| `video` | 视频生成任务 | `/api/tasks` |
+| `import` | 剧本导入任务 | `/api/import/tasks` |
+| `outline` | 大纲生成任务 | `/api/projects/outline-jobs` |
+| `pipeline` | Pipeline 执行任务 | `/api/pipeline/jobs` |
+
+新增任务类型时，**必须**同步更新：
+1. 后端 API（获取任务列表）
+2. 前端 `Jobs.vue`（添加类型支持）
+3. AGENTS.md（本规则）
+
 ## 计划文档管理
 
 ### 计划文档位置

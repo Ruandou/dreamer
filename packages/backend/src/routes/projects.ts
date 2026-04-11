@@ -150,4 +150,18 @@ export async function projectRoutes(fastify: FastifyInstance) {
       return job
     }
   )
+
+  // 获取用户所有 outline jobs
+  fastify.get(
+    '/outline-jobs',
+    { preHandler: [fastify.authenticate] },
+    async (request) => {
+      const user = (request as any).user
+
+      return prisma.outlineJob.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' }
+      })
+    }
+  )
 }

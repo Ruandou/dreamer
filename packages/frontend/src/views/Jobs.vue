@@ -12,14 +12,14 @@ const message = useMessage()
 // 统一任务类型
 interface Job {
   id: string
-  type: 'video' | 'import'
+  type: 'video' | 'import' | 'outline' | 'pipeline'
   status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed'
   createdAt: string
   updatedAt: string
   // video task fields
-  sceneId?: string
-  sceneNum?: number
-  sceneDescription?: string
+  segmentId?: string
+  segmentNum?: number
+  segmentDescription?: string
   model?: string
   videoUrl?: string
   thumbnailUrl?: string
@@ -33,6 +33,12 @@ interface Job {
   contentPreview?: string
   result?: any
   errorMsg?: string
+  // outline task fields
+  idea?: string
+  // pipeline task fields
+  currentStep?: string
+  progress?: number
+  stepResults?: any[]
 }
 
 // 计算任务运行时长
@@ -66,9 +72,14 @@ const columns: DataTableColumns<Job> = [
     key: 'type',
     width: 90,
     render(row) {
-      return h(NTag, { type: row.type === 'video' ? 'info' : 'warning', size: 'small' }, () =>
-        row.type === 'video' ? '🎬 视频' : '📄 导入'
-      )
+      const typeMap: Record<string, { type: string; label: string }> = {
+        video: { type: 'info', label: '🎬 视频' },
+        import: { type: 'warning', label: '📄 导入' },
+        outline: { type: 'success', label: '✨ 大纲' },
+        pipeline: { type: 'error', label: '🔄 Pipeline' }
+      }
+      const config = typeMap[row.type] || typeMap.video
+      return h(NTag, { type: config.type as any, size: 'small' }, () => config.label)
     }
   },
   {
@@ -86,7 +97,13 @@ const columns: DataTableColumns<Job> = [
     ellipsis: { tooltip: true },
     render(row) {
       if (row.type === 'video') {
-        return `场景 ${row.sceneNum}: ${(row.prompt || '').slice(0, 50)}${(row.prompt || '').length > 50 ? '...' : ''}`
+        return `场景 ${row.segmentNum}: ${(row.prompt || '').slice(0, 50)}${(row.prompt || '').length > 50 ? '...' : ''}`
+      }
+      if (row.type === 'outline') {
+        return (row.idea || '').slice(0, 60) + ((row.idea || '').length > 60 ? '...' : '')
+      }
+      if (row.type === 'pipeline') {
+        return row.projectName ? `项目: ${row.projectName}` : 'Pipeline 任务'
       }
       return row.contentPreview || (row.content || '').slice(0, 50) + ((row.content || '').length > 50 ? '...' : '')
     }
@@ -98,6 +115,12 @@ const columns: DataTableColumns<Job> = [
     render(row) {
       if (row.type === 'video') {
         return row.model?.toUpperCase() || '-'
+      }
+      if (row.type === 'outline') {
+        return row.idea ? row.idea.length + ' 字符' : '-'
+      }
+      if (row.type === 'pipeline') {
+        return row.currentStep ? `${row.progress || 0}%` : '-'
       }
       return row.content ? row.content.length + ' 字符' : '-'
     }
@@ -113,6 +136,15 @@ const columns: DataTableColumns<Job> = [
       if (row.type === 'import' && row.status === 'completed') {
         const r = row.result || {}
         return `${r.episodesCreated || 0} 集, ${r.charactersCreated || 0} 角色`
+      }
+      if (row.type === 'outline' && row.status === 'completed' && row.result?.outline) {
+        return row.result.outline.title || '已完成'
+      }
+      if (row.type === 'pipeline' && row.status === 'completed') {
+        return row.currentStep || '已完成'
+      }
+      if (row.type === 'pipeline' && row.status === 'running') {
+        return `步骤: ${row.currentStep || '-'}`
       }
       if (row.status === 'failed') {
         const msg = row.errorMsg || '未知错误'
@@ -192,6 +224,8 @@ const filteredJobs = computed(() => {
   if (activeTab.value === 'all') return jobs.value
   if (activeTab.value === 'video') return jobs.value.filter(j => j.type === 'video')
   if (activeTab.value === 'import') return jobs.value.filter(j => j.type === 'import')
+  if (activeTab.value === 'outline') return jobs.value.filter(j => j.type === 'outline')
+  if (activeTab.value === 'pipeline') return jobs.value.filter(j => j.type === 'pipeline')
   return jobs.value
 })
 
@@ -229,9 +263,9 @@ const fetchJobs = async () => {
             status: t.status,
             createdAt: t.createdAt,
             updatedAt: t.updatedAt,
-            sceneId: t.sceneId,
-            sceneNum: t.sceneNum,
-            sceneDescription: t.sceneDescription,
+            segmentId: t.segmentId,
+            segmentNum: t.segmentNum,
+            segmentDescription: t.description,
             model: t.model,
             videoUrl: t.videoUrl,
             thumbnailUrl: t.thumbnailUrl,
@@ -246,10 +280,56 @@ const fetchJobs = async () => {
       }
     }
 
+    // 获取大纲任务
+    const outlineJobs: Job[] = []
+    try {
+      const outlineRes = await api.get('/projects/outline-jobs')
+      const outlines = outlineRes.data || []
+      for (const o of outlines) {
+        outlineJobs.push({
+          id: o.id,
+          type: 'outline',
+          status: o.status,
+          createdAt: o.createdAt,
+          updatedAt: o.updatedAt,
+          idea: o.idea,
+          result: o.result,
+          errorMsg: o.error
+        })
+      }
+    } catch (e) {
+      // 忽略大纲任务获取错误
+    }
+
+    // 获取 Pipeline 任务
+    const pipelineJobs: Job[] = []
+    try {
+      const pipelineRes = await api.get('/pipeline/jobs')
+      const pipelines = pipelineRes.data || []
+      for (const p of pipelines) {
+        pipelineJobs.push({
+          id: p.id,
+          type: 'pipeline',
+          status: p.status,
+          currentStep: p.currentStep,
+          progress: p.progress,
+          projectId: p.projectId,
+          projectName: p.projectName,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+          errorMsg: p.error
+        })
+      }
+    } catch (e) {
+      // 忽略 Pipeline 任务获取错误
+    }
+
     // 合并并按时间排序
-    jobs.value = [...importJobs, ...videoJobs].sort((a, b) =>
+    console.log('Import:', importJobs.length, 'Video:', videoJobs.length, 'Outline:', outlineJobs.length, 'Pipeline:', pipelineJobs.length)
+    jobs.value = [...importJobs, ...videoJobs, ...outlineJobs, ...pipelineJobs].sort((a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
+    console.log('Total jobs:', jobs.value.length)
   } catch (error) {
     console.error('Failed to fetch jobs:', error)
   } finally {
@@ -338,6 +418,26 @@ onUnmounted(() => {
               <span>📄 导入</span>
               <NTag v-if="jobs.filter(j => j.type === 'import').length" size="small" round type="warning">
                 {{ jobs.filter(j => j.type === 'import').length }}
+              </NTag>
+            </NSpace>
+          </template>
+        </NTabPane>
+        <NTabPane name="outline" tab="大纲生成">
+          <template #tab>
+            <NSpace :size="8">
+              <span>✨ 大纲</span>
+              <NTag v-if="jobs.filter(j => j.type === 'outline').length" size="small" round type="success">
+                {{ jobs.filter(j => j.type === 'outline').length }}
+              </NTag>
+            </NSpace>
+          </template>
+        </NTabPane>
+        <NTabPane name="pipeline" tab="Pipeline">
+          <template #tab>
+            <NSpace :size="8">
+              <span>🔄 Pipeline</span>
+              <NTag v-if="jobs.filter(j => j.type === 'pipeline').length" size="small" round type="error">
+                {{ jobs.filter(j => j.type === 'pipeline').length }}
               </NTag>
             </NSpace>
           </template>

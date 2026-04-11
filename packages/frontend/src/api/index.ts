@@ -128,8 +128,6 @@ export async function pollOutlineJob(
 
   throw new Error('生成大纲超时')
 }
-  return res.data
-}
 
 // Preview import without saving
 export interface ImportPreview {

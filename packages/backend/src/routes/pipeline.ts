@@ -195,6 +195,36 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // 获取用户所有 Pipeline Jobs
+  fastify.get('/jobs', {
+    preHandler: [fastify.authenticate]
+  }, async (request) => {
+    const userId = (request as any).user.id
+
+    const jobs = await prisma.pipelineJob.findMany({
+      where: {
+        project: { userId }
+      },
+      include: {
+        project: { select: { id: true, name: true } },
+        stepResults: true
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    return jobs.map(job => ({
+      id: job.id,
+      projectId: job.projectId,
+      projectName: job.project?.name,
+      status: job.status,
+      currentStep: job.currentStep,
+      progress: job.progress,
+      error: job.error,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt
+    }))
+  })
+
   // 取消 Job
   fastify.delete<{
     Params: { jobId: string }
