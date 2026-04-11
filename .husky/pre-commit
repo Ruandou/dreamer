@@ -1,3 +1,3 @@
 #!/bin/sh
 cd /Users/leifu/Learn/dreamer
-echo "Running pre-commit checks..."
+pnpm exec lint-staged
