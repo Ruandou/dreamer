@@ -123,7 +123,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
   )
 
   // Generate video for scene
-  fastify.post<{ Params: { id: string }; Body: { model: VideoModel; referenceImage?: string; duration?: number } }>(
+  fastify.post<{ Params: { id: string }; Body: { model: VideoModel; referenceImage?: string; imageUrls?: string[]; duration?: number } }>(
     '/:id/generate',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
@@ -134,7 +134,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
       }
 
-      const { model, referenceImage, duration } = request.body
+      const { model, referenceImage, imageUrls, duration } = request.body
 
       const scene = await prisma.scene.findUnique({
         where: { id: sceneId }
@@ -161,6 +161,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         prompt: scene.prompt,
         model,
         referenceImage,
+        imageUrls,
         duration
       })
 
@@ -175,12 +176,12 @@ export async function sceneRoutes(fastify: FastifyInstance) {
   )
 
   // Batch generate videos
-  fastify.post<{ Body: { sceneIds: string[]; model: VideoModel; referenceImage?: string } }>(
+  fastify.post<{ Body: { sceneIds: string[]; model: VideoModel; referenceImage?: string; imageUrls?: string[] } }>(
     '/batch-generate',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const { sceneIds, model, referenceImage } = request.body
+      const { sceneIds, model, referenceImage, imageUrls } = request.body
 
       const results = []
 
@@ -207,7 +208,8 @@ export async function sceneRoutes(fastify: FastifyInstance) {
           taskId: task.id,
           prompt: scene.prompt,
           model,
-          referenceImage
+          referenceImage,
+          imageUrls
         })
 
         await prisma.scene.update({

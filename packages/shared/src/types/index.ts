@@ -238,6 +238,7 @@ export interface VideoJobData {
   taskId: string
   prompt: string
   model: VideoModel
-  referenceImage?: string
+  referenceImage?: string  // 单张参考图 (Wan 2.6)
+  imageUrls?: string[]  // 多张参考图 (Seedance 2.0)
   duration?: number
 }

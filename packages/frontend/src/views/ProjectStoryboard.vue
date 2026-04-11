@@ -111,7 +111,9 @@ const handleOptimizePrompt = async () => {
 }
 
 const handleGenerate = async (sceneId: string) => {
-  await sceneStore.generateVideo(sceneId, selectedModel.value, selectedReferenceImage.value)
+  await sceneStore.generateVideo(sceneId, selectedModel.value, {
+    referenceImage: selectedReferenceImage.value
+  })
   message.info('视频生成任务已提交')
   startPolling(sceneId)
 }
@@ -121,7 +123,9 @@ const handleBatchGenerate = async () => {
   await sceneStore.batchGenerate(
     Array.from(selectedScenes.value),
     selectedModel.value,
-    selectedReferenceImage.value
+    {
+      referenceImage: selectedReferenceImage.value
+    }
   )
   message.info(`已提交 ${selectedScenes.value.size} 个生成任务`)
   Array.from(selectedScenes.value).forEach(id => startPolling(id))

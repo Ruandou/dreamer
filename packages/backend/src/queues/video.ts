@@ -26,7 +26,7 @@ export const videoQueue = new Queue<VideoJobData>('video-generation', {
 export const videoWorker = new Worker<VideoJobData>(
   'video-generation',
   async (job) => {
-    const { sceneId, taskId, prompt, model, referenceImage, duration } = job.data
+    const { sceneId, taskId, prompt, model, referenceImage, imageUrls, duration } = job.data
 
     console.log(`Processing video job ${job.id} for scene ${sceneId}, model: ${model}`)
 
@@ -82,10 +82,10 @@ export const videoWorker = new Worker<VideoJobData>(
 
       } else {
         // Seedance 2.0 API call
-        console.log(`Submitting Seedance 2.0 task for scene ${sceneId}`)
+        console.log(`Submitting Seedance 2.0 task for scene ${sceneId}, reference images: ${imageUrls?.length || 0}`)
         const response = await submitSeedanceTask({
           prompt,
-          referenceImage,
+          imageUrls: imageUrls,
           duration: effectiveDuration
         })
 

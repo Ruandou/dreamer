@@ -64,13 +64,18 @@ export const useSceneStore = defineStore('scene', () => {
     await fetchScenes(episodeId)
   }
 
-  async function generateVideo(sceneId: string, model: 'wan2.6' | 'seedance2.0', referenceImage?: string, duration?: number) {
+  async function generateVideo(sceneId: string, model: 'wan2.6' | 'seedance2.0', options?: {
+    referenceImage?: string
+    imageUrls?: string[]
+    duration?: number
+  }) {
     isGenerating.value = true
     try {
       const res = await api.post<{ taskId: string; sceneId: string }>(`/scenes/${sceneId}/generate`, {
         model,
-        referenceImage,
-        duration
+        referenceImage: options?.referenceImage,
+        imageUrls: options?.imageUrls,
+        duration: options?.duration
       })
       // Refresh scene to get updated tasks
       await getScene(sceneId)
@@ -80,13 +85,17 @@ export const useSceneStore = defineStore('scene', () => {
     }
   }
 
-  async function batchGenerate(sceneIds: string[], model: 'wan2.6' | 'seedance2.0', referenceImage?: string) {
+  async function batchGenerate(sceneIds: string[], model: 'wan2.6' | 'seedance2.0', options?: {
+    referenceImage?: string
+    imageUrls?: string[]
+  }) {
     isGenerating.value = true
     try {
       const res = await api.post<{ sceneId: string; taskId: string }[]>(`/scenes/batch-generate`, {
         sceneIds,
         model,
-        referenceImage
+        referenceImage: options?.referenceImage,
+        imageUrls: options?.imageUrls
       })
       return res.data
     } finally {
