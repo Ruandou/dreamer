@@ -246,5 +246,21 @@ describe('Parser Service', () => {
       expect(result.parsed.episodes[0].scenes[0].prompt).toContain('办公室')
       expect(result.parsed.episodes[0].scenes[0].prompt).toContain('夜')
     })
+
+    it('should throw DeepSeekAuthError for 401/403 in markdown mode', async () => {
+      const error = new Error('Unauthorized')
+      error.status = 401
+      mockCreate.mockRejectedValueOnce(error)
+
+      await expect(parseScriptDocument('test content', 'markdown')).rejects.toThrow('DeepSeek API 认证失败')
+    })
+
+    it('should throw error for specific parsing failure messages without retry', async () => {
+      mockCreate
+        .mockRejectedValueOnce(new Error('剧本解析失败，请检查文档格式'))
+        .mockRejectedValueOnce(new Error('剧本解析失败，请检查文档格式'))
+
+      await expect(parseScriptDocument('test content', 'markdown')).rejects.toThrow('剧本解析失败')
+    })
   })
 })
