@@ -22,9 +22,8 @@ const apiKeyInput = ref('')
 const deepseekApiUrl = ref('')
 const atlasApiKey = ref('')
 const atlasApiUrl = ref('')
-const volcAccessKey = ref('')
-const volcSecretKey = ref('')
-const volcApiUrl = ref('')
+const arkApiKey = ref('')
+const arkApiUrl = ref('')
 
 const balance = ref<any>(null)
 const balanceError = ref<string | null>(null)
@@ -65,9 +64,8 @@ onMounted(async () => {
       deepseekApiUrl.value = data.apiKeys.deepseekApiUrl || ''
       atlasApiKey.value = data.apiKeys.atlasApiKey || ''
       atlasApiUrl.value = data.apiKeys.atlasApiUrl || ''
-      volcAccessKey.value = data.apiKeys.volcAccessKey || ''
-      volcSecretKey.value = data.apiKeys.volcSecretKey || ''
-      volcApiUrl.value = data.apiKeys.volcApiUrl || ''
+      arkApiKey.value = data.apiKeys.arkApiKey || ''
+      arkApiUrl.value = data.apiKeys.arkApiUrl || ''
     }
   } catch (error: any) {
     message.error('获取设置失败')
@@ -124,9 +122,8 @@ const saveSettings = async () => {
         deepseekApiUrl: deepseekApiUrl.value,
         atlasApiKey: atlasApiKey.value,
         atlasApiUrl: atlasApiUrl.value,
-        volcAccessKey: volcAccessKey.value,
-        volcSecretKey: volcSecretKey.value,
-        volcApiUrl: volcApiUrl.value
+        arkApiKey: arkApiKey.value,
+        arkApiUrl: arkApiUrl.value
       }
     }
     if (apiKeyInput.value) {
@@ -275,21 +272,21 @@ const formatBalance = (amount: number) => {
         </NCard>
 
         <!-- Volcano Engine API (Seedance 2.0) -->
-        <NCard title="🎥 火山引擎（视频生成 Seedance 2.0）" class="settings-card">
+        <NCard title="🎥 火山方舟（视频生成 Seedance 2.0）" class="settings-card">
           <template #header-extra>
-            <NTag v-if="volcAccessKey" type="success" size="small">已配置</NTag>
+            <NTag v-if="arkApiKey" type="success" size="small">已配置</NTag>
             <NTag v-else type="warning" size="small">未配置</NTag>
           </template>
 
           <NForm label-placement="left" label-width="120">
-            <NFormItem label="Access Key">
-              <NInput v-model:value="volcAccessKey" type="password" placeholder="火山引擎 Access Key" show-password-on="click" />
-            </NFormItem>
-            <NFormItem label="Secret Key">
-              <NInput v-model:value="volcSecretKey" type="password" placeholder="火山引擎 Secret Key" show-password-on="click" />
+            <NFormItem label="API Key">
+              <NInput v-model:value="arkApiKey" type="password" placeholder="火山方舟 API Key" show-password-on="click" />
             </NFormItem>
             <NFormItem label="API URL">
-              <NInput v-model:value="volcApiUrl" placeholder="https://volcbytebytes.example.com" />
+              <NInput v-model:value="arkApiUrl" placeholder="https://ark.cn-beijing.volces.com/api/v3" />
+              <template #feedback>
+                默认地址：https://ark.cn-beijing.volces.com/api/v3
+              </template>
             </NFormItem>
           </NForm>
         </NCard>

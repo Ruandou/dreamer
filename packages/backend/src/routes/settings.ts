@@ -20,9 +20,8 @@ export async function settingsRoutes(fastify: FastifyInstance) {
           deepseekApiUrl: true,
           atlasApiKey: true,
           atlasApiUrl: true,
-          volcAccessKey: true,
-          volcSecretKey: true,
-          volcApiUrl: true,
+          arkApiKey: true,
+          arkApiUrl: true,
           createdAt: true
         }
       })
@@ -64,9 +63,8 @@ export async function settingsRoutes(fastify: FastifyInstance) {
           deepseekApiUrl: dbUser.deepseekApiUrl,
           atlasApiKey: dbUser.atlasApiKey,
           atlasApiUrl: dbUser.atlasApiUrl,
-          volcAccessKey: dbUser.volcAccessKey,
-          volcSecretKey: dbUser.volcSecretKey,
-          volcApiUrl: dbUser.volcApiUrl
+          arkApiKey: dbUser.arkApiKey,
+          arkApiUrl: dbUser.arkApiUrl
         }
       }
     }
@@ -81,9 +79,8 @@ export async function settingsRoutes(fastify: FastifyInstance) {
         deepseekApiUrl?: string
         atlasApiKey?: string
         atlasApiUrl?: string
-        volcAccessKey?: string
-        volcSecretKey?: string
-        volcApiUrl?: string
+        arkApiKey?: string
+        arkApiUrl?: string
       }
     }
   }>(
@@ -101,9 +98,8 @@ export async function settingsRoutes(fastify: FastifyInstance) {
           if (apiKeys.deepseekApiUrl !== undefined) updateData.deepseekApiUrl = apiKeys.deepseekApiUrl || null
           if (apiKeys.atlasApiKey !== undefined) updateData.atlasApiKey = apiKeys.atlasApiKey || null
           if (apiKeys.atlasApiUrl !== undefined) updateData.atlasApiUrl = apiKeys.atlasApiUrl || null
-          if (apiKeys.volcAccessKey !== undefined) updateData.volcAccessKey = apiKeys.volcAccessKey || null
-          if (apiKeys.volcSecretKey !== undefined) updateData.volcSecretKey = apiKeys.volcSecretKey || null
-          if (apiKeys.volcApiUrl !== undefined) updateData.volcApiUrl = apiKeys.volcApiUrl || null
+          if (apiKeys.arkApiKey !== undefined) updateData.arkApiKey = apiKeys.arkApiKey || null
+          if (apiKeys.arkApiUrl !== undefined) updateData.arkApiUrl = apiKeys.arkApiUrl || null
         }
 
         const updatedUser = await prisma.user.update({
