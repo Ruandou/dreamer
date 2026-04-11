@@ -1,100 +1,134 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from "vue";
+import { useRouter } from "vue-router";
 import {
-  NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem,
-  NInput, NTag, NDropdown,
-  useMessage, useDialog
-} from 'naive-ui'
-import type { MenuOption, UploadFileInfo } from 'naive-ui'
-import { useProjectStore } from '@/stores/project'
-import EmptyState from '@/components/EmptyState.vue'
-import StatusBadge from '@/components/StatusBadge.vue'
+  NCard,
+  NButton,
+  NSpace,
+  NEmpty,
+  NModal,
+  NForm,
+  NFormItem,
+  NInput,
+  NTag,
+  NDropdown,
+  NUpload,
+  NUploadDragger,
+  useMessage,
+  useDialog,
+} from "naive-ui";
+import type { MenuOption, UploadFileInfo } from "naive-ui";
+import { useProjectStore } from "@/stores/project";
+import EmptyState from "@/components/EmptyState.vue";
+import StatusBadge from "@/components/StatusBadge.vue";
 
-const router = useRouter()
-const message = useMessage()
-const dialog = useDialog()
-const projectStore = useProjectStore()
+const router = useRouter();
+const message = useMessage();
+const dialog = useDialog();
+const projectStore = useProjectStore();
 
-const showCreateModal = ref(false)
-const newProject = ref({ name: '', description: '' })
-const searchQuery = ref('')
-const quickIdea = ref('')
-const isCreating = ref(false)
+const showCreateModal = ref(false);
+const newProject = ref({ name: "", description: "" });
+const searchQuery = ref("");
+const quickIdea = ref("");
+const isCreating = ref(false);
 
 onMounted(() => {
-  projectStore.fetchProjects()
-})
+  projectStore.fetchProjects();
+});
 
 const filteredProjects = computed(() => {
   if (!searchQuery.value.trim()) {
-    return projectStore.projects
+    return projectStore.projects;
   }
-  const query = searchQuery.value.toLowerCase()
+  const query = searchQuery.value.toLowerCase();
   return projectStore.projects.filter(
-    p => p.name.toLowerCase().includes(query) ||
-         (p.description && p.description.toLowerCase().includes(query))
-  )
-})
+    (p) =>
+      p.name.toLowerCase().includes(query) ||
+      (p.description && p.description.toLowerCase().includes(query)),
+  );
+});
 
 const handleCreate = () => {
-  showCreateModal.value = true
-}
+  showCreateModal.value = true;
+};
+
+const handleFileChange = (options: { file: UploadFileInfo }) => {
+  const file = options.file;
+  if (!file.file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    quickIdea.value = e.target?.result as string;
+    message.success("剧本已导入");
+  };
+  reader.readAsText(file.file);
+};
+
+const handleFileUpload = (fileList: { file: UploadFileInfo }[]) => {
+  const file = fileList[0]?.file;
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    quickIdea.value = e.target?.result as string;
+    message.success("剧本已导入");
+  };
+  reader.readAsText(file);
+};
 
 const handleQuickCreate = async () => {
   if (!quickIdea.value.trim()) {
-    message.warning('请输入剧本想法')
-    return
+    message.warning("请输入剧本想法");
+    return;
   }
-  isCreating.value = true
-  router.push(`/generate?idea=${encodeURIComponent(quickIdea.value)}`)
-}
+  isCreating.value = true;
+  router.push(`/generate?idea=${encodeURIComponent(quickIdea.value)}`);
+};
 
 const handleSubmit = async () => {
   if (!newProject.value.name.trim()) {
-    message.warning('请输入项目名称')
-    return
+    message.warning("请输入项目名称");
+    return;
   }
-  const project = await projectStore.createProject(newProject.value)
-  showCreateModal.value = false
-  newProject.value = { name: '', description: '' }
-  router.push(`/project/${project.id}`)
-}
+  const project = await projectStore.createProject(newProject.value);
+  showCreateModal.value = false;
+  newProject.value = { name: "", description: "" };
+  router.push(`/project/${project.id}`);
+};
 
 const handleProjectClick = (id: string) => {
-  router.push(`/project/${id}`)
-}
+  router.push(`/project/${id}`);
+};
 
 const handleDelete = (id: string) => {
   dialog.warning({
-    title: '确认删除',
-    content: '确定要删除这个项目吗？此操作不可撤销。',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: "确认删除",
+    content: "确定要删除这个项目吗？此操作不可撤销。",
+    positiveText: "删除",
+    negativeText: "取消",
     onPositiveClick: async () => {
-      await projectStore.deleteProject(id)
-      message.success('项目已删除')
-    }
-  })
-}
+      await projectStore.deleteProject(id);
+      message.success("项目已删除");
+    },
+  });
+};
 
 const formatDate = (date: string) => {
-  return new Date(date).toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
+  return new Date(date).toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
 
-const dropdownOptions = [
-  { label: '删除', key: 'delete' }
-]
+const dropdownOptions = [{ label: "删除", key: "delete" }];
 
 const handleDropdownSelect = (key: string, projectId: string) => {
-  if (key === 'delete') {
-    handleDelete(projectId)
+  if (key === "delete") {
+    handleDelete(projectId);
   }
-}
+};
 </script>
 
 <template>
@@ -113,12 +147,17 @@ const handleDropdownSelect = (key: string, projectId: string) => {
             v-model:value="searchQuery"
             placeholder="搜索项目..."
             clearable
-            style="width: 160px"
+            style="width: 200px"
           >
             <template #prefix>
-              <span>🔍</span>
+              <span class="search-icon">🔍</span>
             </template>
           </NInput>
+          <NButtonGroup>
+            <NButton @click="router.push('/jobs')"> 📋 任务 </NButton>
+            <NButton @click="router.push('/stats')"> 📊 统计 </NButton>
+            <NButton @click="router.push('/settings')"> ⚙️ 设置 </NButton>
+          </NButtonGroup>
         </NSpace>
       </div>
     </header>
@@ -130,20 +169,29 @@ const handleDropdownSelect = (key: string, projectId: string) => {
           v-model:value="quickIdea"
           type="textarea"
           placeholder="✨ 输入想法，快速创建短剧... 或 导入已有剧本"
-          :rows="2"
+          :rows="3"
           @keydown.enter.ctrl="handleQuickCreate"
         />
       </div>
       <div class="quick-create__actions">
-        <NButton @click="router.push('/import')" secondary>导入剧本</NButton>
-        <NButton
-          type="primary"
-          @click="handleQuickCreate"
-          :disabled="!quickIdea.trim()"
-          :loading="isCreating"
+        <NSpace justify="center">
+          <NUpload
+          :max="1"
+          accept=".md,.txt,.json"
+          :show-file-list="false"
+          @change="handleFileUpload"
         >
-          生成大纲 →
-        </NButton>
+          <NButton secondary>导入剧本</NButton>
+        </NUpload>
+          <NButton
+            type="primary"
+            @click="handleQuickCreate"
+            :disabled="!quickIdea.trim()"
+            :loading="isCreating"
+          >
+            生成大纲 →
+          </NButton>
+        </NSpace>
       </div>
     </div>
 
@@ -183,30 +231,28 @@ const handleDropdownSelect = (key: string, projectId: string) => {
             @click="handleProjectClick(project.id)"
           >
             <div class="project-card__cover">
-              <div class="project-card__cover-placeholder">
-                🎬
-              </div>
+              <div class="project-card__cover-placeholder">🎬</div>
               <StatusBadge status="draft" class="project-card__status" />
             </div>
 
             <div class="project-card__body">
               <h3 class="project-card__title">{{ project.name }}</h3>
               <p class="project-card__desc">
-                {{ project.description || '暂无描述' }}
+                {{ project.description || "暂无描述" }}
               </p>
             </div>
 
             <div class="project-card__footer">
-              <span class="project-card__date">{{ formatDate(project.createdAt) }}</span>
+              <span class="project-card__date">{{
+                formatDate(project.createdAt)
+              }}</span>
               <NDropdown
                 :options="dropdownOptions"
                 @select="(key) => handleDropdownSelect(key, project.id)"
                 trigger="click"
                 @click.stop
               >
-                <NButton text size="small" @click.stop>
-                  ⋮
-                </NButton>
+                <NButton text size="small" @click.stop> ⋮ </NButton>
               </NDropdown>
             </div>
           </NCard>
@@ -287,8 +333,8 @@ const handleDropdownSelect = (key: string, projectId: string) => {
 
 .quick-create {
   display: flex;
+  flex-direction: column;
   gap: var(--spacing-md);
-  align-items: flex-end;
   margin-bottom: var(--spacing-lg);
   padding: var(--spacing-lg);
   background: var(--color-bg-white);
@@ -296,7 +342,12 @@ const handleDropdownSelect = (key: string, projectId: string) => {
 }
 
 .quick-create__input-wrap {
-  flex: 1;
+  width: 100%;
+}
+
+.quick-create__actions {
+  display: flex;
+  justify-content: center;
 }
 
 .projects-grid {
