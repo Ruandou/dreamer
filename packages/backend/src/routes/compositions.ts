@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
-import { composeVideo, CompositionSegment } from '../services/ffmpeg.js'
+import { composeVideo, CompositionSegment as FFmpegCompositionSegment } from '../services/ffmpeg.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { verifyCompositionOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 
@@ -26,7 +26,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // Get composition with scene details
+  // Get composition with segment details
   fastify.get<{ Params: { id: string } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
@@ -53,17 +53,17 @@ export async function compositionRoutes(fastify: FastifyInstance) {
 
       // Enrich segments with video URLs from selected VideoTasks
       const enrichedSegments = await Promise.all(
-        composition.segments.map(async (segment) => {
+        composition.segments.map(async (compSegment) => {
           const selectedTask = await prisma.videoTask.findFirst({
             where: {
-              sceneId: segment.sceneId,
+              segmentId: compSegment.segmentId,
               isSelected: true,
               status: 'completed'
             }
           })
 
           return {
-            ...segment,
+            ...compSegment,
             videoUrl: selectedTask?.videoUrl || null,
             thumbnailUrl: selectedTask?.thumbnailUrl || null
           }
@@ -143,7 +143,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // Update timeline (segments)
+  // Update timeline (composition segments)
   fastify.put<{ Params: { id: string }; Body: { segments: any[] } }>(
     '/:id/timeline',
     { preHandler: [fastify.authenticate] },
@@ -157,15 +157,15 @@ export async function compositionRoutes(fastify: FastifyInstance) {
 
       const { segments } = request.body
 
-      // Delete existing segments
-      await prisma.segment.deleteMany({ where: { compositionId } })
+      // Delete existing composition segments
+      await prisma.compositionSegment.deleteMany({ where: { compositionId } })
 
       // Create new segments with validation
       if (segments.length > 0) {
-        await prisma.segment.createMany({
+        await prisma.compositionSegment.createMany({
           data: segments.map((seg: any) => ({
             compositionId,
-            sceneId: seg.sceneId,
+            segmentId: seg.segmentId,
             order: seg.order,
             startTime: Math.max(0, seg.startTime || 0),
             endTime: Math.max(seg.startTime || 0, seg.endTime || 5),
@@ -306,27 +306,27 @@ export async function compositionRoutes(fastify: FastifyInstance) {
 
       try {
         // Get video URLs for all segments
-        const segmentsWithVideos: CompositionSegment[] = []
+        const segmentsWithVideos: FFmpegCompositionSegment[] = []
 
-        for (const segment of composition.segments) {
+        for (const compSegment of composition.segments) {
           const selectedTask = await prisma.videoTask.findFirst({
             where: {
-              sceneId: segment.sceneId,
+              segmentId: compSegment.segmentId,
               isSelected: true,
               status: 'completed'
             }
           })
 
           if (!selectedTask?.videoUrl) {
-            throw new Error(`No selected video found for scene ${segment.sceneId}`)
+            throw new Error(`No selected video found for segment ${compSegment.segmentId}`)
           }
 
           segmentsWithVideos.push({
-            sceneId: segment.sceneId,
+            segmentId: compSegment.segmentId,
             videoUrl: selectedTask.videoUrl,
-            startTime: segment.startTime,
-            endTime: segment.endTime,
-            transition: segment.transition || undefined
+            startTime: compSegment.startTime,
+            endTime: compSegment.endTime,
+            transition: compSegment.transition || undefined
           })
         }
 

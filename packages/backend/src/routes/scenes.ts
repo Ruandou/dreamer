@@ -2,11 +2,11 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { videoQueue } from '../queues/video.js'
 import { optimizePrompt } from '../services/deepseek.js'
-import { verifySceneOwnership, verifyEpisodeOwnership } from '../plugins/auth.js'
+import { verifySegmentOwnership, verifyEpisodeOwnership } from '../plugins/auth.js'
 import type { VideoModel } from '@dreamer/shared/types'
 
 export async function sceneRoutes(fastify: FastifyInstance) {
-  // List scenes for an episode
+  // List segments for an episode
   fastify.get<{ Querystring: { episodeId: string } }>(
     '/',
     { preHandler: [fastify.authenticate] },
@@ -19,9 +19,9 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
       }
 
-      return prisma.scene.findMany({
+      return prisma.segment.findMany({
         where: { episodeId },
-        orderBy: { sceneNum: 'asc' },
+        orderBy: { segmentNum: 'asc' },
         include: {
           tasks: {
             orderBy: { createdAt: 'desc' }
@@ -31,193 +31,193 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // Get scene
+  // Get segment
   fastify.get<{ Params: { id: string } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const sceneId = request.params.id
+      const segmentId = request.params.id
 
-      if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+      if (!(await verifySegmentOwnership(userId, segmentId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this segment' })
       }
 
-      const scene = await prisma.scene.findUnique({
-        where: { id: sceneId },
+      const segment = await prisma.segment.findUnique({
+        where: { id: segmentId },
         include: { tasks: { orderBy: { createdAt: 'desc' } } }
       })
 
-      if (!scene) {
-        return reply.status(404).send({ error: 'Scene not found' })
+      if (!segment) {
+        return reply.status(404).send({ error: 'Segment not found' })
       }
 
-      return scene
+      return segment
     }
   )
 
-  // Create scene
-  fastify.post<{ Body: { episodeId: string; sceneNum: number; description?: string; prompt: string } }>(
+  // Create segment
+  fastify.post<{ Body: { episodeId: string; segmentNum: number; description?: string; prompt: string } }>(
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const { episodeId, sceneNum, description, prompt } = request.body
+      const { episodeId, segmentNum, description, prompt } = request.body
 
       // Verify episode ownership
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
       }
 
-      const scene = await prisma.scene.create({
-        data: { episodeId, sceneNum, description, prompt }
+      const segment = await prisma.segment.create({
+        data: { episodeId, segmentNum, prompt, description }
       })
 
-      return reply.status(201).send(scene)
+      return reply.status(201).send(segment)
     }
   )
 
-  // Update scene
-  fastify.put<{ Params: { id: string }; Body: { description?: string; prompt?: string; sceneNum?: number } }>(
+  // Update segment
+  fastify.put<{ Params: { id: string }; Body: { description?: string; prompt?: string; segmentNum?: number } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const sceneId = request.params.id
+      const segmentId = request.params.id
 
-      if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+      if (!(await verifySegmentOwnership(userId, segmentId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this segment' })
       }
 
-      const { description, prompt, sceneNum } = request.body
+      const { description, prompt, segmentNum } = request.body
 
-      const scene = await prisma.scene.update({
-        where: { id: sceneId },
-        data: { description, prompt, ...(sceneNum !== undefined && { sceneNum }) }
+      const segment = await prisma.segment.update({
+        where: { id: segmentId },
+        data: { description, prompt, ...(segmentNum !== undefined && { segmentNum }) }
       })
 
-      return scene
+      return segment
     }
   )
 
-  // Delete scene
+  // Delete segment
   fastify.delete<{ Params: { id: string } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const sceneId = request.params.id
+      const segmentId = request.params.id
 
-      if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+      if (!(await verifySegmentOwnership(userId, segmentId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this segment' })
       }
 
-      const scene = await prisma.scene.findUnique({ where: { id: sceneId } })
-      if (!scene) {
-        return reply.status(404).send({ error: 'Scene not found' })
+      const segment = await prisma.segment.findUnique({ where: { id: segmentId } })
+      if (!segment) {
+        return reply.status(404).send({ error: 'Segment not found' })
       }
 
-      await prisma.scene.delete({ where: { id: sceneId } })
+      await prisma.segment.delete({ where: { id: segmentId } })
       return reply.status(204).send()
     }
   )
 
-  // Generate video for scene
+  // Generate video for segment
   fastify.post<{ Params: { id: string }; Body: { model: VideoModel; referenceImage?: string; imageUrls?: string[]; duration?: number } }>(
     '/:id/generate',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const sceneId = request.params.id
+      const segmentId = request.params.id
 
-      if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+      if (!(await verifySegmentOwnership(userId, segmentId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this segment' })
       }
 
       const { model, referenceImage, imageUrls, duration } = request.body
 
-      const scene = await prisma.scene.findUnique({
-        where: { id: sceneId }
+      const segment = await prisma.segment.findUnique({
+        where: { id: segmentId }
       })
 
-      if (!scene) {
-        return reply.status(404).send({ error: 'Scene not found' })
+      if (!segment) {
+        return reply.status(404).send({ error: 'Segment not found' })
       }
 
       // Create video task
       const task = await prisma.videoTask.create({
         data: {
-          sceneId: scene.id,
+          segmentId: segment.id,
           model,
           status: 'queued',
-          prompt: scene.prompt
+          prompt: segment.prompt
         }
       })
 
       // Add to queue
       await videoQueue.add('generate-video', {
-        sceneId: scene.id,
+        segmentId: segment.id,
         taskId: task.id,
-        prompt: scene.prompt,
+        prompt: segment.prompt,
         model,
         referenceImage,
         imageUrls,
         duration
       })
 
-      // Update scene status
-      await prisma.scene.update({
-        where: { id: scene.id },
-        data: { status: 'processing' }
+      // Update segment status
+      await prisma.segment.update({
+        where: { id: segment.id },
+        data: { status: 'generating' }
       })
 
-      return { taskId: task.id, sceneId: scene.id }
+      return { taskId: task.id, segmentId: segment.id }
     }
   )
 
   // Batch generate videos
-  fastify.post<{ Body: { sceneIds: string[]; model: VideoModel; referenceImage?: string; imageUrls?: string[] } }>(
+  fastify.post<{ Body: { segmentIds: string[]; model: VideoModel; referenceImage?: string; imageUrls?: string[] } }>(
     '/batch-generate',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const { sceneIds, model, referenceImage, imageUrls } = request.body
+      const { segmentIds, model, referenceImage, imageUrls } = request.body
 
       const results = []
 
-      for (const sceneId of sceneIds) {
-        // Verify ownership for each scene
-        if (!(await verifySceneOwnership(userId, sceneId))) {
+      for (const segmentId of segmentIds) {
+        // Verify ownership for each segment
+        if (!(await verifySegmentOwnership(userId, segmentId))) {
           continue
         }
 
-        const scene = await prisma.scene.findUnique({ where: { id: sceneId } })
-        if (!scene) continue
+        const segment = await prisma.segment.findUnique({ where: { id: segmentId } })
+        if (!segment) continue
 
         const task = await prisma.videoTask.create({
           data: {
-            sceneId,
+            segmentId,
             model,
             status: 'queued',
-            prompt: scene.prompt
+            prompt: segment.prompt
           }
         })
 
         await videoQueue.add('generate-video', {
-          sceneId: scene.id,
+          segmentId: segment.id,
           taskId: task.id,
-          prompt: scene.prompt,
+          prompt: segment.prompt,
           model,
           referenceImage,
           imageUrls
         })
 
-        await prisma.scene.update({
-          where: { id: scene.id },
-          data: { status: 'processing' }
+        await prisma.segment.update({
+          where: { id: segment.id },
+          data: { status: 'generating' }
         })
 
-        results.push({ sceneId, taskId: task.id })
+        results.push({ segmentId, taskId: task.id })
       }
 
       return results
@@ -230,15 +230,15 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const { id: sceneId, taskId } = request.params
+      const { id: segmentId, taskId } = request.params
 
-      if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+      if (!(await verifySegmentOwnership(userId, segmentId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this segment' })
       }
 
-      // Unselect all other tasks for this scene
+      // Unselect all other tasks for this segment
       await prisma.videoTask.updateMany({
-        where: { sceneId },
+        where: { segmentId },
         data: { isSelected: false }
       })
 
@@ -252,20 +252,20 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // Get all tasks for a scene
+  // Get all tasks for a segment
   fastify.get<{ Params: { id: string } }>(
     '/:id/tasks',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const sceneId = request.params.id
+      const segmentId = request.params.id
 
-      if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+      if (!(await verifySegmentOwnership(userId, segmentId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this segment' })
       }
 
       return prisma.videoTask.findMany({
-        where: { sceneId },
+        where: { segmentId },
         orderBy: { createdAt: 'desc' }
       })
     }
@@ -277,38 +277,38 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const sceneId = request.params.id
+      const segmentId = request.params.id
 
-      if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+      if (!(await verifySegmentOwnership(userId, segmentId))) {
+        return reply.status(403).send({ error: 'Forbidden: You do not have access to this segment' })
       }
 
       const { prompt } = request.body
 
-      const scene = await prisma.scene.findUnique({
-        where: { id: sceneId },
+      const segment = await prisma.segment.findUnique({
+        where: { id: segmentId },
         include: { episode: { include: { project: { include: { characters: true } } } } }
       })
 
-      if (!scene) {
-        return reply.status(404).send({ error: 'Scene not found' })
+      if (!segment) {
+        return reply.status(404).send({ error: 'Segment not found' })
       }
 
-      const targetPrompt = prompt || scene.prompt
+      const targetPrompt = prompt || segment.prompt
 
       // Build context with characters
-      const characters = scene.episode.project.characters
+      const characters = segment.episode.project.characters
       const context = characters.length > 0
-        ? `角色设定：${characters.map(c => `${c.name}: ${c.description || '未描述'}`).join('; ')}`
+        ? `角色设定：${characters.map((c: any) => `${c.name}: ${c.description || '未描述'}`).join('; ')}`
         : undefined
 
       try {
         const { optimized, cost } = await optimizePrompt(targetPrompt, context)
 
-        // Optionally update the scene with optimized prompt
+        // Optionally update the segment with optimized prompt
         if (!prompt) {
-          await prisma.scene.update({
-            where: { id: sceneId },
+          await prisma.segment.update({
+            where: { id: segmentId },
             data: { prompt: optimized }
           })
         }

@@ -27,18 +27,18 @@ export const videoQueue = new Queue<VideoJobData>('video-generation', {
 export const videoWorker = new Worker<VideoJobData>(
   'video-generation',
   async (job) => {
-    const { sceneId, taskId, prompt, model, referenceImage, imageUrls, duration } = job.data
+    const { segmentId, taskId, prompt, model, referenceImage, imageUrls, duration } = job.data
 
-    console.log(`Processing video job ${job.id} for scene ${sceneId}, model: ${model}`)
+    console.log(`Processing video job ${job.id} for segment ${segmentId}, model: ${model}`)
 
     const effectiveDuration = duration || 5
 
     // Get userId for SSE notification
     const task = await prisma.videoTask.findUnique({
       where: { id: taskId },
-      include: { scene: { include: { episode: { include: { project: true } } } } }
+      include: { segment: { include: { episode: { include: { project: true } } } } }
     })
-    const userId = task?.scene.episode.project.userId
+    const userId = task?.segment.episode.project.userId
 
     // 在try-catch外部声明变量，确保在catch块中可访问
     let videoUrl: string = ''
@@ -56,18 +56,18 @@ export const videoWorker = new Worker<VideoJobData>(
 
       // Send SSE notification
       if (userId) {
-        sendTaskUpdate(userId, taskId, 'processing', { sceneId })
+        sendTaskUpdate(userId, taskId, 'processing', { segmentId })
       }
 
-      // Update scene status
-      await prisma.scene.update({
-        where: { id: sceneId },
-        data: { status: 'processing' }
+      // Update segment status
+      await prisma.segment.update({
+        where: { id: segmentId },
+        data: { status: 'generating' }
       })
 
       if (model === 'wan2.6') {
         // Wan 2.6 API call
-        console.log(`Submitting Wan 2.6 task for scene ${sceneId}`)
+        console.log(`Submitting Wan 2.6 task for segment ${segmentId}`)
 
         // Log API call
         if (userId) {
@@ -118,13 +118,13 @@ export const videoWorker = new Worker<VideoJobData>(
             status: 'completed',
             responseData: { videoUrl, thumbnailUrl },
             cost,
-            duration: result.duration
+            duration: effectiveDuration
           })
         }
 
       } else {
         // Seedance 2.0 API call
-        console.log(`Submitting Seedance 2.0 task for scene ${sceneId}, reference images: ${imageUrls?.length || 0}`)
+        console.log(`Submitting Seedance 2.0 task for segment ${segmentId}, reference images: ${imageUrls?.length || 0}`)
 
         // Log API call
         if (userId) {
@@ -175,7 +175,7 @@ export const videoWorker = new Worker<VideoJobData>(
             status: 'completed',
             responseData: { videoUrl, thumbnailUrl },
             cost,
-            duration: result.duration
+            duration: effectiveDuration
           })
         }
       }
@@ -219,16 +219,16 @@ export const videoWorker = new Worker<VideoJobData>(
         }
       })
 
-      // Update scene status
-      await prisma.scene.update({
-        where: { id: sceneId },
+      // Update segment status
+      await prisma.segment.update({
+        where: { id: segmentId },
         data: { status: 'completed' }
       })
 
       // Send SSE notification
       if (userId) {
         sendTaskUpdate(userId, taskId, 'completed', {
-          sceneId,
+          segmentId,
           videoUrl: uploadedVideoUrl,
           thumbnailUrl: uploadedThumbnailUrl,
           cost
@@ -257,16 +257,16 @@ export const videoWorker = new Worker<VideoJobData>(
         }
       })
 
-      // Update scene status
-      await prisma.scene.update({
-        where: { id: sceneId },
+      // Update segment status
+      await prisma.segment.update({
+        where: { id: segmentId },
         data: { status: 'failed' }
       })
 
       // Send SSE notification
       if (userId) {
         sendTaskUpdate(userId, taskId, 'failed', {
-          sceneId,
+          segmentId,
           error: error instanceof Error ? error.message : 'Unknown error'
         })
       }

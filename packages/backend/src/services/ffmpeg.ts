@@ -7,7 +7,7 @@ import { uploadFile, generateFileKey } from './storage.js'
 const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg'
 
 export interface CompositionSegment {
-  sceneId: string
+  segmentId: string
   videoUrl: string
   startTime: number
   endTime: number

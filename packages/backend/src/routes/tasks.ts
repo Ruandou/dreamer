@@ -40,7 +40,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
       }
 
-      const scenes = await prisma.scene.findMany({
+      const segments = await prisma.segment.findMany({
         where: {
           episode: { projectId }
         },
@@ -49,15 +49,15 @@ export async function taskRoutes(fastify: FastifyInstance) {
         }
       })
 
-      const tasks = scenes.flatMap(scene =>
-        scene.tasks.map(task => ({
+      const tasks = segments.flatMap((segment: any) =>
+        segment.tasks.map((task: any) => ({
           ...task,
-          sceneNum: scene.sceneNum,
-          sceneDescription: scene.description
+          segmentNum: segment.segmentNum,
+          segmentDescription: segment.description
         }))
       )
 
-      return tasks.sort((a, b) =>
+      return tasks.sort((a: any, b: any) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       )
     }
@@ -93,9 +93,9 @@ export async function taskRoutes(fastify: FastifyInstance) {
         data: { status: 'failed', errorMsg: 'Cancelled by user' }
       })
 
-      // Update scene status back to pending
-      await prisma.scene.update({
-        where: { id: task.sceneId },
+      // Update segment status back to pending
+      await prisma.segment.update({
+        where: { id: task.segmentId },
         data: { status: 'pending' }
       })
 
@@ -130,23 +130,23 @@ export async function taskRoutes(fastify: FastifyInstance) {
       // Create a new task as retry
       const newTask = await prisma.videoTask.create({
         data: {
-          sceneId: task.sceneId,
+          segmentId: task.segmentId,
           model: task.model,
           status: 'queued',
           prompt: task.prompt
         }
       })
 
-      // Update scene status
-      await prisma.scene.update({
-        where: { id: task.sceneId },
-        data: { status: 'processing' }
+      // Update segment status
+      await prisma.segment.update({
+        where: { id: task.segmentId },
+        data: { status: 'generating' }
       })
 
       // Re-add to queue
       const { videoQueue } = await import('../queues/video.js')
       await videoQueue.add('generate-video', {
-        sceneId: task.sceneId,
+        segmentId: task.segmentId,
         taskId: newTask.id,
         prompt: task.prompt,
         model: task.model as 'wan2.6' | 'seedance2.0'

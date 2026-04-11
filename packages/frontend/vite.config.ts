@@ -24,8 +24,14 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    host: 'localhost',
     hmr: {
       overlay: true,
+      clientPort: 3000,
+    },
+    watch: {
+      usePolling: true,
+      interval: 100,
     },
     proxy: {
       '/api': {

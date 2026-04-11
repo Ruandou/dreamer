@@ -21,6 +21,7 @@ import { authRoutes } from './routes/auth.js'
 import { statsRoutes } from './routes/stats.js'
 import { importRoutes } from './routes/import.js'
 import { settingsRoutes } from './routes/settings.js'
+import { pipelineRoutes } from './routes/pipeline.js'
 
 // Initialize Prisma with explicit DATABASE_URL
 export const prisma = new PrismaClient()
@@ -84,6 +85,7 @@ async function start() {
     await fastify.register(statsRoutes, { prefix: '/api/stats' })
     await fastify.register(importRoutes, { prefix: '/api/import' })
     await fastify.register(settingsRoutes, { prefix: '/api/settings' })
+    await fastify.register(pipelineRoutes, { prefix: '/api/pipeline' })
 
     // Health check
     fastify.get('/health', async () => ({ status: 'ok' }))

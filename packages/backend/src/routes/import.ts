@@ -3,6 +3,7 @@ import { prisma } from '../index.js'
 import { importQueue } from '../queues/import.js'
 import { parseScriptDocument } from '../services/parser.js'
 import { importParsedData, type ParsedScript } from '../services/importer.js'
+import { verifyProjectOwnership } from '../plugins/auth.js'
 
 export async function importRoutes(fastify: FastifyInstance) {
   // 预览解析结果（不保存到数据库）

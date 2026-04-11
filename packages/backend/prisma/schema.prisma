@@ -32,13 +32,17 @@ model Project {
   description String?
   userId      String
   user        User     @relation(fields: [userId], references: [id])
+  visualStyle String[] @default([]) // 视频风格: realistic, cinematic, vintage
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  episodes     Episode[]
-  characters   Character[]
+  episodes      Episode[]
+  characters    Character[]
+  locations     Location[]
   compositions Composition[]
   importTasks  ImportTask[]
+  pipelineJobs  PipelineJob[]
+  assets       ProjectAsset[]
 
   @@index([userId])
 }
@@ -49,11 +53,13 @@ model Episode {
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   episodeNum Int
   title      String?
+  synopsis   String?  // 分集摘要
   script     Json?    // 存储结构化剧本JSON
+  sceneIndices Int[] @default([]) // 场景索引列表
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  scenes Scene[]
+  segments Segment[]
 
   @@unique([projectId, episodeNum])
   @@index([projectId])
@@ -70,6 +76,7 @@ model Character {
 
   images      CharacterImage[]
 
+  @@unique([projectId, name])
   @@index([projectId])
 }
 
@@ -88,32 +95,92 @@ model CharacterImage {
 
   parent      CharacterImage? @relation("ImageHierarchy", fields: [parentId], references: [id])
   children    CharacterImage[] @relation("ImageHierarchy")
+  segmentUsages CharacterSegment[]
 
   @@index([characterId])
   @@index([parentId])
 }
 
-model Scene {
+// Segment - 分镜片段（视频生成单元）
+model Segment {
+  id              String   @id @default(cuid())
+  episodeId       String
+  episode        Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  segmentNum     Int      // 分镜序号
+  description    String?  // 分镜描述
+  locationId      String?
+  location       Location? @relation(fields: [locationId], references: [id])
+  duration       Int?     // 总时长(毫秒)
+  cameraMovement String?  // 运镜方式
+  aspectRatio    String?  // 9:16 / 16:9 / 1:1
+  prompt         String   // 视频生成提示词
+  visualStyle    String[] @default([]) // 视觉风格
+  status        String   @default("pending") // pending/generating/completed/failed
+  seedanceParams Json?   // Seedance API 参数
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tasks              VideoTask[]
+  characterSegments  CharacterSegment[]
+  subShots          SubShot[]
+
+  @@unique([episodeId, segmentNum])
+  @@index([episodeId])
+  @@index([locationId])
+}
+
+// SubShot - 子片段（时序描述）
+model SubShot {
+  id           String   @id @default(cuid())
+  segmentId    String
+  segment     Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  order       Int      // 顺序
+  durationMs   Int      // 时长(毫秒)
+  description  String   // 描述文本
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([segmentId])
+}
+
+// CharacterSegment - 片段中的人物及其造型
+model CharacterSegment {
+  id               String   @id @default(cuid())
+  segmentId        String
+  segment         Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  characterImageId String   // 该片段中使用的人物具体形象
+  characterImage   CharacterImage @relation(fields: [characterImageId], references: [id])
+  action          String?  // 该片段中角色的动作/情绪
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([segmentId, characterImageId])
+  @@index([segmentId])
+  @@index([characterImageId])
+}
+
+// Location - 场地（从剧本提取）
+model Location {
   id          String   @id @default(cuid())
-  episodeId   String
-  episode     Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
-  sceneNum    Int
-  description String?
-  prompt      String
-  status      String   @default("pending") // pending/processing/completed/failed
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  location    String   // 地点名称
+  timeOfDay   String?  // 日/夜/晨/昏
+  characters  String[] @default([]) // 出场角色列表
+  description String?  // 场景描述
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tasks VideoTask[]
+  segments Segment[]
 
-  @@unique([episodeId, sceneNum])
-  @@index([episodeId])
+  @@unique([projectId, location])
+  @@index([projectId])
 }
 
 model VideoTask {
   id              String   @id @default(cuid())
-  sceneId         String
-  scene           Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  segmentId        String
+  segment         Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
   model           String
   externalTaskId  String?  // 外部 API (火山引擎/Atlas) 的任务 ID
   status          String   @default("queued") // queued/processing/completed/failed
@@ -127,7 +194,7 @@ model VideoTask {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@index([sceneId])
+  @@index([segmentId])
   @@index([externalTaskId])
   apiCalls ModelApiCall[]
 }
@@ -186,16 +253,16 @@ model Composition {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  segments Segment[]
+  segments CompositionSegment[]
 
   @@index([projectId])
 }
 
-model Segment {
+model CompositionSegment {
   id            String      @id @default(cuid())
   compositionId String
   composition   Composition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
-  sceneId       String
+  segmentId      String      // 引用 Pipeline Segment
   order         Int
   startTime     Float
   endTime       Float
@@ -218,4 +285,55 @@ model ImportTask {
   updatedAt   DateTime @updatedAt
 
   @@index([userId])
+}
+
+// PipelineJob - Pipeline 执行任务
+model PipelineJob {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status      String   @default("pending") // pending/running/completed/failed
+  currentStep String   @default("script-writing") // script-writing/episode-split/segment-extract/storyboard
+  progress    Int      @default(0)         // 0-100
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stepResults PipelineStepResult[]
+
+  @@index([projectId])
+}
+
+// PipelineStepResult - Pipeline 各步骤的详细结果
+model PipelineStepResult {
+  id          String   @id @default(cuid())
+  jobId       String
+  job         PipelineJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  step        String   // script-writing/episode-split/segment-extract/storyboard
+  status      String   @default("pending") // pending/processing/completed/failed
+  input       Json?    // 步骤输入数据
+  output      Json?    // 步骤输出数据
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([jobId, step])
+  @@index([jobId])
+}
+
+model ProjectAsset {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        String   // character/background/atmosphere/prop/style
+  name        String
+  url         String
+  description String?
+  tags        String[] // JSON array
+  mood        String[] // JSON array
+  location    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
 }

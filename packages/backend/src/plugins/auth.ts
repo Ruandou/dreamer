@@ -36,13 +36,13 @@ export async function verifyEpisodeOwnership(userId: string, episodeId: string):
   return episode?.project.userId === userId
 }
 
-// Helper to verify user owns the scene's project
-export async function verifySceneOwnership(userId: string, sceneId: string): Promise<boolean> {
-  const scene = await prisma.scene.findUnique({
-    where: { id: sceneId },
+// Helper to verify user owns the segment's project
+export async function verifySegmentOwnership(userId: string, segmentId: string): Promise<boolean> {
+  const segment = await prisma.segment.findUnique({
+    where: { id: segmentId },
     include: { episode: { include: { project: { select: { userId: true } } } } }
   })
-  return scene?.episode.project.userId === userId
+  return segment?.episode.project.userId === userId
 }
 
 // Helper to verify user owns the character's project
@@ -63,12 +63,12 @@ export async function verifyCompositionOwnership(userId: string, compositionId: 
   return composition?.project.userId === userId
 }
 
-// Helper to verify user owns the task's scene's project
+// Helper to verify user owns the task's segment's project
 export async function verifyTaskOwnership(userId: string, taskId: string): Promise<boolean> {
   const task = await prisma.videoTask.findUnique({
     where: { id: taskId },
     include: {
-      scene: {
+      segment: {
         include: {
           episode: {
             include: {
@@ -81,5 +81,5 @@ export async function verifyTaskOwnership(userId: string, taskId: string): Promi
       }
     }
   })
-  return task?.scene.episode.project.userId === userId
+  return task?.segment.episode.project.userId === userId
 }

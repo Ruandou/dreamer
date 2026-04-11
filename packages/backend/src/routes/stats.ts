@@ -47,7 +47,7 @@ export async function statsRoutes(fastify: FastifyInstance) {
         include: {
           episodes: {
             include: {
-              scenes: {
+              segments: {
                 include: {
                   tasks: true
                 }
@@ -64,7 +64,7 @@ export async function statsRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Project not found' })
       }
 
-      const tasks = project.episodes.flatMap(e => e.scenes.flatMap(s => s.tasks))
+      const tasks = project.episodes.flatMap(e => e.segments.flatMap(s => s.tasks))
       const completedTasks = tasks.filter(t => t.status === 'completed')
       const failedTasks = tasks.filter(t => t.status === 'failed')
 
@@ -124,7 +124,7 @@ export async function statsRoutes(fastify: FastifyInstance) {
         include: {
           episodes: {
             include: {
-              scenes: {
+              segments: {
                 include: {
                   tasks: true
                 }
@@ -138,12 +138,12 @@ export async function statsRoutes(fastify: FastifyInstance) {
       })
 
       const allTasks = projects.flatMap(p =>
-        p.episodes.flatMap(e => e.scenes.flatMap(s => s.tasks))
+        p.episodes.flatMap(e => e.segments.flatMap(s => s.tasks))
       )
       const completedTasks = allTasks.filter(t => t.status === 'completed')
 
       const projectStats: ProjectCostStats[] = projects.map(project => {
-        const tasks = project.episodes.flatMap(e => e.scenes.flatMap(s => s.tasks))
+        const tasks = project.episodes.flatMap(e => e.segments.flatMap(s => s.tasks))
         const completed = tasks.filter(t => t.status === 'completed')
         const failed = tasks.filter(t => t.status === 'failed')
         const wanTasks = completed.filter(t => t.model === 'wan2.6')
@@ -227,13 +227,13 @@ export async function statsRoutes(fastify: FastifyInstance) {
       }
 
       if (projectId) {
-        whereClause.scene = {
+        whereClause.segment = {
           episode: {
             projectId
           }
         }
       } else {
-        whereClause.scene = {
+        whereClause.segment = {
           episode: {
             project: {
               userId: user.id

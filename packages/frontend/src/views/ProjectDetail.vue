@@ -43,6 +43,12 @@ const menuOptions: MenuOption[] = [
     key: 'compose',
     icon: '🎞️',
     onClick: () => router.push(`/project/${projectId.value}/compose`)
+  },
+  {
+    label: 'AI流水线',
+    key: 'pipeline',
+    icon: '⚡',
+    onClick: () => router.push(`/project/${projectId.value}/pipeline`)
   }
 ]
 
@@ -52,11 +58,12 @@ const currentMenu = computed(() => {
   if (path.includes('/characters')) return 'characters'
   if (path.includes('/storyboard')) return 'storyboard'
   if (path.includes('/compose')) return 'compose'
+  if (path.includes('/pipeline')) return 'pipeline'
   return 'script'
 })
 
 const currentTabIndex = computed(() => {
-  const tabs = ['script', 'characters', 'storyboard', 'compose']
+  const tabs = ['script', 'characters', 'storyboard', 'compose', 'pipeline']
   return tabs.indexOf(currentMenu.value)
 })
 </script>

@@ -2,13 +2,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NCard, NButton, NSpace, NGrid, NGi, NEmpty, NModal, NForm, NFormItem,
-  NInput, NInputNumber, NTag, NDropdown, NSelect, NUpload, NUploadDragger,
-  useMessage, useDialog, NAlert, NText
+  NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem,
+  NInput, NTag, NDropdown,
+  useMessage, useDialog
 } from 'naive-ui'
 import type { MenuOption, UploadFileInfo } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
-import { api } from '@/api'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 
@@ -18,15 +17,10 @@ const dialog = useDialog()
 const projectStore = useProjectStore()
 
 const showCreateModal = ref(false)
-const showImportModal = ref(false)
 const newProject = ref({ name: '', description: '' })
 const searchQuery = ref('')
-const viewMode = ref<'grid' | 'list'>('grid')
-
-// Import state
-const importContent = ref('')
-const importType = ref<'markdown' | 'json'>('markdown')
-const isImporting = ref(false)
+const quickIdea = ref('')
+const isCreating = ref(false)
 
 onMounted(() => {
   projectStore.fetchProjects()
@@ -47,57 +41,13 @@ const handleCreate = () => {
   showCreateModal.value = true
 }
 
-const handleImport = () => {
-  showImportModal.value = true
-  importContent.value = ''
-}
-
-const handleFileChange = (options: { file: UploadFileInfo }) => {
-  const file = options.file
-  if (!file.file) return
-
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    importContent.value = e.target?.result as string
-    // Auto-detect type
-    if (file.name.endsWith('.json')) {
-      importType.value = 'json'
-    } else {
-      importType.value = 'markdown'
-    }
-  }
-  reader.readAsText(file.file)
-}
-
-const handleImportProject = async () => {
-  if (!importContent.value.trim()) {
-    message.warning('请输入或上传剧本内容')
+const handleQuickCreate = async () => {
+  if (!quickIdea.value.trim()) {
+    message.warning('请输入剧本想法')
     return
   }
-
-  isImporting.value = true
-  try {
-    const res = await api.post('/import/project', {
-      content: importContent.value,
-      type: importType.value
-    })
-
-    message.success('导入任务已创建，正在后台处理...')
-
-    // 跳转到任务页面或等待完成
-    // 这里简化处理，直接跳转到项目列表刷新
-    showImportModal.value = false
-    await projectStore.fetchProjects()
-
-    // 提示用户查看新导入的项目
-    if (projectStore.projects.length > 0) {
-      message.info('请在项目列表中查看导入的项目')
-    }
-  } catch (error: any) {
-    message.error(error.response?.data?.error || '导入失败')
-  } finally {
-    isImporting.value = false
-  }
+  isCreating.value = true
+  router.push(`/generate?idea=${encodeURIComponent(quickIdea.value)}`)
 }
 
 const handleSubmit = async () => {
@@ -128,14 +78,6 @@ const handleDelete = (id: string) => {
   })
 }
 
-const getProjectStats = (project: any) => {
-  // Placeholder - in real app would compute from episodes, scenes etc
-  return {
-    episodes: 0,
-    progress: 0
-  }
-}
-
 const formatDate = (date: string) => {
   return new Date(date).toLocaleDateString('zh-CN', {
     year: 'numeric',
@@ -145,7 +87,6 @@ const formatDate = (date: string) => {
 }
 
 const dropdownOptions = [
-  { label: '编辑', key: 'edit' },
   { label: '删除', key: 'delete' }
 ]
 
@@ -172,35 +113,39 @@ const handleDropdownSelect = (key: string, projectId: string) => {
             v-model:value="searchQuery"
             placeholder="搜索项目..."
             clearable
-            style="width: 200px"
+            style="width: 160px"
           >
             <template #prefix>
-              <span class="search-icon">🔍</span>
+              <span>🔍</span>
             </template>
           </NInput>
-          <NButtonGroup>
-            <NButton @click="router.push('/jobs')">
-              📋 任务
-            </NButton>
-            <NButton @click="router.push('/stats')">
-              📊 统计
-            </NButton>
-            <NButton @click="router.push('/settings')">
-              ⚙️ 设置
-            </NButton>
-          </NButtonGroup>
-          <NButton @click="handleImport" secondary>
-            导入剧本
-          </NButton>
-          <NButton @click="handleCreate" type="primary">
-            <template #icon>
-              <span>+</span>
-            </template>
-            新建项目
-          </NButton>
         </NSpace>
       </div>
     </header>
+
+    <!-- Quick Create -->
+    <div class="quick-create">
+      <div class="quick-create__input-wrap">
+        <NInput
+          v-model:value="quickIdea"
+          type="textarea"
+          placeholder="✨ 输入想法，快速创建短剧... 或 导入已有剧本"
+          :rows="2"
+          @keydown.enter.ctrl="handleQuickCreate"
+        />
+      </div>
+      <div class="quick-create__actions">
+        <NButton @click="router.push('/import')" secondary>导入剧本</NButton>
+        <NButton
+          type="primary"
+          @click="handleQuickCreate"
+          :disabled="!quickIdea.trim()"
+          :loading="isCreating"
+        >
+          生成大纲 →
+        </NButton>
+      </div>
+    </div>
 
     <!-- Content -->
     <div class="projects-content">
@@ -212,9 +157,10 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         icon="🎬"
       >
         <template #action>
-          <NButton type="primary" @click="handleCreate">
-            创建第一个项目
-          </NButton>
+          <NSpace>
+            <NButton @click="handleImport">导入剧本</NButton>
+            <NButton type="primary" @click="handleCreate">新建项目</NButton>
+          </NSpace>
         </template>
       </EmptyState>
 
@@ -279,13 +225,13 @@ const handleDropdownSelect = (key: string, projectId: string) => {
       <NForm :model="newProject" label-placement="top">
         <NFormItem label="项目名称" path="name">
           <NInput
-            v:value="newProject.name"
+            v-model:value="newProject.name"
             placeholder="给你的短剧起个名字"
           />
         </NFormItem>
         <NFormItem label="项目描述" path="description">
           <NInput
-            v:value="newProject.description"
+            v-model:value="newProject.description"
             type="textarea"
             placeholder="简要描述故事背景或创作方向（可选）"
             :rows="3"
@@ -296,73 +242,6 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         <NSpace justify="end">
           <NButton @click="showCreateModal = false">取消</NButton>
           <NButton type="primary" @click="handleSubmit">创建项目</NButton>
-        </NSpace>
-      </template>
-    </NModal>
-
-    <!-- Import Modal -->
-    <NModal
-      v-model:show="showImportModal"
-      preset="card"
-      title="导入剧本"
-      style="width: 700px"
-      :bordered="false"
-    >
-      <div class="import-modal">
-        <NAlert type="info" class="import-alert">
-          支持 Markdown 和 JSON 格式的剧本文件。上传后将自动解析并创建项目。
-        </NAlert>
-
-        <NUpload
-          class="import-upload"
-          :multiple="false"
-          accept=".md,.markdown,.json"
-          :show-file-list="false"
-          @change="handleFileChange"
-        >
-          <NUploadDragger>
-            <div class="upload-content">
-              <span class="upload-icon">📄</span>
-              <NText>点击或拖拽文件到此处上传</NText>
-              <NText type="secondary" style="font-size: 12px">
-                支持 .md, .markdown, .json 格式
-              </NText>
-            </div>
-          </NUploadDragger>
-        </NUpload>
-
-        <NForm :model="{ importContent, importType }" label-placement="top" class="import-form">
-          <NFormItem label="剧本内容" path="importContent">
-            <NInput
-              v-model:value="importContent"
-              type="textarea"
-              placeholder="或者直接粘贴剧本内容..."
-              :rows="6"
-            />
-          </NFormItem>
-          <NFormItem label="格式" path="importType">
-            <NSelect
-              v-model:value="importType"
-              :options="[
-                { label: 'Markdown', value: 'markdown' },
-                { label: 'JSON', value: 'json' }
-              ]"
-              style="width: 200px"
-            />
-          </NFormItem>
-        </NForm>
-      </div>
-      <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showImportModal = false">取消</NButton>
-          <NButton
-            type="primary"
-            @click="handleImportProject"
-            :disabled="!importContent.trim()"
-            :loading="isImporting"
-          >
-            一键导入
-          </NButton>
         </NSpace>
       </template>
     </NModal>
@@ -404,6 +283,20 @@ const handleDropdownSelect = (key: string, projectId: string) => {
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   min-height: 400px;
+}
+
+.quick-create {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: flex-end;
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  background: var(--color-bg-white);
+  border-radius: var(--radius-lg);
+}
+
+.quick-create__input-wrap {
+  flex: 1;
 }
 
 .projects-grid {
@@ -480,41 +373,5 @@ const handleDropdownSelect = (key: string, projectId: string) => {
 .project-card__date {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
-}
-
-.search-icon {
-  font-size: 14px;
-}
-
-/* Import Modal Styles */
-.import-modal {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.import-alert {
-  margin-bottom: var(--spacing-sm);
-}
-
-.import-upload {
-  margin-bottom: var(--spacing-md);
-}
-
-.upload-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-lg);
-}
-
-.upload-icon {
-  font-size: 32px;
-  margin-bottom: var(--spacing-xs);
-}
-
-.import-form {
-  margin-top: var(--spacing-md);
 }
 </style>

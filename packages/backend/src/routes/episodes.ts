@@ -39,7 +39,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
 
       const episode = await prisma.episode.findUnique({
         where: { id: episodeId },
-        include: { scenes: true }
+        include: { segments: true }
       })
 
       if (!episode) {
@@ -166,26 +166,26 @@ export async function episodeRoutes(fastify: FastifyInstance) {
           }
         })
 
-        // Auto-create scenes from script
+        // Auto-create segments from script
         if (script.scenes && script.scenes.length > 0) {
-          // Delete existing scenes
-          await prisma.scene.deleteMany({ where: { episodeId } })
+          // Delete existing segments
+          await prisma.segment.deleteMany({ where: { episodeId } })
 
-          // Create new scenes
-          const scenesData = script.scenes.map((scene) => ({
+          // Create new segments
+          const segmentsData = script.scenes.map((scene) => ({
             episodeId,
-            sceneNum: scene.sceneNum || 1,
+            segmentNum: scene.sceneNum || 1,
             description: scene.description || `${scene.location} - ${scene.timeOfDay}`,
             prompt: buildScenePrompt(scene, script.title || '')
           }))
 
-          await prisma.scene.createMany({ data: scenesData })
+          await prisma.segment.createMany({ data: segmentsData })
         }
 
         return {
           episode: updatedEpisode,
           script,
-          scenesCreated: script.scenes?.length || 0,
+          segmentsCreated: script.scenes?.length || 0,
           aiCost: cost.costCNY
         }
       } catch (error) {

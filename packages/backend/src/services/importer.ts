@@ -25,7 +25,7 @@ export interface ImportResults {
   episodesCreated: number
   episodesUpdated: number
   charactersCreated: number
-  scenesCreated: number
+  segmentsCreated: number
 }
 
 export async function importParsedData(projectId: string, parsed: ParsedScript): Promise<ImportResults> {
@@ -33,7 +33,7 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
     episodesCreated: 0,
     episodesUpdated: 0,
     charactersCreated: 0,
-    scenesCreated: 0
+    segmentsCreated: 0
   }
 
   // Create characters with AI-extracted descriptions
@@ -55,7 +55,7 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
         projectId,
         episodeNum: episodeData.episodeNum
       },
-      include: { scenes: true }
+      include: { segments: true }
     })
 
     if (existing) {
@@ -68,19 +68,19 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
         }
       })
 
-      // Delete old scenes and create new ones
-      await prisma.scene.deleteMany({ where: { episodeId: existing.id } })
+      // Delete old segments and create new ones
+      await prisma.segment.deleteMany({ where: { episodeId: existing.id } })
 
       for (const scene of episodeData.scenes) {
-        await prisma.scene.create({
+        await prisma.segment.create({
           data: {
             episodeId: existing.id,
-            sceneNum: scene.sceneNum,
+            segmentNum: scene.sceneNum,
             description: scene.description,
             prompt: scene.prompt
           }
         })
-        results.scenesCreated++
+        results.segmentsCreated++
       }
 
       results.episodesUpdated++
@@ -95,17 +95,17 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
         }
       })
 
-      // Create scenes
+      // Create segments
       for (const scene of episodeData.scenes) {
-        await prisma.scene.create({
+        await prisma.segment.create({
           data: {
             episodeId: episode.id,
-            sceneNum: scene.sceneNum,
+            segmentNum: scene.sceneNum,
             description: scene.description,
             prompt: scene.prompt
           }
         })
-        results.scenesCreated++
+        results.segmentsCreated++
       }
 
       results.episodesCreated++

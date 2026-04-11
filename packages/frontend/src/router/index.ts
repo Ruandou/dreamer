@@ -22,6 +22,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Import.vue'),
   },
   {
+    path: '/generate',
+    name: 'Generate',
+    component: () => import('@/views/Generate.vue'),
+  },
+  {
     path: '/stats',
     name: 'Stats',
     component: () => import('@/views/Stats.vue'),
@@ -75,6 +80,11 @@ const routes: RouteRecordRaw[] = [
         path: 'compose',
         name: 'ProjectCompose',
         component: () => import('@/views/ProjectCompose.vue')
+      },
+      {
+        path: 'pipeline',
+        name: 'ProjectPipeline',
+        component: () => import('@/views/ProjectPipeline.vue')
       }
     ]
   }

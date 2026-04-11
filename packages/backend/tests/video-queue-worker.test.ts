@@ -76,6 +76,10 @@ vi.mock('../src/index.js', () => ({
     scene: {
       update: mockSceneUpdate
     },
+    modelApiCall: {
+      create: vi.fn().mockResolvedValue({ id: 'api-call-123' }),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 })
+    },
     $connect: vi.fn(),
     $disconnect: vi.fn()
   }

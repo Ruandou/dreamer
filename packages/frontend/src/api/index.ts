@@ -175,4 +175,112 @@ export async function getAiBalance() {
   return res.data
 }
 
+// Pipeline API
+export interface PipelineStepInfo {
+  id: string
+  description: string
+}
+
+export interface PipelineExecuteParams {
+  projectId: string
+  idea: string
+  targetEpisodes?: number
+  targetDuration?: number
+  defaultAspectRatio?: '16:9' | '9:16' | '1:1'
+  defaultResolution?: '480p' | '720p'
+}
+
+// Pipeline Job 类型
+export interface PipelineJob {
+  id: string
+  projectId: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  currentStep: string
+  progress: number
+  error?: string
+  stepResults?: PipelineStepResult[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PipelineStepResult {
+  step: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  input?: any
+  output?: any
+  error?: string
+}
+
+// 创建 Pipeline Job
+export interface PipelineExecuteResult {
+  success: boolean
+  data?: {
+    jobId: string
+    status: string
+    message: string
+  }
+  error?: string
+}
+
+export async function executePipeline(params: PipelineExecuteParams) {
+  const res = await api.post<PipelineExecuteResult>('/pipeline/execute', params)
+  return res.data
+}
+
+// 获取 Job 状态
+export async function getPipelineJob(jobId: string) {
+  const res = await api.get<{ success: boolean; data?: PipelineJob }>(`/pipeline/job/${jobId}`)
+  return res.data
+}
+
+// 获取项目的 Pipeline 状态
+export async function getPipelineStatus(projectId: string) {
+  const res = await api.get<{
+    success: boolean
+    data?: {
+      id?: string
+      status: string
+      currentStep?: string
+      progress?: number
+      error?: string
+      stepResults?: PipelineStepResult[]
+    }
+  }>(`/pipeline/status/${projectId}`)
+  return res.data
+}
+
+// 获取 Pipeline 步骤列表
+export async function getPipelineSteps() {
+  const res = await api.get<{ steps: PipelineStepInfo[] }>('/pipeline/steps')
+  return res.data
+}
+
+// 轮询 Pipeline 状态
+export async function pollPipelineStatus(
+  projectId: string,
+  onProgress?: (job: PipelineJob) => void,
+  maxAttempts = 60,
+  intervalMs = 2000
+): Promise<PipelineJob> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const result = await getPipelineJobStatus(projectId)
+    if (result.data) {
+      const job = result.data as unknown as PipelineJob
+      onProgress?.(job)
+
+      if (job.status === 'completed' || job.status === 'failed') {
+        return job
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, intervalMs))
+  }
+  throw new Error('Pipeline polling timeout')
+}
+
+// 获取 Job 详情（内部使用）
+async function getPipelineJobStatus(jobId: string): Promise<{ data?: PipelineJob }> {
+  const res = await api.get<{ success: boolean; data?: PipelineJob }>(`/pipeline/job/${jobId}`)
+  return res.data
+}
+
 export { api }

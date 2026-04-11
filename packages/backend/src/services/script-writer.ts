@@ -1,0 +1,504 @@
+import OpenAI from 'openai'
+import type { ScriptContent, ScriptScene, Dialogue, Character } from '@dreamer/shared/types'
+import { calculateDeepSeekCost, type DeepSeekCost, DeepSeekAuthError, DeepSeekRateLimitError } from './deepseek.js'
+
+// Script Writer System Prompt
+const SCRIPT_WRITER_PROMPT = `你是一个专业的短视频剧本作家，擅长创作适合AI视频生成的高质量短剧剧本。
+
+## 你的能力
+
+1. 从一句话想法生成完整剧本
+2. 根据用户反馈改进剧本
+3. 优化剧本结构以适应视频生成
+
+## 剧本格式（严格遵循）
+
+剧本必须符合以下JSON格式（不要包含markdown代码块标记）：
+
+{
+  "title": "剧集标题",
+  "summary": "3-5句话故事梗概",
+  "metadata": {
+    "genre": "古装/现代/科幻/都市/校园",
+    "style": "穿越/逆袭/甜宠/搞笑/虐心/热血/悬疑",
+    "tone": "幽默/严肃/悬疑/感人/浪漫",
+    "targetAudience": "18-25女性/25-35女性/通用",
+    "coreConflict": "一句话核心冲突",
+    "keyPlotPoints": ["情节点1", "情节点2", "情节点3"],
+    "totalEstimatedDuration": 180,
+    "recommendedEpisodes": 3,
+    "characters": ["角色名1", "角色名2"]
+  },
+  "scenes": [
+    {
+      "sceneNum": 1,
+      "location": "场景地点",
+      "timeOfDay": "日/夜/晨/昏",
+      "characters": ["角色1", "角色2"],
+      "description": "场景描述（视觉画面）",
+      "dialogues": [
+        {"character": "角色名", "content": "对话内容"}
+      ],
+      "actions": ["动作1", "动作2"]
+    }
+  ]
+}
+
+## 创作原则
+
+### 短视频友好
+- 每集时长控制在60-90秒（适合短视频平台）
+- 场景数量：每集3-5个场景
+- 每场景时长：10-20秒
+- 开场前3秒必须有"钩子"抓人
+
+### AI视频友好
+- 场景描述要具体（便于AI生成画面）
+- 动作要明确（便于AI理解）
+- 避免过于复杂的场景切换
+- 每个场景应有明确的视觉焦点
+
+### 情绪节奏
+- 起承转合结构清晰
+- 每集至少一个情绪高潮点
+- 结尾留有悬念或钩子（吸引看完）
+
+### 角色设计
+- 主要角色不超过3个
+- 每个角色有明确性格标签
+- 角色关系要清晰
+
+## 创作流程
+
+1. 分析用户想法，确定题材和风格
+2. 设计核心冲突和关键情节点
+3. 规划场景结构
+4. 填充具体场景内容
+5. 检查是否符合格式要求
+
+直接返回JSON格式，不要包含其他文字。`
+
+export interface ScriptWriterOptions {
+  characters?: Character[]
+  projectContext?: string
+}
+
+export interface ScriptWriterResult {
+  script: ScriptContent
+  cost: DeepSeekCost
+}
+
+/**
+ * 从一句话想法生成专业剧本
+ */
+export async function writeScriptFromIdea(
+  idea: string,
+  options?: ScriptWriterOptions
+): Promise<ScriptWriterResult> {
+  const deepseek = getDeepSeekClient()
+
+  const userPrompt = buildUserPrompt(idea, options)
+
+  let lastError: Error | null = null
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const completion = await deepseek.chat.completions.create({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: SCRIPT_WRITER_PROMPT },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 4000
+      })
+
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('DeepSeek API 返回为空')
+      }
+
+      const cost = calculateDeepSeekCost(completion.usage)
+      const script = parseScriptResponse(content)
+
+      validateScript(script)
+
+      return { script, cost }
+    } catch (error: any) {
+      lastError = error
+
+      if (error?.status === 401 || error?.status === 403) {
+        throw new DeepSeekAuthError()
+      }
+
+      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
+        if (attempt < 2) {
+          await sleep(2000 * attempt)
+          continue
+        }
+        throw new DeepSeekRateLimitError()
+      }
+
+      if (attempt < 2) {
+        await sleep(1000)
+        continue
+      }
+    }
+  }
+
+  throw lastError || new Error('剧本生成失败')
+}
+
+/**
+ * 扩展剧本（生成更多场景）
+ */
+export async function expandScript(
+  script: ScriptContent,
+  additionalScenes: number = 3,
+  options?: ScriptWriterOptions
+): Promise<ScriptWriterResult> {
+  const deepseek = getDeepSeekClient()
+
+  const userPrompt = `请为以下剧本扩展${additionalScenes}个新场景：
+
+当前剧本：
+${JSON.stringify(script, null, 2)}
+
+请保持：
+1. 相同的风格和基调
+2. 角色一致性
+3. 故事连贯性
+
+新增场景应该推动剧情发展，增加冲突或揭示新信息。
+
+直接返回JSON格式的完整剧本（包括原有场景+新场景）。`
+
+  let lastError: Error | null = null
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const completion = await deepseek.chat.completions.create({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: SCRIPT_WRITER_PROMPT },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 4000
+      })
+
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('DeepSeek API 返回为空')
+      }
+
+      const cost = calculateDeepSeekCost(completion.usage)
+      const script = parseScriptResponse(content)
+
+      validateScript(script)
+
+      return { script, cost }
+    } catch (error: any) {
+      lastError = error
+
+      if (error?.status === 401 || error?.status === 403) {
+        throw new DeepSeekAuthError()
+      }
+
+      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
+        if (attempt < 2) {
+          await sleep(2000 * attempt)
+          continue
+        }
+        throw new DeepSeekRateLimitError()
+      }
+
+      if (attempt < 2) {
+        await sleep(1000)
+        continue
+      }
+    }
+  }
+
+  throw lastError || new Error('剧本扩展失败')
+}
+
+/**
+ * 改进剧本
+ */
+export async function improveScript(
+  script: ScriptContent,
+  feedback: string,
+  options?: ScriptWriterOptions
+): Promise<ScriptWriterResult> {
+  const deepseek = getDeepSeekClient()
+
+  const userPrompt = `请根据以下反馈改进剧本：
+
+当前剧本：
+${JSON.stringify(script, null, 2)}
+
+用户反馈：
+${feedback}
+
+请保持剧本的整体结构，只根据反馈进行针对性改进。
+
+直接返回JSON格式的完整剧本。`
+
+  let lastError: Error | null = null
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const completion = await deepseek.chat.completions.create({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: SCRIPT_WRITER_PROMPT },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 4000
+      })
+
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('DeepSeek API 返回为空')
+      }
+
+      const cost = calculateDeepSeekCost(completion.usage)
+      const improvedScript = parseScriptResponse(content)
+
+      validateScript(improvedScript)
+
+      return { script: improvedScript, cost }
+    } catch (error: any) {
+      lastError = error
+
+      if (error?.status === 401 || error?.status === 403) {
+        throw new DeepSeekAuthError()
+      }
+
+      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
+        if (attempt < 2) {
+          await sleep(2000 * attempt)
+          continue
+        }
+        throw new DeepSeekRateLimitError()
+      }
+
+      if (attempt < 2) {
+        await sleep(1000)
+        continue
+      }
+    }
+  }
+
+  throw lastError || new Error('剧本改进失败')
+}
+
+/**
+ * 优化单个场景描述
+ */
+export async function optimizeSceneDescription(
+  description: string,
+  sceneContext?: {
+    location?: string
+    timeOfDay?: string
+    characters?: string[]
+  }
+): Promise<string> {
+  const deepseek = getDeepSeekClient()
+
+  const contextStr = sceneContext
+    ? `场景上下文：\n- 地点：${sceneContext.location || '未指定'}\n- 时间：${sceneContext.timeOfDay || '未指定'}\n- 角色：${sceneContext.characters?.join(', ') || '未指定'}`
+    : ''
+
+  const userPrompt = `请优化以下场景描述，使其更适合AI视频生成：
+
+原始描述：
+${description}
+
+${contextStr}
+
+优化要求：
+1. 增加具体的视觉细节（颜色、材质、光线等）
+2. 明确主体和背景
+3. 添加动态元素（动作、氛围）
+4. 保持原意不变
+
+直接返回优化后的描述文字，不要其他内容。`
+
+  let lastError: Error | null = null
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const completion = await deepseek.chat.completions.create({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: '你是一个专业的AI视频提示词优化专家。' },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.5,
+        max_tokens: 500
+      })
+
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('DeepSeek API 返回为空')
+      }
+
+      return content.trim()
+    } catch (error: any) {
+      lastError = error
+
+      if (error?.status === 401 || error?.status === 403) {
+        throw new DeepSeekAuthError()
+      }
+
+      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
+        if (attempt < 2) {
+          await sleep(2000 * attempt)
+          continue
+        }
+        throw new DeepSeekRateLimitError()
+      }
+
+      if (attempt < 2) {
+        await sleep(1000)
+        continue
+      }
+    }
+  }
+
+  throw lastError || new Error('场景描述优化失败')
+}
+
+// ==================== Helper Functions ====================
+
+function getDeepSeekClient(): OpenAI {
+  return new OpenAI({
+    apiKey: process.env.DEEPSEEK_API_KEY,
+    baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1'
+  })
+}
+
+function buildUserPrompt(idea: string, options?: ScriptWriterOptions): string {
+  let prompt = `请根据以下想法创作一个短视频剧本：
+
+想法：${idea}`
+
+  if (options?.characters && options.characters.length > 0) {
+    const characterList = options.characters
+      .map(c => `- ${c.name}: ${c.description || '未描述'}`)
+      .join('\n')
+    prompt += `\n\n角色设定：\n${characterList}`
+  }
+
+  if (options?.projectContext) {
+    prompt += `\n\n项目背景：\n${options.projectContext}`
+  }
+
+  return prompt
+}
+
+function parseScriptResponse(content: string): ScriptContent {
+  // 清理返回内容，移除可能的 markdown 代码块
+  let cleanContent = content
+  if (content.includes('```json')) {
+    cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  }
+
+  // 移除可能的引号包裹
+  if (cleanContent.startsWith('"') && cleanContent.endsWith('"')) {
+    cleanContent = cleanContent.slice(1, -1)
+  }
+
+  // 尝试解析JSON
+  try {
+    const parsed = JSON.parse(cleanContent)
+    return convertToScriptContent(parsed)
+  } catch {
+    // 如果直接解析失败，尝试提取 JSON 部分
+    const jsonMatch = cleanContent.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      return convertToScriptContent(JSON.parse(jsonMatch[0]))
+    }
+    throw new Error('剧本格式不正确，无法解析')
+  }
+}
+
+function convertToScriptContent(data: any): ScriptContent {
+  // 处理可能的嵌套结构
+  let scenesArray: any[] = []
+
+  if (Array.isArray(data.scenes)) {
+    scenesArray = data.scenes
+  } else if (Array.isArray(data.episodes) && data.episodes.length > 0) {
+    scenesArray = data.episodes[0].scenes || []
+  }
+
+  const scenes: ScriptScene[] = scenesArray.map((s: any, index: number) => {
+    // 处理 dialogues
+    let dialogues: Dialogue[] = []
+    if (Array.isArray(s.dialogues)) {
+      dialogues = s.dialogues.map((d: any) => ({
+        character: d.character || d.name || '',
+        content: d.content || d.line || ''
+      }))
+    } else if (s.dialogue && typeof s.dialogue === 'object') {
+      dialogues = Object.entries(s.dialogue).map(([character, content]) => ({
+        character,
+        content: content as string
+      }))
+    }
+
+    // 处理 actions
+    let actions: string[] = []
+    if (Array.isArray(s.actions)) {
+      actions = s.actions
+    } else if (typeof s.action === 'string') {
+      actions = s.action.split(/(?<=[。！？；.!?;])/).filter(Boolean)
+    }
+
+    return {
+      sceneNum: s.sceneNum || s.scene_number || index + 1,
+      location: s.location || '',
+      timeOfDay: s.timeOfDay || s.time || '日',
+      characters: Array.isArray(s.characters) ? s.characters : [],
+      description: s.description || '',
+      dialogues,
+      actions
+    }
+  })
+
+  // 处理 metadata
+  const metadata = data.metadata || {}
+
+  return {
+    title: data.title || data.episode_title || '未命名剧本',
+    summary: data.summary || '',
+    scenes
+  }
+}
+
+function validateScript(script: ScriptContent): void {
+  if (!script.title) {
+    throw new Error('剧本缺少标题')
+  }
+
+  if (!Array.isArray(script.scenes) || script.scenes.length === 0) {
+    throw new Error('剧本缺少场景')
+  }
+
+  for (const scene of script.scenes) {
+    if (!scene.location) {
+      throw new Error(`场景${scene.sceneNum}缺少地点描述`)
+    }
+    if (!scene.description) {
+      throw new Error(`场景${scene.sceneNum}缺少场景描述`)
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
