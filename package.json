@@ -27,7 +27,7 @@
   },
   "lint-staged": {
     "packages/backend/**/*.{ts,js}": [
-      "pnpm --filter @dreamer/backend exec vitest run"
+      "pnpm --filter @dreamer/backend test -- run"
     ],
     "packages/frontend/**/*.{ts,vue}": [
       "pnpm --filter @dreamer/frontend run type-check"
