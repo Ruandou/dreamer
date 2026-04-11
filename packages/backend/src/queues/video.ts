@@ -6,6 +6,7 @@ import { submitWan26Task, waitForWan26Completion, calculateWan26Cost } from '../
 import { submitSeedanceTask, waitForSeedanceCompletion, calculateSeedanceCost } from '../services/seedance.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { sendTaskUpdate } from '../plugins/sse.js'
+import { logApiCall, updateApiCall } from '../services/api-logger.js'
 
 const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null
@@ -60,19 +61,50 @@ export const videoWorker = new Worker<VideoJobData>(
       let videoUrl: string
       let thumbnailUrl: string
       let cost: number
+      let externalTaskId: string
+      let apiCallId: string
 
       if (model === 'wan2.6') {
         // Wan 2.6 API call
         console.log(`Submitting Wan 2.6 task for scene ${sceneId}`)
+
+        // Log API call
+        if (userId) {
+          const log = await logApiCall({
+            userId,
+            model: 'wan2.6',
+            provider: 'atlas',
+            prompt,
+            requestParams: { referenceImage, duration: effectiveDuration },
+            videoTaskId: taskId
+          })
+          apiCallId = log.id
+        }
+
         const response = await submitWan26Task({
           prompt,
           referenceImage,
           duration: effectiveDuration
         })
 
+        externalTaskId = response.taskId
+
+        // Save external task ID to both VideoTask and ApiCall
+        await prisma.videoTask.update({
+          where: { id: taskId },
+          data: { externalTaskId }
+        })
+
+        if (apiCallId) {
+          await updateApiCall(externalTaskId, { status: 'processing' })
+        }
+
         const result = await waitForWan26Completion(response.taskId)
 
         if (!result.videoUrl) {
+          if (apiCallId) {
+            await updateApiCall(externalTaskId, { status: 'failed', errorMsg: 'No video URL returned' })
+          }
           throw new Error('Wan 2.6 returned no video URL')
         }
 
@@ -80,24 +112,71 @@ export const videoWorker = new Worker<VideoJobData>(
         thumbnailUrl = result.thumbnailUrl || ''
         cost = calculateWan26Cost(effectiveDuration)
 
+        if (apiCallId) {
+          await updateApiCall(externalTaskId, {
+            status: 'completed',
+            responseData: { videoUrl, thumbnailUrl },
+            cost,
+            duration: result.duration
+          })
+        }
+
       } else {
         // Seedance 2.0 API call
         console.log(`Submitting Seedance 2.0 task for scene ${sceneId}, reference images: ${imageUrls?.length || 0}`)
+
+        // Log API call
+        if (userId) {
+          const log = await logApiCall({
+            userId,
+            model: 'seedance2.0',
+            provider: 'volcengine',
+            prompt,
+            requestParams: { imageUrls, duration: effectiveDuration },
+            videoTaskId: taskId
+          })
+          apiCallId = log.id
+        }
+
         const response = await submitSeedanceTask({
           prompt,
           imageUrls: imageUrls,
           duration: effectiveDuration
         })
 
+        externalTaskId = response.taskId
+
+        // Save external task ID to both VideoTask and ApiCall
+        await prisma.videoTask.update({
+          where: { id: taskId },
+          data: { externalTaskId }
+        })
+
+        if (apiCallId) {
+          await updateApiCall(externalTaskId, { status: 'processing' })
+        }
+
         const result = await waitForSeedanceCompletion(response.taskId)
 
         if (!result.videoUrl) {
+          if (apiCallId) {
+            await updateApiCall(externalTaskId, { status: 'failed', errorMsg: 'No video URL returned' })
+          }
           throw new Error('Seedance 2.0 returned no video URL')
         }
 
         videoUrl = result.videoUrl
         thumbnailUrl = result.thumbnailUrl || ''
         cost = calculateSeedanceCost(effectiveDuration)
+
+        if (apiCallId) {
+          await updateApiCall(externalTaskId, {
+            status: 'completed',
+            responseData: { videoUrl, thumbnailUrl },
+            cost,
+            duration: result.duration
+          })
+        }
       }
 
       // Download video and upload to MinIO
@@ -159,6 +238,14 @@ export const videoWorker = new Worker<VideoJobData>(
 
     } catch (error) {
       console.error(`Video job ${job.id} failed:`, error)
+
+      // Update api call log if we have externalTaskId
+      if (externalTaskId && apiCallId) {
+        await updateApiCall(externalTaskId, {
+          status: 'failed',
+          errorMsg: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
 
       // Update task as failed
       await prisma.videoTask.update({

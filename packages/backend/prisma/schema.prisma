@@ -111,22 +111,62 @@ model Scene {
 }
 
 model VideoTask {
-  id           String   @id @default(cuid())
-  sceneId      String
-  scene        Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
-  model        String
-  status       String   @default("queued") // queued/processing/completed/failed
-  prompt       String
-  cost         Float?
-  duration     Int?     // 生成耗时（秒）
-  videoUrl     String?
-  thumbnailUrl String?
-  errorMsg     String?
-  isSelected   Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String   @id @default(cuid())
+  sceneId         String
+  scene           Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  model           String
+  externalTaskId  String?  // 外部 API (火山引擎/Atlas) 的任务 ID
+  status          String   @default("queued") // queued/processing/completed/failed
+  prompt          String
+  cost            Float?
+  duration        Int?     // 生成耗时（秒）
+  videoUrl        String?
+  thumbnailUrl    String?
+  errorMsg        String?
+  isSelected      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([sceneId])
+  @@index([externalTaskId])
+}
+
+model ModelApiCall {
+  id              String   @id @default(cuid())
+  userId         String
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 模型信息
+  model          String   // wan2.6, seedance2.0, deepseek, etc.
+  provider       String   // volcengine, atlas, openai, deepseek
+
+  // 请求信息
+  prompt         String
+  requestParams  String?  // JSON: { imageUrls, duration, quality, referenceImage, etc. }
+
+  // 响应信息
+  externalTaskId String?  // 外部 API 的任务 ID
+  status         String   @default("pending") // pending/processing/completed/failed
+  responseData   String?  // JSON: { videoUrl, thumbnailUrl, etc. }
+
+  // 费用和时间
+  cost           Float?
+  duration       Int?     // 生成耗时（秒）
+
+  // 错误信息
+  errorMsg       String?
+
+  // 关联任务（可选）
+  videoTaskId    String?
+  videoTask      VideoTask? @relation(fields: [videoTaskId], references: [id], onDelete: SetNull)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@index([externalTaskId])
+  @@index([model])
+  @@index([createdAt])
 }
 
 model Composition {
