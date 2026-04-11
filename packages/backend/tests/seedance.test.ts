@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// Use vi.hoisted to ensure mocks are set up before imports
+const mockFetch = vi.hoisted(() => vi.fn())
 
 // Mock environment variables
 process.env.VOLC_ACCESS_KEY = 'test-access-key'
@@ -6,8 +9,7 @@ process.env.VOLC_SECRET_KEY = 'test-secret-key'
 process.env.VOLC_API_URL = 'https://api.volc.example.com'
 
 // Mock global fetch
-const mockFetch = vi.fn()
-global.fetch = mockFetch
+vi.stubGlobal('fetch', mockFetch)
 
 // Import after mocks
 import {
@@ -15,8 +17,7 @@ import {
   pollSeedanceStatus,
   waitForSeedanceCompletion,
   calculateSeedanceCost,
-  type SeedanceGenerateRequest,
-  type SeedanceStatusResponse
+  type SeedanceGenerateRequest
 } from '../src/services/seedance.js'
 
 describe('Seedance Service', () => {
@@ -27,14 +28,12 @@ describe('Seedance Service', () => {
   describe('calculateSeedanceCost', () => {
     it('should calculate cost correctly for 5 second video', () => {
       const cost = calculateSeedanceCost(5)
-
-      // 5 seconds * 1 yuan/sec * 0.14 CNY to USD = 0.7 USD
+      // 5 seconds * 14 credits/sec * $0.01 = $0.7
       expect(cost).toBeCloseTo(0.7)
     })
 
     it('should calculate cost correctly for 10 second video', () => {
       const cost = calculateSeedanceCost(10)
-
       expect(cost).toBeCloseTo(1.4)
     })
   })
@@ -44,8 +43,8 @@ describe('Seedance Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          taskId: 'task-123',
-          status: 'queued'
+          id: 'task-123',
+          status: 'pending'
         })
       })
 
@@ -95,10 +94,12 @@ describe('Seedance Service', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          taskId: 'task-123',
-          status: 'completed',
-          videoUrl: 'https://example.com/video.mp4',
-          thumbnailUrl: 'https://example.com/thumb.jpg'
+          id: 'task-123',
+          status: 'succeeded',
+          output: {
+            video_url: 'https://example.com/video.mp4',
+            thumbnail_url: 'https://example.com/thumb.jpg'
+          }
         })
       })
 
@@ -123,10 +124,14 @@ describe('Seedance Service', () => {
     it('should return when task is completed', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ taskId: 'task-123', status: 'completed', videoUrl: 'https://example.com/video.mp4' })
+        json: async () => ({
+          id: 'task-123',
+          status: 'succeeded',
+          output: { video_url: 'https://example.com/video.mp4' }
+        })
       })
 
-      const response = await waitForSeedanceCompletion('task-123', 60000)
+      const response = await waitForSeedanceCompletion('task-123', undefined, 60000)
 
       expect(response.status).toBe('completed')
       expect(response.videoUrl).toBe('https://example.com/video.mp4')
@@ -135,10 +140,14 @@ describe('Seedance Service', () => {
     it('should throw error when task fails', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ taskId: 'task-123', status: 'failed', error: 'Processing error' })
+        json: async () => ({
+          id: 'task-123',
+          status: 'failed',
+          error: { message: 'Processing error' }
+        })
       })
 
-      await expect(waitForSeedanceCompletion('task-123', 60000)).rejects.toThrow('Seedance 2.0 task failed: Processing error')
+      await expect(waitForSeedanceCompletion('task-123', undefined, 60000)).rejects.toThrow('Seedance 2.0 task failed: Processing error')
     })
   })
 })
