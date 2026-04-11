@@ -115,7 +115,31 @@ git add .
 git commit -m "feat: 添加新功能"
 ```
 
-### 常见问题
+## 计划文档管理
+
+### 计划文档位置
+
+所有计划文档存放在 `docs/plans/` 目录，命名格式：
+
+```
+docs/plans/<计划名称>_<YYYYMMDD>.md
+```
+
+例如：`Pipeline重构计划_20260411.md`
+
+### 计划文档归档规则
+
+1. **创建时**：在 `docs/plans/` 创建带日期的计划文档
+2. **完成后**：将计划文档移到 `docs/plans/` 并归档
+3. **实时更新**：计划中的任务状态变更时，同步更新文档中的任务状态
+
+### 禁止在 `.cursor/plans/` 创建计划
+
+`.cursor/plans/` 是 Cursor 内部使用的计划存储，**不要使用**。所有计划文档必须放在 `docs/plans/`。
+
+---
+
+## 常见问题
 
 ### DATABASE_URL not found
 
