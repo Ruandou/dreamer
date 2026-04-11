@@ -7,23 +7,31 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n backend,worker,frontend -c blue,green,yellow \"npm run dev:backend\" \"npm run dev:worker\" \"npm run dev:frontend\"",
-    "dev:backend": "npm run dev -w packages/backend",
-    "dev:worker": "npm run dev:worker -w packages/backend",
-    "dev:frontend": "npm run dev -w packages/frontend",
-    "build": "npm run build -w packages/shared && npm run build -w packages/backend && npm run build -w packages/frontend",
-    "db:install": "npm run db:generate -w packages/backend && npm run db:push -w packages/backend",
+    "dev": "pnpm -r --parallel run dev",
+    "dev:backend": "pnpm --filter @dreamer/backend run dev",
+    "dev:worker": "pnpm --filter @dreamer/backend run dev:worker",
+    "dev:frontend": "pnpm --filter @dreamer/frontend run dev",
+    "build": "pnpm --filter @dreamer/shared run build && pnpm --filter @dreamer/backend run build && pnpm --filter @dreamer/frontend run build",
+    "db:generate": "pnpm --filter @dreamer/backend run db:generate",
+    "db:push": "pnpm --filter @dreamer/backend run db:push",
     "docker:up": "cd docker && docker compose up -d",
     "docker:down": "cd docker && docker compose down",
-    "start": "npm run start -w packages/backend",
+    "start": "pnpm --filter @dreamer/backend run start",
     "prepare": "husky"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "typescript": "^5.4.0",
     "vitest": "1.6.0"
+  },
+  "lint-staged": {
+    "packages/backend/**/*.{ts,js}": [
+      "pnpm --filter @dreamer/backend test --run"
+    ],
+    "packages/frontend/**/*.{ts,vue}": [
+      "pnpm --filter @dreamer/frontend run type-check"
+    ]
   },
   "engines": {
     "node": ">=18.0.0"
