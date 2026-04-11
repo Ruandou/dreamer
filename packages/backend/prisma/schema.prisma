@@ -24,6 +24,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   projects Project[]
+  apiCalls ModelApiCall[]
 }
 
 model Project {
@@ -129,6 +130,7 @@ model VideoTask {
 
   @@index([sceneId])
   @@index([externalTaskId])
+  apiCalls ModelApiCall[]
 }
 
 model ModelApiCall {

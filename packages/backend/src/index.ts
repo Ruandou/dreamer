@@ -1,5 +1,4 @@
 import { config } from 'dotenv'
-// Load .env from project root BEFORE any other imports that depend on env vars
 config({ path: '../../.env' })
 
 import Fastify from 'fastify'
