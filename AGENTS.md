@@ -91,11 +91,26 @@ pnpm db:push      # 同步 schema（只做增量更新）
 
 ### 提交规范
 
+### 禁止自动提交
+
+**重要**: Agent **绝对不能**自动执行 `git commit`。所有提交必须由用户明确确认后才能执行。
+
+- ❌ 禁止：自动运行 `git add .` 和 `git commit`
+- ❌ 禁止：在完成修改后自动提交
+- ✅ 必须：先向用户展示修改内容，等待用户确认后再提交
+- ✅ 必须：使用 `git status` 和 `git diff` 向用户展示变更
+
+### 提交流程
+
 ```bash
 # 1. 先运行测试确保通过
 cd packages/backend && pnpm test --run
 
-# 2. 测试通过后再提交
+# 2. 展示变更给用户确认
+git status
+git diff
+
+# 3. 用户确认后，再执行提交（用户明确说"提交"时才执行）
 git add .
 git commit -m "feat: 添加新功能"
 ```
