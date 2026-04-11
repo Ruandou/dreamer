@@ -70,7 +70,7 @@ describe('Stats Routes', () => {
         name: 'Test Project',
         episodes: [
           {
-            scenes: [
+            segments: [
               {
                 tasks: [
                   { id: 'task-1', model: 'wan2.6', status: 'completed', cost: 0.5, createdAt: new Date() }
@@ -115,7 +115,7 @@ describe('Stats Routes', () => {
           name: 'Test Project',
           episodes: [
             {
-              scenes: [
+              segments: [
                 {
                   tasks: [
                     { id: 'task-1', model: 'wan2.6', status: 'completed', cost: 0.5, createdAt: new Date() }

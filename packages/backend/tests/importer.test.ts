@@ -6,8 +6,8 @@ const {
   mockEpisodeFindFirst,
   mockEpisodeCreate,
   mockEpisodeUpdate,
-  mockSceneDeleteMany,
-  mockSceneCreate,
+  mockSegmentDeleteMany,
+  mockSegmentCreate,
   mockProjectFindFirst
 } = vi.hoisted(() => {
   return {
@@ -15,8 +15,8 @@ const {
     mockEpisodeFindFirst: vi.fn(),
     mockEpisodeCreate: vi.fn(),
     mockEpisodeUpdate: vi.fn(),
-    mockSceneDeleteMany: vi.fn(),
-    mockSceneCreate: vi.fn(),
+    mockSegmentDeleteMany: vi.fn(),
+    mockSegmentCreate: vi.fn(),
     mockProjectFindFirst: vi.fn()
   }
 })
@@ -32,9 +32,9 @@ vi.mock('../src/index.js', () => ({
       create: mockEpisodeCreate,
       update: mockEpisodeUpdate
     },
-    scene: {
-      deleteMany: mockSceneDeleteMany,
-      create: mockSceneCreate
+    segment: {
+      deleteMany: mockSegmentDeleteMany,
+      create: mockSegmentCreate
     },
     project: {
       findFirst: mockProjectFindFirst
@@ -78,13 +78,13 @@ describe('Importer Service', () => {
       mockEpisodeFindFirst.mockResolvedValue(null)
       mockEpisodeCreate.mockResolvedValue({ id: 'ep-1', episodeNum: 1 })
       mockCharacterCreate.mockResolvedValue({ id: 'char-1' })
-      mockSceneCreate.mockImplementation((data) => Promise.resolve({ id: `scene-${data.sceneNum}`, ...data }))
+      mockSegmentCreate.mockImplementation((data) => Promise.resolve({ id: `scene-${data.sceneNum}`, ...data }))
 
       const results = await importParsedData('proj-1', parsed)
 
       expect(results.charactersCreated).toBe(2)
       expect(results.episodesCreated).toBe(1)
-      expect(results.scenesCreated).toBe(2)
+      expect(results.segmentsCreated).toBe(2)
       expect(results.episodesUpdated).toBe(0)
     })
 
@@ -110,14 +110,14 @@ describe('Importer Service', () => {
         episodeNum: 1,
         scenes: [{ id: 'old-scene-1' }]
       })
-      mockSceneCreate.mockImplementation((data) => Promise.resolve({ id: `scene-${data.sceneNum}`, ...data }))
+      mockSegmentCreate.mockImplementation((data) => Promise.resolve({ id: `scene-${data.sceneNum}`, ...data }))
 
       const results = await importParsedData('proj-1', parsed)
 
       expect(results.episodesCreated).toBe(0)
       expect(results.episodesUpdated).toBe(1)
-      expect(results.scenesCreated).toBe(1)
-      expect(mockSceneDeleteMany).toHaveBeenCalledWith({ where: { episodeId: 'ep-1' } })
+      expect(results.segmentsCreated).toBe(1)
+      expect(mockSegmentDeleteMany).toHaveBeenCalledWith({ where: { episodeId: 'ep-1' } })
       expect(mockEpisodeUpdate).toHaveBeenCalled()
     })
 

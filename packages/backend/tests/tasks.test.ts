@@ -4,21 +4,21 @@ import Fastify, { FastifyInstance } from 'fastify'
 // Use vi.hoisted to define mocks before module loading
 const {
   mockVideoTaskFindUnique,
-  mockSceneFindMany,
+  mockSegmentFindMany,
   mockVideoTaskUpdate,
-  mockSceneUpdate,
+  mockSegmentUpdate,
   mockVideoTaskCreate,
   mockEpisodeFindFirst,
-  mockSceneFindFirst
+  mockSegmentFindFirst
 } = vi.hoisted(() => {
   return {
     mockVideoTaskFindUnique: vi.fn(),
-    mockSceneFindMany: vi.fn(),
+    mockSegmentFindMany: vi.fn(),
     mockVideoTaskUpdate: vi.fn(),
-    mockSceneUpdate: vi.fn(),
+    mockSegmentUpdate: vi.fn(),
     mockVideoTaskCreate: vi.fn(),
     mockEpisodeFindFirst: vi.fn(),
-    mockSceneFindFirst: vi.fn()
+    mockSegmentFindFirst: vi.fn()
   }
 })
 
@@ -43,10 +43,10 @@ vi.mock('../src/index.js', () => ({
       update: mockVideoTaskUpdate,
       create: mockVideoTaskCreate
     },
-    scene: {
-      findMany: mockSceneFindMany,
-      update: mockSceneUpdate,
-      findFirst: mockSceneFindFirst
+    segment: {
+      findMany: mockSegmentFindMany,
+      update: mockSegmentUpdate,
+      findFirst: mockSegmentFindFirst
     },
     episode: {
       findFirst: mockEpisodeFindFirst
@@ -126,7 +126,7 @@ describe('Task Routes', () => {
           ]
         }
       ]
-      mockSceneFindMany.mockResolvedValue(mockScenes)
+      mockSegmentFindMany.mockResolvedValue(mockScenes)
 
       const response = await app.inject({
         method: 'GET',

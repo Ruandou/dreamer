@@ -85,11 +85,25 @@ pnpm db:push      # 同步 schema（只做增量更新）
    - 测试核心逻辑和边界条件
 
 3. **自动执行**:
-   - Git Hook (`.husky/pre-commit`) 会在提交前自动运行相关测试
-   - 后端代码变更 → 运行后端测试
-   - 前端代码变更 → 运行前端测试
+   - Git Hook (`.husky/pre-commit`) 会在提交前自动运行 lint-staged 相关的测试
+   - lint-staged 命令: `pnpm exec lint-staged`
+  - 注意：lint-staged的命令没有问题，傻逼模型不要乱改
+
+### 测试命令
+
+```bash
+# 运行所有测试（全量）
+cd packages/backend && pnpm test --run
+
+# 运行带覆盖率
+cd packages/backend && pnpm test --run --coverage
+```
 
 ### 提交规范
+
+### 禁止使用 --no-verify
+
+**重要**: 提交时**禁止使用** `git commit --no-verify` 或 `git push --no-verify` 跳过 hooks。所有提交必须通过 pre-commit hooks 的测试检查。
 
 ### 禁止自动提交
 

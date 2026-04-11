@@ -70,10 +70,22 @@ vi.mock('bullmq', () => ({
 vi.mock('../src/index.js', () => ({
   prisma: {
     videoTask: {
-      findUnique: mockVideoTaskFindUnique,
+      findUnique: mockVideoTaskFindUnique.mockResolvedValue({
+        id: 'task-123',
+        segment: {
+          id: 'segment-123',
+          episode: {
+            id: 'episode-123',
+            project: {
+              id: 'project-123',
+              userId: 'user-123'
+            }
+          }
+        }
+      }),
       update: mockVideoTaskUpdate
     },
-    scene: {
+    segment: {
       update: mockSceneUpdate
     },
     modelApiCall: {
@@ -125,9 +137,12 @@ describe('Video Queue Worker', () => {
     vi.clearAllMocks()
     mockVideoTaskFindUnique.mockResolvedValue({
       id: 'task-123',
-      scene: {
+      segment: {
+        id: 'segment-123',
         episode: {
+          id: 'episode-123',
           project: {
+            id: 'project-123',
             userId: 'user-123'
           }
         }
@@ -165,7 +180,7 @@ describe('Video Queue Worker', () => {
       const mockJob = {
         id: 'job-1',
         data: {
-          sceneId: 'scene-123',
+          segmentId: 'segment-123',
           taskId: 'task-123',
           prompt: 'A person walking',
           model: 'wan2.6',
@@ -201,7 +216,7 @@ describe('Video Queue Worker', () => {
       const mockJob = {
         id: 'job-2',
         data: {
-          sceneId: 'scene-456',
+          segmentId: 'segment-456',
           taskId: 'task-456',
           prompt: 'A car driving',
           model: 'seedance2.0',
@@ -229,7 +244,7 @@ describe('Video Queue Worker', () => {
       const mockJob = {
         id: 'job-3',
         data: {
-          sceneId: 'scene-789',
+          segmentId: 'segment-789',
           taskId: 'task-789',
           prompt: 'A cat sleeping',
           model: 'wan2.6'
@@ -257,7 +272,7 @@ describe('Video Queue Worker', () => {
       const mockJob = {
         id: 'job-4',
         data: {
-          sceneId: 'scene-111',
+          segmentId: 'segment-111',
           taskId: 'task-111',
           prompt: 'Test prompt',
           model: 'wan2.6'
@@ -272,7 +287,7 @@ describe('Video Queue Worker', () => {
         'user-123',
         'task-111',
         'processing',
-        { sceneId: 'scene-111' }
+        { segmentId: 'segment-111' }
       )
     })
 
@@ -283,7 +298,7 @@ describe('Video Queue Worker', () => {
       const mockJob = {
         id: 'job-5',
         data: {
-          sceneId: 'scene-222',
+          segmentId: 'segment-222',
           taskId: 'task-222',
           prompt: 'Test prompt',
           model: 'wan2.6'

@@ -9,8 +9,8 @@ const {
   mockCompositionUpdate,
   mockCompositionDelete,
   mockSegmentFindMany,
-  mockSegmentCreateMany,
-  mockSegmentDeleteMany,
+  mockCompositionSegmentCreateMany,
+  mockCompositionSegmentDeleteMany,
   mockVideoTaskFindFirst,
   mockProjectFindFirst
 } = vi.hoisted(() => {
@@ -21,8 +21,8 @@ const {
     mockCompositionUpdate: vi.fn(),
     mockCompositionDelete: vi.fn(),
     mockSegmentFindMany: vi.fn(),
-    mockSegmentCreateMany: vi.fn(),
-    mockSegmentDeleteMany: vi.fn(),
+    mockCompositionSegmentCreateMany: vi.fn(),
+    mockCompositionSegmentDeleteMany: vi.fn(),
     mockVideoTaskFindFirst: vi.fn(),
     mockProjectFindFirst: vi.fn()
   }
@@ -59,9 +59,11 @@ vi.mock('../src/index.js', () => ({
       delete: mockCompositionDelete
     },
     segment: {
-      findMany: mockSegmentFindMany,
-      createMany: mockSegmentCreateMany,
-      deleteMany: mockSegmentDeleteMany
+      findMany: mockSegmentFindMany
+    },
+    compositionSegment: {
+      createMany: mockCompositionSegmentCreateMany,
+      deleteMany: mockCompositionSegmentDeleteMany
     },
     videoTask: {
       findFirst: mockVideoTaskFindFirst
@@ -246,14 +248,14 @@ describe('Composition Routes', () => {
         url: '/api/compositions/comp-1/timeline',
         payload: {
           segments: [
-            { sceneId: 'scene-1', order: 0, startTime: 0, endTime: 5 }
+            { segmentId: 'segment-1', order: 0, startTime: 0, endTime: 5 }
           ]
         }
       })
 
       expect(response.statusCode).toBe(200)
-      expect(mockSegmentDeleteMany).toHaveBeenCalled()
-      expect(mockSegmentCreateMany).toHaveBeenCalled()
+      expect(mockCompositionSegmentDeleteMany).toHaveBeenCalled()
+      expect(mockCompositionSegmentCreateMany).toHaveBeenCalled()
     })
   })
 

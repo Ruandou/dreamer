@@ -47,13 +47,6 @@ export const videoWorker = new Worker<VideoJobData>(
     let externalTaskId: string = ''
     let apiCallId: string = ''
 
-    // 在try-catch外部声明变量，确保在catch块中可访问
-    let videoUrl: string = ''
-    let thumbnailUrl: string = ''
-    let cost: number = 0
-    let externalTaskId: string = ''
-    let apiCallId: string = ''
-
     try {
       // Update task status to processing
       await prisma.videoTask.update({

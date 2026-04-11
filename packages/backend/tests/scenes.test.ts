@@ -3,11 +3,11 @@ import Fastify, { FastifyInstance } from 'fastify'
 
 // Use vi.hoisted to define mocks before module loading
 const {
-  mockSceneFindMany,
-  mockSceneFindUnique,
-  mockSceneCreate,
-  mockSceneUpdate,
-  mockSceneDelete,
+  mockSegmentFindMany,
+  mockSegmentFindUnique,
+  mockSegmentCreate,
+  mockSegmentUpdate,
+  mockSegmentDelete,
   mockVideoTaskCreate,
   mockVideoTaskUpdateMany,
   mockVideoTaskUpdate,
@@ -15,11 +15,11 @@ const {
   mockEpisodeFindFirst
 } = vi.hoisted(() => {
   return {
-    mockSceneFindMany: vi.fn(),
-    mockSceneFindUnique: vi.fn(),
-    mockSceneCreate: vi.fn(),
-    mockSceneUpdate: vi.fn(),
-    mockSceneDelete: vi.fn(),
+    mockSegmentFindMany: vi.fn(),
+    mockSegmentFindUnique: vi.fn(),
+    mockSegmentCreate: vi.fn(),
+    mockSegmentUpdate: vi.fn(),
+    mockSegmentDelete: vi.fn(),
     mockVideoTaskCreate: vi.fn(),
     mockVideoTaskUpdateMany: vi.fn(),
     mockVideoTaskUpdate: vi.fn(),
@@ -35,9 +35,9 @@ vi.mock('../src/queues/video.js', () => ({
   }
 }))
 
-// Mock verifySceneOwnership and verifyEpisodeOwnership
+// Mock verifySegmentOwnership and verifyEpisodeOwnership
 vi.mock('../src/plugins/auth.js', () => ({
-  verifySceneOwnership: vi.fn().mockResolvedValue(true),
+  verifySegmentOwnership: vi.fn().mockResolvedValue(true),
   verifyEpisodeOwnership: vi.fn().mockResolvedValue(true)
 }))
 
@@ -52,12 +52,12 @@ vi.mock('../src/services/deepseek.js', () => ({
 // Mock the index.js module
 vi.mock('../src/index.js', () => ({
   prisma: {
-    scene: {
-      findMany: mockSceneFindMany,
-      findUnique: mockSceneFindUnique,
-      create: mockSceneCreate,
-      update: mockSceneUpdate,
-      delete: mockSceneDelete
+    segment: {
+      findMany: mockSegmentFindMany,
+      findUnique: mockSegmentFindUnique,
+      create: mockSegmentCreate,
+      update: mockSegmentUpdate,
+      delete: mockSegmentDelete
     },
     videoTask: {
       create: mockVideoTaskCreate,
@@ -104,7 +104,7 @@ describe('Scene Routes', () => {
       const mockScenes = [
         { id: 'scene-1', sceneNum: 1, description: 'Test', tasks: [] }
       ]
-      mockSceneFindMany.mockResolvedValue(mockScenes)
+      mockSegmentFindMany.mockResolvedValue(mockScenes)
 
       const response = await app.inject({
         method: 'GET',
@@ -120,7 +120,7 @@ describe('Scene Routes', () => {
 
   describe('GET /api/scenes/:id', () => {
     it('should return scene details', async () => {
-      mockSceneFindUnique.mockResolvedValue({
+      mockSegmentFindUnique.mockResolvedValue({
         id: 'scene-1',
         sceneNum: 1,
         description: 'Test scene',
@@ -138,7 +138,7 @@ describe('Scene Routes', () => {
     })
 
     it('should return 404 when scene not found', async () => {
-      mockSceneFindUnique.mockResolvedValue(null)
+      mockSegmentFindUnique.mockResolvedValue(null)
 
       const response = await app.inject({
         method: 'GET',
@@ -158,7 +158,7 @@ describe('Scene Routes', () => {
         description: 'New scene',
         prompt: 'test prompt'
       }
-      mockSceneCreate.mockResolvedValue(newScene)
+      mockSegmentCreate.mockResolvedValue(newScene)
 
       const response = await app.inject({
         method: 'POST',
@@ -179,7 +179,7 @@ describe('Scene Routes', () => {
 
   describe('PUT /api/scenes/:id', () => {
     it('should update a scene', async () => {
-      mockSceneUpdate.mockResolvedValue({
+      mockSegmentUpdate.mockResolvedValue({
         id: 'scene-1',
         sceneNum: 1,
         description: 'Updated',
@@ -203,8 +203,8 @@ describe('Scene Routes', () => {
 
   describe('DELETE /api/scenes/:id', () => {
     it('should delete a scene', async () => {
-      mockSceneFindUnique.mockResolvedValue({ id: 'scene-1' })
-      mockSceneDelete.mockResolvedValue({ id: 'scene-1' })
+      mockSegmentFindUnique.mockResolvedValue({ id: 'scene-1' })
+      mockSegmentDelete.mockResolvedValue({ id: 'scene-1' })
 
       const response = await app.inject({
         method: 'DELETE',
@@ -215,7 +215,7 @@ describe('Scene Routes', () => {
     })
 
     it('should return 404 when scene not found', async () => {
-      mockSceneFindUnique.mockResolvedValue(null)
+      mockSegmentFindUnique.mockResolvedValue(null)
 
       const response = await app.inject({
         method: 'DELETE',
@@ -228,7 +228,7 @@ describe('Scene Routes', () => {
 
   describe('POST /api/scenes/:id/generate', () => {
     it('should create video generation task', async () => {
-      mockSceneFindUnique.mockResolvedValue({
+      mockSegmentFindUnique.mockResolvedValue({
         id: 'scene-1',
         sceneNum: 1,
         prompt: 'test prompt'
@@ -251,7 +251,7 @@ describe('Scene Routes', () => {
 
   describe('POST /api/scenes/:id/optimize-prompt', () => {
     it('should optimize scene prompt', async () => {
-      mockSceneFindUnique.mockResolvedValue({
+      mockSegmentFindUnique.mockResolvedValue({
         id: 'scene-1',
         prompt: 'original prompt',
         episode: {
@@ -273,7 +273,7 @@ describe('Scene Routes', () => {
     })
 
     it('should return 404 when scene not found', async () => {
-      mockSceneFindUnique.mockResolvedValue(null)
+      mockSegmentFindUnique.mockResolvedValue(null)
 
       const response = await app.inject({
         method: 'POST',
@@ -285,7 +285,7 @@ describe('Scene Routes', () => {
     })
 
     it('should handle characters context', async () => {
-      mockSceneFindUnique.mockResolvedValue({
+      mockSegmentFindUnique.mockResolvedValue({
         id: 'scene-1',
         prompt: 'original prompt',
         episode: {
@@ -308,7 +308,7 @@ describe('Scene Routes', () => {
     })
 
     it('should not update scene when custom prompt is provided', async () => {
-      mockSceneFindUnique.mockResolvedValue({
+      mockSegmentFindUnique.mockResolvedValue({
         id: 'scene-1',
         prompt: 'original prompt',
         episode: {
@@ -327,14 +327,14 @@ describe('Scene Routes', () => {
       })
 
       expect(response.statusCode).toBe(200)
-      expect(mockSceneUpdate).not.toHaveBeenCalled()
+      expect(mockSegmentUpdate).not.toHaveBeenCalled()
     })
   })
 
   describe('POST /api/scenes/batch-generate', () => {
     it('should create tasks for multiple scenes', async () => {
-      mockSceneFindUnique.mockResolvedValue({
-        id: 'scene-1',
+      mockSegmentFindUnique.mockResolvedValue({
+        id: 'segment-1',
         prompt: 'test prompt'
       })
       mockVideoTaskCreate.mockResolvedValue({ id: 'task-1', status: 'queued' })
@@ -343,7 +343,7 @@ describe('Scene Routes', () => {
         method: 'POST',
         url: '/api/scenes/batch-generate',
         payload: {
-          sceneIds: ['scene-1', 'scene-2'],
+          segmentIds: ['segment-1', 'segment-2'],
           model: 'wan2.6'
         }
       })

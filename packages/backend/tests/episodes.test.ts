@@ -10,8 +10,8 @@ const {
   mockEpisodeDelete,
   mockProjectFindFirst,
   mockProjectFindUnique,
-  mockSceneDeleteMany,
-  mockSceneCreateMany
+  mockSegmentDeleteMany,
+  mockSegmentCreateMany
 } = vi.hoisted(() => {
   return {
     mockEpisodeFindMany: vi.fn(),
@@ -21,8 +21,8 @@ const {
     mockEpisodeDelete: vi.fn(),
     mockProjectFindFirst: vi.fn(),
     mockProjectFindUnique: vi.fn(),
-    mockSceneDeleteMany: vi.fn(),
-    mockSceneCreateMany: vi.fn()
+    mockSegmentDeleteMany: vi.fn(),
+    mockSegmentCreateMany: vi.fn()
   }
 })
 
@@ -59,9 +59,9 @@ vi.mock('../src/index.js', () => ({
       findFirst: mockProjectFindFirst,
       findUnique: mockProjectFindUnique
     },
-    scene: {
-      deleteMany: mockSceneDeleteMany,
-      createMany: mockSceneCreateMany
+    segment: {
+      deleteMany: mockSegmentDeleteMany,
+      createMany: mockSegmentCreateMany
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()

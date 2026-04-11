@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const {
   mockProjectFindUnique,
   mockEpisodeFindUnique,
-  mockSceneFindUnique,
+  mockSegmentFindUnique,
   mockCharacterFindUnique,
   mockCompositionFindUnique,
   mockVideoTaskFindUnique
@@ -12,7 +12,7 @@ const {
   return {
     mockProjectFindUnique: vi.fn(),
     mockEpisodeFindUnique: vi.fn(),
-    mockSceneFindUnique: vi.fn(),
+    mockSegmentFindUnique: vi.fn(),
     mockCharacterFindUnique: vi.fn(),
     mockCompositionFindUnique: vi.fn(),
     mockVideoTaskFindUnique: vi.fn()
@@ -28,8 +28,8 @@ vi.mock('../src/index.js', () => ({
     episode: {
       findUnique: mockEpisodeFindUnique
     },
-    scene: {
-      findUnique: mockSceneFindUnique
+    segment: {
+      findUnique: mockSegmentFindUnique
     },
     character: {
       findUnique: mockCharacterFindUnique
@@ -49,7 +49,7 @@ vi.mock('../src/index.js', () => ({
 import {
   verifyProjectOwnership,
   verifyEpisodeOwnership,
-  verifySceneOwnership,
+  verifySegmentOwnership,
   verifyCharacterOwnership,
   verifyCompositionOwnership,
   verifyTaskOwnership
@@ -110,25 +110,25 @@ describe('Auth Plugin', () => {
     })
   })
 
-  describe('verifySceneOwnership', () => {
-    it('should return true when user owns the scene project', async () => {
-      mockSceneFindUnique.mockResolvedValue({
-        id: 'scene-1',
+  describe('verifySegmentOwnership', () => {
+    it('should return true when user owns the segment project', async () => {
+      mockSegmentFindUnique.mockResolvedValue({
+        id: 'segment-1',
         episode: { project: { userId: 'user-1' } }
       })
 
-      const result = await verifySceneOwnership('user-1', 'scene-1')
+      const result = await verifySegmentOwnership('user-1', 'segment-1')
 
       expect(result).toBe(true)
     })
 
-    it('should return false when user does not own the scene project', async () => {
-      mockSceneFindUnique.mockResolvedValue({
-        id: 'scene-1',
+    it('should return false when user does not own the segment project', async () => {
+      mockSegmentFindUnique.mockResolvedValue({
+        id: 'segment-1',
         episode: { project: { userId: 'other-user' } }
       })
 
-      const result = await verifySceneOwnership('user-1', 'scene-1')
+      const result = await verifySegmentOwnership('user-1', 'segment-1')
 
       expect(result).toBe(false)
     })
@@ -186,7 +186,7 @@ describe('Auth Plugin', () => {
     it('should return true when user owns the task project', async () => {
       mockVideoTaskFindUnique.mockResolvedValue({
         id: 'task-1',
-        scene: { episode: { project: { userId: 'user-1' } } }
+        segment: { episode: { project: { userId: 'user-1' } } }
       })
 
       const result = await verifyTaskOwnership('user-1', 'task-1')
@@ -197,7 +197,7 @@ describe('Auth Plugin', () => {
     it('should return false when user does not own the task project', async () => {
       mockVideoTaskFindUnique.mockResolvedValue({
         id: 'task-1',
-        scene: { episode: { project: { userId: 'other-user' } } }
+        segment: { episode: { project: { userId: 'other-user' } } }
       })
 
       const result = await verifyTaskOwnership('user-1', 'task-1')
