@@ -75,6 +75,62 @@ export async function getImportTaskStatus(taskId: string) {
   return res.data
 }
 
+// Create outline generation job
+export async function createOutlineJob(idea: string): Promise<{ jobId: string }> {
+  const res = await api.post('/projects/generate-outline', { idea })
+  return res.data
+}
+
+// Get outline job status
+export interface OutlineJob {
+  id: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  idea: string
+  result?: {
+    outline: {
+      title: string
+      summary: string
+      metadata: any
+      sceneCount: number
+    }
+    rawScript: any
+  }
+  error?: string
+}
+
+export async function getOutlineJobStatus(jobId: string): Promise<OutlineJob> {
+  const res = await api.get(`/projects/outline-job/${jobId}`)
+  return res.data
+}
+
+// Poll outline job until completed
+export async function pollOutlineJob(
+  jobId: string,
+  onProgress?: (status: string) => void,
+  timeout = 180000
+): Promise<OutlineJob['result']> {
+  const startTime = Date.now()
+
+  while (Date.now() - startTime < timeout) {
+    const job = await getOutlineJobStatus(jobId)
+
+    if (job.status === 'completed') {
+      return job.result
+    }
+
+    if (job.status === 'failed') {
+      throw new Error(job.error || '生成大纲失败')
+    }
+
+    onProgress?.(job.status)
+    await new Promise(resolve => setTimeout(resolve, 2000))
+  }
+
+  throw new Error('生成大纲超时')
+}
+  return res.data
+}
+
 // Preview import without saving
 export interface ImportPreview {
   projectName?: string

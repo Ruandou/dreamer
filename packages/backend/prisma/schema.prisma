@@ -321,6 +321,20 @@ model PipelineStepResult {
   @@index([jobId])
 }
 
+// OutlineJob - 大纲生成异步任务
+model OutlineJob {
+  id        String   @id @default(cuid())
+  userId    String
+  status    String   @default("pending") // pending/running/completed/failed
+  idea      String   // 用户输入的想法
+  result    Json?    // 生成结果（outline + rawScript）
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
 model ProjectAsset {
   id          String   @id @default(cuid())
   projectId   String

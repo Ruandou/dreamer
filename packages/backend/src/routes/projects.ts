@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { writeScriptFromIdea } from '../services/script-writer.js'
+import { createOutlineJob, getOutlineJob } from '../queues/outline.js'
 import type { ScriptContent } from '@dreamer/shared/types'
 
 export async function projectRoutes(fastify: FastifyInstance) {
@@ -101,7 +102,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // Generate outline (script大纲)
+  // Generate outline (异步job模式)
   fastify.post<{
     Body: { idea: string }
   }>(
@@ -116,23 +117,37 @@ export async function projectRoutes(fastify: FastifyInstance) {
       }
 
       try {
-        // 调用 script-writer 生成大纲
-        const result = await writeScriptFromIdea(idea)
-        const script = result.script
-
-        // 只返回大纲信息（不含完整剧本）
-        const outline = {
-          title: script.title,
-          summary: script.summary,
-          metadata: script.metadata,
-          sceneCount: script.scenes.length
-        }
-
-        return { outline, rawScript: script }
+        // 创建异步job
+        const jobId = await createOutlineJob(user.id, idea)
+        return { jobId }
       } catch (error: any) {
         fastify.log.error(error)
-        return reply.status(500).send({ error: error.message || '生成大纲失败' })
+        return reply.status(500).send({ error: error.message || '创建任务失败' })
       }
+    }
+  )
+
+  // 获取 outline job 状态
+  fastify.get<{
+    Params: { jobId: string }
+  }>(
+    '/outline-job/:jobId',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = (request as any).user
+      const { jobId } = request.params
+
+      const job = await getOutlineJob(jobId)
+
+      if (!job) {
+        return reply.status(404).send({ error: '任务不存在' })
+      }
+
+      if (job.userId !== user.id) {
+        return reply.status(403).send({ error: '无权访问' })
+      }
+
+      return job
     }
   )
 }

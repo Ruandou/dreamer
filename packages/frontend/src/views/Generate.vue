@@ -6,7 +6,7 @@ import {
   useMessage
 } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
-import { api } from '@/api'
+import { api, createOutlineJob, pollOutlineJob } from '@/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -14,6 +14,7 @@ const message = useMessage()
 const projectStore = useProjectStore()
 
 const isLoading = ref(true)
+const generatingStatus = ref('')
 const outline = ref<any>(null)
 const selectedStyle = ref<string>('cinematic')
 const isStarting = ref(false)
@@ -33,8 +34,18 @@ onMounted(async () => {
   }
 
   try {
-    const res = await api.post('/projects/generate-outline', { idea })
-    outline.value = res.data.outline
+    // 创建异步job
+    const { jobId } = await createOutlineJob(idea)
+
+    // 轮询等待结果
+    const result = await pollOutlineJob(
+      jobId,
+      (status) => {
+        generatingStatus.value = status === 'pending' ? '等待开始...' : 'AI 创作中...'
+      }
+    )
+
+    outline.value = result?.outline
   } catch (e: any) {
     error.value = e.message || '生成大纲失败'
   } finally {
@@ -77,7 +88,7 @@ const handleBack = () => {
     <!-- Loading -->
     <div v-if="isLoading" class="loading-state">
       <div class="loading-spinner"></div>
-      <p>AI 正在生成剧本大纲...</p>
+      <p>{{ generatingStatus || 'AI 正在生成剧本大纲...' }}</p>
     </div>
 
     <!-- Error -->
