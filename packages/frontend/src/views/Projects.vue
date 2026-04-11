@@ -12,12 +12,10 @@ import {
   NInput,
   NTag,
   NDropdown,
-  NUpload,
-  NUploadDragger,
   useMessage,
   useDialog,
 } from "naive-ui";
-import type { MenuOption, UploadFileInfo } from "naive-ui";
+import type { MenuOption } from "naive-ui";
 import { useProjectStore } from "@/stores/project";
 import EmptyState from "@/components/EmptyState.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
@@ -32,6 +30,7 @@ const newProject = ref({ name: "", description: "" });
 const searchQuery = ref("");
 const quickIdea = ref("");
 const isCreating = ref(false);
+const fileInputRef = ref<HTMLInputElement | null>(null);
 
 onMounted(() => {
   projectStore.fetchProjects();
@@ -72,6 +71,37 @@ const handleFileUpload = (fileList: { file: UploadFileInfo }[]) => {
   const reader = new FileReader();
   reader.onload = (e) => {
     quickIdea.value = e.target?.result as string;
+    message.success("剧本已导入");
+  };
+  reader.readAsText(file);
+};
+
+const handleFileInputClick = () => {
+  fileInputRef.value?.click();
+};
+
+const handleFileInputChange = (e: Event) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    quickIdea.value = ev.target?.result as string;
+    message.success("剧本已导入");
+  };
+  reader.readAsText(file);
+};
+
+const handleDrop = (e: DragEvent) => {
+  const files = e.dataTransfer?.files;
+  if (!files?.length) return;
+
+  const file = files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    quickIdea.value = ev.target?.result as string;
     message.success("剧本已导入");
   };
   reader.readAsText(file);
@@ -163,26 +193,24 @@ const handleDropdownSelect = (key: string, projectId: string) => {
     </header>
 
     <!-- Quick Create -->
-    <div class="quick-create">
+    <div
+      class="quick-create"
+      @drop.prevent="handleDrop"
+      @dragover.prevent
+      @dragenter.prevent
+    >
       <div class="quick-create__input-wrap">
         <NInput
           v-model:value="quickIdea"
           type="textarea"
-          placeholder="✨ 输入想法，快速创建短剧... 或 导入已有剧本"
+          placeholder="✨ 输入想法，快速创建短剧... 或 拖拽剧本文件到此处"
           :rows="3"
           @keydown.enter.ctrl="handleQuickCreate"
         />
       </div>
       <div class="quick-create__actions">
         <NSpace justify="center">
-          <NUpload
-          :max="1"
-          accept=".md,.txt,.json"
-          :show-file-list="false"
-          @change="handleFileUpload"
-        >
-          <NButton secondary>导入剧本</NButton>
-        </NUpload>
+          <NButton secondary @click="handleFileInputClick">导入剧本</NButton>
           <NButton
             type="primary"
             @click="handleQuickCreate"
@@ -194,6 +222,13 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         </NSpace>
       </div>
     </div>
+    <input
+      ref="fileInputRef"
+      type="file"
+      accept=".md,.txt,.json"
+      style="display: none"
+      @change="handleFileInputChange"
+    />
 
     <!-- Content -->
     <div class="projects-content">
