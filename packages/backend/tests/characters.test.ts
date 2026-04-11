@@ -273,6 +273,17 @@ describe('Character Routes', () => {
 
       expect(response.statusCode).toBe(204)
     })
+
+    it('should return 403 when user does not own character', async () => {
+      mockVerifyCharacterOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/characters/char-1/images/img-1'
+      })
+
+      expect(response.statusCode).toBe(403)
+    })
   })
 
   describe('PUT /api/characters/:id/images/:imageId/move', () => {
@@ -310,6 +321,20 @@ describe('Character Routes', () => {
       })
 
       expect(response.statusCode).toBe(400)
+    })
+
+    it('should return 403 when user does not own character', async () => {
+      mockVerifyCharacterOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/characters/char-1/images/img-1/move',
+        payload: {
+          parentId: 'new-parent'
+        }
+      })
+
+      expect(response.statusCode).toBe(403)
     })
   })
 })
