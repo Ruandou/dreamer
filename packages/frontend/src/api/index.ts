@@ -92,60 +92,6 @@ export async function getImportTaskStatus(taskId: string) {
   return res.data
 }
 
-// Create outline generation job
-export async function createOutlineJob(idea: string): Promise<{ jobId: string }> {
-  const res = await api.post('/projects/generate-outline', { idea })
-  return res.data
-}
-
-// Get outline job status
-export interface OutlineJob {
-  id: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
-  idea: string
-  result?: {
-    outline: {
-      title: string
-      summary: string
-      metadata: any
-      sceneCount: number
-    }
-    rawScript: any
-  }
-  error?: string
-}
-
-export async function getOutlineJobStatus(jobId: string): Promise<OutlineJob> {
-  const res = await api.get(`/projects/outline-job/${jobId}`)
-  return res.data
-}
-
-// Poll outline job until completed
-export async function pollOutlineJob(
-  jobId: string,
-  onProgress?: (status: string) => void,
-  timeout = 180000
-): Promise<OutlineJob['result']> {
-  const startTime = Date.now()
-
-  while (Date.now() - startTime < timeout) {
-    const job = await getOutlineJobStatus(jobId)
-
-    if (job.status === 'completed') {
-      return job.result
-    }
-
-    if (job.status === 'failed') {
-      throw new Error(job.error || '生成大纲失败')
-    }
-
-    onProgress?.(job.status)
-    await new Promise(resolve => setTimeout(resolve, 2000))
-  }
-
-  throw new Error('生成大纲超时')
-}
-
 // Preview import without saving
 export interface ImportPreview {
   projectName?: string
@@ -266,8 +212,10 @@ export interface PipelineJob {
   id: string
   projectId: string
   status: 'pending' | 'running' | 'completed' | 'failed'
+  jobType?: string
   currentStep: string
   progress: number
+  progressMeta?: { current?: number; total?: number; message?: string } | null
   error?: string
   stepResults?: PipelineStepResult[]
   createdAt: string
@@ -302,6 +250,26 @@ export async function executePipeline(params: PipelineExecuteParams) {
 export async function getPipelineJob(jobId: string) {
   const res = await api.get<{ success: boolean; data?: PipelineJob }>(`/pipeline/job/${jobId}`)
   return res.data
+}
+
+/** 按 jobId 轮询直到 completed / failed */
+export async function pollPipelineJob(
+  jobId: string,
+  onProgress?: (job: PipelineJob) => void,
+  timeout = 600000,
+  intervalMs = 2000
+): Promise<PipelineJob> {
+  const start = Date.now()
+  while (Date.now() - start < timeout) {
+    const result = await getPipelineJob(jobId)
+    const data = result.data
+    if (!data) throw new Error('无法获取任务状态')
+    onProgress?.(data)
+    if (data.status === 'completed') return data
+    if (data.status === 'failed') throw new Error(data.error || '任务失败')
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  throw new Error('任务超时')
 }
 
 // 获取项目的 Pipeline 状态

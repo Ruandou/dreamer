@@ -26,6 +26,14 @@ import {
   generateStoryboard
 } from './storyboard-generator.js'
 
+import {
+  mergeEpisodesToScriptContent,
+  areEpisodeScriptsComplete,
+  buildEpisodePlansFromDbEpisodes,
+  DEFAULT_TARGET_EPISODES
+} from './project-script-jobs.js'
+import { saveCharacters, saveLocations } from './script-entities.js'
+
 import type {
   ScriptContent,
   ScriptScene,
@@ -75,66 +83,6 @@ async function updateStepResult(jobId: string, step: string, update: {
       updatedAt: new Date()
     }
   })
-}
-
-/**
- * 保存角色到数据库
- */
-async function saveCharacters(projectId: string, script: ScriptContent) {
-  const characterNames = new Set<string>()
-
-  for (const scene of script.scenes) {
-    for (const character of scene.characters || []) {
-      characterNames.add(character)
-    }
-  }
-
-  for (const name of characterNames) {
-    await prisma.character.upsert({
-      where: {
-        projectId_name: { projectId, name }
-      },
-      update: {},
-      create: {
-        projectId,
-        name,
-        description: `角色: ${name}`
-      }
-    })
-  }
-}
-
-/**
- * 保存场地到数据库
- */
-async function saveLocations(projectId: string, script: ScriptContent) {
-  const locationMap = new Map<string, { timeOfDay?: string; description?: string }>()
-
-  for (const scene of script.scenes) {
-    if (scene.location) {
-      if (!locationMap.has(scene.location)) {
-        locationMap.set(scene.location, {
-          timeOfDay: scene.timeOfDay,
-          description: scene.description
-        })
-      }
-    }
-  }
-
-  for (const [locationName, info] of locationMap) {
-    await prisma.location.upsert({
-      where: {
-        projectId_name: { projectId, name: locationName }
-      },
-      update: { timeOfDay: info.timeOfDay, description: info.description },
-      create: {
-        projectId,
-        name: locationName,
-        timeOfDay: info.timeOfDay || '日',
-        description: info.description
-      }
-    })
-  }
 }
 
 /**
@@ -352,37 +300,70 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
     // 更新状态为运行中
     await updateJobProgress(jobId, { status: 'running', currentStep: 'script-writing', progress: 5 })
 
-    // ========== 步骤 1: 剧本生成 ==========
-    await updateStepResult(jobId, 'script-writing', { status: 'processing', input: { idea } })
-
-    const scriptResult = await writeScriptFromIdea(idea, {
-      characters: [] // TODO: 传入已有角色
+    const te = targetEpisodes && targetEpisodes > 0 ? targetEpisodes : DEFAULT_TARGET_EPISODES
+    const existingEpisodes = await prisma.episode.findMany({
+      where: { projectId, episodeNum: { lte: te } },
+      orderBy: { episodeNum: 'asc' }
     })
+    const skipEarlySteps =
+      existingEpisodes.length >= te && areEpisodeScriptsComplete(existingEpisodes, te)
 
-    const script = scriptResult.script
-    await updateStepResult(jobId, 'script-writing', {
-      status: 'completed',
-      output: { script }
-    })
-    await updateJobProgress(jobId, { progress: 25 })
+    let script: ScriptContent
+    let episodes: EpisodePlan[]
 
-    // 保存角色和场地
-    await saveCharacters(projectId, script)
-    await saveLocations(projectId, script)
+    if (skipEarlySteps) {
+      // ========== 已具备全部分集 rawScript：跳过 AI 写剧与智能分集 ==========
+      await updateStepResult(jobId, 'script-writing', {
+        status: 'completed',
+        input: { idea },
+        output: { skipped: true, reason: 'episodes_already_have_rawScript' }
+      })
+      await updateJobProgress(jobId, { progress: 25 })
 
-    // ========== 步骤 2: 智能分集 ==========
-    await updateStepProgress(jobId, 'episode-split', 'processing')
+      script = mergeEpisodesToScriptContent(existingEpisodes)
+      await saveCharacters(projectId, script)
+      await saveLocations(projectId, script)
 
-    const episodes = splitIntoEpisodes(script, {
-      targetDuration: targetDuration || 60
-    })
+      await updateStepProgress(jobId, 'episode-split', 'processing')
+      episodes = buildEpisodePlansFromDbEpisodes(existingEpisodes, script)
+      await updateStepResult(jobId, 'episode-split', {
+        status: 'completed',
+        output: { episodes, skipped: true }
+      })
+      await updateJobProgress(jobId, { currentStep: 'episode-split', progress: 45 })
+    } else {
+      // ========== 步骤 1: 剧本生成 ==========
+      await updateStepResult(jobId, 'script-writing', { status: 'processing', input: { idea } })
 
-    await saveEpisodes(projectId, episodes, script)
-    await updateStepResult(jobId, 'episode-split', {
-      status: 'completed',
-      output: { episodes }
-    })
-    await updateJobProgress(jobId, { currentStep: 'episode-split', progress: 45 })
+      const scriptResult = await writeScriptFromIdea(idea, {
+        characters: [] // TODO: 传入已有角色
+      })
+
+      script = scriptResult.script
+      await updateStepResult(jobId, 'script-writing', {
+        status: 'completed',
+        output: { script }
+      })
+      await updateJobProgress(jobId, { progress: 25 })
+
+      // 保存角色和场地
+      await saveCharacters(projectId, script)
+      await saveLocations(projectId, script)
+
+      // ========== 步骤 2: 智能分集 ==========
+      await updateStepProgress(jobId, 'episode-split', 'processing')
+
+      episodes = splitIntoEpisodes(script, {
+        targetDuration: targetDuration || 60
+      })
+
+      await saveEpisodes(projectId, episodes, script)
+      await updateStepResult(jobId, 'episode-split', {
+        status: 'completed',
+        output: { episodes }
+      })
+      await updateJobProgress(jobId, { currentStep: 'episode-split', progress: 45 })
+    }
 
     // ========== 步骤 3: 分镜提取 ==========
     await updateStepResult(jobId, 'segment-extract', { status: 'processing' })

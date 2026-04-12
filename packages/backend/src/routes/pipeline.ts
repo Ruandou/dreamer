@@ -45,6 +45,7 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
         data: {
           projectId,
           status: 'pending',
+          jobType: 'full-pipeline',
           currentStep: 'script-writing',
           progress: 0
         }
@@ -124,8 +125,10 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
         id: job.id,
         projectId: job.projectId,
         status: job.status,
+        jobType: job.jobType,
         currentStep: job.currentStep,
         progress: job.progress,
+        progressMeta: job.progressMeta,
         error: job.error,
         stepResults: job.stepResults,
         createdAt: job.createdAt,

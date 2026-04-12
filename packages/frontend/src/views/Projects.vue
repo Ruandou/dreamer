@@ -10,7 +10,6 @@ import {
   useMessage,
   useDialog,
 } from "naive-ui";
-import { api } from "@/api";
 import { useProjectStore } from "@/stores/project";
 import EmptyState from "@/components/EmptyState.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
@@ -79,13 +78,17 @@ const handleQuickCreate = async () => {
   }
   isCreating.value = true;
   try {
-    const response = await api.post("/projects/generate-outline", {
-      idea: quickIdea.value,
+    const idea = quickIdea.value.trim();
+    const name =
+      idea.length <= 40 ? idea : `${idea.slice(0, 37)}…`;
+    const project = await projectStore.createProject({
+      name,
+      description: idea,
     });
-    const jobId = response.data.jobId;
-    router.push(`/generate?jobId=${jobId}`);
+    router.push(`/generate?projectId=${project.id}`);
   } catch (e: any) {
-    message.error(e.message || "创建任务失败");
+    message.error(e.message || "创建项目失败");
+  } finally {
     isCreating.value = false;
   }
 };

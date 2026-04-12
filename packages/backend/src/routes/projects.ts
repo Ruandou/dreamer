@@ -1,7 +1,12 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
-import { createOutlineJob, getOutlineJob } from '../queues/outline.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
+import {
+  runGenerateFirstEpisode,
+  runScriptBatchJob,
+  runParseScriptJob,
+  DEFAULT_TARGET_EPISODES
+} from '../services/project-script-jobs.js'
 
 export async function projectRoutes(fastify: FastifyInstance) {
   // List projects
@@ -33,65 +38,154 @@ export async function projectRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // Generate outline（静态路径须注册在 /:id 之前）
+  // 生成第一集（须注册在 GET /:id 之前，避免被误匹配）
   fastify.post<{
-    Body: { idea: string }
+    Params: { id: string }
+    Body: { description?: string }
   }>(
-    '/generate-outline',
+    '/:id/episodes/generate-first',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const user = (request as any).user
-      const { idea } = request.body
+      const projectId = request.params.id
+      const { description } = request.body || {}
 
-      if (!idea?.trim()) {
-        return reply.status(400).send({ error: '想法不能为空' })
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, userId: user.id }
+      })
+      if (!project) {
+        return reply.status(404).send({ error: '项目不存在' })
+      }
+
+      if (description?.trim()) {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { description: description.trim() }
+        })
       }
 
       try {
-        const jobId = await createOutlineJob(user.id, idea)
-        return { jobId }
-      } catch (error: any) {
-        fastify.log.error(error)
-        return reply.status(500).send({ error: error.message || '创建任务失败' })
+        await runGenerateFirstEpisode(projectId)
+      } catch (e: any) {
+        return reply.status(500).send({ error: e?.message || '生成第一集失败' })
+      }
+
+      const updated = await prisma.project.findUnique({
+        where: { id: projectId },
+        include: { episodes: { where: { episodeNum: 1 } } }
+      })
+      const ep1 = updated?.episodes[0]
+      return {
+        episode: ep1,
+        synopsis: updated?.synopsis
       }
     }
   )
 
-  // 获取用户所有 outline jobs（须在 /:id 之前，否则 id 会匹配成 "outline-jobs"）
-  fastify.get(
-    '/outline-jobs',
-    { preHandler: [fastify.authenticate] },
-    async (request) => {
-      const user = (request as any).user
-
-      return prisma.outlineJob.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'desc' }
-      })
-    }
-  )
-
-  // 获取 outline job 状态
-  fastify.get<{
-    Params: { jobId: string }
+  // 批量生成剩余集（异步）
+  fastify.post<{
+    Params: { id: string }
+    Body: { targetEpisodes?: number }
   }>(
-    '/outline-job/:jobId',
+    '/:id/episodes/generate-remaining',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const user = (request as any).user
-      const { jobId } = request.params
+      const projectId = request.params.id
+      const targetEpisodes = request.body?.targetEpisodes ?? DEFAULT_TARGET_EPISODES
 
-      const job = await getOutlineJob(jobId)
-
-      if (!job) {
-        return reply.status(404).send({ error: '任务不存在' })
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, userId: user.id }
+      })
+      if (!project) {
+        return reply.status(404).send({ error: '项目不存在' })
       }
 
-      if (job.userId !== user.id) {
-        return reply.status(403).send(permissionDeniedBody)
+      if (targetEpisodes < 2 || targetEpisodes > 200) {
+        return reply.status(400).send({ error: 'targetEpisodes 须在 2–200 之间' })
       }
 
-      return job
+      const ep1 = await prisma.episode.findUnique({
+        where: { projectId_episodeNum: { projectId, episodeNum: 1 } }
+      })
+      const rs = ep1?.rawScript as any
+      if (!ep1 || !rs || !Array.isArray(rs.scenes) || rs.scenes.length === 0) {
+        return reply.status(400).send({ error: '请先生成第一集剧本' })
+      }
+
+      const job = await prisma.pipelineJob.create({
+        data: {
+          projectId,
+          status: 'pending',
+          jobType: 'script-batch',
+          currentStep: 'script-batch',
+          progress: 0
+        }
+      })
+
+      void runScriptBatchJob(job.id, projectId, targetEpisodes).catch(err => {
+        console.error('script-batch job failed', err)
+      })
+
+      return {
+        jobId: job.id,
+        status: 'processing',
+        targetEpisodes,
+        message: '任务已启动'
+      }
+    }
+  )
+
+  // 解析剧本：实体 + 形象槽位 + 分集概要（异步）
+  fastify.post<{
+    Params: { id: string }
+    Body: { targetEpisodes?: number }
+  }>(
+    '/:id/parse',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = (request as any).user
+      const projectId = request.params.id
+      const targetEpisodes = request.body?.targetEpisodes ?? DEFAULT_TARGET_EPISODES
+
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, userId: user.id },
+        include: { episodes: { where: { episodeNum: 1 } } }
+      })
+      if (!project) {
+        return reply.status(404).send({ error: '项目不存在' })
+      }
+
+      if (!project.visualStyle?.length) {
+        return reply.status(400).send({ error: '请至少选择一种视觉风格' })
+      }
+
+      const ep1 = project.episodes[0]
+      const raw = ep1?.rawScript
+      const scenes = raw && typeof raw === 'object' ? (raw as any).scenes : null
+      if (!raw || typeof raw !== 'object' || !Array.isArray(scenes) || scenes.length === 0) {
+        return reply.status(400).send({ error: '请先生成第一集剧本' })
+      }
+
+      const job = await prisma.pipelineJob.create({
+        data: {
+          projectId,
+          status: 'pending',
+          jobType: 'parse-script',
+          currentStep: 'parse-script',
+          progress: 0
+        }
+      })
+
+      void runParseScriptJob(job.id, projectId, targetEpisodes).catch(err => {
+        console.error('parse-script job failed', err)
+      })
+
+      return {
+        jobId: job.id,
+        status: 'processing',
+        message: '解析任务已启动'
+      }
     }
   )
 
@@ -104,7 +198,8 @@ export async function projectRoutes(fastify: FastifyInstance) {
       const project = await prisma.project.findFirst({
         where: { id: request.params.id, userId: user.id },
         include: {
-          episodes: { include: { scenes: true } },
+          // 不 include DB Scene：分镜/任务走 /scenes；剧本正文在 episode.rawScript（JSON）
+          episodes: true,
           characters: true,
           locations: true,
           compositions: true
@@ -120,12 +215,20 @@ export async function projectRoutes(fastify: FastifyInstance) {
   )
 
   // Update project
-  fastify.put<{ Params: { id: string }; Body: { name?: string; description?: string } }>(
+  fastify.put<{
+    Params: { id: string }
+    Body: {
+      name?: string
+      description?: string
+      synopsis?: string | null
+      visualStyle?: string[]
+    }
+  }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const user = (request as any).user
-      const { name, description } = request.body
+      const { name, description, synopsis, visualStyle } = request.body
 
       const project = await prisma.project.findFirst({
         where: { id: request.params.id, userId: user.id }
@@ -135,9 +238,24 @@ export async function projectRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Project not found' })
       }
 
+      const data: Record<string, unknown> = {}
+      if (name !== undefined) data.name = name
+      if (description !== undefined) data.description = description
+      if (synopsis !== undefined) data.synopsis = synopsis
+      if (visualStyle !== undefined) {
+        if (!Array.isArray(visualStyle)) {
+          return reply.status(400).send({ error: 'visualStyle 须为字符串数组' })
+        }
+        data.visualStyle = visualStyle
+      }
+
+      if (Object.keys(data).length === 0) {
+        return project
+      }
+
       return prisma.project.update({
         where: { id: request.params.id },
-        data: { name, description }
+        data
       })
     }
   )

@@ -12,7 +12,7 @@ const message = useMessage()
 // 统一任务类型
 interface Job {
   id: string
-  type: 'video' | 'import' | 'outline' | 'pipeline'
+  type: 'video' | 'import' | 'pipeline'
   status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed'
   createdAt: string
   updatedAt: string
@@ -33,8 +33,6 @@ interface Job {
   contentPreview?: string
   result?: any
   errorMsg?: string
-  // outline task fields
-  idea?: string
   // pipeline task fields
   currentStep?: string
   progress?: number
@@ -75,7 +73,6 @@ const columns: DataTableColumns<Job> = [
       const typeMap: Record<string, { type: string; label: string }> = {
         video: { type: 'info', label: '🎬 视频' },
         import: { type: 'warning', label: '📄 导入' },
-        outline: { type: 'success', label: '✨ 大纲' },
         pipeline: { type: 'error', label: '🔄 Pipeline' }
       }
       const config = typeMap[row.type] || typeMap.video
@@ -99,9 +96,6 @@ const columns: DataTableColumns<Job> = [
       if (row.type === 'video') {
         return `场景 ${row.sceneNum}: ${(row.prompt || '').slice(0, 50)}${(row.prompt || '').length > 50 ? '...' : ''}`
       }
-      if (row.type === 'outline') {
-        return (row.idea || '').slice(0, 60) + ((row.idea || '').length > 60 ? '...' : '')
-      }
       if (row.type === 'pipeline') {
         return row.projectName ? `项目: ${row.projectName}` : 'Pipeline 任务'
       }
@@ -115,9 +109,6 @@ const columns: DataTableColumns<Job> = [
     render(row) {
       if (row.type === 'video') {
         return row.model?.toUpperCase() || '-'
-      }
-      if (row.type === 'outline') {
-        return row.idea ? row.idea.length + ' 字符' : '-'
       }
       if (row.type === 'pipeline') {
         return row.currentStep ? `${row.progress || 0}%` : '-'
@@ -136,9 +127,6 @@ const columns: DataTableColumns<Job> = [
       if (row.type === 'import' && row.status === 'completed') {
         const r = row.result || {}
         return `${r.episodesCreated || 0} 集, ${r.charactersCreated || 0} 角色`
-      }
-      if (row.type === 'outline' && row.status === 'completed' && row.result?.outline) {
-        return row.result.outline.title || '已完成'
       }
       if (row.type === 'pipeline' && row.status === 'completed') {
         return row.currentStep || '已完成'
@@ -224,7 +212,6 @@ const filteredJobs = computed(() => {
   if (activeTab.value === 'all') return jobs.value
   if (activeTab.value === 'video') return jobs.value.filter(j => j.type === 'video')
   if (activeTab.value === 'import') return jobs.value.filter(j => j.type === 'import')
-  if (activeTab.value === 'outline') return jobs.value.filter(j => j.type === 'outline')
   if (activeTab.value === 'pipeline') return jobs.value.filter(j => j.type === 'pipeline')
   return jobs.value
 })
@@ -280,27 +267,6 @@ const fetchJobs = async () => {
       }
     }
 
-    // 获取大纲任务
-    const outlineJobs: Job[] = []
-    try {
-      const outlineRes = await api.get('/projects/outline-jobs')
-      const outlines = outlineRes.data || []
-      for (const o of outlines) {
-        outlineJobs.push({
-          id: o.id,
-          type: 'outline',
-          status: o.status,
-          createdAt: o.createdAt,
-          updatedAt: o.updatedAt,
-          idea: o.idea,
-          result: o.result,
-          errorMsg: o.error
-        })
-      }
-    } catch (e) {
-      // 忽略大纲任务获取错误
-    }
-
     // 获取 Pipeline 任务
     const pipelineJobs: Job[] = []
     try {
@@ -325,8 +291,8 @@ const fetchJobs = async () => {
     }
 
     // 合并并按时间排序
-    console.log('Import:', importJobs.length, 'Video:', videoJobs.length, 'Outline:', outlineJobs.length, 'Pipeline:', pipelineJobs.length)
-    jobs.value = [...importJobs, ...videoJobs, ...outlineJobs, ...pipelineJobs].sort((a, b) =>
+    console.log('Import:', importJobs.length, 'Video:', videoJobs.length, 'Pipeline:', pipelineJobs.length)
+    jobs.value = [...importJobs, ...videoJobs, ...pipelineJobs].sort((a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
     console.log('Total jobs:', jobs.value.length)
@@ -418,16 +384,6 @@ onUnmounted(() => {
               <span>📄 导入</span>
               <NTag v-if="jobs.filter(j => j.type === 'import').length" size="small" round type="warning">
                 {{ jobs.filter(j => j.type === 'import').length }}
-              </NTag>
-            </NSpace>
-          </template>
-        </NTabPane>
-        <NTabPane name="outline" tab="大纲生成">
-          <template #tab>
-            <NSpace :size="8">
-              <span>✨ 大纲</span>
-              <NTag v-if="jobs.filter(j => j.type === 'outline').length" size="small" round type="success">
-                {{ jobs.filter(j => j.type === 'outline').length }}
               </NTag>
             </NSpace>
           </template>

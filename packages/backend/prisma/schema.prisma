@@ -26,15 +26,16 @@ model User {
 }
 
 model Project {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  synopsis    String?
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  visualStyle String[] @default([])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  synopsis     String?
+  storyContext String?  @db.Text
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  visualStyle  String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   episodes     Episode[]
   characters   Character[]
@@ -300,15 +301,17 @@ model ImportTask {
 }
 
 model PipelineJob {
-  id          String   @id @default(cuid())
-  projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  status      String   @default("pending")
-  currentStep String   @default("script-writing")
-  progress    Int      @default(0)
-  error       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status       String   @default("pending")
+  jobType      String   @default("full-pipeline")
+  currentStep  String   @default("script-writing")
+  progress     Int      @default(0)
+  progressMeta Json?
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   stepResults PipelineStepResult[]
 
@@ -329,19 +332,6 @@ model PipelineStepResult {
 
   @@unique([jobId, step])
   @@index([jobId])
-}
-
-model OutlineJob {
-  id        String   @id @default(cuid())
-  userId    String
-  status    String   @default("pending")
-  idea      String
-  result    Json?
-  error     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
 }
 
 model ProjectAsset {

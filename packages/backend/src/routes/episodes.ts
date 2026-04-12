@@ -39,8 +39,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
       }
 
       const episode = await prisma.episode.findUnique({
-        where: { id: episodeId },
-        include: { scenes: true }
+        where: { id: episodeId }
       })
 
       if (!episode) {

@@ -139,7 +139,6 @@ git commit -m "feat: 添加新功能"
 |------|------|----------|
 | `video` | 视频生成任务 | `/api/tasks` |
 | `import` | 剧本导入任务 | `/api/import/tasks` |
-| `outline` | 大纲生成任务 | `/api/projects/outline-jobs` |
 | `pipeline` | Pipeline 执行任务 | `/api/pipeline/jobs` |
 
 新增任务类型时，**必须**同步更新：
@@ -341,6 +340,7 @@ docs/plans/<计划名称>_<YYYYMMDD>.md
 ### Prisma：`migrations` 与版本管理、要记几条命令？
 
 - **`packages/backend/prisma/migrations/` 必须进 Git**，与 `schema.prisma` 一起作为「库结构变更」的唯一事实来源。仓库里曾误把该目录写进 `.gitignore`，已去掉；拉代码后同事用同一条迁移链即可对齐。
+- **当前迁移链**：单条 baseline `20260416120000_baseline_schema`（空库一次 `migrate deploy` 建全表；开头 `DROP TABLE IF EXISTS "OutlineJob"`，丢弃已下线大纲任务表）。在**已有数据**且此前只用 `db push`、从未对齐过本迁移的库上，请勿对生产库直接跑 baseline（会 `CREATE TABLE` 冲突）；应备份后用 `migrate diff` 生成增量，或新库 / `migrate reset` 后再 deploy。
 - **日常部署 / 本地对齐结构，只需记一条**：`pnpm --filter @dreamer/backend run db:migrate:deploy`（读仓库根 `.env` 里的 `DATABASE_URL`）。
 - **其余脚本用途**（不必每次都用）：
   - `db:migrate` → `prisma migrate dev`，**本地改 schema 后生成新迁移**时用；

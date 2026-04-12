@@ -149,6 +149,75 @@ export async function writeScriptFromIdea(
   throw lastError || new Error('剧本生成失败')
 }
 
+const EPISODE_WRITER_PROMPT = `你是短视频分集编剧。只输出一集剧本 JSON（不要 markdown），结构必须严格为：
+{
+  "title": "本集标题",
+  "summary": "本集一句话梗概",
+  "metadata": {},
+  "scenes": [
+    {
+      "sceneNum": 1,
+      "location": "地点",
+      "timeOfDay": "日",
+      "characters": ["角色"],
+      "description": "画面与动作",
+      "dialogues": [{"character":"名","content":"台词"}],
+      "actions": ["动作"]
+    }
+  ]
+}
+每集 3-6 个场景，保持人物与全剧梗概一致。`
+
+/**
+ * 根据全剧梗概与前情续写某一集（用于批量生成第 2 集及以后）
+ */
+export async function writeEpisodeForProject(
+  episodeNum: number,
+  seriesSynopsis: string,
+  rollingContext: string,
+  seriesTitle: string
+): Promise<ScriptWriterResult> {
+  const deepseek = getDeepSeekClient()
+  const userPrompt = `剧名：${seriesTitle}
+全剧梗概：${seriesSynopsis}
+前情与已发生剧情摘要：${rollingContext || '（首集后的连续剧情）'}
+
+请只写第 ${episodeNum} 集的剧本 JSON。`
+
+  let lastError: Error | null = null
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const completion = await deepseek.chat.completions.create({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: EPISODE_WRITER_PROMPT },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.75,
+        max_tokens: 4000
+      })
+      const content = completion.choices[0]?.message?.content
+      if (!content) throw new Error('DeepSeek API 返回为空')
+      const cost = calculateDeepSeekCost(completion.usage)
+      const script = parseScriptResponse(content)
+      validateScript(script)
+      return { script, cost }
+    } catch (error: any) {
+      lastError = error
+      if (error?.status === 401 || error?.status === 403) throw new DeepSeekAuthError()
+      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
+        if (attempt < 2) {
+          await sleep(2000 * attempt)
+          continue
+        }
+        throw new DeepSeekRateLimitError()
+      }
+      if (attempt < 2) await sleep(1000)
+    }
+  }
+  throw lastError || new Error(`第 ${episodeNum} 集剧本生成失败`)
+}
+
 /**
  * 扩展剧本（生成更多场景）
  */

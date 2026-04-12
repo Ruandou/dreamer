@@ -10,7 +10,6 @@ import {
   executePipeline,
   getPipelineJob,
   getPipelineStatus,
-  getOutlineJobStatus,
   type PipelineJob,
   type PipelineStepResult
 } from '@/api'
@@ -64,20 +63,6 @@ const stepStatuses = computed(() => {
 })
 
 onMounted(async () => {
-  // Check if there's a jobId from URL query params (from Generate page)
-  const urlJobId = route.query.jobId as string
-  if (urlJobId) {
-    try {
-      const job = await getOutlineJobStatus(urlJobId)
-      if (job.result?.rawScript?.content) {
-        idea.value = job.result.rawScript.content
-        showInputModal.value = true
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-
   // Check if there's a previous running or completed job
   try {
     const result = await getPipelineStatus(projectId.value)
@@ -186,7 +171,7 @@ const executePipelineAsync = async () => {
 }
 
 const goToProjectDetail = () => {
-  router.push(`/projects/${projectId.value}`)
+  router.push(`/project/${projectId.value}`)
 }
 </script>
 

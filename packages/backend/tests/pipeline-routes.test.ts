@@ -175,4 +175,46 @@ describe('Pipeline Routes', () => {
       expect(response.statusCode).toBe(200)
     })
   })
+
+  describe('GET /api/pipeline/job/:jobId', () => {
+    it('returns jobType and progressMeta in data envelope', async () => {
+      mockPipelineJobFindUnique.mockResolvedValue({
+        id: 'job-1',
+        projectId: 'proj-1',
+        status: 'running',
+        jobType: 'script-batch',
+        currentStep: 'script-batch',
+        progress: 40,
+        progressMeta: { current: 5, total: 60, message: '正在生成第 5/60 集' },
+        error: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        stepResults: []
+      })
+      mockProjectFindFirst.mockResolvedValue({ id: 'proj-1', userId: 'test-user-id' })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pipeline/job/job-1'
+      })
+
+      expect(response.statusCode).toBe(200)
+      const body = JSON.parse(response.payload)
+      expect(body.success).toBe(true)
+      expect(body.data.jobType).toBe('script-batch')
+      expect(body.data.progressMeta?.current).toBe(5)
+      expect(body.data.progressMeta?.message).toContain('5/60')
+    })
+
+    it('returns 404 when job not found', async () => {
+      mockPipelineJobFindUnique.mockResolvedValue(null)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pipeline/job/missing'
+      })
+
+      expect(response.statusCode).toBe(404)
+    })
+  })
 })

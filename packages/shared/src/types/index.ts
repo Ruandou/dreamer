@@ -13,6 +13,9 @@ export interface Project {
   name: string
   description?: string
   synopsis?: string
+  visualStyle?: string[]
+  storyContext?: string | null
+  episodes?: Episode[]
   createdAt: Date
   updatedAt: Date
 }
@@ -24,6 +27,7 @@ export interface Episode {
   projectId: string
   episodeNum: number
   title?: string
+  synopsis?: string | null
   rawScript?: ScriptContent
   createdAt: Date
   updatedAt: Date

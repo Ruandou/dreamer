@@ -201,6 +201,36 @@ describe('Project Routes', () => {
       const data = JSON.parse(response.payload)
       expect(data.error).toBe('Project not found')
     })
+
+    it('should persist synopsis and visualStyle', async () => {
+      mockProjectFindFirst.mockResolvedValue({
+        id: 'proj-1',
+        name: 'P',
+        userId: 'test-user-id'
+      })
+      mockProjectUpdate.mockResolvedValue({
+        id: 'proj-1',
+        name: 'P',
+        synopsis: '梗概',
+        visualStyle: ['cinematic'],
+        userId: 'test-user-id'
+      })
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/projects/proj-1',
+        payload: {
+          synopsis: '梗概',
+          visualStyle: ['cinematic']
+        }
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(mockProjectUpdate).toHaveBeenCalledWith({
+        where: { id: 'proj-1' },
+        data: { synopsis: '梗概', visualStyle: ['cinematic'] }
+      })
+    })
   })
 
   describe('DELETE /api/projects/:id', () => {
