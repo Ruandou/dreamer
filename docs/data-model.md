@@ -147,6 +147,7 @@ User
 | timeOfDay | String? | 日/夜/晨/昏 |
 | characters | String[] | 出场角色列表 |
 | description | String? | 场景描述 |
+| imageUrl | String? | 场地图片 URL（AI 生成） |
 
 ### CharacterSegment (片段角色)
 

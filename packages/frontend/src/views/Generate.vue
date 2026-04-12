@@ -27,16 +27,13 @@ const styleOptions = [
 ]
 
 onMounted(async () => {
-  const idea = route.query.idea as string
-  if (!idea) {
+  const jobId = route.query.jobId as string
+  if (!jobId) {
     router.replace('/projects')
     return
   }
 
   try {
-    // 创建异步job
-    const { jobId } = await createOutlineJob(idea)
-
     // 轮询等待结果
     const result = await pollOutlineJob(
       jobId,
@@ -69,8 +66,9 @@ const handleStart = async () => {
       visualStyle: [selectedStyle.value]
     })
 
-    // 跳转 Pipeline
-    router.push(`/project/${project.id}/pipeline?idea=${encodeURIComponent(route.query.idea as string)}`)
+    // 跳转 Pipeline（使用 jobId）
+    const jobId = route.query.jobId as string
+    router.push(`/project/${project.id}/pipeline${jobId ? `?jobId=${jobId}` : ''}`)
   } catch (e: any) {
     message.error(e.message || '启动失败')
   } finally {

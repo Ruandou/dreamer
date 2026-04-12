@@ -168,6 +168,7 @@ model Location {
   timeOfDay   String?  // 日/夜/晨/昏
   characters  String[] @default([]) // 出场角色列表
   description String?  // 场景描述
+  imageUrl    String?  // 场地图片 URL（AI 生成）
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

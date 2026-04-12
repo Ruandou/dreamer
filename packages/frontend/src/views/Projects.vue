@@ -15,7 +15,7 @@ import {
   useMessage,
   useDialog,
 } from "naive-ui";
-import type { MenuOption } from "naive-ui";
+import { api } from "@/api";
 import { useProjectStore } from "@/stores/project";
 import EmptyState from "@/components/EmptyState.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
@@ -113,7 +113,16 @@ const handleQuickCreate = async () => {
     return;
   }
   isCreating.value = true;
-  router.push(`/generate?idea=${encodeURIComponent(quickIdea.value)}`);
+  try {
+    const response = await api.post("/projects/generate-outline", {
+      idea: quickIdea.value,
+    });
+    const jobId = response.data.jobId;
+    router.push(`/generate?jobId=${jobId}`);
+  } catch (e: any) {
+    message.error(e.message || "创建任务失败");
+    isCreating.value = false;
+  }
 };
 
 const handleSubmit = async () => {
