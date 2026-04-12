@@ -10,7 +10,9 @@ import type {
   SceneAsset,
   SceneAssetRecommendation,
   EpisodePlan,
-  CharacterAction
+  CharacterAction,
+  VoiceSegment,
+  VoiceConfig
 } from '@dreamer/shared/types'
 import { extractActionsFromScene } from './action-extractor.js'
 import { matchAssets, getReferenceImageUrls } from './scene-asset.js'
@@ -83,6 +85,9 @@ function createSegment(
   // 构建特效
   const specialEffects = determineSpecialEffects(scene)
 
+  // 生成语音片段
+  const voiceSegments = buildVoiceSegments(scene, characters, sceneActions)
+
   // 生成基础提示词
   const seedancePrompt = generateSeedancePrompt(
     scene,
@@ -114,7 +119,8 @@ function createSegment(
     seedancePrompt,
     contextForNext: generateContextForNext(scene, segmentNum),
     sceneAssets: assets,
-    compositeImageUrls
+    compositeImageUrls,
+    voiceSegments
   }
 }
 
@@ -261,6 +267,125 @@ function determineSpecialEffects(scene: ScriptScene): string[] {
   }
 
   return effects
+}
+
+/**
+ * 从场景对话生成语音片段
+ */
+function buildVoiceSegments(
+  scene: ScriptScene,
+  characters: StoryboardSegment['characters'],
+  sceneActions: SceneActions
+): VoiceSegment[] {
+  if (!scene.dialogues || scene.dialogues.length === 0) {
+    return []
+  }
+
+  const voiceSegments: VoiceSegment[] = []
+  let currentTimeMs = 0
+
+  // 估算每句话的时长（根据文字长度）
+  const estimateDuration = (text: string): number => {
+    // 约 200字/分钟 = 3.3字/秒，加上停顿时间
+    return Math.max(1000, text.length * 50 + 500)
+  }
+
+  // 获取角色情绪
+  const getEmotion = (characterName: string): string | undefined => {
+    for (const action of sceneActions.actions) {
+      if (action.characterName === characterName && action.emotion) {
+        return action.emotion
+      }
+    }
+    return undefined
+  }
+
+  // 获取角色ID（如果有）
+  const getCharacterId = (characterName: string): string => {
+    // 暂时返回空字符串，实际使用时需要从项目角色列表中查找
+    return ''
+  }
+
+  for (let i = 0; i < scene.dialogues.length; i++) {
+    const dialogue = scene.dialogues[i]
+    const durationMs = estimateDuration(dialogue.content)
+
+    // 查找角色的情绪
+    const emotion = getEmotion(dialogue.character)
+
+    // 生成音色配置
+    const voiceConfig = inferVoiceConfig(dialogue.character, emotion, scene.timeOfDay)
+
+    voiceSegments.push({
+      characterId: getCharacterId(dialogue.character),
+      order: i + 1,
+      startTimeMs: currentTimeMs,
+      durationMs,
+      text: dialogue.content,
+      voiceConfig,
+      emotion
+    })
+
+    currentTimeMs += durationMs
+  }
+
+  return voiceSegments
+}
+
+/**
+ * 根据角色名、情绪、场景时间推断音色配置
+ */
+function inferVoiceConfig(
+  characterName: string,
+  emotion?: string,
+  sceneTimeOfDay?: string
+): VoiceConfig {
+  // 默认配置
+  const defaultConfig: VoiceConfig = {
+    gender: 'female',
+    age: 'young',
+    tone: 'mid',
+    timbre: 'warm_solid',
+    speed: 'medium'
+  }
+
+  // 根据角色名推断性别（简单规则：常见女性名优先）
+  const femaleNames = ['她', '女主', '小姐', '姑娘', '姐姐', '妹妹', '妈妈', '奶奶']
+  const maleNames = ['他', '男主', '先生', '哥哥', '弟弟', '爸爸', '爷爷']
+
+  // 简单判断：如果角色名包含特定字符
+  // 实际使用时应该从角色元数据获取
+
+  // 根据情绪调整
+  if (emotion) {
+    switch (emotion.toLowerCase()) {
+      case 'excited':
+      case 'happy':
+      case 'joyful':
+        return { ...defaultConfig, speed: 'fast', tone: 'high' }
+      case 'sad':
+      case 'cry':
+        return { ...defaultConfig, speed: 'slow', tone: 'low' }
+      case 'angry':
+      case 'furious':
+        return { ...defaultConfig, speed: 'fast', tone: 'high', timbre: 'warm_thick' }
+      case 'confused':
+      case 'puzzled':
+        return { ...defaultConfig, speed: 'slow', tone: 'low_mid' }
+      case 'fear':
+      case 'scared':
+        return { ...defaultConfig, speed: 'fast', tone: 'high', timbre: 'soft_gentle' }
+      default:
+        return defaultConfig
+    }
+  }
+
+  // 根据场景时间调整
+  if (sceneTimeOfDay === '夜' || sceneTimeOfDay === '昏') {
+    return { ...defaultConfig, timbre: 'warm_thick' }
+  }
+
+  return defaultConfig
 }
 
 /**

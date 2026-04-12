@@ -71,10 +71,13 @@ model Character {
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name        String
   description String?
+  voiceId     String?  // 预留：音色克隆 ID（如 ElevenLabs voice_id）
+  voiceConfig Json?    // 角色全局默认音色配置
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  images      CharacterImage[]
+  images        CharacterImage[]
+  voiceSegments VoiceSegment[]
 
   @@unique([projectId, name])
   @@index([projectId])
@@ -123,6 +126,7 @@ model Segment {
   tasks              VideoTask[]
   characterSegments  CharacterSegment[]
   subShots          SubShot[]
+  voiceSegments     VoiceSegment[]
 
   @@unique([episodeId, segmentNum])
   @@index([episodeId])
@@ -157,6 +161,28 @@ model CharacterSegment {
   @@unique([segmentId, characterImageId])
   @@index([segmentId])
   @@index([characterImageId])
+}
+
+// VoiceSegment - 语音片段（分镜中的台词）
+model VoiceSegment {
+  id               String   @id @default(cuid())
+  segmentId        String
+  segment          Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  characterId      String
+  character        Character @relation(fields: [characterId], references: [id])
+
+  order            Int       // 同一分镜内语音播放顺序
+  startTimeMs     Int       // 相对于 Segment 开始时间的偏移(毫秒)
+  durationMs       Int       // 语音时长(毫秒)
+  text             String    // 台词文本
+  voiceConfig      Json      // 音色配置
+  emotion          String?   // 情绪标签 confused/excited/sad/neutral
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([segmentId])
+  @@index([characterId])
 }
 
 // Location - 场地（从剧本提取）

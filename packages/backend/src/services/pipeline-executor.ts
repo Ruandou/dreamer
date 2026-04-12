@@ -167,7 +167,8 @@ async function saveEpisodes(projectId: string, episodes: EpisodePlan[]) {
 async function saveSegments(
   projectId: string,
   episodes: EpisodePlan[],
-  storyboard: StoryboardSegment[]
+  storyboard: StoryboardSegment[],
+  scenes: ScriptScene[]
 ) {
   for (const segment of storyboard) {
     const episode = episodes.find(e => e.episodeNum === segment.episodeNum)
@@ -271,6 +272,68 @@ async function saveSegments(
         })
       }
     }
+
+    // 保存 VoiceSegments
+    if (segment.voiceSegments && segment.voiceSegments.length > 0) {
+      // 通过 segmentNum 找到对应的 scene（segmentNum 是从 1 开始的索引）
+      const sceneIndex = episode.sceneIndices
+        ? episode.sceneIndices[segment.segmentNum - 1]
+        : segment.segmentNum - 1
+      const scene = scenes[sceneIndex]
+
+      for (const voice of segment.voiceSegments) {
+        let characterId = voice.characterId
+
+        // 如果 characterId 为空，通过角色名查找
+        if (!characterId && scene) {
+          const characterName = scene.dialogues[voice.order - 1]?.character
+          if (characterName) {
+            const character = await prisma.character.findFirst({
+              where: { projectId, name: characterName }
+            })
+            if (character) {
+              characterId = character.id
+            }
+          }
+        }
+
+        // 如果还是空，尝试通过 segment.characters 查找
+        if (!characterId && segment.characters) {
+          const dialogue = scene?.dialogues[voice.order - 1]
+          if (dialogue) {
+            const characterInSegment = segment.characters.find(
+              c => c.name === dialogue.character
+            )
+            if (characterInSegment) {
+              const character = await prisma.character.findFirst({
+                where: { projectId, name: dialogue.character }
+              })
+              if (character) {
+                characterId = character.id
+              }
+            }
+          }
+        }
+
+        if (!characterId) {
+          console.warn(`VoiceSegment skipped: no character found for segment ${segmentRecord.id}, order ${voice.order}`)
+          continue
+        }
+
+        await prisma.voiceSegment.create({
+          data: {
+            segmentId: segmentRecord.id,
+            characterId,
+            order: voice.order,
+            startTimeMs: voice.startTimeMs,
+            durationMs: voice.durationMs,
+            text: voice.text,
+            voiceConfig: voice.voiceConfig,
+            emotion: voice.emotion
+          }
+        })
+      }
+    }
   }
 }
 
@@ -358,7 +421,7 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
     }
 
     // 保存分镜到数据库
-    await saveSegments(projectId, episodes, allSegments)
+    await saveSegments(projectId, episodes, allSegments, script.scenes)
 
     await updateStepResult(jobId, 'storyboard', {
       status: 'completed',

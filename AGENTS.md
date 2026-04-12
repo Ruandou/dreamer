@@ -147,6 +147,171 @@ git commit -m "feat: 添加新功能"
 2. 前端 `Jobs.vue`（添加类型支持）
 3. AGENTS.md（本规则）
 
+## 模块开发规范
+
+### 模块目录结构
+
+每个功能模块应放在 `packages/backend/src/services/` 下的独立目录：
+
+```
+services/
+├── tts/                    # 语音合成模块
+│   ├── index.ts           # 统一导出
+│   ├── base.ts            # 平台抽象接口
+│   ├── mapper.ts          # 音色映射表
+│   ├── aliyun.ts         # 阿里云实现
+│   └── volcano.ts         # 火山引擎实现
+├── scene-asset.ts         # 素材匹配（单文件模块）
+└── seedance-audio.ts      # Seedance 音频对接
+```
+
+### 模块设计原则
+
+1. **单一职责**：每个模块只负责一件事
+2. **接口抽象**：对外暴露统一接口，隐藏实现细节
+3. **依赖倒置**：通过接口/类型解耦，不直接依赖具体实现
+4. **可测试性**：核心逻辑纯函数化，易于单元测试
+
+---
+
+## 语音管理模块 (TTS)
+
+### 模块职责
+
+语音管理模块负责：
+1. 从剧本对话生成结构化语音配置（VoiceSegment）
+2. 将 VoiceConfig 映射为各 TTS 平台的 voice_id
+3. 提供统一 TTS 合成接口
+4. 与 Seedance 2.0 音频参数对接
+
+### 核心类型
+
+```typescript
+// packages/shared/src/types/index.ts
+
+export interface VoiceConfig {
+  gender: 'male' | 'female'
+  age: 'young' | 'middle_aged' | 'old' | 'teen'
+  tone: 'high' | 'mid' | 'low' | 'low_mid'
+  timbre: 'warm_solid' | 'warm_thick' | 'clear_bright' | 'soft_gentle'
+  speed: 'slow' | 'medium' | 'fast'
+  pitch?: number
+  volume?: number
+}
+
+export interface VoiceSegment {
+  id?: string
+  characterId: string
+  order: number
+  startTimeMs: number
+  durationMs: number
+  text: string
+  voiceConfig: VoiceConfig
+  emotion?: string
+}
+```
+
+### TTS Provider 接口
+
+```typescript
+// packages/backend/src/services/tts/base.ts
+
+export interface TTSOptions {
+  pitch?: number
+  volume?: number
+  speed?: number
+}
+
+export interface TTSProvider {
+  /** 提供商名称 */
+  name: string
+  /** 合成语音，返回音频 URL */
+  synthesize(text: string, voiceId: string, options?: TTSOptions): Promise<string>
+  /** 从 VoiceConfig 获取平台对应的 voice_id */
+  getVoiceId(config: VoiceConfig): string
+}
+
+export function getTTSProvider(platform: 'aliyun' | 'volcano'): TTSProvider
+```
+
+### 音色映射表
+
+```typescript
+// packages/backend/src/services/tts/mapper.ts
+
+export function getVoiceIdFromConfig(
+  config: VoiceConfig,
+  platform: 'aliyun' | 'volcano'
+): string
+
+// 映射表示例
+const ALIYUN_VOICE_MAP = {
+  male: {
+    young: {
+      warm_solid: 'zh_male_qingrun',
+      clear_bright: 'zh_male_qingse',
+      default: 'zh_male_shaonian'
+    },
+    middle_aged: { /* ... */ },
+    old: { /* ... */ }
+  },
+  female: { /* ... */ }
+}
+```
+
+### Seedance 音频对接
+
+```typescript
+// packages/backend/src/services/seedance-audio.ts
+
+export interface SeedanceAudioSegment {
+  character_tag: string      // @Character1
+  text: string
+  voice_config: VoiceConfig
+  start_time: number        // 秒
+  duration: number          // 秒
+}
+
+export interface SeedanceAudioPayload {
+  type: 'tts'
+  segments: SeedanceAudioSegment[]
+}
+
+/** 从数据库读取 VoiceSegment，组装成 Seedance 音频参数 */
+export async function buildSeedanceAudio(segmentId: string): Promise<SeedanceAudioPayload>
+
+/** 获取分镜关联的所有语音片段 */
+export async function getSegmentVoiceSegments(segmentId: string): Promise<VoiceSegment[]>
+```
+
+### VoiceSegment 生成流程
+
+```
+ScriptScene.dialogues[]
+        ↓
+buildVoiceSegments(scene, characters)
+        ↓
+VoiceSegment[] (存入数据库)
+        ↓
+buildSeedanceAudio(segmentId) → SeedanceAudioPayload
+        ↓
+Seedance API (generateAudio: true)
+```
+
+### 新增模块检查清单
+
+新增 TTS 相关模块时，必须：
+
+1. **类型定义**：在 `packages/shared/src/types/index.ts` 添加类型
+2. **Provider 实现**：实现 `TTSProvider` 接口
+3. **映射表**：在 `mapper.ts` 添加平台映射
+4. **统一导出**：在 `index.ts` 导出
+5. **数据库模型**：如需持久化，添加到 `schema.prisma`
+6. **测试用例**：编写单元测试，覆盖率 > 90%
+7. **文档**：更新本节内容
+
+---
+
 ## 计划文档管理
 
 ### 计划文档位置

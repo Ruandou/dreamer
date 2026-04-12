@@ -40,14 +40,26 @@ User
         │           │     ├── characterImageId → CharacterImage
         │           │     └── action (该片段中的动作/情绪)
         │           │
+        │           ├── VoiceSegment[] (语音片段)
+        │           │
         │           └── VideoTask[] (视频生成任务)
         │                 ├── model (wan2.6/seedance2.0)
         │                 └── status (queued/processing/completed/failed)
         │
         ├── Character[] (角色，从剧本提取)
+        │     ├── voiceId (音色克隆 ID)
+        │     ├── voiceConfig (全局默认音色配置)
         │     └── images[] (形象，parentId 层级)
         │           ├── parentId=null (基础形象)
         │           └── parentId→基础 (衍生：服装/表情/pose)
+        │
+        ├── VoiceSegment[] (语音片段)
+        │     ├── segmentId → Segment
+        │     ├── characterId → Character
+        │     ├── order, startTimeMs, durationMs
+        │     ├── text (台词文本)
+        │     ├── voiceConfig (音色配置)
+        │     └── emotion (情绪标签)
         │
         ├── Location[] (场地，从剧本提取)
         │     ├── location (地点名)
@@ -146,6 +158,8 @@ User
 | projectId | String | 所属项目 ID |
 | name | String | 角色名 |
 | description | String? | 角色描述 |
+| voiceId | String? | 音色克隆 ID（预留） |
+| voiceConfig | Json? | 全局默认音色配置 |
 
 ### CharacterImage (角色形象)
 
@@ -180,6 +194,20 @@ User
 | segmentId | String | 所属分镜 ID |
 | characterImageId | String | 使用的角色形象 ID |
 | action | String? | 该片段中角色的动作/情绪 |
+
+### VoiceSegment (语音片段)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String | 主键 |
+| segmentId | String | 所属分镜 ID |
+| characterId | String | 对应角色 ID |
+| order | Int | 播放顺序 |
+| startTimeMs | Int | 开始时间（毫秒） |
+| durationMs | Int | 语音时长（毫秒） |
+| text | String | 台词文本 |
+| voiceConfig | Json | 音色配置 |
+| emotion | String? | 情绪标签 |
 
 ### VideoTask (视频任务)
 

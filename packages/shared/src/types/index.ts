@@ -347,6 +347,7 @@ export interface StoryboardSegment {
   compositeImageUrls: string[]  // 最终传给Seedance的参考图（最多9张）
   subShots?: SubShot[]     // 子片段列表
   characterActions?: Record<string, string>  // characterName -> action
+  voiceSegments?: VoiceSegment[]  // 语音片段列表
 }
 
 /**
@@ -369,6 +370,26 @@ export interface SeedanceSegmentConfig {
   aspectRatio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9'
   resolution: '480p' | '720p'
   generateAudio: boolean
+  audioConfig?: SeedanceAudioPayload    // TTS 音频配置
+}
+
+/**
+ * Seedance 音频片段
+ */
+export interface SeedanceAudioSegment {
+  character_tag: string      // @Character1
+  text: string
+  voice_config: VoiceConfig
+  start_time: number        // 秒
+  duration: number          // 秒
+}
+
+/**
+ * Seedance 音频载荷
+ */
+export interface SeedanceAudioPayload {
+  type: 'tts'
+  segments: SeedanceAudioSegment[]
 }
 
 /**
@@ -393,6 +414,33 @@ export interface PipelineStatus {
   progress: number  // 0-100
   results?: Record<PipelineStep, any>
   error?: string
+}
+
+/**
+ * 音色配置
+ */
+export interface VoiceConfig {
+  gender: 'male' | 'female'
+  age: 'young' | 'middle_aged' | 'old' | 'teen'
+  tone: 'high' | 'mid' | 'low' | 'low_mid'
+  timbre: 'warm_solid' | 'warm_thick' | 'clear_bright' | 'soft_gentle'
+  speed: 'slow' | 'medium' | 'fast'
+  pitch?: number      // 可选，音高偏移
+  volume?: number     // 可选，音量
+}
+
+/**
+ * 语音片段
+ */
+export interface VoiceSegment {
+  id?: string
+  characterId: string
+  order: number
+  startTimeMs: number
+  durationMs: number
+  text: string
+  voiceConfig: VoiceConfig
+  emotion?: string
 }
 
 /**

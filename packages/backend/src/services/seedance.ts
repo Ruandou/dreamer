@@ -15,6 +15,16 @@ export interface SeedanceGenerateRequest {
   aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive'
   resolution?: '480p' | '720p'
   generateAudio?: boolean
+  audioConfig?: {
+    type: 'tts'
+    segments: Array<{
+      character_tag: string
+      text: string
+      voice_config: Record<string, any>
+      start_time: number
+      duration: number
+    }>
+  }
 }
 
 export interface SeedanceGenerateResponse {
