@@ -1,5 +1,7 @@
 # Dreamer 数据模型文档
 
+> **真源已迁移**：请以仓库根目录 [`DREAMER_DATA_MODEL.md`](../DREAMER_DATA_MODEL.md)（**v4.1**）为团队设计规范；本文档保留历史说明，新开发请勿以本文为准。
+
 ## 概述
 
 Dreamer 是一个 AI 短剧生产工作台，从剧本到成品的全流程平台。

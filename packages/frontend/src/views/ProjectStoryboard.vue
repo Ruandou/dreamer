@@ -2,18 +2,16 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
-  NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
-  NSelect, NImage, NTag, NProgress, NAlert, NSwitch, NTooltip, NCheckbox,
-  NScrollbar, useMessage, useDialog, NDropdown, NPopconfirm
+  NButton, NSpace, NModal, NForm, NFormItem, NInput, NInputNumber,
+  NSelect, NImage, NTag, NProgress, NAlert, NSwitch, NCheckbox,
+  NScrollbar, useMessage, useDialog, NDropdown
 } from 'naive-ui'
-import { useSceneStore, type SceneWithTasks } from '@/stores/scene'
+import { useSceneStore, type SceneWithTakes } from '@/stores/scene'
 import { useEpisodeStore } from '@/stores/episode'
 import { useCharacterStore } from '@/stores/character'
 import VideoPlayer from '@/components/VideoPlayer.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
-import ProgressRing from '@/components/ProgressRing.vue'
-
 const route = useRoute()
 const message = useMessage()
 const dialog = useDialog()
@@ -21,11 +19,23 @@ const sceneStore = useSceneStore()
 const episodeStore = useEpisodeStore()
 const characterStore = useCharacterStore()
 
+function primaryPrompt(scene: SceneWithTakes): string {
+  const shots = scene.shots as { description?: string }[] | undefined
+  const first = shots?.[0]?.description?.trim()
+  if (first) return first
+  return scene.description?.trim() || '使用场景描述'
+}
+
+function characterPreviewUrl(char: { images?: { avatarUrl?: string }[] }): string | undefined {
+  return char.images?.find((i) => i.avatarUrl)?.avatarUrl
+}
+
 const projectId = computed(() => route.params.id as string)
 
 const showCreateModal = ref(false)
 const showEditorModal = ref(false)
-const editingScene = ref<SceneWithTasks | null>(null)
+type SceneEditor = SceneWithTakes & { editPrompt: string }
+const editingScene = ref<SceneEditor | null>(null)
 const newScene = ref({ description: '', prompt: '' })
 const selectedModel = ref<'wan2.6' | 'seedance2.0'>('wan2.6')
 const selectedReferenceImage = ref<string | undefined>()
@@ -88,8 +98,12 @@ const handleCreateScene = async () => {
   message.success('分镜创建成功')
 }
 
-const handleEditScene = (scene: SceneWithTasks) => {
-  editingScene.value = { ...scene }
+const handleEditScene = (scene: SceneWithTakes) => {
+  const base = primaryPrompt(scene)
+  editingScene.value = {
+    ...scene,
+    editPrompt: base === '使用场景描述' ? '' : base
+  }
   showEditorModal.value = true
 }
 
@@ -97,7 +111,8 @@ const handleSaveScene = async () => {
   if (!editingScene.value) return
   await sceneStore.updateScene(editingScene.value.id, {
     description: editingScene.value.description,
-    prompt: editingScene.value.prompt
+    sceneNum: editingScene.value.sceneNum,
+    prompt: editingScene.value.editPrompt
   })
   showEditorModal.value = false
   message.success('保存成功')
@@ -105,8 +120,8 @@ const handleSaveScene = async () => {
 
 const handleOptimizePrompt = async () => {
   if (!editingScene.value) return
-  const optimized = await sceneStore.optimizePrompt(editingScene.value.id, editingScene.value.prompt)
-  editingScene.value.prompt = optimized
+  const optimized = await sceneStore.optimizePrompt(editingScene.value.id, editingScene.value.editPrompt)
+  editingScene.value.editPrompt = optimized
   message.success('提示词优化完成')
 }
 
@@ -227,9 +242,7 @@ const modelOptions = [
   { label: 'Seedance 2.0 高光模式', value: 'seedance2.0' }
 ]
 
-const getSceneTasks = (scene: SceneWithTasks) => {
-  return (scene as any).tasks as any[] || []
-}
+const getSceneTakes = (scene: SceneWithTakes) => scene.takes ?? []
 </script>
 
 <template>
@@ -322,7 +335,7 @@ const getSceneTasks = (scene: SceneWithTasks) => {
             @dragover.prevent
           >
             <!-- Scene Header -->
-            <div class="scene-card__header" @click="handleEditScene(scene as SceneWithTasks)">
+            <div class="scene-card__header" @click="handleEditScene(scene as SceneWithTakes)">
               <div class="scene-card__info">
                 <StatusBadge :status="scene.status" />
                 <span class="scene-card__num">#{{ scene.sceneNum }}</span>
@@ -343,13 +356,13 @@ const getSceneTasks = (scene: SceneWithTasks) => {
               <!-- Prompt -->
               <div class="scene-card__prompt">
                 <span class="prompt-label">提示词</span>
-                <span class="prompt-text">{{ scene.prompt || '使用场景描述' }}</span>
+                <span class="prompt-text">{{ primaryPrompt(scene) }}</span>
               </div>
 
               <!-- Tasks -->
-              <div v-if="getSceneTasks(scene).length" class="scene-card__tasks">
+              <div v-if="getSceneTakes(scene).length" class="scene-card__tasks">
                 <div
-                  v-for="task in getSceneTasks(scene)"
+                  v-for="task in getSceneTakes(scene)"
                   :key="task.id"
                   :class="['task-item', { selected: task.isSelected, processing: task.status === 'processing' }]"
                 >
@@ -413,7 +426,7 @@ const getSceneTasks = (scene: SceneWithTasks) => {
                 >
                   生成视频
                 </NButton>
-                <NButton size="small" @click="handleEditScene(scene as SceneWithTasks)">
+                <NButton size="small" @click="handleEditScene(scene as SceneWithTakes)">
                   编辑
                 </NButton>
                 <NButton size="small" type="error" text @click="handleDeleteScene(scene.id)">
@@ -433,12 +446,12 @@ const getSceneTasks = (scene: SceneWithTasks) => {
             <div
               v-for="char in characterStore.characters"
               :key="char.id"
-              :class="['ref-item', { active: selectedReferenceImage === char.avatarUrl }]"
-              @click="selectedReferenceImage = selectedReferenceImage === char.avatarUrl ? undefined : char.avatarUrl"
+              :class="['ref-item', { active: selectedReferenceImage === characterPreviewUrl(char) }]"
+              @click="selectedReferenceImage = selectedReferenceImage === characterPreviewUrl(char) ? undefined : characterPreviewUrl(char)"
             >
               <NImage
-                v-if="char.avatarUrl"
-                :src="char.avatarUrl"
+                v-if="characterPreviewUrl(char)"
+                :src="characterPreviewUrl(char)"
                 width="60"
                 height="60"
                 object-fit="cover"
@@ -507,9 +520,9 @@ const getSceneTasks = (scene: SceneWithTasks) => {
             :rows="2"
           />
         </NFormItem>
-        <NFormItem label="视频提示词" path="prompt">
+        <NFormItem label="视频提示词" path="editPrompt">
           <NInput
-            v-model:value="editingScene.prompt"
+            v-model:value="editingScene.editPrompt"
             type="textarea"
             placeholder="用于生成视频的提示词"
             :rows="4"

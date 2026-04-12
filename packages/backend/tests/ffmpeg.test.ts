@@ -17,26 +17,23 @@ describe('FFmpeg Service', () => {
     })
   })
 
-  describe('CompositionSegment interface', () => {
-    it('should accept valid segment data', () => {
+  describe('CompositionClip interface', () => {
+    it('should accept valid clip data', () => {
       const segment = {
-        sceneId: 'scene-123',
         videoUrl: 'https://example.com/video.mp4',
         startTime: 0,
         endTime: 5,
         transition: 'fade'
       }
 
-      expect(segment.sceneId).toBe('scene-123')
       expect(segment.videoUrl).toBe('https://example.com/video.mp4')
       expect(segment.startTime).toBe(0)
       expect(segment.endTime).toBe(5)
       expect(segment.transition).toBe('fade')
     })
 
-    it('should accept segment without transition', () => {
+    it('should accept clip without transition', () => {
       const segment = {
-        sceneId: 'scene-123',
         videoUrl: 'https://example.com/video.mp4',
         startTime: 10,
         endTime: 15
@@ -51,7 +48,6 @@ describe('FFmpeg Service', () => {
       const options = {
         segments: [
           {
-            sceneId: 'scene-1',
             videoUrl: 'https://example.com/video1.mp4',
             startTime: 0,
             endTime: 5
@@ -77,7 +73,6 @@ describe('FFmpeg Service', () => {
       const options = {
         segments: [
           {
-            sceneId: 'scene-1',
             videoUrl: 'https://example.com/video1.mp4',
             startTime: 0,
             endTime: 5

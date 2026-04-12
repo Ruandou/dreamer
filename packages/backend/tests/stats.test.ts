@@ -5,12 +5,12 @@ import Fastify, { FastifyInstance } from 'fastify'
 const {
   mockProjectFindUnique,
   mockProjectFindMany,
-  mockVideoTaskFindMany
+  mockTakeFindMany
 } = vi.hoisted(() => {
   return {
     mockProjectFindUnique: vi.fn(),
     mockProjectFindMany: vi.fn(),
-    mockVideoTaskFindMany: vi.fn()
+    mockTakeFindMany: vi.fn()
   }
 })
 
@@ -29,8 +29,8 @@ vi.mock('../src/index.js', () => ({
       findUnique: mockProjectFindUnique,
       findMany: mockProjectFindMany
     },
-    videoTask: {
-      findMany: mockVideoTaskFindMany
+    take: {
+      findMany: mockTakeFindMany
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()
@@ -70,9 +70,9 @@ describe('Stats Routes', () => {
         name: 'Test Project',
         episodes: [
           {
-            segments: [
+            scenes: [
               {
-                tasks: [
+                takes: [
                   { id: 'task-1', model: 'wan2.6', status: 'completed', cost: 0.5, createdAt: new Date() }
                 ]
               }
@@ -86,7 +86,7 @@ describe('Stats Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/api/stats/projects/proj-1'
+        url: '/api/stats/projects/p?projectId=proj-1'
       })
 
       expect(response.statusCode).toBe(200)
@@ -100,7 +100,7 @@ describe('Stats Routes', () => {
 
       const response = await app.inject({
         method: 'GET',
-        url: '/api/stats/projects/nonexistent'
+        url: '/api/stats/projects/p?projectId=nonexistent'
       })
 
       expect(response.statusCode).toBe(404)
@@ -115,9 +115,9 @@ describe('Stats Routes', () => {
           name: 'Test Project',
           episodes: [
             {
-              segments: [
+              scenes: [
                 {
-                  tasks: [
+                  takes: [
                     { id: 'task-1', model: 'wan2.6', status: 'completed', cost: 0.5, createdAt: new Date() }
                   ]
                 }
@@ -142,7 +142,7 @@ describe('Stats Routes', () => {
 
   describe('GET /api/stats/trend', () => {
     it('should return daily cost trend', async () => {
-      mockVideoTaskFindMany.mockResolvedValue([
+      mockTakeFindMany.mockResolvedValue([
         { id: 'task-1', model: 'wan2.6', cost: 0.5, createdAt: new Date() },
         { id: 'task-2', model: 'seedance2.0', cost: 1.0, createdAt: new Date() }
       ])
@@ -173,7 +173,7 @@ describe('Stats Routes', () => {
 
   describe('GET /api/stats/trend', () => {
     it('should return empty trend when no tasks', async () => {
-      mockVideoTaskFindMany.mockResolvedValue([])
+      mockTakeFindMany.mockResolvedValue([])
 
       const response = await app.inject({
         method: 'GET',
@@ -186,7 +186,7 @@ describe('Stats Routes', () => {
     })
 
     it('should filter by projectId', async () => {
-      mockVideoTaskFindMany.mockResolvedValue([
+      mockTakeFindMany.mockResolvedValue([
         { id: 'task-1', model: 'wan2.6', cost: 0.5, createdAt: new Date() }
       ])
 

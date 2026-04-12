@@ -27,7 +27,7 @@ describe('ApiLogger Service', () => {
         provider: 'volcengine',
         prompt: 'A beautiful sunset',
         requestParams: { imageUrls: ['https://example.com/img.jpg'], duration: 5 },
-        videoTaskId: 'task-1'
+        takeId: 'task-1'
       }
 
       const expectedLog = {
@@ -43,7 +43,7 @@ describe('ApiLogger Service', () => {
         cost: null,
         duration: null,
         errorMsg: null,
-        videoTaskId: 'task-1',
+        takeId: 'task-1',
         createdAt: new Date(),
         updatedAt: new Date()
       }
@@ -76,7 +76,7 @@ describe('ApiLogger Service', () => {
         prompt: 'Test',
         status: 'failed',
         errorMsg: 'API rate limit exceeded',
-        videoTaskId: null,
+        takeId: null,
         createdAt: new Date(),
         updatedAt: new Date()
       }
@@ -114,7 +114,7 @@ describe('ApiLogger Service', () => {
         responseData: JSON.stringify({ videoUrl: apiCallResult.videoUrl, thumbnailUrl: apiCallResult.thumbnailUrl }),
         cost: 0.5,
         duration: 5,
-        videoTaskId: null,
+        takeId: null,
         createdAt: new Date(),
         updatedAt: new Date()
       }

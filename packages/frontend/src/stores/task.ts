@@ -1,16 +1,16 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { VideoTask } from '@dreamer/shared/types'
+import type { Take } from '@dreamer/shared/types'
 import { api } from '@/api'
 
 export const useTaskStore = defineStore('task', () => {
-  const currentTask = ref<VideoTask | null>(null)
+  const currentTask = ref<Take | null>(null)
   const isLoading = ref(false)
 
   async function fetchTask(taskId: string) {
     isLoading.value = true
     try {
-      const res = await api.get<VideoTask>(`/tasks/${taskId}`)
+      const res = await api.get<Take>(`/tasks/${taskId}`)
       currentTask.value = res.data
       return res.data
     } finally {
@@ -19,7 +19,7 @@ export const useTaskStore = defineStore('task', () => {
   }
 
   async function cancelTask(taskId: string) {
-    const res = await api.post<VideoTask>(`/tasks/${taskId}/cancel`)
+    const res = await api.post<Take>(`/tasks/${taskId}/cancel`)
     if (currentTask.value?.id === taskId) {
       currentTask.value = res.data
     }
@@ -27,12 +27,12 @@ export const useTaskStore = defineStore('task', () => {
   }
 
   async function retryTask(taskId: string) {
-    const res = await api.post<VideoTask>(`/tasks/${taskId}/retry`)
+    const res = await api.post<Take>(`/tasks/${taskId}/retry`)
     return res.data
   }
 
   async function fetchProjectTasks(projectId: string) {
-    const res = await api.get<VideoTask[]>(`/tasks?projectId=${projectId}`)
+    const res = await api.get<Take[]>(`/tasks?projectId=${projectId}`)
     return res.data
   }
 

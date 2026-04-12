@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import type { ScriptContent, ScriptScene, Dialogue, Character } from '@dreamer/shared/types'
+import type { ScriptContent, ScriptScene, ScriptDialogueLine, Character } from '@dreamer/shared/types'
 import { calculateDeepSeekCost, type DeepSeekCost, DeepSeekAuthError, DeepSeekRateLimitError } from './deepseek.js'
 
 // Script Writer System Prompt
@@ -442,7 +442,7 @@ function convertToScriptContent(data: any): ScriptContent {
 
   const scenes: ScriptScene[] = scenesArray.map((s: any, index: number) => {
     // 处理 dialogues
-    let dialogues: Dialogue[] = []
+    let dialogues: ScriptDialogueLine[] = []
     if (Array.isArray(s.dialogues)) {
       dialogues = s.dialogues.map((d: any) => ({
         character: d.character || d.name || '',

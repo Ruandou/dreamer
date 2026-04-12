@@ -47,9 +47,9 @@ export async function statsRoutes(fastify: FastifyInstance) {
         include: {
           episodes: {
             include: {
-              segments: {
+              scenes: {
                 include: {
-                  tasks: true
+                  takes: true
                 }
               }
             }
@@ -64,7 +64,7 @@ export async function statsRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Project not found' })
       }
 
-      const tasks = project.episodes.flatMap(e => e.segments.flatMap(s => s.tasks))
+      const tasks = project.episodes.flatMap(e => e.scenes.flatMap(s => s.takes))
       const completedTasks = tasks.filter(t => t.status === 'completed')
       const failedTasks = tasks.filter(t => t.status === 'failed')
 
@@ -124,9 +124,9 @@ export async function statsRoutes(fastify: FastifyInstance) {
         include: {
           episodes: {
             include: {
-              segments: {
+              scenes: {
                 include: {
-                  tasks: true
+                  takes: true
                 }
               }
             }
@@ -138,12 +138,12 @@ export async function statsRoutes(fastify: FastifyInstance) {
       })
 
       const allTasks = projects.flatMap(p =>
-        p.episodes.flatMap(e => e.segments.flatMap(s => s.tasks))
+        p.episodes.flatMap(e => e.scenes.flatMap(s => s.takes))
       )
       const completedTasks = allTasks.filter(t => t.status === 'completed')
 
       const projectStats: ProjectCostStats[] = projects.map(project => {
-        const tasks = project.episodes.flatMap(e => e.segments.flatMap(s => s.tasks))
+        const tasks = project.episodes.flatMap(e => e.scenes.flatMap(s => s.takes))
         const completed = tasks.filter(t => t.status === 'completed')
         const failed = tasks.filter(t => t.status === 'failed')
         const wanTasks = completed.filter(t => t.model === 'wan2.6')
@@ -227,13 +227,13 @@ export async function statsRoutes(fastify: FastifyInstance) {
       }
 
       if (projectId) {
-        whereClause.segment = {
+        whereClause.scene = {
           episode: {
             projectId
           }
         }
       } else {
-        whereClause.segment = {
+        whereClause.scene = {
           episode: {
             project: {
               userId: user.id
@@ -242,7 +242,7 @@ export async function statsRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const tasks = await prisma.videoTask.findMany({
+      const tasks = await prisma.take.findMany({
         where: whereClause,
         select: {
           cost: true,

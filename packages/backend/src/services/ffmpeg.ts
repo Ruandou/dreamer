@@ -6,8 +6,7 @@ import { uploadFile, generateFileKey } from './storage.js'
 
 const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg'
 
-export interface CompositionSegment {
-  segmentId: string
+export interface CompositionClip {
   videoUrl: string
   startTime: number
   endTime: number
@@ -15,7 +14,7 @@ export interface CompositionSegment {
 }
 
 export interface CompositionOptions {
-  segments: CompositionSegment[]
+  segments: CompositionClip[]
   voiceoverUrl?: string
   bgmUrl?: string
   subtitlesUrl?: string
@@ -70,7 +69,7 @@ async function getVideoDuration(filePath: string): Promise<number> {
 /**
  * Merge multiple video segments using FFmpeg
  */
-async function mergeSegments(segments: CompositionSegment[], outputPath: string): Promise<void> {
+async function mergeSegments(segments: CompositionClip[], outputPath: string): Promise<void> {
   // Create a temporary file list for FFmpeg concat
   const listFile = path.join(os.tmpdir(), `concat_list_${Date.now()}.txt`)
   let listContent = ''
@@ -79,7 +78,11 @@ async function mergeSegments(segments: CompositionSegment[], outputPath: string)
     const segment = segments[i]
     const tempFile = await downloadToTemp(segment.videoUrl)
     const startTime = segment.startTime || 0
-    const duration = segment.endTime - startTime
+    let duration = segment.endTime - startTime
+    if (!Number.isFinite(duration) || duration <= 0) {
+      const full = await getVideoDuration(tempFile)
+      duration = Math.max(0.1, full - startTime)
+    }
 
     // If we have a start time, we need to trim
     if (startTime > 0) {

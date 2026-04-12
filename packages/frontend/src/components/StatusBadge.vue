@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{
-  status: 'draft' | 'processing' | 'completed' | 'failed' | 'pending' | 'queued'
+  status: 'draft' | 'processing' | 'completed' | 'failed' | 'pending' | 'queued' | 'generating'
   size?: 'small' | 'medium'
 }>()
 
@@ -8,6 +8,7 @@ const statusConfig = {
   draft: { label: '草稿', color: '#6b7280', bg: '#f3f4f6' },
   pending: { label: '等待中', color: '#6b7280', bg: '#f3f4f6' },
   queued: { label: '队列中', color: '#3b82f6', bg: '#dbeafe' },
+  generating: { label: '生成中', color: '#3b82f6', bg: '#dbeafe' },
   processing: { label: '制作中', color: '#3b82f6', bg: '#dbeafe' },
   completed: { label: '已完成', color: '#10b981', bg: '#d1fae5' },
   failed: { label: '失败', color: '#ef4444', bg: '#fee2e2' },

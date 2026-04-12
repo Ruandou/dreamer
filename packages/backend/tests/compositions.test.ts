@@ -1,18 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import Fastify, { FastifyInstance } from 'fastify'
 
-// Use vi.hoisted to define mocks before module loading
 const {
   mockCompositionFindMany,
   mockCompositionFindUnique,
   mockCompositionCreate,
   mockCompositionUpdate,
   mockCompositionDelete,
-  mockSegmentFindMany,
-  mockCompositionSegmentCreateMany,
-  mockCompositionSegmentDeleteMany,
-  mockVideoTaskFindFirst,
-  mockProjectFindFirst
+  mockCompositionSceneCreateMany,
+  mockCompositionSceneDeleteMany
 } = vi.hoisted(() => {
   return {
     mockCompositionFindMany: vi.fn(),
@@ -20,26 +16,25 @@ const {
     mockCompositionCreate: vi.fn(),
     mockCompositionUpdate: vi.fn(),
     mockCompositionDelete: vi.fn(),
-    mockSegmentFindMany: vi.fn(),
-    mockCompositionSegmentCreateMany: vi.fn(),
-    mockCompositionSegmentDeleteMany: vi.fn(),
-    mockVideoTaskFindFirst: vi.fn(),
-    mockProjectFindFirst: vi.fn()
+    mockCompositionSceneCreateMany: vi.fn(),
+    mockCompositionSceneDeleteMany: vi.fn()
   }
 })
 
-// Mock ffmpeg service
 vi.mock('../src/services/ffmpeg.js', () => ({
-  composeVideo: vi.fn().mockResolvedValue({ outputPath: '/tmp/output.mp4' })
+  composeVideo: vi.fn().mockResolvedValue({
+    outputUrl: 'https://storage.example.com/output.mp4',
+    duration: 12,
+    width: 1080,
+    height: 1920
+  })
 }))
 
-// Mock storage service
 vi.mock('../src/services/storage.js', () => ({
   uploadFile: vi.fn().mockResolvedValue('https://storage.example.com/output.mp4'),
   generateFileKey: vi.fn().mockReturnValue('compositions/output.mp4')
 }))
 
-// Mock verifyCompositionOwnership and verifyProjectOwnership
 const mockVerifyCompositionOwnership = vi.fn().mockResolvedValue(true)
 const mockVerifyProjectOwnership = vi.fn().mockResolvedValue(true)
 
@@ -48,7 +43,6 @@ vi.mock('../src/plugins/auth.js', () => ({
   verifyProjectOwnership: (...args: any[]) => mockVerifyProjectOwnership(...args)
 }))
 
-// Mock the index.js module
 vi.mock('../src/index.js', () => ({
   prisma: {
     composition: {
@@ -58,25 +52,15 @@ vi.mock('../src/index.js', () => ({
       update: mockCompositionUpdate,
       delete: mockCompositionDelete
     },
-    segment: {
-      findMany: mockSegmentFindMany
-    },
-    compositionSegment: {
-      createMany: mockCompositionSegmentCreateMany,
-      deleteMany: mockCompositionSegmentDeleteMany
-    },
-    videoTask: {
-      findFirst: mockVideoTaskFindFirst
-    },
-    project: {
-      findFirst: mockProjectFindFirst
+    compositionScene: {
+      createMany: mockCompositionSceneCreateMany,
+      deleteMany: mockCompositionSceneDeleteMany
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()
   }
 }))
 
-// Import routes after all mocks are set up
 import { compositionRoutes } from '../src/routes/compositions.js'
 
 describe('Composition Routes', () => {
@@ -85,8 +69,7 @@ describe('Composition Routes', () => {
   beforeAll(async () => {
     app = Fastify({ logger: false })
 
-    // Mock authenticate
-    app.decorate('authenticate', async (request: any, reply: any) => {
+    app.decorate('authenticate', async (request: any) => {
       request.user = { id: 'test-user-id', email: 'test@example.com' }
     })
 
@@ -104,9 +87,7 @@ describe('Composition Routes', () => {
 
   describe('GET /api/compositions', () => {
     it('should return compositions for a project', async () => {
-      const mockCompositions = [
-        { id: 'comp-1', title: 'Composition 1', segments: [] }
-      ]
+      const mockCompositions = [{ id: 'comp-1', title: 'Composition 1', scenes: [] }]
       mockCompositionFindMany.mockResolvedValue(mockCompositions)
 
       const response = await app.inject({
@@ -126,10 +107,16 @@ describe('Composition Routes', () => {
       mockCompositionFindUnique.mockResolvedValue({
         id: 'comp-1',
         title: 'Composition 1',
-        segments: []
-      })
-      mockVideoTaskFindFirst.mockResolvedValue({
-        videoUrl: 'https://storage.example.com/video.mp4'
+        scenes: [
+          {
+            id: 'cs-1',
+            sceneId: 'scene-1',
+            takeId: 'take-1',
+            order: 0,
+            take: { videoUrl: 'https://storage.example.com/video.mp4', thumbnailUrl: null },
+            scene: { id: 'scene-1', sceneNum: 1 }
+          }
+        ]
       })
 
       const response = await app.inject({
@@ -140,6 +127,7 @@ describe('Composition Routes', () => {
       expect(response.statusCode).toBe(200)
       const data = JSON.parse(response.payload)
       expect(data.id).toBe('comp-1')
+      expect(data.scenes[0].videoUrl).toBe('https://storage.example.com/video.mp4')
     })
 
     it('should return 404 when composition not found', async () => {
@@ -170,6 +158,7 @@ describe('Composition Routes', () => {
       const newComposition = {
         id: 'comp-2',
         projectId: 'proj-1',
+        episodeId: 'ep-1',
         title: 'New Composition'
       }
       mockCompositionCreate.mockResolvedValue(newComposition)
@@ -179,6 +168,7 @@ describe('Composition Routes', () => {
         url: '/api/compositions',
         payload: {
           projectId: 'proj-1',
+          episodeId: 'ep-1',
           title: 'New Composition'
         }
       })
@@ -236,42 +226,24 @@ describe('Composition Routes', () => {
   })
 
   describe('PUT /api/compositions/:id/timeline', () => {
-    it('should update timeline with segments', async () => {
+    it('should update timeline with clips', async () => {
       mockCompositionFindUnique.mockResolvedValue({
         id: 'comp-1',
         title: 'Composition 1',
-        segments: []
+        scenes: []
       })
 
       const response = await app.inject({
         method: 'PUT',
         url: '/api/compositions/comp-1/timeline',
         payload: {
-          segments: [
-            { segmentId: 'segment-1', order: 0, startTime: 0, endTime: 5 }
-          ]
+          clips: [{ sceneId: 'scene-1', takeId: 'take-1', order: 0 }]
         }
       })
 
       expect(response.statusCode).toBe(200)
-      expect(mockCompositionSegmentDeleteMany).toHaveBeenCalled()
-      expect(mockCompositionSegmentCreateMany).toHaveBeenCalled()
-    })
-  })
-
-  describe('POST /api/compositions/:id/audio', () => {
-    it('should reject when no file is uploaded', async () => {
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/compositions/comp-1/audio',
-        payload: {},
-        headers: {
-          'content-type': 'multipart/form-data'
-        }
-      })
-
-      // Without multipart support, Fastify returns 415 Unsupported Media Type
-      expect([400, 415, 500]).toContain(response.statusCode)
+      expect(mockCompositionSceneDeleteMany).toHaveBeenCalledWith({ where: { compositionId: 'comp-1' } })
+      expect(mockCompositionSceneCreateMany).toHaveBeenCalled()
     })
   })
 
@@ -287,11 +259,11 @@ describe('Composition Routes', () => {
       expect(response.statusCode).toBe(404)
     })
 
-    it('should return 400 when no segments', async () => {
+    it('should return 400 when no clips', async () => {
       mockCompositionFindUnique.mockResolvedValue({
         id: 'comp-1',
         title: 'Composition 1',
-        segments: []
+        scenes: []
       })
 
       const response = await app.inject({
@@ -301,22 +273,24 @@ describe('Composition Routes', () => {
 
       expect(response.statusCode).toBe(400)
       const data = JSON.parse(response.payload)
-      expect(data.error).toContain('No segments')
+      expect(data.error).toContain('No clips')
     })
 
-    it('should export successfully with segments', async () => {
+    it('should export successfully with clips', async () => {
       mockCompositionFindUnique.mockResolvedValue({
         id: 'comp-1',
         title: 'Composition 1',
-        segments: [
-          { id: 'seg-1', sceneId: 'scene-1', order: 0, startTime: 0, endTime: 5 }
+        scenes: [
+          {
+            id: 'cs-1',
+            sceneId: 'scene-1',
+            takeId: 'take-1',
+            order: 0,
+            take: { videoUrl: 'https://example.com/video.mp4', thumbnailUrl: null }
+          }
         ]
       })
-      mockVideoTaskFindFirst.mockResolvedValue({
-        videoUrl: 'https://example.com/video.mp4',
-        status: 'completed'
-      })
-      mockCompositionUpdate.mockResolvedValue({ id: 'comp-1', status: 'exported' })
+      mockCompositionUpdate.mockResolvedValue({ id: 'comp-1', status: 'completed' })
 
       const response = await app.inject({
         method: 'POST',
@@ -326,15 +300,20 @@ describe('Composition Routes', () => {
       expect(response.statusCode).toBe(200)
     })
 
-    it('should return 500 when no selected video for scene', async () => {
+    it('should return 500 when take has no video', async () => {
       mockCompositionFindUnique.mockResolvedValue({
         id: 'comp-1',
         title: 'Composition 1',
-        segments: [
-          { id: 'seg-1', sceneId: 'scene-1', order: 0, startTime: 0, endTime: 5 }
+        scenes: [
+          {
+            id: 'cs-1',
+            sceneId: 'scene-1',
+            takeId: 'take-1',
+            order: 0,
+            take: { videoUrl: null, thumbnailUrl: null }
+          }
         ]
       })
-      mockVideoTaskFindFirst.mockResolvedValue(null) // No selected video
 
       const response = await app.inject({
         method: 'POST',
@@ -348,17 +327,16 @@ describe('Composition Routes', () => {
       mockCompositionFindUnique.mockResolvedValue({
         id: 'comp-1',
         title: 'Composition 1',
-        segments: [
-          { id: 'seg-1', sceneId: 'scene-1', order: 0, startTime: 0, endTime: 5, isSelected: true }
+        scenes: [
+          {
+            id: 'cs-1',
+            sceneId: 'scene-1',
+            takeId: 'take-1',
+            order: 0,
+            take: { videoUrl: 'https://cdn.example.com/video.mp4', thumbnailUrl: null }
+          }
         ]
       })
-      mockVideoTaskFindFirst.mockResolvedValue({
-        id: 'task-1',
-        videoUrl: 'https://cdn.example.com/video.mp4',
-        status: 'completed',
-        isSelected: true
-      })
-      // Mock composeVideo to throw
       const { composeVideo } = await import('../src/services/ffmpeg.js')
       vi.mocked(composeVideo).mockRejectedValueOnce(new Error('FFmpeg error'))
 

@@ -3,7 +3,6 @@ import { prisma } from '../index.js'
 import { verifyTaskOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 
 export async function taskRoutes(fastify: FastifyInstance) {
-  // Get task by ID
   fastify.get<{ Params: { id: string } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
@@ -15,7 +14,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this task' })
       }
 
-      const task = await prisma.videoTask.findUnique({
+      const task = await prisma.take.findUnique({
         where: { id: taskId }
       })
 
@@ -27,7 +26,6 @@ export async function taskRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // List tasks by project
   fastify.get<{ Querystring: { projectId: string } }>(
     '/',
     { preHandler: [fastify.authenticate] },
@@ -35,35 +33,33 @@ export async function taskRoutes(fastify: FastifyInstance) {
       const userId = (request as any).user.id
       const { projectId } = request.query
 
-      // Verify project ownership
       if (!(await verifyProjectOwnership(userId, projectId))) {
         return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
       }
 
-      const segments = await prisma.segment.findMany({
+      const scenes = await prisma.scene.findMany({
         where: {
           episode: { projectId }
         },
         include: {
-          tasks: true
+          takes: true
         }
       })
 
-      const tasks = segments.flatMap((segment: any) =>
-        segment.tasks.map((task: any) => ({
+      const tasks = scenes.flatMap((scene) =>
+        scene.takes.map((task) => ({
           ...task,
-          segmentNum: segment.segmentNum,
-          segmentDescription: segment.description
+          sceneNum: scene.sceneNum,
+          sceneDescription: scene.description
         }))
       )
 
-      return tasks.sort((a: any, b: any) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      return tasks.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       )
     }
   )
 
-  // Cancel task
   fastify.post<{ Params: { id: string } }>(
     '/:id/cancel',
     { preHandler: [fastify.authenticate] },
@@ -75,7 +71,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this task' })
       }
 
-      const task = await prisma.videoTask.findUnique({
+      const task = await prisma.take.findUnique({
         where: { id: taskId }
       })
 
@@ -87,15 +83,13 @@ export async function taskRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Cannot cancel a completed or failed task' })
       }
 
-      // Update task status
-      const updatedTask = await prisma.videoTask.update({
+      const updatedTask = await prisma.take.update({
         where: { id: taskId },
         data: { status: 'failed', errorMsg: 'Cancelled by user' }
       })
 
-      // Update segment status back to pending
-      await prisma.segment.update({
-        where: { id: task.segmentId },
+      await prisma.scene.update({
+        where: { id: task.sceneId },
         data: { status: 'pending' }
       })
 
@@ -103,7 +97,6 @@ export async function taskRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // Retry failed task
   fastify.post<{ Params: { id: string } }>(
     '/:id/retry',
     { preHandler: [fastify.authenticate] },
@@ -115,7 +108,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this task' })
       }
 
-      const task = await prisma.videoTask.findUnique({
+      const task = await prisma.take.findUnique({
         where: { id: taskId }
       })
 
@@ -127,26 +120,23 @@ export async function taskRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Can only retry failed tasks' })
       }
 
-      // Create a new task as retry
-      const newTask = await prisma.videoTask.create({
+      const newTask = await prisma.take.create({
         data: {
-          segmentId: task.segmentId,
+          sceneId: task.sceneId,
           model: task.model,
           status: 'queued',
           prompt: task.prompt
         }
       })
 
-      // Update segment status
-      await prisma.segment.update({
-        where: { id: task.segmentId },
+      await prisma.scene.update({
+        where: { id: task.sceneId },
         data: { status: 'generating' }
       })
 
-      // Re-add to queue
       const { videoQueue } = await import('../queues/video.js')
       await videoQueue.add('generate-video', {
-        segmentId: task.segmentId,
+        sceneId: task.sceneId,
         taskId: newTask.id,
         prompt: task.prompt,
         model: task.model as 'wan2.6' | 'seedance2.0'

@@ -8,7 +8,7 @@ export interface ApiCallParams {
   provider: string
   prompt: string
   requestParams?: Record<string, any>
-  videoTaskId?: string
+  takeId?: string
 }
 
 export interface ApiCallResult {
@@ -37,7 +37,7 @@ export async function logApiCall(params: ApiCallParams, result?: ApiCallResult) 
       cost: result?.cost,
       duration: result?.duration,
       errorMsg: result?.error,
-      videoTaskId: params.videoTaskId
+      takeId: params.takeId
     }
   })
 }

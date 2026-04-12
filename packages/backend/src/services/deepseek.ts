@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import type { ScriptContent, ScriptScene, Dialogue } from '@dreamer/shared/types'
+import type { ScriptContent, ScriptScene, ScriptDialogueLine } from '@dreamer/shared/types'
 
 // DeepSeek pricing (per 1M tokens) - 人民币定价
 // 来源：https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
@@ -132,7 +132,7 @@ export function convertDeepSeekResponse(data: any): ScriptContent {
 
   const scenes: ScriptScene[] = scenesArray.map((s: any) => {
     // 处理 dialogues - 可能是数组或对象
-    let dialogues: Dialogue[] = []
+    let dialogues: ScriptDialogueLine[] = []
     if (Array.isArray(s.dialogues)) {
       dialogues = s.dialogues.map((d: any) => ({
         character: d.character || d.name || '',

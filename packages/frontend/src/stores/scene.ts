@@ -1,21 +1,31 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Scene, VideoTask } from '@dreamer/shared/types'
+import type { Take, SceneStatus } from '@dreamer/shared/types'
 import { api } from '@/api'
 
-// Extended Scene type with tasks (from API response)
-export type SceneWithTasks = Scene & { tasks?: VideoTask[] }
+/** 后端返回的场次（含 takes） */
+export type SceneRow = {
+  id: string
+  episodeId: string
+  sceneNum: number
+  description: string
+  status: SceneStatus
+  takes?: Take[]
+  shots?: unknown[]
+}
+
+export type SceneWithTakes = SceneRow
 
 export const useSceneStore = defineStore('scene', () => {
-  const scenes = ref<Scene[]>([])
-  const currentScene = ref<SceneWithTasks | null>(null)
+  const scenes = ref<SceneRow[]>([])
+  const currentScene = ref<SceneWithTakes | null>(null)
   const isLoading = ref(false)
   const isGenerating = ref(false)
 
   async function fetchScenes(episodeId: string) {
     isLoading.value = true
     try {
-      const res = await api.get<Scene[]>(`/scenes?episodeId=${episodeId}`)
+      const res = await api.get<SceneRow[]>(`/scenes?episodeId=${episodeId}`)
       scenes.value = res.data
     } finally {
       isLoading.value = false
@@ -23,20 +33,20 @@ export const useSceneStore = defineStore('scene', () => {
   }
 
   async function getScene(id: string) {
-    const res = await api.get<Scene>(`/scenes/${id}`)
+    const res = await api.get<SceneRow>(`/scenes/${id}`)
     currentScene.value = res.data
     return res.data
   }
 
   async function createScene(data: { episodeId: string; sceneNum: number; description?: string; prompt: string }) {
-    const res = await api.post<Scene>('/scenes', data)
+    const res = await api.post<SceneRow>('/scenes', data)
     scenes.value.push(res.data)
     scenes.value.sort((a, b) => a.sceneNum - b.sceneNum)
     return res.data
   }
 
-  async function updateScene(id: string, data: { description?: string; prompt?: string; sceneNum?: number }) {
-    const res = await api.put<Scene>(`/scenes/${id}`, data)
+  async function updateScene(id: string, data: { description?: string; sceneNum?: number; prompt?: string }) {
+    const res = await api.put<SceneRow>(`/scenes/${id}`, data)
     const index = scenes.value.findIndex(s => s.id === id)
     if (index !== -1) {
       scenes.value[index] = res.data
@@ -56,7 +66,6 @@ export const useSceneStore = defineStore('scene', () => {
   }
 
   async function reorderScenes(episodeId: string, sceneIds: string[]) {
-    // Update scene numbers based on order
     const updates = sceneIds.map((id, index) =>
       updateScene(id, { sceneNum: index + 1 })
     )
@@ -77,7 +86,6 @@ export const useSceneStore = defineStore('scene', () => {
         imageUrls: options?.imageUrls,
         duration: options?.duration
       })
-      // Refresh scene to get updated tasks
       await getScene(sceneId)
       return res.data
     } finally {
@@ -104,7 +112,7 @@ export const useSceneStore = defineStore('scene', () => {
   }
 
   async function selectTask(sceneId: string, taskId: string) {
-    const res = await api.post<VideoTask>(`/scenes/${sceneId}/tasks/${taskId}/select`)
+    const res = await api.post<Take>(`/scenes/${sceneId}/tasks/${taskId}/select`)
     await getScene(sceneId)
     return res.data
   }
@@ -115,9 +123,9 @@ export const useSceneStore = defineStore('scene', () => {
   }
 
   async function fetchTasks(sceneId: string) {
-    const res = await api.get<VideoTask[]>(`/scenes/${sceneId}/tasks`)
+    const res = await api.get<Take[]>(`/scenes/${sceneId}/tasks`)
     if (currentScene.value) {
-      currentScene.value.tasks = res.data
+      currentScene.value.takes = res.data
     }
     return res.data
   }

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Composition, Segment } from '@dreamer/shared/types'
+import type { Composition, CompositionTimelineClip } from '@dreamer/shared/types'
 import { api } from '@/api'
 
 export const useCompositionStore = defineStore('composition', () => {
@@ -30,8 +30,8 @@ export const useCompositionStore = defineStore('composition', () => {
     }
   }
 
-  async function createComposition(projectId: string, title: string) {
-    const res = await api.post<Composition>('/compositions', { projectId, title })
+  async function createComposition(projectId: string, episodeId: string, title: string) {
+    const res = await api.post<Composition>('/compositions', { projectId, episodeId, title })
     compositions.value.unshift(res.data)
     return res.data
   }
@@ -56,26 +56,8 @@ export const useCompositionStore = defineStore('composition', () => {
     }
   }
 
-  async function updateTimeline(id: string, segments: Omit<Segment, 'id' | 'compositionId'>[]) {
-    const res = await api.put<Composition>(`/compositions/${id}/timeline`, { segments })
-    currentComposition.value = res.data
-    return res.data
-  }
-
-  async function uploadAudio(id: string, type: 'voiceover' | 'bgm', file: File) {
-    const formData = new FormData()
-    formData.append(type, file)
-
-    const res = await (api as any).postFormData(`/compositions/${id}/audio`, formData)
-    currentComposition.value = res.data
-    return res.data
-  }
-
-  async function uploadSubtitles(id: string, file: File) {
-    const formData = new FormData()
-    formData.append('file', file)
-
-    const res = await (api as any).postFormData(`/compositions/${id}/subtitles`, formData)
+  async function updateTimeline(id: string, clips: Omit<CompositionTimelineClip, 'id' | 'compositionId'>[]) {
+    const res = await api.put<Composition>(`/compositions/${id}/timeline`, { clips })
     currentComposition.value = res.data
     return res.data
   }
@@ -86,7 +68,6 @@ export const useCompositionStore = defineStore('composition', () => {
       const res = await api.post<{ message: string; outputUrl?: string; duration?: number }>(
         `/compositions/${id}/export`
       )
-      // Refresh composition to get updated status
       await getComposition(id)
       return res.data
     } finally {
@@ -105,8 +86,6 @@ export const useCompositionStore = defineStore('composition', () => {
     updateComposition,
     deleteComposition,
     updateTimeline,
-    uploadAudio,
-    uploadSubtitles,
     triggerExport
   }
 })

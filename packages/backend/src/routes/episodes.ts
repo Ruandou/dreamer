@@ -39,7 +39,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
 
       const episode = await prisma.episode.findUnique({
         where: { id: episodeId },
-        include: { segments: true }
+        include: { scenes: true }
       })
 
       if (!episode) {
@@ -72,7 +72,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
   )
 
   // Update episode (including script content)
-  fastify.put<{ Params: { id: string }; Body: { title?: string; script?: any } }>(
+  fastify.put<{ Params: { id: string }; Body: { title?: string; script?: any; rawScript?: any } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
@@ -83,11 +83,12 @@ export async function episodeRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
       }
 
-      const { title, script } = request.body
+      const { title, script, rawScript } = request.body
+      const scriptPayload = rawScript ?? script
 
       const episode = await prisma.episode.update({
         where: { id: episodeId },
-        data: { title, script }
+        data: { title, ...(scriptPayload !== undefined && { rawScript: scriptPayload }) }
       })
 
       return episode
@@ -162,30 +163,52 @@ export async function episodeRoutes(fastify: FastifyInstance) {
           where: { id: episodeId },
           data: {
             title: script.title || episode.title,
-            script: script as any
+            rawScript: script as any
           }
         })
 
-        // Auto-create segments from script
         if (script.scenes && script.scenes.length > 0) {
-          // Delete existing segments
-          await prisma.segment.deleteMany({ where: { episodeId } })
+          await prisma.scene.deleteMany({ where: { episodeId } })
 
-          // Create new segments
-          const segmentsData = script.scenes.map((scene) => ({
-            episodeId,
-            segmentNum: scene.sceneNum || 1,
-            description: scene.description || `${scene.location} - ${scene.timeOfDay}`,
-            prompt: buildScenePrompt(scene, script.title || '')
-          }))
+          for (const sc of script.scenes) {
+            let locationId: string | undefined
+            if (sc.location) {
+              const loc = await prisma.location.findFirst({
+                where: { projectId: episode.projectId, name: sc.location }
+              })
+              locationId = loc?.id
+            }
 
-          await prisma.segment.createMany({ data: segmentsData })
+            const scene = await prisma.scene.create({
+              data: {
+                episodeId,
+                sceneNum: sc.sceneNum || 1,
+                locationId,
+                timeOfDay: sc.timeOfDay,
+                description: sc.description || `${sc.location} - ${sc.timeOfDay}`,
+                duration: 5000,
+                aspectRatio: '9:16',
+                visualStyle: [],
+                status: 'pending'
+              }
+            })
+
+            await prisma.shot.create({
+              data: {
+                sceneId: scene.id,
+                shotNum: 1,
+                order: 1,
+                description: buildScenePrompt(sc, script.title || ''),
+                duration: 5000
+              }
+            })
+          }
         }
 
         return {
           episode: updatedEpisode,
           script,
-          segmentsCreated: script.scenes?.length || 0,
+          scenesCreated: script.scenes?.length || 0,
           aiCost: cost.costCNY
         }
       } catch (error) {

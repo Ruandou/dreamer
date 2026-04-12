@@ -2,17 +2,14 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
-  NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
+  NButton, NSpace, NModal, NForm, NFormItem, NInput,
   NSpin, NAlert, NCollapse, NCollapseItem, NTag, NUpload, useMessage,
   NTooltip, NScrollbar
 } from 'naive-ui'
-import type { UploadFileInfo } from 'naive-ui'
 import { useEpisodeStore } from '@/stores/episode'
 import { importScript } from '@/api'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
-import { useAutoSave } from '@/composables/useAutoSave'
-
 const route = useRoute()
 const message = useMessage()
 const episodeStore = useEpisodeStore()
@@ -52,7 +49,7 @@ watch(
       try {
         await episodeStore.updateEpisode(selectedEpisodeId.value, {
           title: episode.title,
-          script: episode.script as any
+          rawScript: episode.rawScript as any
         })
         lastSaved.value = new Date()
       } catch (error) {
@@ -107,7 +104,7 @@ const handleSaveScript = async () => {
   if (!selectedEpisodeId.value || !episodeStore.currentEpisode) return
   await episodeStore.updateEpisode(selectedEpisodeId.value, {
     title: episodeStore.currentEpisode.title || undefined,
-    script: episodeStore.currentEpisode.script as any
+    rawScript: episodeStore.currentEpisode.rawScript as any
   })
   message.success('保存成功')
 }
@@ -146,7 +143,7 @@ const handleFileChange = (file: File) => {
   reader.readAsText(file)
 }
 
-const script = computed(() => episodeStore.currentEpisode?.script as any)
+const script = computed(() => episodeStore.currentEpisode?.rawScript as any)
 const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
 </script>
 
@@ -206,7 +203,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
             </div>
             <div class="episode-item__status">
               <StatusBadge
-                :status="episode.script ? 'completed' : 'draft'"
+                :status="episode.rawScript ? 'completed' : 'draft'"
                 size="small"
               />
             </div>
@@ -458,7 +455,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
             accept=".md,.markdown,.json,.txt"
             :max-size="10 * 1024 * 1024"
             :show-file-list="false"
-            @change="(options: { file: UploadFileInfo }) => handleFileChange(options.file.file as File)"
+            @change="(options: any) => handleFileChange(options.file.file as File)"
           >
             <NButton type="default" dashed>选择文件</NButton>
           </NUpload>

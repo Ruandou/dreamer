@@ -61,7 +61,7 @@ export const createTestEpisode = async (prisma: PrismaClient, projectId: string,
 
 export const cleanupTestData = async (prisma: PrismaClient) => {
   // Clean up in reverse order of dependencies
-  await prisma.videoTask.deleteMany({})
+  await prisma.take.deleteMany({})
   await prisma.scene.deleteMany({})
   await prisma.episode.deleteMany({})
   await prisma.characterImage.deleteMany({})

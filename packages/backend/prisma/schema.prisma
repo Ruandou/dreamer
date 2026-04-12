@@ -8,19 +8,18 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  password  String
-  apiKey    String?
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  password       String
+  apiKey         String?
   deepseekApiUrl String?
-  // 其他 API Keys
   atlasApiKey    String?
   atlasApiUrl    String?
   arkApiKey      String?
   arkApiUrl      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   projects Project[]
   apiCalls ModelApiCall[]
@@ -30,18 +29,19 @@ model Project {
   id          String   @id @default(cuid())
   name        String
   description String?
+  synopsis    String?
   userId      String
   user        User     @relation(fields: [userId], references: [id])
-  visualStyle String[] @default([]) // 视频风格: realistic, cinematic, vintage
+  visualStyle String[] @default([])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  episodes      Episode[]
-  characters    Character[]
-  locations     Location[]
+  episodes     Episode[]
+  characters   Character[]
+  locations    Location[]
   compositions Composition[]
   importTasks  ImportTask[]
-  pipelineJobs  PipelineJob[]
+  pipelineJobs PipelineJob[]
   assets       ProjectAsset[]
 
   @@index([userId])
@@ -53,13 +53,13 @@ model Episode {
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   episodeNum Int
   title      String?
-  synopsis   String?  // 分集摘要
-  script     Json?    // 存储结构化剧本JSON
-  sceneIndices Int[] @default([]) // 场景索引列表
+  synopsis   String?
+  rawScript  Json?    @map("script")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  segments Segment[]
+  scenes       Scene[]
+  compositions Composition[]
 
   @@unique([projectId, episodeNum])
   @@index([projectId])
@@ -71,190 +71,176 @@ model Character {
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  voiceId     String?  // 预留：音色克隆 ID（如 ElevenLabs voice_id）
-  voiceConfig Json?    // 角色全局默认音色配置
+  voiceId     String?
+  voiceConfig Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  images        CharacterImage[]
-  voiceSegments VoiceSegment[]
+  images    CharacterImage[]
+  dialogues SceneDialogue[] @relation("CharacterDialogues")
 
   @@unique([projectId, name])
   @@index([projectId])
 }
 
 model CharacterImage {
-  id          String   @id @default(cuid())
+  id            String   @id @default(cuid())
   characterId String
-  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  name        String
-  avatarUrl   String?
-  parentId    String?   // 父节点 ID，null 表示基础形象
-  type        String    @default("base")  // base/outfit/expression/pose
-  description String?
-  order       Int      @default(0)       // 排序
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  character     Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  name          String
+  avatarUrl     String?
+  parentId      String?
+  type          String   @default("base")
+  description   String?
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  parent      CharacterImage? @relation("ImageHierarchy", fields: [parentId], references: [id])
-  children    CharacterImage[] @relation("ImageHierarchy")
-  segmentUsages CharacterSegment[]
+  parent           CharacterImage? @relation("ImageHierarchy", fields: [parentId], references: [id])
+  children         CharacterImage[] @relation("ImageHierarchy")
+  characterShots   CharacterShot[]
 
   @@index([characterId])
   @@index([parentId])
 }
 
-// Segment - 分镜片段（视频生成单元）
-model Segment {
-  id              String   @id @default(cuid())
-  episodeId       String
+model Scene {
+  id             String   @id @default(cuid())
+  episodeId      String
   episode        Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
-  segmentNum     Int      // 分镜序号
-  description    String?  // 分镜描述
-  locationId      String?
+  sceneNum       Int
+  locationId     String?
   location       Location? @relation(fields: [locationId], references: [id])
-  duration       Int?     // 总时长(毫秒)
-  cameraMovement String?  // 运镜方式
-  aspectRatio    String?  // 9:16 / 16:9 / 1:1
-  prompt         String   // 视频生成提示词
-  visualStyle    String[] @default([]) // 视觉风格
-  status        String   @default("pending") // pending/generating/completed/failed
-  seedanceParams Json?   // Seedance API 参数
+  timeOfDay      String?
+  description    String   @default("")
+  duration       Int      @default(0)
+  aspectRatio    String   @default("9:16")
+  visualStyle    String[] @default([])
+  seedanceParams Json?
+  status         String   @default("pending")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tasks              VideoTask[]
-  characterSegments  CharacterSegment[]
-  subShots          SubShot[]
-  voiceSegments     VoiceSegment[]
+  shots             Shot[]
+  dialogues         SceneDialogue[] @relation("SceneDialogues")
+  takes             Take[]
+  compositionUsages CompositionScene[]
 
-  @@unique([episodeId, segmentNum])
+  @@unique([episodeId, sceneNum])
   @@index([episodeId])
   @@index([locationId])
 }
 
-// SubShot - 子片段（时序描述）
-model SubShot {
-  id           String   @id @default(cuid())
-  segmentId    String
-  segment     Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
-  order       Int      // 顺序
-  durationMs   Int      // 时长(毫秒)
-  description  String   // 描述文本
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+model Shot {
+  id             String   @id @default(cuid())
+  sceneId        String
+  scene          Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  shotNum        Int
+  order          Int
+  description    String
+  duration       Int      @default(0)
+  cameraMovement String?
+  cameraAngle    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  @@index([segmentId])
+  characterShots CharacterShot[]
+
+  @@index([sceneId])
 }
 
-// CharacterSegment - 片段中的人物及其造型
-model CharacterSegment {
-  id               String   @id @default(cuid())
-  segmentId        String
-  segment         Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
-  characterImageId String   // 该片段中使用的人物具体形象
-  characterImage   CharacterImage @relation(fields: [characterImageId], references: [id])
-  action          String?  // 该片段中角色的动作/情绪
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+model CharacterShot {
+  id                 String   @id @default(cuid())
+  shotId             String
+  shot               Shot     @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  characterImageId   String
+  characterImage     CharacterImage @relation(fields: [characterImageId], references: [id])
+  action             String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  @@unique([segmentId, characterImageId])
-  @@index([segmentId])
+  @@unique([shotId, characterImageId])
+  @@index([shotId])
   @@index([characterImageId])
 }
 
-// VoiceSegment - 语音片段（分镜中的台词）
-model VoiceSegment {
-  id               String   @id @default(cuid())
-  segmentId        String
-  segment          Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
-  characterId      String
-  character        Character @relation(fields: [characterId], references: [id])
+model SceneDialogue {
+  id          String   @id @default(cuid())
+  sceneId     String
+  scene       Scene    @relation("SceneDialogues", fields: [sceneId], references: [id], onDelete: Cascade)
+  characterId String
+  character   Character @relation("CharacterDialogues", fields: [characterId], references: [id])
+  order       Int
+  startTimeMs Int
+  durationMs  Int
+  text        String
+  voiceConfig Json
+  emotion     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  order            Int       // 同一分镜内语音播放顺序
-  startTimeMs     Int       // 相对于 Segment 开始时间的偏移(毫秒)
-  durationMs       Int       // 语音时长(毫秒)
-  text             String    // 台词文本
-  voiceConfig      Json      // 音色配置
-  emotion          String?   // 情绪标签 confused/excited/sad/neutral
-
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@index([segmentId])
+  @@index([sceneId])
   @@index([characterId])
 }
 
-// Location - 场地（从剧本提取）
 model Location {
   id          String   @id @default(cuid())
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  location    String   // 地点名称
-  timeOfDay   String?  // 日/夜/晨/昏
-  characters  String[] @default([]) // 出场角色列表
-  description String?  // 场景描述
-  imageUrl    String?  // 场地图片 URL（AI 生成）
+  name        String   @map("location")
+  timeOfDay   String?
+  characters  String[] @default([])
+  description String?
+  imageUrl    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  segments Segment[]
+  scenes Scene[]
 
-  @@unique([projectId, location])
+  @@unique([projectId, name])
   @@index([projectId])
 }
 
-model VideoTask {
-  id              String   @id @default(cuid())
-  segmentId        String
-  segment         Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
-  model           String
-  externalTaskId  String?  // 外部 API (火山引擎/Atlas) 的任务 ID
-  status          String   @default("queued") // queued/processing/completed/failed
-  prompt          String
-  cost            Float?
-  duration        Int?     // 生成耗时（秒）
-  videoUrl        String?
-  thumbnailUrl    String?
-  errorMsg        String?
-  isSelected      Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+model Take {
+  id             String   @id @default(cuid())
+  sceneId        String
+  scene          Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  model          String
+  externalTaskId String?
+  status         String   @default("queued")
+  prompt         String
+  cost           Float?
+  duration       Int?
+  videoUrl       String?
+  thumbnailUrl   String?
+  errorMsg       String?
+  isSelected     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  @@index([segmentId])
+  apiCalls            ModelApiCall[]
+  compositionUsages   CompositionScene[]
+
+  @@index([sceneId])
   @@index([externalTaskId])
-  apiCalls ModelApiCall[]
 }
 
 model ModelApiCall {
-  id              String   @id @default(cuid())
+  id             String   @id @default(cuid())
   userId         String
-  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // 模型信息
-  model          String   // wan2.6, seedance2.0, deepseek, etc.
-  provider       String   // volcengine, atlas, openai, deepseek
-
-  // 请求信息
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model          String
+  provider       String
   prompt         String
-  requestParams  String?  // JSON: { imageUrls, duration, quality, referenceImage, etc. }
-
-  // 响应信息
-  externalTaskId String?  // 外部 API 的任务 ID
-  status         String   @default("pending") // pending/processing/completed/failed
-  responseData   String?  // JSON: { videoUrl, thumbnailUrl, etc. }
-
-  // 费用和时间
+  requestParams  String?
+  externalTaskId String?
+  status         String   @default("pending")
+  responseData   String?
   cost           Float?
-  duration       Int?     // 生成耗时（秒）
-
-  // 错误信息
+  duration       Int?
   errorMsg       String?
-
-  // 关联任务（可选）
-  videoTaskId    String?
-  videoTask      VideoTask? @relation(fields: [videoTaskId], references: [id], onDelete: SetNull)
-
+  takeId         String?
+  take           Take?    @relation(fields: [takeId], references: [id], onDelete: SetNull)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -268,34 +254,33 @@ model Composition {
   id         String   @id @default(cuid())
   projectId  String
   project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episodeId  String
+  episode    Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
   title      String
-  duration   Int      @default(0)
-  width      Int      @default(1080)
-  height     Int      @default(1920)
-  status     String   @default("draft") // draft/composing/exporting/exported
-  voiceover  String?
-  bgm        String?
-  subtitles  String?
+  status     String   @default("draft")
   outputUrl  String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  segments CompositionSegment[]
+  scenes CompositionScene[]
 
   @@index([projectId])
+  @@index([episodeId])
 }
 
-model CompositionSegment {
-  id            String      @id @default(cuid())
-  compositionId String
-  composition   Composition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
-  segmentId      String      // 引用 Pipeline Segment
-  order         Int
-  startTime     Float
-  endTime       Float
-  transition    String?
+model CompositionScene {
+  id              String      @id @default(cuid())
+  compositionId   String
+  composition     Composition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+  sceneId         String
+  scene           Scene       @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  takeId          String
+  take            Take        @relation(fields: [takeId], references: [id], onDelete: Cascade)
+  order           Int
 
   @@index([compositionId])
+  @@index([sceneId])
+  @@index([takeId])
 }
 
 model ImportTask {
@@ -303,7 +288,7 @@ model ImportTask {
   projectId   String?
   project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   userId      String
-  status      String   @default("pending") // pending/processing/completed/failed
+  status      String   @default("pending")
   content     String
   type        String   @default("markdown")
   result      Json?
@@ -314,14 +299,13 @@ model ImportTask {
   @@index([userId])
 }
 
-// PipelineJob - Pipeline 执行任务
 model PipelineJob {
   id          String   @id @default(cuid())
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  status      String   @default("pending") // pending/running/completed/failed
-  currentStep String   @default("script-writing") // script-writing/episode-split/segment-extract/storyboard
-  progress    Int      @default(0)         // 0-100
+  status      String   @default("pending")
+  currentStep String   @default("script-writing")
+  progress    Int      @default(0)
   error       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -331,30 +315,28 @@ model PipelineJob {
   @@index([projectId])
 }
 
-// PipelineStepResult - Pipeline 各步骤的详细结果
 model PipelineStepResult {
-  id          String   @id @default(cuid())
-  jobId       String
-  job         PipelineJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  step        String   // script-writing/episode-split/segment-extract/storyboard
-  status      String   @default("pending") // pending/processing/completed/failed
-  input       Json?    // 步骤输入数据
-  output      Json?    // 步骤输出数据
-  error       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String      @id @default(cuid())
+  jobId     String
+  job       PipelineJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  step      String
+  status    String      @default("pending")
+  input     Json?
+  output    Json?
+  error     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   @@unique([jobId, step])
   @@index([jobId])
 }
 
-// OutlineJob - 大纲生成异步任务
 model OutlineJob {
   id        String   @id @default(cuid())
   userId    String
-  status    String   @default("pending") // pending/running/completed/failed
-  idea      String   // 用户输入的想法
-  result    Json?    // 生成结果（outline + rawScript）
+  status    String   @default("pending")
+  idea      String
+  result    Json?
   error     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -366,13 +348,14 @@ model ProjectAsset {
   id          String   @id @default(cuid())
   projectId   String
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  type        String   // character/background/atmosphere/prop/style
+  type        String
   name        String
   url         String
   description String?
-  tags        String[] // JSON array
-  mood        String[] // JSON array
+  tags        String[]
+  mood        String[]
   location    String?
+  source      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

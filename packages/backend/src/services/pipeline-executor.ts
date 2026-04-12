@@ -28,6 +28,7 @@ import {
 
 import type {
   ScriptContent,
+  ScriptScene,
   EpisodePlan,
   SceneActions,
   SceneAssetRecommendation,
@@ -120,15 +121,15 @@ async function saveLocations(projectId: string, script: ScriptContent) {
     }
   }
 
-  for (const [location, info] of locationMap) {
+  for (const [locationName, info] of locationMap) {
     await prisma.location.upsert({
       where: {
-        projectId_location: { projectId, location }
+        projectId_name: { projectId, name: locationName }
       },
       update: { timeOfDay: info.timeOfDay, description: info.description },
       create: {
         projectId,
-        location,
+        name: locationName,
         timeOfDay: info.timeOfDay || '日',
         description: info.description
       }
@@ -139,7 +140,7 @@ async function saveLocations(projectId: string, script: ScriptContent) {
 /**
  * 保存分集到数据库
  */
-async function saveEpisodes(projectId: string, episodes: EpisodePlan[]) {
+async function saveEpisodes(projectId: string, episodes: EpisodePlan[], rawScript: ScriptContent) {
   for (const episode of episodes) {
     await prisma.episode.upsert({
       where: {
@@ -148,124 +149,130 @@ async function saveEpisodes(projectId: string, episodes: EpisodePlan[]) {
       update: {
         title: episode.title,
         synopsis: episode.synopsis,
-        sceneIndices: episode.sceneIndices
+        rawScript: rawScript as object
       },
       create: {
         projectId,
         episodeNum: episode.episodeNum,
         title: episode.title,
         synopsis: episode.synopsis,
-        sceneIndices: episode.sceneIndices
+        rawScript: rawScript as object
       }
     })
   }
 }
 
 /**
- * 保存分镜到数据库
+ * 保存分场 / 镜头 / 台词到数据库（v4.1：Scene + Shot + SceneDialogue + CharacterShot）
  */
 async function saveSegments(
   projectId: string,
   episodes: EpisodePlan[],
   storyboard: StoryboardSegment[],
-  scenes: ScriptScene[]
+  scriptScenes: ScriptScene[]
 ) {
   for (const segment of storyboard) {
     const episode = episodes.find(e => e.episodeNum === segment.episodeNum)
     if (!episode) continue
 
-    // 获取 episode
     const episodeRecord = await prisma.episode.findFirst({
       where: { projectId, episodeNum: segment.episodeNum }
     })
     if (!episodeRecord) continue
 
-    // 获取 location
     let locationId: string | undefined
     if (segment.location) {
       const location = await prisma.location.findFirst({
-        where: { projectId, location: segment.location }
+        where: { projectId, name: segment.location }
       })
       locationId = location?.id
     }
 
-    // 创建/更新 Segment
-    const segmentRecord = await prisma.segment.upsert({
+    const sceneRecord = await prisma.scene.upsert({
       where: {
-        episodeId_segmentNum: {
+        episodeId_sceneNum: {
           episodeId: episodeRecord.id,
-          segmentNum: segment.segmentNum
+          sceneNum: segment.segmentNum
         }
       },
       update: {
         locationId,
         duration: segment.duration,
-        cameraMovement: segment.cameraMovement,
         aspectRatio: segment.aspectRatio,
-        prompt: segment.seedancePrompt,
         visualStyle: segment.visualStyle || [],
+        description: segment.description,
+        timeOfDay: segment.timeOfDay,
         status: 'pending'
       },
       create: {
         episodeId: episodeRecord.id,
-        segmentNum: segment.segmentNum,
+        sceneNum: segment.segmentNum,
         locationId,
         duration: segment.duration,
-        cameraMovement: segment.cameraMovement,
         aspectRatio: segment.aspectRatio,
-        prompt: segment.seedancePrompt,
         visualStyle: segment.visualStyle || [],
+        description: segment.description,
+        timeOfDay: segment.timeOfDay,
         status: 'pending'
       }
     })
 
-    // 保存 SubShots
-    if (segment.subShots) {
+    await prisma.shot.deleteMany({ where: { sceneId: sceneRecord.id } })
+    await prisma.sceneDialogue.deleteMany({ where: { sceneId: sceneRecord.id } })
+
+    if (segment.subShots && segment.subShots.length > 0) {
       for (const subShot of segment.subShots) {
-        await prisma.subShot.upsert({
-          where: {
-            id: subShot.id || `temp-${segmentRecord.id}-${subShot.order}`
-          },
-          update: {
+        await prisma.shot.create({
+          data: {
+            sceneId: sceneRecord.id,
+            shotNum: subShot.order,
             order: subShot.order,
-            durationMs: subShot.durationMs,
-            description: subShot.description
-          },
-          create: {
-            segmentId: segmentRecord.id,
-            order: subShot.order,
-            durationMs: subShot.durationMs,
-            description: subShot.description
+            description: subShot.description,
+            duration: subShot.durationMs,
+            cameraMovement: segment.cameraMovement
           }
         })
       }
+    } else {
+      await prisma.shot.create({
+        data: {
+          sceneId: sceneRecord.id,
+          shotNum: 1,
+          order: 1,
+          description: segment.seedancePrompt,
+          duration: segment.duration,
+          cameraMovement: segment.cameraMovement
+        }
+      })
     }
 
-    // 保存 CharacterSegments
-    if (segment.characterActions) {
+    const firstShot = await prisma.shot.findFirst({
+      where: { sceneId: sceneRecord.id },
+      orderBy: [{ order: 'asc' }, { shotNum: 'asc' }]
+    })
+
+    if (segment.characterActions && firstShot) {
       for (const [characterName, action] of Object.entries(segment.characterActions)) {
-        // 查找角色
         const character = await prisma.character.findFirst({
           where: { projectId, name: characterName }
         })
         if (!character) continue
 
-        // 查找角色的基础形象
         const characterImage = await prisma.characterImage.findFirst({
           where: { characterId: character.id, type: 'base' }
         })
         if (!characterImage) continue
 
-        await prisma.characterSegment.upsert({
+        await prisma.characterShot.upsert({
           where: {
-            segmentId_characterImageId: {
-              segmentId: segmentRecord.id,
+            shotId_characterImageId: {
+              shotId: firstShot.id,
               characterImageId: characterImage.id
             }
           },
           update: { action },
           create: {
-            segmentId: segmentRecord.id,
+            shotId: firstShot.id,
             characterImageId: characterImage.id,
             action
           }
@@ -273,20 +280,17 @@ async function saveSegments(
       }
     }
 
-    // 保存 VoiceSegments
     if (segment.voiceSegments && segment.voiceSegments.length > 0) {
-      // 通过 segmentNum 找到对应的 scene（segmentNum 是从 1 开始的索引）
       const sceneIndex = episode.sceneIndices
         ? episode.sceneIndices[segment.segmentNum - 1]
         : segment.segmentNum - 1
-      const scene = scenes[sceneIndex]
+      const scriptScene = scriptScenes[sceneIndex]
 
       for (const voice of segment.voiceSegments) {
         let characterId = voice.characterId
 
-        // 如果 characterId 为空，通过角色名查找
-        if (!characterId && scene) {
-          const characterName = scene.dialogues[voice.order - 1]?.character
+        if (!characterId && scriptScene) {
+          const characterName = scriptScene.dialogues[voice.order - 1]?.character
           if (characterName) {
             const character = await prisma.character.findFirst({
               where: { projectId, name: characterName }
@@ -297,9 +301,8 @@ async function saveSegments(
           }
         }
 
-        // 如果还是空，尝试通过 segment.characters 查找
-        if (!characterId && segment.characters) {
-          const dialogue = scene?.dialogues[voice.order - 1]
+        if (!characterId && segment.characters && scriptScene) {
+          const dialogue = scriptScene.dialogues[voice.order - 1]
           if (dialogue) {
             const characterInSegment = segment.characters.find(
               c => c.name === dialogue.character
@@ -316,19 +319,19 @@ async function saveSegments(
         }
 
         if (!characterId) {
-          console.warn(`VoiceSegment skipped: no character found for segment ${segmentRecord.id}, order ${voice.order}`)
+          console.warn(`SceneDialogue skipped: no character for scene ${sceneRecord.id}, order ${voice.order}`)
           continue
         }
 
-        await prisma.voiceSegment.create({
+        await prisma.sceneDialogue.create({
           data: {
-            segmentId: segmentRecord.id,
+            sceneId: sceneRecord.id,
             characterId,
             order: voice.order,
             startTimeMs: voice.startTimeMs,
             durationMs: voice.durationMs,
             text: voice.text,
-            voiceConfig: voice.voiceConfig,
+            voiceConfig: JSON.parse(JSON.stringify(voice.voiceConfig)) as object,
             emotion: voice.emotion
           }
         })
@@ -374,7 +377,7 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
       targetDuration: targetDuration || 60
     })
 
-    await saveEpisodes(projectId, episodes)
+    await saveEpisodes(projectId, episodes, script)
     await updateStepResult(jobId, 'episode-split', {
       status: 'completed',
       output: { episodes }

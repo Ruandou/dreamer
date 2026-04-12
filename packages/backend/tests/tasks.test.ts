@@ -1,62 +1,49 @@
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import Fastify, { FastifyInstance } from 'fastify'
 
-// Use vi.hoisted to define mocks before module loading
 const {
-  mockVideoTaskFindUnique,
-  mockSegmentFindMany,
-  mockVideoTaskUpdate,
-  mockSegmentUpdate,
-  mockVideoTaskCreate,
-  mockEpisodeFindFirst,
-  mockSegmentFindFirst
+  mockTakeFindUnique,
+  mockSceneFindMany,
+  mockTakeUpdate,
+  mockSceneUpdate,
+  mockTakeCreate
 } = vi.hoisted(() => {
   return {
-    mockVideoTaskFindUnique: vi.fn(),
-    mockSegmentFindMany: vi.fn(),
-    mockVideoTaskUpdate: vi.fn(),
-    mockSegmentUpdate: vi.fn(),
-    mockVideoTaskCreate: vi.fn(),
-    mockEpisodeFindFirst: vi.fn(),
-    mockSegmentFindFirst: vi.fn()
+    mockTakeFindUnique: vi.fn(),
+    mockSceneFindMany: vi.fn(),
+    mockTakeUpdate: vi.fn(),
+    mockSceneUpdate: vi.fn(),
+    mockTakeCreate: vi.fn()
   }
 })
 
-// Mock video queue
 vi.mock('../src/queues/video.js', () => ({
   videoQueue: {
     add: vi.fn().mockResolvedValue({ id: 'job-1' })
   }
 }))
 
-// Mock verifyTaskOwnership and verifyProjectOwnership
 vi.mock('../src/plugins/auth.js', () => ({
   verifyTaskOwnership: vi.fn().mockResolvedValue(true),
   verifyProjectOwnership: vi.fn().mockResolvedValue(true)
 }))
 
-// Mock the index.js module
 vi.mock('../src/index.js', () => ({
   prisma: {
-    videoTask: {
-      findUnique: mockVideoTaskFindUnique,
-      update: mockVideoTaskUpdate,
-      create: mockVideoTaskCreate
+    take: {
+      findUnique: mockTakeFindUnique,
+      update: mockTakeUpdate,
+      create: mockTakeCreate
     },
-    segment: {
-      findMany: mockSegmentFindMany,
-      update: mockSegmentUpdate,
-      findFirst: mockSegmentFindFirst
-    },
-    episode: {
-      findFirst: mockEpisodeFindFirst
+    scene: {
+      findMany: mockSceneFindMany,
+      update: mockSceneUpdate
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()
   }
 }))
 
-// Import routes after all mocks are set up
 import { taskRoutes } from '../src/routes/tasks.js'
 
 describe('Task Routes', () => {
@@ -65,8 +52,7 @@ describe('Task Routes', () => {
   beforeAll(async () => {
     app = Fastify({ logger: false })
 
-    // Mock authenticate
-    app.decorate('authenticate', async (request: any, reply: any) => {
+    app.decorate('authenticate', async (request: any) => {
       request.user = { id: 'test-user-id', email: 'test@example.com' }
     })
 
@@ -90,7 +76,7 @@ describe('Task Routes', () => {
         status: 'completed',
         model: 'wan2.6'
       }
-      mockVideoTaskFindUnique.mockResolvedValue(mockTask)
+      mockTakeFindUnique.mockResolvedValue(mockTask)
 
       const response = await app.inject({
         method: 'GET',
@@ -103,7 +89,7 @@ describe('Task Routes', () => {
     })
 
     it('should return 404 when task not found', async () => {
-      mockVideoTaskFindUnique.mockResolvedValue(null)
+      mockTakeFindUnique.mockResolvedValue(null)
 
       const response = await app.inject({
         method: 'GET',
@@ -121,12 +107,10 @@ describe('Task Routes', () => {
           id: 'scene-1',
           sceneNum: 1,
           description: 'Test scene',
-          tasks: [
-            { id: 'task-1', status: 'completed', model: 'wan2.6' }
-          ]
+          takes: [{ id: 'task-1', status: 'completed', model: 'wan2.6', createdAt: new Date() }]
         }
       ]
-      mockSegmentFindMany.mockResolvedValue(mockScenes)
+      mockSceneFindMany.mockResolvedValue(mockScenes)
 
       const response = await app.inject({
         method: 'GET',
@@ -141,12 +125,12 @@ describe('Task Routes', () => {
 
   describe('POST /api/tasks/:id/cancel', () => {
     it('should cancel a pending task', async () => {
-      mockVideoTaskFindUnique.mockResolvedValue({
+      mockTakeFindUnique.mockResolvedValue({
         id: 'task-1',
         sceneId: 'scene-1',
         status: 'processing'
       })
-      mockVideoTaskUpdate.mockResolvedValue({
+      mockTakeUpdate.mockResolvedValue({
         id: 'task-1',
         status: 'failed',
         errorMsg: 'Cancelled by user'
@@ -163,7 +147,7 @@ describe('Task Routes', () => {
     })
 
     it('should return 400 when trying to cancel completed task', async () => {
-      mockVideoTaskFindUnique.mockResolvedValue({
+      mockTakeFindUnique.mockResolvedValue({
         id: 'task-1',
         sceneId: 'scene-1',
         status: 'completed'
@@ -180,7 +164,7 @@ describe('Task Routes', () => {
     })
 
     it('should return 400 when trying to cancel already failed task', async () => {
-      mockVideoTaskFindUnique.mockResolvedValue({
+      mockTakeFindUnique.mockResolvedValue({
         id: 'task-1',
         sceneId: 'scene-1',
         status: 'failed'
@@ -195,7 +179,7 @@ describe('Task Routes', () => {
     })
 
     it('should return 404 when task not found', async () => {
-      mockVideoTaskFindUnique.mockResolvedValue(null)
+      mockTakeFindUnique.mockResolvedValue(null)
 
       const response = await app.inject({
         method: 'POST',
@@ -208,14 +192,14 @@ describe('Task Routes', () => {
 
   describe('POST /api/tasks/:id/retry', () => {
     it('should retry a failed task', async () => {
-      mockVideoTaskFindUnique.mockResolvedValue({
+      mockTakeFindUnique.mockResolvedValue({
         id: 'task-1',
         sceneId: 'scene-1',
         status: 'failed',
         model: 'wan2.6',
         prompt: 'test prompt'
       })
-      mockVideoTaskCreate.mockResolvedValue({
+      mockTakeCreate.mockResolvedValue({
         id: 'task-2',
         sceneId: 'scene-1',
         status: 'queued'
@@ -232,7 +216,7 @@ describe('Task Routes', () => {
     })
 
     it('should return 400 when trying to retry non-failed task', async () => {
-      mockVideoTaskFindUnique.mockResolvedValue({
+      mockTakeFindUnique.mockResolvedValue({
         id: 'task-1',
         sceneId: 'scene-1',
         status: 'completed'
@@ -249,7 +233,7 @@ describe('Task Routes', () => {
     })
 
     it('should return 404 when task not found', async () => {
-      mockVideoTaskFindUnique.mockResolvedValue(null)
+      mockTakeFindUnique.mockResolvedValue(null)
 
       const response = await app.inject({
         method: 'POST',

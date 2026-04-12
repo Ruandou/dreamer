@@ -1,11 +1,10 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
-import { composeVideo, CompositionSegment as FFmpegCompositionSegment } from '../services/ffmpeg.js'
+import { composeVideo, type CompositionClip } from '../services/ffmpeg.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { verifyCompositionOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 
 export async function compositionRoutes(fastify: FastifyInstance) {
-  // List compositions for a project
   fastify.get<{ Querystring: { projectId: string } }>(
     '/',
     { preHandler: [fastify.authenticate] },
@@ -13,20 +12,18 @@ export async function compositionRoutes(fastify: FastifyInstance) {
       const userId = (request as any).user.id
       const { projectId } = request.query
 
-      // Verify project ownership
       if (!(await verifyProjectOwnership(userId, projectId))) {
         return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
       }
 
       return prisma.composition.findMany({
         where: { projectId },
-        include: { segments: { orderBy: { order: 'asc' } } },
+        include: { scenes: { orderBy: { order: 'asc' } } },
         orderBy: { createdAt: 'desc' }
       })
     }
   )
 
-  // Get composition with segment details
   fastify.get<{ Params: { id: string } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
@@ -41,8 +38,9 @@ export async function compositionRoutes(fastify: FastifyInstance) {
       const composition = await prisma.composition.findUnique({
         where: { id: compositionId },
         include: {
-          segments: {
-            orderBy: { order: 'asc' }
+          scenes: {
+            orderBy: { order: 'asc' },
+            include: { take: true, scene: true }
           }
         }
       })
@@ -51,55 +49,39 @@ export async function compositionRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Composition not found' })
       }
 
-      // Enrich segments with video URLs from selected VideoTasks
-      const enrichedSegments = await Promise.all(
-        composition.segments.map(async (compSegment) => {
-          const selectedTask = await prisma.videoTask.findFirst({
-            where: {
-              segmentId: compSegment.segmentId,
-              isSelected: true,
-              status: 'completed'
-            }
-          })
-
-          return {
-            ...compSegment,
-            videoUrl: selectedTask?.videoUrl || null,
-            thumbnailUrl: selectedTask?.thumbnailUrl || null
-          }
-        })
-      )
+      const enrichedScenes = composition.scenes.map((row) => ({
+        ...row,
+        videoUrl: row.take.videoUrl || null,
+        thumbnailUrl: row.take.thumbnailUrl || null
+      }))
 
       return {
         ...composition,
-        segments: enrichedSegments
+        scenes: enrichedScenes
       }
     }
   )
 
-  // Create composition
-  fastify.post<{ Body: { projectId: string; title: string } }>(
+  fastify.post<{ Body: { projectId: string; episodeId: string; title: string } }>(
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
-      const { projectId, title } = request.body
+      const { projectId, episodeId, title } = request.body
 
-      // Verify project ownership
       if (!(await verifyProjectOwnership(userId, projectId))) {
         return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
       }
 
       const composition = await prisma.composition.create({
-        data: { projectId, title }
+        data: { projectId, episodeId, title }
       })
 
       return reply.status(201).send(composition)
     }
   )
 
-  // Update composition
-  fastify.put<{ Params: { id: string }; Body: { title?: string; duration?: number; width?: number; height?: number } }>(
+  fastify.put<{ Params: { id: string }; Body: { title?: string } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
@@ -110,18 +92,17 @@ export async function compositionRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this composition' })
       }
 
-      const { title, duration, width, height } = request.body
+      const { title } = request.body
 
       const composition = await prisma.composition.update({
         where: { id: compositionId },
-        data: { title, duration, width, height }
+        data: { title }
       })
 
       return composition
     }
   )
 
-  // Delete composition
   fastify.delete<{ Params: { id: string } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
@@ -143,8 +124,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // Update timeline (composition segments)
-  fastify.put<{ Params: { id: string }; Body: { segments: any[] } }>(
+  fastify.put<{ Params: { id: string }; Body: { clips: Array<{ sceneId: string; takeId: string; order: number }> } }>(
     '/:id/timeline',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
@@ -155,125 +135,28 @@ export async function compositionRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden: You do not have access to this composition' })
       }
 
-      const { segments } = request.body
+      const { clips } = request.body
 
-      // Delete existing composition segments
-      await prisma.compositionSegment.deleteMany({ where: { compositionId } })
+      await prisma.compositionScene.deleteMany({ where: { compositionId } })
 
-      // Create new segments with validation
-      if (segments.length > 0) {
-        await prisma.compositionSegment.createMany({
-          data: segments.map((seg: any) => ({
+      if (clips.length > 0) {
+        await prisma.compositionScene.createMany({
+          data: clips.map((c) => ({
             compositionId,
-            segmentId: seg.segmentId,
-            order: seg.order,
-            startTime: Math.max(0, seg.startTime || 0),
-            endTime: Math.max(seg.startTime || 0, seg.endTime || 5),
-            transition: seg.transition || 'none'
+            sceneId: c.sceneId,
+            takeId: c.takeId,
+            order: c.order
           }))
         })
       }
 
-      // Calculate total duration with validation
-      const totalDuration = segments.reduce(
-        (sum: number, seg: any) => {
-          const start = seg.startTime || 0
-          const end = Math.max(start, seg.endTime || 5)
-          return sum + (end - start)
-        },
-        0
-      )
-
-      await prisma.composition.update({
-        where: { id: compositionId },
-        data: { duration: totalDuration }
-      })
-
       return prisma.composition.findUnique({
         where: { id: compositionId },
-        include: { segments: { orderBy: { order: 'asc' } } }
+        include: { scenes: { orderBy: { order: 'asc' } } }
       })
     }
   )
 
-  // Upload audio (voiceover, bgm)
-  fastify.post<{ Params: { id: string } }>(
-    '/:id/audio',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id
-      const compositionId = request.params.id
-
-      if (!(await verifyCompositionOwnership(userId, compositionId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this composition' })
-      }
-
-      const data = await request.file()
-
-      if (!data) {
-        return reply.status(400).send({ error: 'No file uploaded' })
-      }
-
-      const audioType = data.fieldname
-      if (audioType !== 'voiceover' && audioType !== 'bgm') {
-        return reply.status(400).send({ error: 'Invalid audio type' })
-      }
-
-      // Upload to MinIO
-      const buffer = await data.toBuffer()
-      const key = generateFileKey('assets', `${audioType}_${Date.now()}.mp3`)
-      const url = await uploadFile('assets', key, buffer, data.mimetype)
-
-      const updateData: any = {}
-      updateData[audioType] = url
-
-      const composition = await prisma.composition.update({
-        where: { id: compositionId },
-        data: updateData
-      })
-
-      return composition
-    }
-  )
-
-  // Upload subtitles file
-  fastify.post<{ Params: { id: string } }>(
-    '/:id/subtitles',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id
-      const compositionId = request.params.id
-
-      if (!(await verifyCompositionOwnership(userId, compositionId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this composition' })
-      }
-
-      const data = await request.file()
-
-      if (!data) {
-        return reply.status(400).send({ error: 'No file uploaded' })
-      }
-
-      // Only accept SRT or VTT files
-      if (!data.filename.endsWith('.srt') && !data.filename.endsWith('.vtt')) {
-        return reply.status(400).send({ error: 'Only SRT and VTT subtitle files are supported' })
-      }
-
-      // Upload to MinIO
-      const buffer = await data.toBuffer()
-      const key = generateFileKey('assets', `subtitles_${Date.now()}.srt`)
-      const url = await uploadFile('assets', key, buffer, data.mimetype)
-
-      const composition = await prisma.composition.update({
-        where: { id: compositionId },
-        data: { subtitles: url }
-      })
-
-      return composition
-    }
-  )
-
-  // Trigger export
   fastify.post<{ Params: { id: string } }>(
     '/:id/export',
     { preHandler: [fastify.authenticate] },
@@ -287,66 +170,46 @@ export async function compositionRoutes(fastify: FastifyInstance) {
 
       const composition = await prisma.composition.findUnique({
         where: { id: compositionId },
-        include: { segments: { orderBy: { order: 'asc' } } }
+        include: { scenes: { orderBy: { order: 'asc' }, include: { take: true } } }
       })
 
       if (!composition) {
         return reply.status(404).send({ error: 'Composition not found' })
       }
 
-      if (composition.segments.length === 0) {
-        return reply.status(400).send({ error: 'No segments to export' })
+      if (composition.scenes.length === 0) {
+        return reply.status(400).send({ error: 'No clips to export' })
       }
 
-      // Update status to exporting
       await prisma.composition.update({
         where: { id: compositionId },
-        data: { status: 'exporting' }
+        data: { status: 'processing' }
       })
 
       try {
-        // Get video URLs for all segments
-        const segmentsWithVideos: FFmpegCompositionSegment[] = []
+        const clips: CompositionClip[] = []
 
-        for (const compSegment of composition.segments) {
-          const selectedTask = await prisma.videoTask.findFirst({
-            where: {
-              segmentId: compSegment.segmentId,
-              isSelected: true,
-              status: 'completed'
-            }
-          })
-
-          if (!selectedTask?.videoUrl) {
-            throw new Error(`No selected video found for segment ${compSegment.segmentId}`)
+        for (const row of composition.scenes) {
+          const url = row.take.videoUrl
+          if (!url) {
+            throw new Error(`Take ${row.takeId} has no video URL`)
           }
-
-          segmentsWithVideos.push({
-            segmentId: compSegment.segmentId,
-            videoUrl: selectedTask.videoUrl,
-            startTime: compSegment.startTime,
-            endTime: compSegment.endTime,
-            transition: compSegment.transition || undefined
+          clips.push({
+            videoUrl: url,
+            startTime: 0,
+            endTime: 0
           })
         }
 
-        // Run FFmpeg composition
         const result = await composeVideo({
-          segments: segmentsWithVideos,
-          voiceoverUrl: composition.voiceover || undefined,
-          bgmUrl: composition.bgm || undefined,
-          subtitlesUrl: composition.subtitles || undefined,
-          outputWidth: composition.width || 1080,
-          outputHeight: composition.height || 1920
+          segments: clips
         })
 
-        // Update composition with output URL and status
         await prisma.composition.update({
           where: { id: compositionId },
           data: {
-            status: 'exported',
-            outputUrl: result.outputUrl,
-            duration: result.duration
+            status: 'completed',
+            outputUrl: result.outputUrl
           }
         })
 
@@ -360,7 +223,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
 
         await prisma.composition.update({
           where: { id: compositionId },
-          data: { status: 'draft' }
+          data: { status: 'failed' }
         })
 
         return reply.status(500).send({

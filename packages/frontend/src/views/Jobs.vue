@@ -17,8 +17,8 @@ interface Job {
   createdAt: string
   updatedAt: string
   // video task fields
-  segmentId?: string
-  segmentNum?: number
+  sceneId?: string
+  sceneNum?: number
   segmentDescription?: string
   model?: string
   videoUrl?: string
@@ -97,7 +97,7 @@ const columns: DataTableColumns<Job> = [
     ellipsis: { tooltip: true },
     render(row) {
       if (row.type === 'video') {
-        return `场景 ${row.segmentNum}: ${(row.prompt || '').slice(0, 50)}${(row.prompt || '').length > 50 ? '...' : ''}`
+        return `场景 ${row.sceneNum}: ${(row.prompt || '').slice(0, 50)}${(row.prompt || '').length > 50 ? '...' : ''}`
       }
       if (row.type === 'outline') {
         return (row.idea || '').slice(0, 60) + ((row.idea || '').length > 60 ? '...' : '')
@@ -143,7 +143,7 @@ const columns: DataTableColumns<Job> = [
       if (row.type === 'pipeline' && row.status === 'completed') {
         return row.currentStep || '已完成'
       }
-      if (row.type === 'pipeline' && row.status === 'running') {
+      if (row.type === 'pipeline' && row.status === 'processing') {
         return `步骤: ${row.currentStep || '-'}`
       }
       if (row.status === 'failed') {
@@ -263,8 +263,8 @@ const fetchJobs = async () => {
             status: t.status,
             createdAt: t.createdAt,
             updatedAt: t.updatedAt,
-            segmentId: t.segmentId,
-            segmentNum: t.segmentNum,
+            sceneId: t.sceneId,
+            sceneNum: t.sceneNum,
             segmentDescription: t.description,
             model: t.model,
             videoUrl: t.videoUrl,

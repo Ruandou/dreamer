@@ -27,18 +27,18 @@ export const videoQueue = new Queue<VideoJobData>('video-generation', {
 export const videoWorker = new Worker<VideoJobData>(
   'video-generation',
   async (job) => {
-    const { segmentId, taskId, prompt, model, referenceImage, imageUrls, duration } = job.data
+    const { sceneId, taskId, prompt, model, referenceImage, imageUrls, duration } = job.data
 
-    console.log(`Processing video job ${job.id} for segment ${segmentId}, model: ${model}`)
+    console.log(`Processing video job ${job.id} for scene ${sceneId}, model: ${model}`)
 
     const effectiveDuration = duration || 5
 
     // Get userId for SSE notification
-    const task = await prisma.videoTask.findUnique({
+    const task = await prisma.take.findUnique({
       where: { id: taskId },
-      include: { segment: { include: { episode: { include: { project: true } } } } }
+      include: { scene: { include: { episode: { include: { project: true } } } } }
     })
-    const userId = task?.segment.episode.project.userId
+    const userId = task?.scene.episode.project.userId
 
     // 在try-catch外部声明变量，确保在catch块中可访问
     let videoUrl: string = ''
@@ -49,25 +49,25 @@ export const videoWorker = new Worker<VideoJobData>(
 
     try {
       // Update task status to processing
-      await prisma.videoTask.update({
+      await prisma.take.update({
         where: { id: taskId },
         data: { status: 'processing' }
       })
 
       // Send SSE notification
       if (userId) {
-        sendTaskUpdate(userId, taskId, 'processing', { segmentId })
+        sendTaskUpdate(userId, taskId, 'processing', { sceneId })
       }
 
-      // Update segment status
-      await prisma.segment.update({
-        where: { id: segmentId },
+      // Update scene status
+      await prisma.scene.update({
+        where: { id: sceneId },
         data: { status: 'generating' }
       })
 
       if (model === 'wan2.6') {
         // Wan 2.6 API call
-        console.log(`Submitting Wan 2.6 task for segment ${segmentId}`)
+        console.log(`Submitting Wan 2.6 task for scene ${sceneId}`)
 
         // Log API call
         if (userId) {
@@ -77,7 +77,7 @@ export const videoWorker = new Worker<VideoJobData>(
             provider: 'atlas',
             prompt,
             requestParams: { referenceImage, duration: effectiveDuration },
-            videoTaskId: taskId
+            takeId: taskId
           })
           apiCallId = log.id
         }
@@ -90,8 +90,8 @@ export const videoWorker = new Worker<VideoJobData>(
 
         externalTaskId = response.taskId
 
-        // Save external task ID to both VideoTask and ApiCall
-        await prisma.videoTask.update({
+        // Save external task ID to both Take and ApiCall
+        await prisma.take.update({
           where: { id: taskId },
           data: { externalTaskId }
         })
@@ -124,7 +124,7 @@ export const videoWorker = new Worker<VideoJobData>(
 
       } else {
         // Seedance 2.0 API call
-        console.log(`Submitting Seedance 2.0 task for segment ${segmentId}, reference images: ${imageUrls?.length || 0}`)
+        console.log(`Submitting Seedance 2.0 task for scene ${sceneId}, reference images: ${imageUrls?.length || 0}`)
 
         // Log API call
         if (userId) {
@@ -134,7 +134,7 @@ export const videoWorker = new Worker<VideoJobData>(
             provider: 'volcengine',
             prompt,
             requestParams: { imageUrls, duration: effectiveDuration },
-            videoTaskId: taskId
+            takeId: taskId
           })
           apiCallId = log.id
         }
@@ -147,8 +147,8 @@ export const videoWorker = new Worker<VideoJobData>(
 
         externalTaskId = response.taskId
 
-        // Save external task ID to both VideoTask and ApiCall
-        await prisma.videoTask.update({
+        // Save external task ID to both Take and ApiCall
+        await prisma.take.update({
           where: { id: taskId },
           data: { externalTaskId }
         })
@@ -208,7 +208,7 @@ export const videoWorker = new Worker<VideoJobData>(
       }
 
       // Update task as completed
-      await prisma.videoTask.update({
+      await prisma.take.update({
         where: { id: taskId },
         data: {
           status: 'completed',
@@ -219,16 +219,16 @@ export const videoWorker = new Worker<VideoJobData>(
         }
       })
 
-      // Update segment status
-      await prisma.segment.update({
-        where: { id: segmentId },
+      // Update scene status
+      await prisma.scene.update({
+        where: { id: sceneId },
         data: { status: 'completed' }
       })
 
       // Send SSE notification
       if (userId) {
         sendTaskUpdate(userId, taskId, 'completed', {
-          segmentId,
+          sceneId,
           videoUrl: uploadedVideoUrl,
           thumbnailUrl: uploadedThumbnailUrl,
           cost
@@ -249,7 +249,7 @@ export const videoWorker = new Worker<VideoJobData>(
       }
 
       // Update task as failed
-      await prisma.videoTask.update({
+      await prisma.take.update({
         where: { id: taskId },
         data: {
           status: 'failed',
@@ -257,16 +257,16 @@ export const videoWorker = new Worker<VideoJobData>(
         }
       })
 
-      // Update segment status
-      await prisma.segment.update({
-        where: { id: segmentId },
+      // Update scene status
+      await prisma.scene.update({
+        where: { id: sceneId },
         data: { status: 'failed' }
       })
 
       // Send SSE notification
       if (userId) {
         sendTaskUpdate(userId, taskId, 'failed', {
-          segmentId,
+          sceneId,
           error: error instanceof Error ? error.message : 'Unknown error'
         })
       }

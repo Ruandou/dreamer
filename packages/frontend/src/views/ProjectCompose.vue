@@ -2,8 +2,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import {
-  NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
-  NImage, NTag, NAlert, NUpload, NScrollbar, useMessage
+  NButton, NSpace, NModal, NForm, NFormItem, NInput,
+  NImage, NAlert, NScrollbar, useMessage
 } from 'naive-ui'
 import { useCompositionStore } from '@/stores/composition'
 import { useSceneStore } from '@/stores/scene'
@@ -25,15 +25,16 @@ const showPreview = ref(false)
 const previewUrl = ref<string | undefined>()
 const newComposition = ref({ title: '' })
 
-// Available segments from completed scenes
+// 已选用 Take 的场次，可加入成片时间轴
 const availableSegments = computed(() => {
   const segments: any[] = []
   sceneStore.scenes.forEach(scene => {
-    if (scene.status === 'completed' && (scene as any).tasks) {
-      const selectedTask = (scene as any).tasks.find((t: any) => t.isSelected && t.videoUrl)
+    if (scene.status === 'completed' && scene.takes?.length) {
+      const selectedTask = scene.takes.find((t) => t.isSelected && t.videoUrl)
       if (selectedTask) {
         segments.push({
           sceneId: scene.id,
+          takeId: selectedTask.id,
           sceneNum: scene.sceneNum,
           description: scene.description,
           videoUrl: selectedTask.videoUrl,
@@ -49,7 +50,7 @@ const availableSegments = computed(() => {
 // Timeline state
 const timelineSegments = ref<any[]>([])
 const totalDuration = computed(() =>
-  timelineSegments.value.reduce((sum, seg) => sum + (seg.endTime - seg.startTime), 0)
+  timelineSegments.value.reduce((sum, seg) => sum + (Number(seg.duration) || 5), 0)
 )
 
 onMounted(async () => {
@@ -65,7 +66,12 @@ const handleCreateComposition = async () => {
     message.warning('请输入作品标题')
     return
   }
-  await compositionStore.createComposition(projectId.value, newComposition.value.title)
+  const ep = episodeStore.episodes[0]
+  if (!ep) {
+    message.warning('请先创建剧集')
+    return
+  }
+  await compositionStore.createComposition(projectId.value, ep.id, newComposition.value.title)
   showCreateModal.value = false
   newComposition.value = { title: '' }
   message.success('合成创建成功')
@@ -73,16 +79,20 @@ const handleCreateComposition = async () => {
 
 const handleSelectComposition = async (composition: any) => {
   await compositionStore.getComposition(composition.id)
-  if (compositionStore.currentComposition?.segments) {
-    timelineSegments.value = compositionStore.currentComposition.segments.map((seg: any) => ({
-      sceneId: seg.sceneId,
-      order: seg.order,
-      startTime: seg.startTime || 0,
-      endTime: seg.endTime || 5,
-      transition: seg.transition || 'none',
-      videoUrl: seg.videoUrl,
-      thumbnailUrl: seg.thumbnailUrl
+  const comp: any = compositionStore.currentComposition
+  if (comp?.scenes?.length) {
+    timelineSegments.value = comp.scenes.map((row: any) => ({
+      sceneId: row.sceneId,
+      takeId: row.takeId,
+      order: row.order,
+      duration: row.take?.duration || 5,
+      videoUrl: row.videoUrl,
+      thumbnailUrl: row.thumbnailUrl,
+      startTime: 0,
+      endTime: 5
     }))
+  } else {
+    timelineSegments.value = []
   }
 }
 
@@ -93,10 +103,11 @@ const addToTimeline = (segment: any) => {
   )
   timelineSegments.value.push({
     sceneId: segment.sceneId,
+    takeId: segment.takeId,
     order: timelineSegments.value.length,
+    duration: segment.duration || 5,
     startTime: lastEndTime,
     endTime: lastEndTime + (segment.duration || 5),
-    transition: 'none',
     videoUrl: segment.videoUrl,
     thumbnailUrl: segment.thumbnailUrl
   })
@@ -136,27 +147,13 @@ const saveTimeline = async () => {
   if (!compositionStore.currentComposition) return
   await compositionStore.updateTimeline(
     compositionStore.currentComposition.id,
-    timelineSegments.value.map(seg => ({
+    timelineSegments.value.map((seg, i) => ({
       sceneId: seg.sceneId,
-      order: seg.order,
-      startTime: seg.startTime,
-      endTime: seg.endTime,
-      transition: seg.transition
+      takeId: seg.takeId,
+      order: i
     }))
   )
   message.success('时间轴已保存')
-}
-
-const handleUploadAudio = async (type: 'voiceover' | 'bgm', file: File) => {
-  if (!compositionStore.currentComposition) return
-  await compositionStore.uploadAudio(compositionStore.currentComposition.id, type, file)
-  message.success('音频上传成功')
-}
-
-const handleUploadSubtitles = async (file: File) => {
-  if (!compositionStore.currentComposition) return
-  await compositionStore.uploadSubtitles(compositionStore.currentComposition.id, file)
-  message.success('字幕上传成功')
 }
 
 const handleExport = async () => {
@@ -225,7 +222,7 @@ const formatTime = (seconds: number) => {
               @click="handleSelectComposition(comp)"
             >
               <span class="composition-item__title">{{ comp.title }}</span>
-              <StatusBadge :status="comp.status === 'exported' ? 'completed' : 'draft'" size="small" />
+              <StatusBadge :status="comp.status === 'completed' ? 'completed' : comp.status === 'processing' ? 'processing' : 'draft'" size="small" />
             </div>
           </NScrollbar>
         </aside>
@@ -299,58 +296,6 @@ const formatTime = (seconds: number) => {
               </div>
             </section>
 
-            <!-- Audio Section -->
-            <section class="editor-section">
-              <h4 class="editor-section__title">🔊 音频</h4>
-              <div class="audio-items">
-                <div class="audio-item">
-                  <span class="audio-item__label">配音</span>
-                  <NUpload
-                    accept="audio/*"
-                    :show-file-list="false"
-                    @change="(opt: any) => handleUploadAudio('voiceover', opt.file.file)"
-                  >
-                    <NButton size="small">
-                      {{ compositionStore.currentComposition.voiceover ? '替换' : '上传' }}
-                    </NButton>
-                  </NUpload>
-                  <NTag v-if="compositionStore.currentComposition.voiceover" size="small" type="success">
-                    已上传
-                  </NTag>
-                </div>
-                <div class="audio-item">
-                  <span class="audio-item__label">背景音乐</span>
-                  <NUpload
-                    accept="audio/*"
-                    :show-file-list="false"
-                    @change="(opt: any) => handleUploadAudio('bgm', opt.file.file)"
-                  >
-                    <NButton size="small">
-                      {{ compositionStore.currentComposition.bgm ? '替换' : '上传' }}
-                    </NButton>
-                  </NUpload>
-                  <NTag v-if="compositionStore.currentComposition.bgm" size="small" type="success">
-                    已上传
-                  </NTag>
-                </div>
-                <div class="audio-item">
-                  <span class="audio-item__label">字幕</span>
-                  <NUpload
-                    accept=".srt,.vtt"
-                    :show-file-list="false"
-                    @change="(opt: any) => handleUploadSubtitles(opt.file.file)"
-                  >
-                    <NButton size="small">
-                      {{ compositionStore.currentComposition.subtitles ? '替换' : '上传' }}
-                    </NButton>
-                  </NUpload>
-                  <NTag v-if="compositionStore.currentComposition.subtitles" size="small" type="success">
-                    已上传
-                  </NTag>
-                </div>
-              </div>
-            </section>
-
             <!-- Export Section -->
             <section v-if="compositionStore.currentComposition.outputUrl" class="editor-section">
               <h4 class="editor-section__title">🎉 成品预览</h4>
@@ -360,8 +305,8 @@ const formatTime = (seconds: number) => {
             </section>
 
             <!-- Exporting Alert -->
-            <NAlert v-if="compositionStore.currentComposition.status === 'exporting'" type="warning">
-              视频正在导出中，请稍候...
+            <NAlert v-if="compositionStore.currentComposition.status === 'processing'" type="warning">
+              视频正在拼接导出中，请稍候...
             </NAlert>
           </div>
         </main>

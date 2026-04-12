@@ -36,8 +36,12 @@ export const useEpisodeStore = defineStore('episode', () => {
     return res.data
   }
 
-  async function updateEpisode(id: string, data: { title?: string; script?: ScriptContent }) {
-    const res = await api.put<Episode>(`/episodes/${id}`, data)
+  async function updateEpisode(id: string, data: { title?: string; rawScript?: ScriptContent; script?: ScriptContent }) {
+    const payload: { title?: string; rawScript?: ScriptContent } = {}
+    if (data.title !== undefined) payload.title = data.title
+    const scriptBody = data.rawScript ?? data.script
+    if (scriptBody !== undefined) payload.rawScript = scriptBody
+    const res = await api.put<Episode>(`/episodes/${id}`, payload)
     const index = episodes.value.findIndex(e => e.id === id)
     if (index !== -1) {
       episodes.value[index] = res.data

@@ -27,7 +27,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
       const project = await prisma.project.findFirst({
         where: { id: request.params.id, userId: user.id },
         include: {
-          episodes: { include: { segments: true } },
+          episodes: { include: { scenes: true } },
           characters: true,
           locations: true,
           compositions: true

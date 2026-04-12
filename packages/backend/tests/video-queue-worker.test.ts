@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Use vi.hoisted for ALL mocks and variables
 const {
-  mockVideoTaskFindUnique,
-  mockVideoTaskUpdate,
+  mockTakeFindUnique,
+  mockTakeUpdate,
   mockSceneUpdate,
   mockSubmitWan26Task,
   mockWaitForWan26Completion,
@@ -21,8 +20,8 @@ const {
   mockUpdateApiCall,
   capturedProcessor
 } = vi.hoisted(() => ({
-  mockVideoTaskFindUnique: vi.fn(),
-  mockVideoTaskUpdate: vi.fn(),
+  mockTakeFindUnique: vi.fn(),
+  mockTakeUpdate: vi.fn(),
   mockSceneUpdate: vi.fn(),
   mockSubmitWan26Task: vi.fn(),
   mockWaitForWan26Completion: vi.fn(),
@@ -41,7 +40,6 @@ const {
   capturedProcessor: { current: null as ((job: any) => Promise<any>) | null }
 }))
 
-// Mock ioredis
 vi.mock('ioredis', () => {
   const mRedis = {
     quit: vi.fn().mockResolvedValue(undefined),
@@ -51,13 +49,12 @@ vi.mock('ioredis', () => {
   return { default: vi.fn(() => mRedis) }
 })
 
-// Mock bullmq
 vi.mock('bullmq', () => ({
   Queue: vi.fn().mockImplementation(() => ({
     close: mockQueueClose,
     on: vi.fn()
   })),
-  Worker: vi.fn().mockImplementation((Name: string, processor: (job: any) => Promise<any>) => {
+  Worker: vi.fn().mockImplementation((_name: string, processor: (job: any) => Promise<any>) => {
     capturedProcessor.current = processor
     return {
       on: mockWorkerOn,
@@ -66,26 +63,13 @@ vi.mock('bullmq', () => ({
   })
 }))
 
-// Mock prisma
 vi.mock('../src/index.js', () => ({
   prisma: {
-    videoTask: {
-      findUnique: mockVideoTaskFindUnique.mockResolvedValue({
-        id: 'task-123',
-        segment: {
-          id: 'segment-123',
-          episode: {
-            id: 'episode-123',
-            project: {
-              id: 'project-123',
-              userId: 'user-123'
-            }
-          }
-        }
-      }),
-      update: mockVideoTaskUpdate
+    take: {
+      findUnique: mockTakeFindUnique,
+      update: mockTakeUpdate
     },
-    segment: {
+    scene: {
       update: mockSceneUpdate
     },
     modelApiCall: {
@@ -97,12 +81,10 @@ vi.mock('../src/index.js', () => ({
   }
 }))
 
-// Mock SSE
 vi.mock('../src/plugins/sse.js', () => ({
   sendTaskUpdate: mockSendTaskUpdate
 }))
 
-// Mock services
 vi.mock('../src/services/wan26.js', () => ({
   submitWan26Task: mockSubmitWan26Task,
   waitForWan26Completion: mockWaitForWan26Completion,
@@ -120,35 +102,33 @@ vi.mock('../src/services/storage.js', () => ({
   generateFileKey: mockGenerateFileKey
 }))
 
-// Mock api-logger
 vi.mock('../src/services/api-logger.js', () => ({
   logApiCall: mockLogApiCall,
   updateApiCall: mockUpdateApiCall
 }))
 
-// Mock fetch for video download
 global.fetch = vi.fn()
 
-// Import after mocks
 import { videoQueue, videoWorker } from '../src/queues/video.js'
+
+const defaultTake = {
+  id: 'task-123',
+  scene: {
+    id: 'scene-123',
+    episode: {
+      id: 'episode-123',
+      project: {
+        id: 'project-123',
+        userId: 'user-123'
+      }
+    }
+  }
+}
 
 describe('Video Queue Worker', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockVideoTaskFindUnique.mockResolvedValue({
-      id: 'task-123',
-      segment: {
-        id: 'segment-123',
-        episode: {
-          id: 'episode-123',
-          project: {
-            id: 'project-123',
-            userId: 'user-123'
-          }
-        }
-      }
-    })
-    // Mock fetch for video download
+    mockTakeFindUnique.mockResolvedValue(defaultTake)
     ;(global.fetch as any).mockResolvedValue({
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(1024))
     })
@@ -174,13 +154,12 @@ describe('Video Queue Worker', () => {
       mockCalculateWan26Cost.mockReturnValue(0.5)
       mockUploadFile.mockResolvedValue('https://minio.example.com/videos/task-123.mp4')
       mockGenerateFileKey.mockReturnValue('videos/task-123.mp4')
-      // Mock logApiCall to return an object with an id property
       mockLogApiCall.mockResolvedValue({ id: 'api-call-123' })
 
       const mockJob = {
         id: 'job-1',
         data: {
-          segmentId: 'segment-123',
+          sceneId: 'scene-123',
           taskId: 'task-123',
           prompt: 'A person walking',
           model: 'wan2.6',
@@ -192,7 +171,7 @@ describe('Video Queue Worker', () => {
         await capturedProcessor.current(mockJob)
       }
 
-      expect(mockVideoTaskUpdate).toHaveBeenCalledWith({
+      expect(mockTakeUpdate).toHaveBeenCalledWith({
         where: { id: 'task-123' },
         data: { status: 'processing' }
       })
@@ -210,13 +189,12 @@ describe('Video Queue Worker', () => {
       mockCalculateSeedanceCost.mockReturnValue(1.0)
       mockUploadFile.mockResolvedValue('https://minio.example.com/videos/task-123.mp4')
       mockGenerateFileKey.mockReturnValue('videos/task-123.mp4')
-      // Mock logApiCall to return an object with an id property
       mockLogApiCall.mockResolvedValue({ id: 'api-call-456' })
 
       const mockJob = {
         id: 'job-2',
         data: {
-          segmentId: 'segment-456',
+          sceneId: 'scene-456',
           taskId: 'task-456',
           prompt: 'A car driving',
           model: 'seedance2.0',
@@ -244,7 +222,7 @@ describe('Video Queue Worker', () => {
       const mockJob = {
         id: 'job-3',
         data: {
-          segmentId: 'segment-789',
+          sceneId: 'scene-789',
           taskId: 'task-789',
           prompt: 'A cat sleeping',
           model: 'wan2.6'
@@ -272,7 +250,7 @@ describe('Video Queue Worker', () => {
       const mockJob = {
         id: 'job-4',
         data: {
-          segmentId: 'segment-111',
+          sceneId: 'scene-111',
           taskId: 'task-111',
           prompt: 'Test prompt',
           model: 'wan2.6'
@@ -287,18 +265,18 @@ describe('Video Queue Worker', () => {
         'user-123',
         'task-111',
         'processing',
-        { segmentId: 'segment-111' }
+        { sceneId: 'scene-111' }
       )
     })
 
     it('should handle job failure', async () => {
       mockSubmitWan26Task.mockRejectedValue(new Error('API Error'))
-      mockVideoTaskUpdate.mockResolvedValue({ id: 'task-123' })
+      mockTakeUpdate.mockResolvedValue({ id: 'task-123' })
 
       const mockJob = {
         id: 'job-5',
         data: {
-          segmentId: 'segment-222',
+          sceneId: 'scene-222',
           taskId: 'task-222',
           prompt: 'Test prompt',
           model: 'wan2.6'
@@ -309,8 +287,7 @@ describe('Video Queue Worker', () => {
         await expect(capturedProcessor.current(mockJob)).rejects.toThrow('API Error')
       }
 
-      // Verify error handling
-      expect(mockVideoTaskUpdate).toHaveBeenCalledWith({
+      expect(mockTakeUpdate).toHaveBeenCalledWith({
         where: { id: 'task-222' },
         data: expect.objectContaining({ status: 'failed' })
       })

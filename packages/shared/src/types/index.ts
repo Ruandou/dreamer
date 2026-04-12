@@ -12,6 +12,7 @@ export interface Project {
   id: string
   name: string
   description?: string
+  synopsis?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -23,7 +24,7 @@ export interface Episode {
   projectId: string
   episodeNum: number
   title?: string
-  script?: ScriptContent // 结构化剧本JSON
+  rawScript?: ScriptContent
   createdAt: Date
   updatedAt: Date
 }
@@ -53,11 +54,12 @@ export interface ScriptScene {
   timeOfDay: string // 日/夜
   characters: string[] // 出现的角色名列表
   description: string // 场景描述
-  dialogues: Dialogue[]
+  dialogues: ScriptDialogueLine[]
   actions: string[] // 动作描述列表
 }
 
-export interface Dialogue {
+/** 剧本 JSON 中的单行台词（非 DB SceneDialogue） */
+export interface ScriptDialogueLine {
   character: string
   content: string
 }
@@ -87,29 +89,28 @@ export interface CharacterImage {
   updatedAt: Date
 }
 
-// ============ Scene / Storyboard Types ============
+// ============ Episode Scene（场次，视频生成单元）/ Take ============
 
-export interface Scene {
+export interface EpisodeScene {
   id: string
   episodeId: string
   sceneNum: number
-  description?: string // 场景描述
-  prompt: string // 生成视频的最终提示词
+  description?: string
   status: SceneStatus
   createdAt: Date
   updatedAt: Date
 }
 
-export type SceneStatus = 'pending' | 'processing' | 'completed' | 'failed'
+export type SceneStatus = 'pending' | 'generating' | 'processing' | 'completed' | 'failed'
 
-export interface VideoTask {
+export interface Take {
   id: string
   sceneId: string
   model: VideoModel
   status: TaskStatus
   prompt: string
   cost?: number
-  duration?: number // 生成耗时（秒）
+  duration?: number
   videoUrl?: string
   thumbnailUrl?: string
   errorMsg?: string
@@ -126,32 +127,24 @@ export type TaskStatus = 'queued' | 'processing' | 'completed' | 'failed'
 export interface Composition {
   id: string
   projectId: string
+  episodeId: string
   title: string
-  duration: number // 总时长（秒）
-  width: number
-  height: number
   status: CompositionStatus
-  voiceover?: string // 配音文件URL
-  bgm?: string // 背景音乐URL
-  subtitles?: string // 字幕文件URL
-  outputUrl?: string // 最终成品URL
+  outputUrl?: string
   createdAt: Date
   updatedAt: Date
 }
 
-export type CompositionStatus = 'draft' | 'composing' | 'exporting' | 'exported'
+export type CompositionStatus = 'draft' | 'processing' | 'completed' | 'failed'
 
-export interface Segment {
-  id: string
-  compositionId: string
+/** MVP：成片时间轴一项（场次 + 选用 Take） */
+export interface CompositionTimelineClip {
+  id?: string
+  compositionId?: string
   sceneId: string
-  order: number // 时间轴顺序
-  startTime: number // 起始时间（秒）
-  endTime: number // 结束时间（秒）
-  transition?: TransitionType
+  takeId: string
+  order: number
 }
-
-export type TransitionType = 'none' | 'fade' | 'dissolve' | 'wipe' | 'slide'
 
 // ============ API Request/Response Types ============
 
@@ -237,22 +230,23 @@ export interface BatchGenerateRequest {
 // Composition
 export interface CreateCompositionRequest {
   projectId: string
+  episodeId: string
   title: string
 }
 
 export interface UpdateTimelineRequest {
-  segments: Omit<Segment, 'id' | 'compositionId'>[]
+  clips: Omit<CompositionTimelineClip, 'id' | 'compositionId'>[]
 }
 
 // ============ Worker Types ============
 
 export interface VideoJobData {
-  segmentId: string
+  sceneId: string
   taskId: string
   prompt: string
   model: VideoModel
-  referenceImage?: string  // 单张参考图 (Wan 2.6)
-  imageUrls?: string[]  // 多张参考图 (Seedance 2.0)
+  referenceImage?: string
+  imageUrls?: string[]
   duration?: number
 }
 

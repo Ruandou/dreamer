@@ -2,7 +2,7 @@ import { prisma } from '../index.js'
 
 export interface ParsedCharacter {
   name: string
-  description: string  // 角色外貌描述
+  description: string
 }
 
 export interface ParsedScript {
@@ -25,7 +25,7 @@ export interface ImportResults {
   episodesCreated: number
   episodesUpdated: number
   charactersCreated: number
-  segmentsCreated: number
+  scenesCreated: number
 }
 
 export async function importParsedData(projectId: string, parsed: ParsedScript): Promise<ImportResults> {
@@ -33,10 +33,9 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
     episodesCreated: 0,
     episodesUpdated: 0,
     charactersCreated: 0,
-    segmentsCreated: 0
+    scenesCreated: 0
   }
 
-  // Create characters with AI-extracted descriptions
   for (const char of parsed.characters) {
     await prisma.character.create({
       data: {
@@ -48,64 +47,83 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
     results.charactersCreated++
   }
 
-  // Create/update episodes
   for (const episodeData of parsed.episodes) {
     const existing = await prisma.episode.findFirst({
       where: {
         projectId,
         episodeNum: episodeData.episodeNum
       },
-      include: { segments: true }
+      include: { scenes: true }
     })
 
     if (existing) {
-      // Update existing episode
       await prisma.episode.update({
         where: { id: existing.id },
         data: {
           title: episodeData.title,
-          script: episodeData.script as any
+          rawScript: episodeData.script as object
         }
       })
 
-      // Delete old segments and create new ones
-      await prisma.segment.deleteMany({ where: { episodeId: existing.id } })
+      await prisma.scene.deleteMany({ where: { episodeId: existing.id } })
 
-      for (const scene of episodeData.scenes) {
-        await prisma.segment.create({
+      for (const sc of episodeData.scenes) {
+        const scene = await prisma.scene.create({
           data: {
             episodeId: existing.id,
-            segmentNum: scene.sceneNum,
-            description: scene.description,
-            prompt: scene.prompt
+            sceneNum: sc.sceneNum,
+            description: sc.description,
+            duration: 5000,
+            aspectRatio: '9:16',
+            visualStyle: [],
+            status: 'pending'
           }
         })
-        results.segmentsCreated++
+        await prisma.shot.create({
+          data: {
+            sceneId: scene.id,
+            shotNum: 1,
+            order: 1,
+            description: sc.prompt,
+            duration: 5000
+          }
+        })
+        results.scenesCreated++
       }
 
       results.episodesUpdated++
     } else {
-      // Create new episode
       const episode = await prisma.episode.create({
         data: {
           projectId,
           episodeNum: episodeData.episodeNum,
           title: episodeData.title,
-          script: episodeData.script as any
+          rawScript: episodeData.script as object
         }
       })
 
-      // Create segments
-      for (const scene of episodeData.scenes) {
-        await prisma.segment.create({
+      for (const sc of episodeData.scenes) {
+        const scene = await prisma.scene.create({
           data: {
             episodeId: episode.id,
-            segmentNum: scene.sceneNum,
-            description: scene.description,
-            prompt: scene.prompt
+            sceneNum: sc.sceneNum,
+            description: sc.description,
+            duration: 5000,
+            aspectRatio: '9:16',
+            visualStyle: [],
+            status: 'pending'
           }
         })
-        results.segmentsCreated++
+        await prisma.shot.create({
+          data: {
+            sceneId: scene.id,
+            shotNum: 1,
+            order: 1,
+            description: sc.prompt,
+            duration: 5000
+          }
+        })
+        results.scenesCreated++
       }
 
       results.episodesCreated++

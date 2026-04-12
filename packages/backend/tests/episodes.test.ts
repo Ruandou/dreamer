@@ -10,8 +10,10 @@ const {
   mockEpisodeDelete,
   mockProjectFindFirst,
   mockProjectFindUnique,
-  mockSegmentDeleteMany,
-  mockSegmentCreateMany
+  mockSceneDeleteMany,
+  mockSceneCreate,
+  mockShotCreate,
+  mockLocationFindFirst
 } = vi.hoisted(() => {
   return {
     mockEpisodeFindMany: vi.fn(),
@@ -21,8 +23,10 @@ const {
     mockEpisodeDelete: vi.fn(),
     mockProjectFindFirst: vi.fn(),
     mockProjectFindUnique: vi.fn(),
-    mockSegmentDeleteMany: vi.fn(),
-    mockSegmentCreateMany: vi.fn()
+    mockSceneDeleteMany: vi.fn(),
+    mockSceneCreate: vi.fn(),
+    mockShotCreate: vi.fn(),
+    mockLocationFindFirst: vi.fn()
   }
 })
 
@@ -59,9 +63,15 @@ vi.mock('../src/index.js', () => ({
       findFirst: mockProjectFindFirst,
       findUnique: mockProjectFindUnique
     },
-    segment: {
-      deleteMany: mockSegmentDeleteMany,
-      createMany: mockSegmentCreateMany
+    scene: {
+      deleteMany: mockSceneDeleteMany,
+      create: mockSceneCreate
+    },
+    shot: {
+      create: mockShotCreate
+    },
+    location: {
+      findFirst: mockLocationFindFirst
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()
@@ -236,6 +246,12 @@ describe('Episode Routes', () => {
         id: 'ep-1',
         title: 'Expanded Episode'
       })
+      mockSceneDeleteMany.mockResolvedValue({ count: 0 })
+      mockLocationFindFirst.mockResolvedValue(null)
+      mockSceneCreate.mockImplementation((args: { data: { sceneNum: number } }) =>
+        Promise.resolve({ id: `scene-${args.data.sceneNum}`, ...args.data })
+      )
+      mockShotCreate.mockResolvedValue({ id: 'shot-1' })
 
       const response = await app.inject({
         method: 'POST',

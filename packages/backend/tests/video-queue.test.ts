@@ -28,15 +28,15 @@ vi.mock('bullmq', () => {
 })
 
 // Mock prisma
-const mockVideoTaskFindUnique = vi.fn()
-const mockVideoTaskUpdate = vi.fn()
+const mockTakeFindUnique = vi.fn()
+const mockTakeUpdate = vi.fn()
 const mockSceneUpdate = vi.fn()
 
 vi.mock('../src/index.js', () => ({
   prisma: {
-    videoTask: {
-      findUnique: mockVideoTaskFindUnique,
-      update: mockVideoTaskUpdate
+    take: {
+      findUnique: mockTakeFindUnique,
+      update: mockTakeUpdate
     },
     scene: {
       update: mockSceneUpdate

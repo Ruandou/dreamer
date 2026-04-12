@@ -1,25 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Use vi.hoisted to define mocks before module loading
 const {
   mockProjectFindUnique,
   mockEpisodeFindUnique,
-  mockSegmentFindUnique,
+  mockSceneFindUnique,
   mockCharacterFindUnique,
   mockCompositionFindUnique,
-  mockVideoTaskFindUnique
+  mockTakeFindUnique
 } = vi.hoisted(() => {
   return {
     mockProjectFindUnique: vi.fn(),
     mockEpisodeFindUnique: vi.fn(),
-    mockSegmentFindUnique: vi.fn(),
+    mockSceneFindUnique: vi.fn(),
     mockCharacterFindUnique: vi.fn(),
     mockCompositionFindUnique: vi.fn(),
-    mockVideoTaskFindUnique: vi.fn()
+    mockTakeFindUnique: vi.fn()
   }
 })
 
-// Mock the index.js module
 vi.mock('../src/index.js', () => ({
   prisma: {
     project: {
@@ -28,8 +26,8 @@ vi.mock('../src/index.js', () => ({
     episode: {
       findUnique: mockEpisodeFindUnique
     },
-    segment: {
-      findUnique: mockSegmentFindUnique
+    scene: {
+      findUnique: mockSceneFindUnique
     },
     character: {
       findUnique: mockCharacterFindUnique
@@ -37,19 +35,18 @@ vi.mock('../src/index.js', () => ({
     composition: {
       findUnique: mockCompositionFindUnique
     },
-    videoTask: {
-      findUnique: mockVideoTaskFindUnique
+    take: {
+      findUnique: mockTakeFindUnique
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()
   }
 }))
 
-// Import after mocks
 import {
   verifyProjectOwnership,
   verifyEpisodeOwnership,
-  verifySegmentOwnership,
+  verifySceneOwnership,
   verifyCharacterOwnership,
   verifyCompositionOwnership,
   verifyTaskOwnership
@@ -110,25 +107,25 @@ describe('Auth Plugin', () => {
     })
   })
 
-  describe('verifySegmentOwnership', () => {
-    it('should return true when user owns the segment project', async () => {
-      mockSegmentFindUnique.mockResolvedValue({
-        id: 'segment-1',
+  describe('verifySceneOwnership', () => {
+    it('should return true when user owns the scene project', async () => {
+      mockSceneFindUnique.mockResolvedValue({
+        id: 'scene-1',
         episode: { project: { userId: 'user-1' } }
       })
 
-      const result = await verifySegmentOwnership('user-1', 'segment-1')
+      const result = await verifySceneOwnership('user-1', 'scene-1')
 
       expect(result).toBe(true)
     })
 
-    it('should return false when user does not own the segment project', async () => {
-      mockSegmentFindUnique.mockResolvedValue({
-        id: 'segment-1',
+    it('should return false when user does not own the scene project', async () => {
+      mockSceneFindUnique.mockResolvedValue({
+        id: 'scene-1',
         episode: { project: { userId: 'other-user' } }
       })
 
-      const result = await verifySegmentOwnership('user-1', 'segment-1')
+      const result = await verifySceneOwnership('user-1', 'scene-1')
 
       expect(result).toBe(false)
     })
@@ -184,9 +181,9 @@ describe('Auth Plugin', () => {
 
   describe('verifyTaskOwnership', () => {
     it('should return true when user owns the task project', async () => {
-      mockVideoTaskFindUnique.mockResolvedValue({
+      mockTakeFindUnique.mockResolvedValue({
         id: 'task-1',
-        segment: { episode: { project: { userId: 'user-1' } } }
+        scene: { episode: { project: { userId: 'user-1' } } }
       })
 
       const result = await verifyTaskOwnership('user-1', 'task-1')
@@ -195,9 +192,9 @@ describe('Auth Plugin', () => {
     })
 
     it('should return false when user does not own the task project', async () => {
-      mockVideoTaskFindUnique.mockResolvedValue({
+      mockTakeFindUnique.mockResolvedValue({
         id: 'task-1',
-        segment: { episode: { project: { userId: 'other-user' } } }
+        scene: { episode: { project: { userId: 'other-user' } } }
       })
 
       const result = await verifyTaskOwnership('user-1', 'task-1')
@@ -206,7 +203,7 @@ describe('Auth Plugin', () => {
     })
 
     it('should return false when task does not exist', async () => {
-      mockVideoTaskFindUnique.mockResolvedValue(null)
+      mockTakeFindUnique.mockResolvedValue(null)
 
       const result = await verifyTaskOwnership('user-1', 'nonexistent')
 
