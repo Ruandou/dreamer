@@ -36,20 +36,36 @@ User
         │           │     ├── durationMs (时长)
         │           │     └── description (描述)
         │           │
-        │           └── CharacterSegment[] (出现的角色)
-        │                 ├── characterImageId → CharacterImage
-        │                 └── action (该片段中的动作/情绪)
+        │           ├── CharacterSegment[] (出现的角色)
+        │           │     ├── characterImageId → CharacterImage
+        │           │     └── action (该片段中的动作/情绪)
+        │           │
+        │           └── VideoTask[] (视频生成任务)
+        │                 ├── model (wan2.6/seedance2.0)
+        │                 └── status (queued/processing/completed/failed)
         │
         ├── Character[] (角色，从剧本提取)
         │     └── images[] (形象，parentId 层级)
         │           ├── parentId=null (基础形象)
         │           └── parentId→基础 (衍生：服装/表情/pose)
         │
-        └── Location[] (场地，从剧本提取)
-              ├── location (地点名)
-              ├── timeOfDay (日/夜/晨/昏)
-              ├── characters (出场角色列表)
-              └── description (场景描述)
+        ├── Location[] (场地，从剧本提取)
+        │     ├── location (地点名)
+        │     ├── timeOfDay (日/夜/晨/昏)
+        │     ├── characters (出场角色列表)
+        │     ├── description (场景描述)
+        │     └── imageUrl (场地图片)
+        │
+        ├── ProjectAsset[] (项目素材库)
+        │     ├── type (character/background/atmosphere/prop/style)
+        │     ├── url (素材 URL)
+        │     └── tags, mood, location
+        │
+        ├── PipelineJob[] (流水线执行任务)
+        │     └── PipelineStepResult[] (各步骤结果)
+        │
+        └── Composition[] (视频合成)
+              └── CompositionSegment[] (片段关联)
 ```
 
 ## 模型详细说明
@@ -64,7 +80,12 @@ User
 | password | String | 密码（加密） |
 | apiKey | String? | API Key |
 | deepseekApiUrl | String? | DeepSeek API 地址 |
-| ... | ... | 其他 API 配置 |
+| atlasApiKey | String? | Atlas API Key |
+| atlasApiUrl | String? | Atlas API 地址 |
+| arkApiKey | String? | Ark API Key |
+| arkApiUrl | String? | Ark API 地址 |
+| createdAt | DateTime | 创建时间 |
+| updatedAt | DateTime | 更新时间 |
 
 ### Project (项目)
 
@@ -75,6 +96,8 @@ User
 | description | String? | 项目描述 |
 | userId | String | 所有者 ID |
 | visualStyle | String[] | 视频风格数组 |
+| createdAt | DateTime | 创建时间 |
+| updatedAt | DateTime | 更新时间 |
 
 ### Episode (剧集)
 
@@ -171,6 +194,91 @@ User
 | thumbnailUrl | String? | 缩略图 URL |
 | cost | Float? | 费用 |
 | duration | Int? | 生成耗时 |
+| isSelected | Boolean | 是否选中为最终版本 |
+
+### ModelApiCall (API 调用记录)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String | 主键 |
+| userId | String | 用户 ID |
+| model | String | 模型名称 |
+| provider | String | 提供商：volcengine, atlas, openai, deepseek |
+| prompt | String | 请求提示词 |
+| requestParams | String? | 请求参数 JSON |
+| externalTaskId | String? | 外部 API 任务 ID |
+| status | String | 状态 pending/processing/completed/failed |
+| responseData | String? | 响应数据 JSON |
+| cost | Float? | 费用 |
+| duration | Int? | 生成耗时 |
+| errorMsg | String? | 错误信息 |
+| videoTaskId | String? | 关联的 VideoTask ID |
+
+### Composition (视频合成)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String | 主键 |
+| projectId | String | 所属项目 ID |
+| title | String | 合成标题 |
+| duration | Int | 总时长（秒） |
+| width | Int | 宽度，默认 1080 |
+| height | Int | 高度，默认 1920 |
+| status | String | 状态 draft/composing/exporting/exported |
+| voiceover | String? | 配音文件 URL |
+| bgm | String? | 背景音乐 URL |
+| subtitles | String? | 字幕文件 URL |
+| outputUrl | String? | 最终成品 URL |
+
+### CompositionSegment (合成片段关联)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String | 主键 |
+| compositionId | String | 所属合成 ID |
+| segmentId | String | 引用的分镜 ID |
+| order | Int | 时间轴顺序 |
+| startTime | Float | 起始时间（秒） |
+| endTime | Float | 结束时间（秒） |
+| transition | String? | 转场类型 none/fade/dissolve/wipe/slide |
+
+### ProjectAsset (项目素材库)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String | 主键 |
+| projectId | String | 所属项目 ID |
+| type | String | 类型：character/background/atmosphere/prop/style |
+| name | String | 素材名称 |
+| url | String | 素材 URL |
+| description | String? | 素材描述 |
+| tags | String[] | 标签数组 |
+| mood | String[] | 氛围标签数组 |
+| location | String? | 适用场地 |
+
+### ImportTask (剧本导入任务)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String | 主键 |
+| projectId | String? | 所属项目 ID |
+| userId | String | 用户 ID |
+| status | String | 状态 pending/processing/completed/failed |
+| content | String | 导入内容 |
+| type | String | 内容类型，默认 markdown |
+| result | Json? | 导入结果 |
+| errorMsg | String? | 错误信息 |
+
+### OutlineJob (大纲生成任务)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String | 主键 |
+| userId | String | 用户 ID |
+| status | String | 状态 pending/running/completed/failed |
+| idea | String | 用户输入的想法 |
+| result | Json? | 生成结果（outline + rawScript） |
+| error | String? | 错误信息 |
 
 ### PipelineJob (Pipeline 执行任务)
 
@@ -201,36 +309,39 @@ User
 
 ## Pipeline 步骤
 
-Pipeline 执行流程：
+Pipeline 执行流程（7 步）：
 
 ```
-Step 1: 剧本生成 (SCRIPT_WRITING)
-  输入: idea 或已有剧本
+Step 1: 剧本生成 (script-writing)
+  输入: idea
   输出: ScriptContent { title, summary, scenes[] }
-  保存: Episode.script
 
-Step 2: 提取角色 + 场景 (EXTRACT_ENTITIES)
-  输入: scriptContent.scenes[]
-  输出: Character[], Location[]
-  保存: Character 表, Location 表
-
-Step 3: 分集规划 (EPISODE_SPLITTING)
-  输入: scriptContent, targetEpisodes
+Step 2: 智能分集 (episode-splitting)
+  输入: ScriptContent, targetDuration
   输出: EpisodePlan[]
-  保存: Episode.episodeNum, synopsis, sceneIndices
 
-Step 4: 生成分镜 (GENERATE_SEGMENTS)
-  输入: episodes, scriptContent
-  输出: Segment[], SubShot[], CharacterSegment[]
-  保存: Segment 表, SubShot 表, CharacterSegment 表
+Step 3: 动作提取 (action-extraction)
+  输入: scenes[], characters[]
+  输出: SceneActions[]
 
-Step 5: Seedance 参数化 (PARAMETRIZE)
-  输入: segments
+Step 3.5: 素材匹配 (asset-matching)
+  输入: scenes[], characterImages[], projectAssets[]
+  输出: SceneAssetRecommendation[]
+
+Step 4: 分镜生成 (storyboard-generation)
+  输入: episodes, scenes, assetRecommendations
+  输出: StoryboardSegment[]
+
+Step 5: Seedance 参数化 (seedance-parametrization)
+  输入: storyboard[]
   输出: SeedanceSegmentConfig[]
-  保存: Segment.prompt, Segment.seedanceParams
+
+Step 6: 视频生成 (video-generation)
+  输入: seedanceConfigs[]
+  输出: VideoTask[] → videoUrl
 ```
 
-注意：角色动作在 SubShot.description 或 CharacterSegment.action 中描述。
+注意：角色动作在 `action-extraction` 阶段提取，存储在 `SceneActions` 中。
 
 ## 用户操作流程
 
