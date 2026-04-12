@@ -338,6 +338,26 @@ docs/plans/<计划名称>_<YYYYMMDD>.md
 
 ## 常见问题
 
+### Prisma：`migrations` 与版本管理、要记几条命令？
+
+- **`packages/backend/prisma/migrations/` 必须进 Git**，与 `schema.prisma` 一起作为「库结构变更」的唯一事实来源。仓库里曾误把该目录写进 `.gitignore`，已去掉；拉代码后同事用同一条迁移链即可对齐。
+- **日常部署 / 本地对齐结构，只需记一条**：`pnpm --filter @dreamer/backend run db:migrate:deploy`（读仓库根 `.env` 里的 `DATABASE_URL`）。
+- **其余脚本用途**（不必每次都用）：
+  - `db:migrate` → `prisma migrate dev`，**本地改 schema 后生成新迁移**时用；
+  - `db:push` → 无迁移历史或纯原型机时把 schema 推到库（与 migrate 二选一为主流程时，优先 migrate）；
+  - `db:migrate:squash-drift-rows` → **仅**在「删改过已写入 `_prisma_migrations` 的旧迁移目录」这类补救场景用一次，不是流水线常规步骤。
+
+### Prisma：合并迁移后本地库报「迁移目录缺少已记录迁移」
+
+若 `_prisma_migrations` 里仍有已删除的旧迁移名（例如拆分出去的 `20260412120000_add_project_episode_synopsis` 等），在 `packages/backend` 下依次执行：
+
+```bash
+pnpm run db:migrate:squash-drift-rows
+pnpm run db:migrate:deploy
+```
+
+`db:migrate:squash-drift-rows` 会执行 `prisma/squash-drop-old-migration-rows.sql`（只删迁移历史行，不改业务表）。**从未踩过该问题的库**只需 `db:migrate:deploy`。
+
 ### DATABASE_URL not found
 
 检查 index.ts 第一行是否是：

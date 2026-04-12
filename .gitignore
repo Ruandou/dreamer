@@ -27,8 +27,7 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# Prisma
-packages/backend/prisma/migrations/
+# Prisma：`prisma/migrations/` 必须纳入版本管理，勿加入 .gitignore
 
 # MinIO data
 docker/data/
