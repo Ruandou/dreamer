@@ -5,12 +5,7 @@ import {
   NCard,
   NButton,
   NSpace,
-  NEmpty,
-  NModal,
-  NForm,
-  NFormItem,
   NInput,
-  NTag,
   NDropdown,
   useMessage,
   useDialog,
@@ -25,8 +20,6 @@ const message = useMessage();
 const dialog = useDialog();
 const projectStore = useProjectStore();
 
-const showCreateModal = ref(false);
-const newProject = ref({ name: "", description: "" });
 const searchQuery = ref("");
 const quickIdea = ref("");
 const isCreating = ref(false);
@@ -47,34 +40,6 @@ const filteredProjects = computed(() => {
       (p.description && p.description.toLowerCase().includes(query)),
   );
 });
-
-const handleCreate = () => {
-  showCreateModal.value = true;
-};
-
-const handleFileChange = (options: { file: UploadFileInfo }) => {
-  const file = options.file;
-  if (!file.file) return;
-
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    quickIdea.value = e.target?.result as string;
-    message.success("剧本已导入");
-  };
-  reader.readAsText(file.file);
-};
-
-const handleFileUpload = (fileList: { file: UploadFileInfo }[]) => {
-  const file = fileList[0]?.file;
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    quickIdea.value = e.target?.result as string;
-    message.success("剧本已导入");
-  };
-  reader.readAsText(file);
-};
 
 const handleFileInputClick = () => {
   fileInputRef.value?.click();
@@ -125,17 +90,6 @@ const handleQuickCreate = async () => {
   }
 };
 
-const handleSubmit = async () => {
-  if (!newProject.value.name.trim()) {
-    message.warning("请输入项目名称");
-    return;
-  }
-  const project = await projectStore.createProject(newProject.value);
-  showCreateModal.value = false;
-  newProject.value = { name: "", description: "" };
-  router.push(`/project/${project.id}`);
-};
-
 const handleProjectClick = (id: string) => {
   router.push(`/project/${id}`);
 };
@@ -153,7 +107,7 @@ const handleDelete = (id: string) => {
   });
 };
 
-const formatDate = (date: string) => {
+const formatDate = (date: string | Date) => {
   return new Date(date).toLocaleDateString("zh-CN", {
     year: "numeric",
     month: "short",
@@ -245,16 +199,9 @@ const handleDropdownSelect = (key: string, projectId: string) => {
       <EmptyState
         v-if="!projectStore.projects.length"
         title="暂无项目"
-        description="创建你的第一个短剧项目，开始 AI 创作之旅"
+        description="在上方快速创建区输入想法、导入剧本或拖入文件，生成大纲后即可开始创作"
         icon="🎬"
-      >
-        <template #action>
-          <NSpace>
-            <NButton @click="handleImport">导入剧本</NButton>
-            <NButton type="primary" @click="handleCreate">新建项目</NButton>
-          </NSpace>
-        </template>
-      </EmptyState>
+      />
 
       <!-- Search Empty -->
       <EmptyState
@@ -303,38 +250,6 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         </div>
       </template>
     </div>
-
-    <!-- Create Modal -->
-    <NModal
-      v-model:show="showCreateModal"
-      preset="card"
-      title="新建项目"
-      style="width: 480px"
-      :bordered="false"
-    >
-      <NForm :model="newProject" label-placement="top">
-        <NFormItem label="项目名称" path="name">
-          <NInput
-            v-model:value="newProject.name"
-            placeholder="给你的短剧起个名字"
-          />
-        </NFormItem>
-        <NFormItem label="项目描述" path="description">
-          <NInput
-            v-model:value="newProject.description"
-            type="textarea"
-            placeholder="简要描述故事背景或创作方向（可选）"
-            :rows="3"
-          />
-        </NFormItem>
-      </NForm>
-      <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showCreateModal = false">取消</NButton>
-          <NButton type="primary" @click="handleSubmit">创建项目</NButton>
-        </NSpace>
-      </template>
-    </NModal>
   </div>
 </template>
 

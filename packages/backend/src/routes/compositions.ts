@@ -3,6 +3,7 @@ import { prisma } from '../index.js'
 import { composeVideo, type CompositionClip } from '../services/ffmpeg.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { verifyCompositionOwnership, verifyProjectOwnership } from '../plugins/auth.js'
+import { permissionDeniedBody } from '../lib/http-errors.js'
 
 export async function compositionRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { projectId: string } }>(
@@ -13,7 +14,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
       const { projectId } = request.query
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       return prisma.composition.findMany({
@@ -32,7 +33,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
       const compositionId = request.params.id
 
       if (!(await verifyCompositionOwnership(userId, compositionId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this composition' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const composition = await prisma.composition.findUnique({
@@ -70,7 +71,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
       const { projectId, episodeId, title } = request.body
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const composition = await prisma.composition.create({
@@ -89,7 +90,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
       const compositionId = request.params.id
 
       if (!(await verifyCompositionOwnership(userId, compositionId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this composition' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const { title } = request.body
@@ -111,7 +112,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
       const compositionId = request.params.id
 
       if (!(await verifyCompositionOwnership(userId, compositionId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this composition' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const composition = await prisma.composition.findUnique({ where: { id: compositionId } })
@@ -132,7 +133,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
       const compositionId = request.params.id
 
       if (!(await verifyCompositionOwnership(userId, compositionId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this composition' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const { clips } = request.body
@@ -165,7 +166,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
       const compositionId = request.params.id
 
       if (!(await verifyCompositionOwnership(userId, compositionId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this composition' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const composition = await prisma.composition.findUnique({

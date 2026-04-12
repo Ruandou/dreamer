@@ -13,7 +13,9 @@ const {
   mockSceneDeleteMany,
   mockSceneCreate,
   mockShotCreate,
-  mockLocationFindFirst
+  mockLocationFindFirst,
+  mockVerifyEpisodeOwnership,
+  mockVerifyProjectOwnership
 } = vi.hoisted(() => {
   return {
     mockEpisodeFindMany: vi.fn(),
@@ -26,7 +28,9 @@ const {
     mockSceneDeleteMany: vi.fn(),
     mockSceneCreate: vi.fn(),
     mockShotCreate: vi.fn(),
-    mockLocationFindFirst: vi.fn()
+    mockLocationFindFirst: vi.fn(),
+    mockVerifyEpisodeOwnership: vi.fn().mockResolvedValue(true),
+    mockVerifyProjectOwnership: vi.fn().mockResolvedValue(true)
   }
 })
 
@@ -45,8 +49,8 @@ vi.mock('../src/services/deepseek.js', () => ({
 
 // Mock verifyEpisodeOwnership and verifyProjectOwnership
 vi.mock('../src/plugins/auth.js', () => ({
-  verifyEpisodeOwnership: vi.fn().mockResolvedValue(true),
-  verifyProjectOwnership: vi.fn().mockResolvedValue(true)
+  verifyEpisodeOwnership: (...args: unknown[]) => mockVerifyEpisodeOwnership(...args),
+  verifyProjectOwnership: (...args: unknown[]) => mockVerifyProjectOwnership(...args)
 }))
 
 // Mock the index.js module
@@ -80,6 +84,7 @@ vi.mock('../src/index.js', () => ({
 
 // Import routes after all mocks are set up
 import { episodeRoutes } from '../src/routes/episodes.js'
+import { expectPermissionDeniedPayload } from './helpers/expect-http.js'
 
 describe('Episode Routes', () => {
   let app: FastifyInstance
@@ -105,6 +110,17 @@ describe('Episode Routes', () => {
   })
 
   describe('GET /api/episodes', () => {
+    it('should return 403 when user does not own project', async () => {
+      mockVerifyProjectOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/episodes?projectId=proj-1'
+      })
+
+      expectPermissionDeniedPayload(response)
+    })
+
     it('should return episodes for a project', async () => {
       const mockEpisodes = [
         { id: 'ep-1', episodeNum: 1, title: 'Episode 1' },
@@ -152,6 +168,17 @@ describe('Episode Routes', () => {
       })
 
       expect(response.statusCode).toBe(404)
+    })
+
+    it('should return 403 when user does not own episode', async () => {
+      mockVerifyEpisodeOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/episodes/ep-1'
+      })
+
+      expectPermissionDeniedPayload(response)
     })
   })
 

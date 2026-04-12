@@ -5,6 +5,7 @@ import { optimizePrompt } from '../services/deepseek.js'
 import { verifySceneOwnership, verifyEpisodeOwnership } from '../plugins/auth.js'
 import type { VideoModel } from '@dreamer/shared/types'
 import { stitchScenePrompt } from '../services/scene-prompt.js'
+import { permissionDeniedBody } from '../lib/http-errors.js'
 
 async function resolveSceneGeneratePrompt(sceneId: string): Promise<string> {
   const scene = await prisma.scene.findUnique({
@@ -34,7 +35,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
       const { episodeId } = request.query
 
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       return prisma.scene.findMany({
@@ -57,7 +58,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
       const sceneId = request.params.id
 
       if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const scene = await prisma.scene.findUnique({
@@ -81,7 +82,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
       const { episodeId, sceneNum, description, prompt } = request.body
 
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const scene = await prisma.scene.create({
@@ -118,7 +119,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
       const sceneId = request.params.id
 
       if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const { description, sceneNum, prompt } = request.body
@@ -156,7 +157,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
       const sceneId = request.params.id
 
       if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const scene = await prisma.scene.findUnique({ where: { id: sceneId } })
@@ -177,7 +178,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
       const sceneId = request.params.id
 
       if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const { model, referenceImage, imageUrls, duration } = request.body
@@ -270,7 +271,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
       const { id: sceneId, taskId } = request.params
 
       if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       await prisma.take.updateMany({
@@ -295,7 +296,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
       const sceneId = request.params.id
 
       if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       return prisma.take.findMany({
@@ -313,7 +314,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
       const sceneId = request.params.id
 
       if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this scene' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const { prompt } = request.body

@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { expandScript } from '../services/deepseek.js'
 import { verifyEpisodeOwnership, verifyProjectOwnership } from '../plugins/auth.js'
+import { permissionDeniedBody } from '../lib/http-errors.js'
 import type { ScriptContent } from '@dreamer/shared/types'
 
 export async function episodeRoutes(fastify: FastifyInstance) {
@@ -15,7 +16,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
 
       // Verify project ownership
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       return prisma.episode.findMany({
@@ -34,7 +35,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
       const episodeId = request.params.id
 
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const episode = await prisma.episode.findUnique({
@@ -60,7 +61,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
 
       // Verify project ownership
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const episode = await prisma.episode.create({
@@ -80,7 +81,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
       const episodeId = request.params.id
 
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const { title, script, rawScript } = request.body
@@ -104,7 +105,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
       const episodeId = request.params.id
 
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       // Check if exists first
@@ -129,7 +130,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
 
       // Verify ownership
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this episode' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       // Verify episode exists

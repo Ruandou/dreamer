@@ -62,6 +62,7 @@ vi.mock('../src/index.js', () => ({
 }))
 
 import { compositionRoutes } from '../src/routes/compositions.js'
+import { expectPermissionDeniedPayload } from './helpers/expect-http.js'
 
 describe('Composition Routes', () => {
   let app: FastifyInstance
@@ -149,7 +150,7 @@ describe('Composition Routes', () => {
         url: '/api/compositions/comp-1'
       })
 
-      expect(response.statusCode).toBe(403)
+      expectPermissionDeniedPayload(response)
     })
   })
 

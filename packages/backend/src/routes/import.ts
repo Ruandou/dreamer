@@ -4,6 +4,7 @@ import { importQueue } from '../queues/import.js'
 import { parseScriptDocument } from '../services/parser.js'
 import { importParsedData, type ParsedScript } from '../services/importer.js'
 import { verifyProjectOwnership } from '../plugins/auth.js'
+import { permissionDeniedBody } from '../lib/http-errors.js'
 
 export async function importRoutes(fastify: FastifyInstance) {
   // 预览解析结果（不保存到数据库）
@@ -71,7 +72,7 @@ export async function importRoutes(fastify: FastifyInstance) {
       }
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       // 创建导入任务
@@ -164,7 +165,7 @@ export async function importRoutes(fastify: FastifyInstance) {
       }
 
       if (task.userId !== userId) {
-        return reply.status(403).send({ error: '无权限访问此任务' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       return task

@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { verifyTaskOwnership, verifyProjectOwnership } from '../plugins/auth.js'
+import { permissionDeniedBody } from '../lib/http-errors.js'
 
 export async function taskRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
@@ -11,7 +12,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
       const taskId = request.params.id
 
       if (!(await verifyTaskOwnership(userId, taskId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this task' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const task = await prisma.take.findUnique({
@@ -34,7 +35,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
       const { projectId } = request.query
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const scenes = await prisma.scene.findMany({
@@ -68,7 +69,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
       const taskId = request.params.id
 
       if (!(await verifyTaskOwnership(userId, taskId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this task' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const task = await prisma.take.findUnique({
@@ -105,7 +106,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
       const taskId = request.params.id
 
       if (!(await verifyTaskOwnership(userId, taskId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this task' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const task = await prisma.take.findUnique({

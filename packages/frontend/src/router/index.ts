@@ -1,6 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 
+/** 仅允许站内相对路径，防止开放重定向 */
+function safeInternalRedirect(fullPath: string): string | undefined {
+  if (!fullPath.startsWith('/') || fullPath.startsWith('//')) return undefined
+  return fullPath
+}
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -93,6 +99,21 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+const PUBLIC_ROUTE_NAMES = new Set(['Login', 'Register'])
+
+router.beforeEach((to) => {
+  const token = localStorage.getItem('token')
+  const isPublic = to.name != null && PUBLIC_ROUTE_NAMES.has(String(to.name))
+
+  if (token && isPublic) {
+    return { path: '/projects' }
+  }
+  if (!token && !isPublic) {
+    const redirect = safeInternalRedirect(to.fullPath) || '/projects'
+    return { name: 'Login', query: { redirect } }
+  }
 })
 
 export default router

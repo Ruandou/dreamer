@@ -1,8 +1,7 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
-import { writeScriptFromIdea } from '../services/script-writer.js'
 import { createOutlineJob, getOutlineJob } from '../queues/outline.js'
-import type { ScriptContent } from '@dreamer/shared/types'
+import { permissionDeniedBody } from '../lib/http-errors.js'
 
 export async function projectRoutes(fastify: FastifyInstance) {
   // List projects
@@ -18,7 +17,85 @@ export async function projectRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // Get project
+  // Create project
+  fastify.post<{ Body: { name: string; description?: string } }>(
+    '/',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = (request as any).user
+      const { name, description } = request.body
+
+      const project = await prisma.project.create({
+        data: { name, description, userId: user.id }
+      })
+
+      return reply.status(201).send(project)
+    }
+  )
+
+  // Generate outline（静态路径须注册在 /:id 之前）
+  fastify.post<{
+    Body: { idea: string }
+  }>(
+    '/generate-outline',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = (request as any).user
+      const { idea } = request.body
+
+      if (!idea?.trim()) {
+        return reply.status(400).send({ error: '想法不能为空' })
+      }
+
+      try {
+        const jobId = await createOutlineJob(user.id, idea)
+        return { jobId }
+      } catch (error: any) {
+        fastify.log.error(error)
+        return reply.status(500).send({ error: error.message || '创建任务失败' })
+      }
+    }
+  )
+
+  // 获取用户所有 outline jobs（须在 /:id 之前，否则 id 会匹配成 "outline-jobs"）
+  fastify.get(
+    '/outline-jobs',
+    { preHandler: [fastify.authenticate] },
+    async (request) => {
+      const user = (request as any).user
+
+      return prisma.outlineJob.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' }
+      })
+    }
+  )
+
+  // 获取 outline job 状态
+  fastify.get<{
+    Params: { jobId: string }
+  }>(
+    '/outline-job/:jobId',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = (request as any).user
+      const { jobId } = request.params
+
+      const job = await getOutlineJob(jobId)
+
+      if (!job) {
+        return reply.status(404).send({ error: '任务不存在' })
+      }
+
+      if (job.userId !== user.id) {
+        return reply.status(403).send(permissionDeniedBody)
+      }
+
+      return job
+    }
+  )
+
+  // Get project（动态 :id 放在所有静态 GET 之后）
   fastify.get<{ Params: { id: string } }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
@@ -39,22 +116,6 @@ export async function projectRoutes(fastify: FastifyInstance) {
       }
 
       return project
-    }
-  )
-
-  // Create project
-  fastify.post<{ Body: { name: string; description?: string } }>(
-    '/',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const user = (request as any).user
-      const { name, description } = request.body
-
-      const project = await prisma.project.create({
-        data: { name, description, userId: user.id }
-      })
-
-      return reply.status(201).send(project)
     }
   )
 
@@ -99,69 +160,6 @@ export async function projectRoutes(fastify: FastifyInstance) {
       await prisma.project.delete({ where: { id: request.params.id } })
 
       return reply.status(204).send()
-    }
-  )
-
-  // Generate outline (异步job模式)
-  fastify.post<{
-    Body: { idea: string }
-  }>(
-    '/generate-outline',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const user = (request as any).user
-      const { idea } = request.body
-
-      if (!idea?.trim()) {
-        return reply.status(400).send({ error: '想法不能为空' })
-      }
-
-      try {
-        // 创建异步job
-        const jobId = await createOutlineJob(user.id, idea)
-        return { jobId }
-      } catch (error: any) {
-        fastify.log.error(error)
-        return reply.status(500).send({ error: error.message || '创建任务失败' })
-      }
-    }
-  )
-
-  // 获取 outline job 状态
-  fastify.get<{
-    Params: { jobId: string }
-  }>(
-    '/outline-job/:jobId',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const user = (request as any).user
-      const { jobId } = request.params
-
-      const job = await getOutlineJob(jobId)
-
-      if (!job) {
-        return reply.status(404).send({ error: '任务不存在' })
-      }
-
-      if (job.userId !== user.id) {
-        return reply.status(403).send({ error: '无权访问' })
-      }
-
-      return job
-    }
-  )
-
-  // 获取用户所有 outline jobs
-  fastify.get(
-    '/outline-jobs',
-    { preHandler: [fastify.authenticate] },
-    async (request) => {
-      const user = (request as any).user
-
-      return prisma.outlineJob.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'desc' }
-      })
     }
   )
 }

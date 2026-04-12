@@ -12,8 +12,8 @@ export const authPlugin = fp(async (fastify: FastifyInstance) => {
   fastify.decorate('authenticate', async function (request: FastifyRequest, reply: FastifyReply) {
     try {
       await request.jwtVerify()
-    } catch (err) {
-      reply.status(401).send({ error: 'Unauthorized' })
+    } catch {
+      return reply.status(401).send({ error: 'Unauthorized' })
     }
   })
 })

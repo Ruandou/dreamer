@@ -62,6 +62,7 @@ vi.mock('../src/index.js', () => ({
 
 // Import routes after all mocks are set up
 import { importRoutes } from '../src/routes/import.js'
+import { expectPermissionDeniedPayload } from './helpers/expect-http.js'
 
 describe('Import Routes', () => {
   let app: FastifyInstance
@@ -242,9 +243,7 @@ describe('Import Routes', () => {
         url: '/api/import/task/task-1'
       })
 
-      expect(response.statusCode).toBe(403)
-      const data = JSON.parse(response.payload)
-      expect(data.error).toBe('无权限访问此任务')
+      expectPermissionDeniedPayload(response)
     })
   })
 

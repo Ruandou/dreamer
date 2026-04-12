@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { verifyCharacterOwnership, verifyProjectOwnership } from '../plugins/auth.js'
+import { permissionDeniedBody } from '../lib/http-errors.js'
 
 export async function characterRoutes(fastify: FastifyInstance) {
   // List characters for a project (with images)
@@ -13,7 +14,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
       const { projectId } = request.query
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const characters = await prisma.character.findMany({
@@ -39,7 +40,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
       const characterId = request.params.id
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const character = await prisma.character.findUnique({
@@ -68,7 +69,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
       const { projectId, name, description } = request.body
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not own this project' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const character = await prisma.character.create({
@@ -88,7 +89,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
       const characterId = request.params.id
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const { name, description } = request.body
@@ -111,7 +112,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
       const characterId = request.params.id
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       await prisma.character.delete({ where: { id: characterId } })
@@ -130,7 +131,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
       const characterId = request.params.id
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       // Parse multipart form - collect fields first
@@ -210,7 +211,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
       const { id: characterId, imageId } = request.params
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const { name, type, description, order } = request.body
@@ -233,7 +234,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
       const { id: characterId, imageId } = request.params
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       // Delete children first (recursive)
@@ -263,7 +264,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
       const { id: characterId, imageId } = request.params
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
-        return reply.status(403).send({ error: 'Forbidden: You do not have access to this character' })
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const { parentId } = request.body

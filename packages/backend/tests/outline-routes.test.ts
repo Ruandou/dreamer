@@ -34,6 +34,7 @@ vi.mock('../src/queues/outline.js', () => ({
 
 // Import routes after all mocks are set up
 import { projectRoutes } from '../src/routes/projects.js'
+import { expectPermissionDeniedPayload } from './helpers/expect-http.js'
 
 describe('Outline Job Routes', () => {
   let app: FastifyInstance
@@ -155,9 +156,7 @@ describe('Outline Job Routes', () => {
         url: '/api/projects/outline-job/job-123'
       })
 
-      expect(response.statusCode).toBe(403)
-      const data = JSON.parse(response.payload)
-      expect(data.error).toBe('无权访问')
+      expectPermissionDeniedPayload(response)
     })
 
     it('should return running status for pending job', async () => {

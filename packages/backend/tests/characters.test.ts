@@ -75,6 +75,7 @@ vi.mock('../src/index.js', () => ({
 
 // Import routes after all mocks are set up
 import { characterRoutes } from '../src/routes/characters.js'
+import { expectPermissionDeniedPayload } from './helpers/expect-http.js'
 
 describe('Character Routes', () => {
   let app: FastifyInstance
@@ -156,7 +157,7 @@ describe('Character Routes', () => {
         url: '/api/characters/char-1'
       })
 
-      expect(response.statusCode).toBe(403)
+      expectPermissionDeniedPayload(response)
     })
   })
 
@@ -282,7 +283,7 @@ describe('Character Routes', () => {
         url: '/api/characters/char-1/images/img-1'
       })
 
-      expect(response.statusCode).toBe(403)
+      expectPermissionDeniedPayload(response)
     })
   })
 
@@ -334,7 +335,7 @@ describe('Character Routes', () => {
         }
       })
 
-      expect(response.statusCode).toBe(403)
+      expectPermissionDeniedPayload(response)
     })
   })
 })

@@ -14,7 +14,8 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "postinstall": "prisma generate",
-    "test": "vitest"
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@dreamer/shared": "workspace:*",

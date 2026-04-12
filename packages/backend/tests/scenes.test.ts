@@ -14,7 +14,9 @@ const {
   mockTakeUpdateMany,
   mockTakeUpdate,
   mockTakeFindMany,
-  mockEpisodeFindFirst
+  mockEpisodeFindFirst,
+  mockVerifySceneOwnership,
+  mockVerifyEpisodeOwnership
 } = vi.hoisted(() => {
   return {
     mockSceneFindMany: vi.fn(),
@@ -29,7 +31,9 @@ const {
     mockTakeUpdateMany: vi.fn(),
     mockTakeUpdate: vi.fn(),
     mockTakeFindMany: vi.fn(),
-    mockEpisodeFindFirst: vi.fn()
+    mockEpisodeFindFirst: vi.fn(),
+    mockVerifySceneOwnership: vi.fn().mockResolvedValue(true),
+    mockVerifyEpisodeOwnership: vi.fn().mockResolvedValue(true)
   }
 })
 
@@ -40,8 +44,8 @@ vi.mock('../src/queues/video.js', () => ({
 }))
 
 vi.mock('../src/plugins/auth.js', () => ({
-  verifySceneOwnership: vi.fn().mockResolvedValue(true),
-  verifyEpisodeOwnership: vi.fn().mockResolvedValue(true)
+  verifySceneOwnership: (...args: unknown[]) => mockVerifySceneOwnership(...args),
+  verifyEpisodeOwnership: (...args: unknown[]) => mockVerifyEpisodeOwnership(...args)
 }))
 
 vi.mock('../src/services/deepseek.js', () => ({
@@ -80,6 +84,7 @@ vi.mock('../src/index.js', () => ({
 }))
 
 import { sceneRoutes } from '../src/routes/scenes.js'
+import { expectPermissionDeniedPayload } from './helpers/expect-http.js'
 
 describe('Scene Routes', () => {
   let app: FastifyInstance
@@ -104,6 +109,17 @@ describe('Scene Routes', () => {
   })
 
   describe('GET /api/scenes', () => {
+    it('should return 403 when user does not own episode', async () => {
+      mockVerifyEpisodeOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/scenes?episodeId=ep-1'
+      })
+
+      expectPermissionDeniedPayload(response)
+    })
+
     it('should return scenes for an episode', async () => {
       const mockScenes = [{ id: 'scene-1', sceneNum: 1, description: 'Test', takes: [] }]
       mockSceneFindMany.mockResolvedValue(mockScenes)
@@ -149,6 +165,17 @@ describe('Scene Routes', () => {
       })
 
       expect(response.statusCode).toBe(404)
+    })
+
+    it('should return 403 when user does not own scene', async () => {
+      mockVerifySceneOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/scenes/scene-1'
+      })
+
+      expectPermissionDeniedPayload(response)
     })
   })
 

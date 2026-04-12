@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { NCard, NForm, NFormItem, NInput, NButton, NSpace, useMessage } from 'naive-ui'
 import { api } from '@/api'
 
+const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const formValue = ref({ name: '', email: '', password: '', confirmPassword: '' })
@@ -38,7 +39,10 @@ const handleRegister = async () => {
       localStorage.setItem('token', res.data.accessToken)
       localStorage.setItem('user', JSON.stringify(res.data.user))
       message.success('注册成功')
-      router.push('/projects')
+      const raw = route.query.redirect
+      const r = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : ''
+      const target = r.startsWith('/') && !r.startsWith('//') ? r : '/projects'
+      router.push(target)
     }
   } catch (error: any) {
     message.error(error.response?.data?.error || '注册失败')

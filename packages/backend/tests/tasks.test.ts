@@ -6,14 +6,18 @@ const {
   mockSceneFindMany,
   mockTakeUpdate,
   mockSceneUpdate,
-  mockTakeCreate
+  mockTakeCreate,
+  mockVerifyTaskOwnership,
+  mockVerifyProjectOwnership
 } = vi.hoisted(() => {
   return {
     mockTakeFindUnique: vi.fn(),
     mockSceneFindMany: vi.fn(),
     mockTakeUpdate: vi.fn(),
     mockSceneUpdate: vi.fn(),
-    mockTakeCreate: vi.fn()
+    mockTakeCreate: vi.fn(),
+    mockVerifyTaskOwnership: vi.fn().mockResolvedValue(true),
+    mockVerifyProjectOwnership: vi.fn().mockResolvedValue(true)
   }
 })
 
@@ -24,8 +28,8 @@ vi.mock('../src/queues/video.js', () => ({
 }))
 
 vi.mock('../src/plugins/auth.js', () => ({
-  verifyTaskOwnership: vi.fn().mockResolvedValue(true),
-  verifyProjectOwnership: vi.fn().mockResolvedValue(true)
+  verifyTaskOwnership: (...args: unknown[]) => mockVerifyTaskOwnership(...args),
+  verifyProjectOwnership: (...args: unknown[]) => mockVerifyProjectOwnership(...args)
 }))
 
 vi.mock('../src/index.js', () => ({
@@ -45,6 +49,7 @@ vi.mock('../src/index.js', () => ({
 }))
 
 import { taskRoutes } from '../src/routes/tasks.js'
+import { expectPermissionDeniedPayload } from './helpers/expect-http.js'
 
 describe('Task Routes', () => {
   let app: FastifyInstance
@@ -98,9 +103,31 @@ describe('Task Routes', () => {
 
       expect(response.statusCode).toBe(404)
     })
+
+    it('should return 403 when user does not own task', async () => {
+      mockVerifyTaskOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/tasks/task-1'
+      })
+
+      expectPermissionDeniedPayload(response)
+    })
   })
 
   describe('GET /api/tasks', () => {
+    it('should return 403 when user does not own project', async () => {
+      mockVerifyProjectOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/tasks?projectId=proj-1'
+      })
+
+      expectPermissionDeniedPayload(response)
+    })
+
     it('should return tasks for project', async () => {
       const mockScenes = [
         {

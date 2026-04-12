@@ -19,15 +19,32 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
+/** 这些请求的 401 不触发全局跳转（例如密码错误） */
+function isAuthPublicApiRequest(config: { url?: string; baseURL?: string } | undefined): boolean {
+  if (!config) return false
+  const path = `${config.baseURL || ''}${config.url || ''}`.replace(/\/{2,}/g, '/')
+  return path.includes('/auth/login') || path.includes('/auth/register')
+}
+
+let authRedirectScheduled = false
+
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // 已在登录页时不跳转
-      const isLoginRequest = error.config?.url?.includes('/auth/login')
-      if (!isLoginRequest) {
+      if (isAuthPublicApiRequest(error.config)) {
+        return Promise.reject(error)
+      }
+      const path = window.location.pathname
+      if (path === '/login' || path === '/register') {
+        return Promise.reject(error)
+      }
+      if (!authRedirectScheduled) {
+        authRedirectScheduled = true
         localStorage.removeItem('token')
-        window.location.href = '/login'
+        localStorage.removeItem('user')
+        const next = encodeURIComponent(path + (window.location.search || ''))
+        window.location.href = `/login?redirect=${next}`
       }
     }
     return Promise.reject(error)
