@@ -96,6 +96,24 @@ const allEpisodesReady = computed(() => {
 /** 是否需要批量生成（总集数 ≥2 才有第 2 集及以后） */
 const needsBatchEpisodes = computed(() => effectiveTarget.value >= 2)
 
+/** 总集数快捷预设 */
+const EPISODE_PRESETS = [1, 6, 12, 24] as const
+
+/** 顶部步骤：1 创意梗概 → 2 剧本批量 → 3 风格解析 */
+const generateSteps = [
+  { id: 'idea', label: '创意与梗概' },
+  { id: 'script', label: '剧本与批量' },
+  { id: 'parse', label: '风格与解析' }
+] as const
+
+const generateFlowStep = computed(() => {
+  const ep = episode1.value as any
+  const ep1Ready = !!(ep && scenesFromRaw(ep.rawScript).length > 0)
+  if (!ep1Ready) return 1
+  if (!allEpisodesReady.value) return 2
+  return 3
+})
+
 /** 已有剧本内容的集（批量完成后用于预览，不强制凑满目标集数才显示卡片） */
 const episodesWithScript = computed(() => {
   const eps = project.value?.episodes || []
@@ -337,6 +355,22 @@ watch(targetEpisodeCount, (v) => {
       </template>
 
       <template v-else>
+      <nav class="generate-steps" aria-label="生成流程">
+        <template v-for="(step, idx) in generateSteps" :key="step.id">
+          <div
+            class="generate-step"
+            :class="{
+              'is-current': generateFlowStep === idx + 1,
+              'is-done': generateFlowStep > idx + 1
+            }"
+          >
+            <span class="generate-step-num">{{ idx + 1 }}</span>
+            <span class="generate-step-label">{{ step.label }}</span>
+          </div>
+          <div v-if="idx < generateSteps.length - 1" class="generate-step-divider" aria-hidden="true" />
+        </template>
+      </nav>
+
       <div class="two-col">
         <NCard title="故事创意">
           <NInput
@@ -436,6 +470,19 @@ watch(targetEpisodeCount, (v) => {
             <span class="episode-count-unit">集</span>
           </div>
         </template>
+        <div class="episode-presets">
+          <span class="episode-presets-label">快捷</span>
+          <NButton
+            v-for="n in EPISODE_PRESETS"
+            :key="n"
+            size="tiny"
+            :type="effectiveTarget === n ? 'primary' : 'default'"
+            quaternary
+            @click="targetEpisodeCount = n"
+          >
+            {{ n }}
+          </NButton>
+        </div>
         <p v-if="episode1 && scenesFromRaw(episode1.rawScript).length" class="ok-line">
           <template v-if="episodesWithScript.length > 1">
             已生成 {{ episodesWithScript.length }} 集有场次剧本；当前目标 {{ effectiveTarget }} 集。
@@ -481,11 +528,14 @@ watch(targetEpisodeCount, (v) => {
         </div>
       </NCard>
 
-      <div class="footer-actions mt">
+      <div class="footer-parse mt">
         <NButton type="primary" size="large" :loading="isParsing" @click="runParse">解析剧本 →</NButton>
+        <p class="footer-parse-sub">
+          将按当前总集数处理前 {{ effectiveTarget }} 集（含自动补全缺失剧本）；须先选视觉风格。
+        </p>
       </div>
       <p class="hint center">
-        解析剧本前须至少选择一种视觉风格；点击后将提取角色、场景并创建形象槽位，完成后进入项目详情页。
+        提取角色、场景与形象槽位，完成后进入项目详情。
       </p>
       </template>
     </template>
@@ -625,6 +675,107 @@ watch(targetEpisodeCount, (v) => {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-md);
+}
+
+.generate-steps {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: var(--spacing-lg);
+  padding: 14px 10px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.generate-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.generate-step.is-current,
+.generate-step.is-done {
+  opacity: 1;
+}
+
+.generate-step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+.generate-step.is-current .generate-step-num {
+  background: #6366f1;
+  color: #fff;
+}
+
+.generate-step.is-done .generate-step-num {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.generate-step-label {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.35;
+  max-width: 7em;
+}
+
+.generate-step.is-current .generate-step-label {
+  color: #111827;
+  font-weight: 600;
+}
+
+.generate-step-divider {
+  width: 1px;
+  flex-shrink: 0;
+  align-self: stretch;
+  min-height: 44px;
+  background: #e5e7eb;
+  margin: 2px 2px 0;
+}
+
+.episode-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.episode-presets-label {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-right: 4px;
+}
+
+.footer-parse {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.footer-parse-sub {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7280;
+  text-align: right;
+  max-width: 340px;
 }
 
 .script-gen-card :deep(.n-card-header) {
