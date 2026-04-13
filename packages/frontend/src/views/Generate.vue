@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   NCard,
@@ -7,6 +7,10 @@ import {
   NSpace,
   NResult,
   NInput,
+  NInputNumber,
+  NSkeleton,
+  NSpin,
+  NTooltip,
   useMessage
 } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
@@ -17,7 +21,10 @@ const route = useRoute()
 const message = useMessage()
 const projectStore = useProjectStore()
 
-const TARGET_EPISODES = 6
+/** 与后端一致：解析可 1–200；批量生成接口要求 2–200 */
+const MIN_TARGET_EPISODES = 1
+const MAX_TARGET_EPISODES = 200
+const DEFAULT_TARGET_EPISODES = 6
 
 const isLoading = ref(true)
 const generatingStatus = ref('')
@@ -64,17 +71,32 @@ const isParsing = ref(false)
 const showFullEpisode1 = ref(false)
 const previewEpisodeNum = ref(1)
 
-/** 第 1..TARGET_EPISODES 集是否均有可预览的 scenes（用于解析前校验） */
+/** 目标总集数（用户可调，按项目记住） */
+const targetEpisodeCount = ref(DEFAULT_TARGET_EPISODES)
+
+/** 展示与校验用的规范目标集数 */
+const effectiveTarget = computed(() =>
+  Math.max(
+    MIN_TARGET_EPISODES,
+    Math.min(MAX_TARGET_EPISODES, Math.floor(Number(targetEpisodeCount.value) || 1))
+  )
+)
+
+/** 第 1..目标集数 是否均有可预览的 scenes（提示用） */
 const allEpisodesReady = computed(() => {
+  const te = effectiveTarget.value
   const eps = project.value?.episodes || []
-  for (let n = 1; n <= TARGET_EPISODES; n++) {
+  for (let n = 1; n <= te; n++) {
     const e = eps.find((x: any) => epNum(x) === n)
     if (!e || !scenesFromRaw(e.rawScript).length) return false
   }
   return true
 })
 
-/** 已有剧本内容的集（批量完成后用于预览，不强制凑满 TARGET_EPISODES 才显示卡片） */
+/** 是否需要批量生成（总集数 ≥2 才有第 2 集及以后） */
+const needsBatchEpisodes = computed(() => effectiveTarget.value >= 2)
+
+/** 已有剧本内容的集（批量完成后用于预览，不强制凑满目标集数才显示卡片） */
 const episodesWithScript = computed(() => {
   const eps = project.value?.episodes || []
   return [...eps]
@@ -161,11 +183,15 @@ async function saveDraft() {
 async function runBatchRemaining() {
   const id = projectId.value
   if (!id) return
+  const te = Math.max(
+    2,
+    Math.min(MAX_TARGET_EPISODES, Math.floor(Number(targetEpisodeCount.value) || 2))
+  )
   isBatching.value = true
   batchProgress.value = null
   try {
     const { data } = await api.post<{ jobId: string }>(`/projects/${id}/episodes/generate-remaining`, {
-      targetEpisodes: TARGET_EPISODES
+      targetEpisodes: te
     })
     await pollPipelineJob(
       data.jobId,
@@ -206,8 +232,12 @@ async function runParse() {
   await api.put(`/projects/${id}`, { visualStyle: selectedStyles.value })
   isParsing.value = true
   try {
+    const te = Math.max(
+      MIN_TARGET_EPISODES,
+      Math.min(MAX_TARGET_EPISODES, Math.floor(Number(targetEpisodeCount.value) || 1))
+    )
     const { data } = await api.post<{ jobId: string }>(`/projects/${id}/parse`, {
-      targetEpisodes: TARGET_EPISODES
+      targetEpisodes: te
     })
     router.push(`/project/${id}?parseJobId=${data.jobId}`)
   } catch (e: any) {
@@ -226,6 +256,13 @@ onMounted(async () => {
   }
   try {
     await loadProject(pid)
+    const raw = localStorage.getItem(`dreamer.generate.targetEpisodes.${pid}`)
+    if (raw) {
+      const n = parseInt(raw, 10)
+      if (Number.isFinite(n) && n >= MIN_TARGET_EPISODES && n <= MAX_TARGET_EPISODES) {
+        targetEpisodeCount.value = n
+      }
+    }
     const autoGen =
       route.query.autogen === '1' ||
       route.query.autogen === 'true'
@@ -247,17 +284,59 @@ const handleBack = () => {
 function reloadPage() {
   window.location.reload()
 }
+
+watch(targetEpisodeCount, (v) => {
+  const id = projectId.value
+  if (!id) return
+  const n = Math.max(
+    MIN_TARGET_EPISODES,
+    Math.min(MAX_TARGET_EPISODES, Math.floor(Number(v) || 1))
+  )
+  localStorage.setItem(`dreamer.generate.targetEpisodes.${id}`, String(n))
+})
 </script>
 
 <template>
   <div class="generate-page">
-    <template v-if="projectId && !isLoading && !error">
+    <template v-if="projectId && !error">
       <div class="generate-toolbar">
         <NButton quaternary @click="handleBack">← 返回项目列表</NButton>
         <h1 class="page-title-inline">生成大纲</h1>
-        <NButton size="small" @click="saveDraft">保存草稿</NButton>
+        <NButton size="small" :disabled="isLoading" @click="saveDraft">保存草稿</NButton>
       </div>
 
+      <!-- 骨架：进入页面即见布局，避免全屏转圈 -->
+      <template v-if="isLoading">
+        <div class="loading-bar" role="status" aria-live="polite">
+          <NSpin size="small" />
+          <span>{{ generatingStatus || '正在加载项目…' }}</span>
+        </div>
+        <div class="two-col">
+          <NCard title="故事创意">
+            <NSkeleton text :repeat="6" />
+          </NCard>
+          <NCard title="故事梗概">
+            <NSkeleton text :repeat="6" />
+          </NCard>
+        </div>
+        <NCard class="mt" title="剧本预览">
+          <NSkeleton text :repeat="8" />
+        </NCard>
+        <NCard class="mt" title="剧本生成">
+          <NSkeleton height="34px" width="220px" round />
+        </NCard>
+        <NCard class="mt" title="选择视觉风格">
+          <div class="style-list">
+            <NSkeleton v-for="i in 4" :key="i" height="44px" width="96px" round />
+          </div>
+        </NCard>
+        <div class="footer-actions mt">
+          <NSkeleton height="34px" width="88px" round />
+          <NSkeleton height="40px" width="120px" round />
+        </div>
+      </template>
+
+      <template v-else>
       <div class="two-col">
         <NCard title="故事创意">
           <NInput
@@ -301,7 +380,7 @@ function reloadPage() {
           </NSpace>
         </template>
         <p v-if="episodesWithScript.length > 1 && !allEpisodesReady" class="muted episode-picker">
-          当前已生成 {{ episodesWithScript.length }} 集有场次；目标 {{ TARGET_EPISODES }} 集全部就绪后可放心点「解析剧本」。
+          当前已生成 {{ episodesWithScript.length }} 集有场次；目标 {{ effectiveTarget }} 集全部就绪后可放心点「解析剧本」。
         </p>
         <div v-if="!activePreviewEpisode || !scenesFromRaw(activePreviewEpisode.rawScript).length" class="muted">
           <p>暂无第一集剧本。从列表进入不会自动生成，请确认创意与梗概后点击下方按钮。</p>
@@ -327,35 +406,65 @@ function reloadPage() {
           </div>
           <p
             v-if="!showFullEpisode1 && scenesFromRaw(activePreviewEpisode.rawScript).length > 2"
-            class="muted"
+            class="expand-hint muted"
           >
-            共 {{ scenesFromRaw(activePreviewEpisode.rawScript).length }} 场，点击展开查看全部
+            共 {{ scenesFromRaw(activePreviewEpisode.rawScript).length }} 场，
+            <NButton text type="primary" size="tiny" @click="showFullEpisode1 = true">
+              展开查看全部
+            </NButton>
           </p>
         </div>
       </NCard>
 
-      <NCard class="mt" title="剧本生成">
+      <NCard class="mt script-gen-card" title="剧本生成">
+        <template #header-extra>
+          <div class="episode-count-inline">
+            <NTooltip placement="top-end" :delay="200">
+              <template #trigger>
+                <span class="episode-count-label">总集数</span>
+              </template>
+              范围 {{ MIN_TARGET_EPISODES }}–{{ MAX_TARGET_EPISODES }}。解析与批量补全均按此数值；仅 1 集时无需批量。
+            </NTooltip>
+            <NInputNumber
+              v-model:value="targetEpisodeCount"
+              :min="MIN_TARGET_EPISODES"
+              :max="MAX_TARGET_EPISODES"
+              :step="1"
+              size="small"
+              class="episode-count-input"
+            />
+            <span class="episode-count-unit">集</span>
+          </div>
+        </template>
         <p v-if="episode1 && scenesFromRaw(episode1.rawScript).length" class="ok-line">
           <template v-if="episodesWithScript.length > 1">
-            已生成 {{ episodesWithScript.length }} 集有场次剧本；目标总集数 {{ TARGET_EPISODES }} 集。
+            已生成 {{ episodesWithScript.length }} 集有场次剧本；当前目标 {{ effectiveTarget }} 集。
           </template>
-          <template v-else> 第一集已生成。总集数设定：{{ TARGET_EPISODES }} 集。 </template>
+          <template v-else> 第一集已生成。当前目标总集数 {{ effectiveTarget }} 集。 </template>
         </p>
         <p v-if="isBatching && batchProgress?.progressMeta?.message" class="muted">
           {{ batchProgress.progressMeta.message }}
         </p>
-        <NSpace class="mt-sm">
+        <div class="mt-sm">
           <NButton
             type="primary"
             :loading="isBatching"
-            :disabled="isBatching || !episode1 || !scenesFromRaw(episode1.rawScript).length"
+            :disabled="
+              isBatching ||
+              !episode1 ||
+              !scenesFromRaw(episode1.rawScript).length ||
+              !needsBatchEpisodes
+            "
             @click="runBatchRemaining"
           >
-            生成剩余 {{ TARGET_EPISODES - 1 }} 集剧本
+            {{
+              needsBatchEpisodes
+                ? `批量生成至第 ${effectiveTarget} 集`
+                : '仅 1 集无需批量'
+            }}
           </NButton>
-          <NButton quaternary :disabled="isBatching">稍后再说</NButton>
-        </NSpace>
-        <p class="hint">批量生成不依赖视觉风格；耗时较长时可离开页面稍后返回查看。</p>
+        </div>
+        <p class="hint script-gen-hint">批量不依赖视觉风格；耗时可离开页面稍后再看。</p>
       </NCard>
 
       <NCard class="mt" title="选择视觉风格（解析剧本前必选，可多选）">
@@ -373,18 +482,13 @@ function reloadPage() {
       </NCard>
 
       <div class="footer-actions mt">
-        <NButton @click="handleBack">返回修改</NButton>
         <NButton type="primary" size="large" :loading="isParsing" @click="runParse">解析剧本 →</NButton>
       </div>
       <p class="hint center">
         解析剧本前须至少选择一种视觉风格；点击后将提取角色、场景并创建形象槽位，完成后进入项目详情页。
       </p>
+      </template>
     </template>
-
-    <div v-else-if="isLoading" class="loading-state">
-      <div class="loading-spinner"></div>
-      <p>{{ generatingStatus || '加载中…' }}</p>
-    </div>
 
     <NCard v-else-if="error" class="error-card">
       <NResult status="error" title="生成失败" :description="error">
@@ -473,21 +577,48 @@ function reloadPage() {
 }
 
 .script-preview {
-  line-height: 1.7;
+  line-height: 1.65;
+  font-size: 14px;
+  padding: var(--spacing-md);
+  border-radius: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
 }
 
 .scene-block {
   margin-bottom: var(--spacing-md);
+  padding: 14px 16px 14px 18px;
+  background: #fff;
+  border-radius: 10px;
+  border-left: 3px solid #6366f1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.scene-block:last-child {
+  margin-bottom: 0;
 }
 
 .scene-head {
+  font-size: 13px;
   font-weight: 600;
-  margin-bottom: var(--spacing-xs);
+  color: #111827;
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
 }
 
 .scene-desc {
   margin: 0;
-  color: var(--color-text-secondary);
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.expand-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  margin-bottom: 0;
 }
 
 .footer-actions {
@@ -496,28 +627,49 @@ function reloadPage() {
   gap: var(--spacing-md);
 }
 
-.loading-state {
+.script-gen-card :deep(.n-card-header) {
+  padding-bottom: 12px;
+}
+
+.episode-count-inline {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-  gap: var(--spacing-lg);
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.loading-spinner {
-  width: 48px;
-  height: 48px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+.episode-count-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: default;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.episode-count-input {
+  width: 100px;
+}
+
+.episode-count-unit {
+  font-size: 13px;
+  color: #9ca3af;
+  user-select: none;
+}
+
+.script-gen-hint {
+  margin-top: 10px;
+}
+
+.loading-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated, rgba(0, 0, 0, 0.02));
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 .error-card {
