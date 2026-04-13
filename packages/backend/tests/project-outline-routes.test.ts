@@ -12,7 +12,9 @@ const {
   mockPipelineJobCreate,
   mockRunParseScriptJob,
   mockRunScriptBatchJob,
-  mockRunGenerateFirstEpisode
+  mockRunGenerateFirstEpisode,
+  mockHasConcurrentOutlinePipelineJob,
+  mockGetActiveOutlinePipelineJob
 } = vi.hoisted(() => ({
   mockProjectFindFirst: vi.fn(),
   mockProjectFindUnique: vi.fn(),
@@ -24,13 +26,19 @@ const {
   mockPipelineJobCreate: vi.fn(),
   mockRunParseScriptJob: vi.fn(),
   mockRunScriptBatchJob: vi.fn(),
-  mockRunGenerateFirstEpisode: vi.fn()
+  mockRunGenerateFirstEpisode: vi.fn(),
+  mockHasConcurrentOutlinePipelineJob: vi.fn(),
+  mockGetActiveOutlinePipelineJob: vi.fn()
 }))
 
 vi.mock('../src/services/project-script-jobs.js', () => ({
   runParseScriptJob: (...args: unknown[]) => mockRunParseScriptJob(...args) as Promise<void>,
   runScriptBatchJob: (...args: unknown[]) => mockRunScriptBatchJob(...args) as Promise<void>,
   runGenerateFirstEpisode: (...args: unknown[]) => mockRunGenerateFirstEpisode(...args) as Promise<void>,
+  hasConcurrentOutlinePipelineJob: (...args: unknown[]) =>
+    mockHasConcurrentOutlinePipelineJob(...args) as Promise<boolean>,
+  getActiveOutlinePipelineJob: (...args: unknown[]) =>
+    mockGetActiveOutlinePipelineJob(...args) as Promise<unknown>,
   DEFAULT_TARGET_EPISODES: 36
 }))
 
@@ -94,6 +102,58 @@ describe('Project outline & parse routes', () => {
     mockRunParseScriptJob.mockReturnValue(Promise.resolve())
     mockRunScriptBatchJob.mockReturnValue(Promise.resolve())
     mockRunGenerateFirstEpisode.mockReturnValue(Promise.resolve())
+    mockHasConcurrentOutlinePipelineJob.mockResolvedValue(false)
+    mockGetActiveOutlinePipelineJob.mockResolvedValue(null)
+  })
+
+  describe('GET /api/projects/:id/outline-active-job', () => {
+    it('returns 404 when project missing', async () => {
+      mockProjectFindFirst.mockResolvedValue(null)
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/projects/missing/outline-active-job'
+      })
+      expect(res.statusCode).toBe(404)
+    })
+
+    it('returns { job: null } when no active outline job', async () => {
+      mockProjectFindFirst.mockResolvedValue({ id: 'p1', userId: 'test-user-id' })
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/projects/p1/outline-active-job'
+      })
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.payload)
+      expect(body.job).toBeNull()
+      expect(mockGetActiveOutlinePipelineJob).toHaveBeenCalledWith('p1')
+    })
+
+    it('returns active job payload when present', async () => {
+      mockProjectFindFirst.mockResolvedValue({ id: 'p1', userId: 'test-user-id' })
+      mockGetActiveOutlinePipelineJob.mockResolvedValue({
+        id: 'job-1',
+        projectId: 'p1',
+        status: 'running',
+        jobType: 'script-batch',
+        currentStep: 'script-batch',
+        progress: 40,
+        progressMeta: { message: '生成中' },
+        error: null,
+        createdAt: new Date('2025-01-01'),
+        updatedAt: new Date('2025-01-01')
+      })
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/projects/p1/outline-active-job'
+      })
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.payload)
+      expect(body.job?.id).toBe('job-1')
+      expect(body.job?.jobType).toBe('script-batch')
+    })
   })
 
   describe('POST /api/projects/:id/parse', () => {
@@ -175,6 +235,27 @@ describe('Project outline & parse routes', () => {
       )
       expect(mockRunParseScriptJob).toHaveBeenCalledWith('job-parse-1', 'p1', 5)
     })
+
+    it('returns 409 when another outline job is in progress', async () => {
+      mockHasConcurrentOutlinePipelineJob.mockResolvedValue(true)
+      mockProjectFindFirst.mockResolvedValue({
+        id: 'p1',
+        userId: 'test-user-id',
+        visualStyle: ['cinematic'],
+        episodes: [{ episodeNum: 1, rawScript: rawEp1 }]
+      })
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/projects/p1/parse',
+        payload: { targetEpisodes: 5 }
+      })
+      expect(res.statusCode).toBe(409)
+      const body = JSON.parse(res.payload)
+      expect(body.error).toMatch(/进行中/)
+      expect(mockPipelineJobCreate).not.toHaveBeenCalled()
+      expect(mockRunParseScriptJob).not.toHaveBeenCalled()
+    })
   })
 
   describe('POST /api/projects/:id/episodes/generate-remaining', () => {
@@ -206,6 +287,23 @@ describe('Project outline & parse routes', () => {
       const body = JSON.parse(res.payload)
       expect(body.jobId).toBe('job-batch-1')
       expect(mockRunScriptBatchJob).toHaveBeenCalledWith('job-batch-1', 'p1', 8)
+    })
+
+    it('returns 409 when another outline job is in progress', async () => {
+      mockHasConcurrentOutlinePipelineJob.mockResolvedValue(true)
+      mockProjectFindFirst.mockResolvedValue({ id: 'p1', userId: 'test-user-id' })
+      mockEpisodeFindUnique.mockResolvedValue({ id: 'e1', rawScript: rawEp1 })
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/projects/p1/episodes/generate-remaining',
+        payload: { targetEpisodes: 10 }
+      })
+      expect(res.statusCode).toBe(409)
+      const body = JSON.parse(res.payload)
+      expect(body.error).toMatch(/进行中/)
+      expect(mockPipelineJobCreate).not.toHaveBeenCalled()
+      expect(mockRunScriptBatchJob).not.toHaveBeenCalled()
     })
 
     it('returns 400 when targetEpisodes out of range', async () => {

@@ -70,6 +70,9 @@ const episode1 = computed(() =>
 
 const batchProgress = ref<PipelineJob | null>(null)
 const isBatching = ref(false)
+/** 刷新后恢复的「解析剧本」异步任务（与批量互斥） */
+const isParseOutlineRunning = ref(false)
+const parseOutlineProgress = ref<PipelineJob | null>(null)
 const isParsing = ref(false)
 const showFullEpisode1 = ref(false)
 const previewEpisodeNum = ref(1)
@@ -118,6 +121,8 @@ const batchActionLabel = computed(() => {
 const batchButtonDisabled = computed(
   () =>
     isBatching.value ||
+    isParsing.value ||
+    isParseOutlineRunning.value ||
     !episode1HasScript.value ||
     !needsBatchEpisodes.value ||
     batchAllTargetReady.value
@@ -256,9 +261,23 @@ async function saveDraft() {
   await loadProject(id)
 }
 
+async function afterBatchSuccess(id: string) {
+  await loadProject(id)
+  await nextTick()
+  const nums = episodesWithScript.value.map((e: any) => epNum(e))
+  if (nums.length && !nums.includes(previewEpisodeNum.value)) {
+    previewEpisodeNum.value = Math.min(...nums.filter((n) => n >= 1))
+  }
+  showFullEpisode1.value = false
+}
+
 async function runBatchRemaining() {
   const id = projectId.value
   if (!id) return
+  if (isParseOutlineRunning.value) {
+    message.warning('解析任务进行中，请完成后再批量生成')
+    return
+  }
   const te = Math.max(
     2,
     Math.min(MAX_TARGET_EPISODES, Math.floor(Number(targetEpisodeCount.value) || 2))
@@ -278,13 +297,7 @@ async function runBatchRemaining() {
       2500
     )
     message.success('剩余集剧本已生成')
-    await loadProject(id)
-    await nextTick()
-    const nums = episodesWithScript.value.map((e: any) => epNum(e))
-    if (nums.length && !nums.includes(previewEpisodeNum.value)) {
-      previewEpisodeNum.value = Math.min(...nums.filter((n) => n >= 1))
-    }
-    showFullEpisode1.value = false
+    await afterBatchSuccess(id)
   } catch (e: any) {
     message.error(e?.message || '批量生成失败')
   } finally {
@@ -293,9 +306,70 @@ async function runBatchRemaining() {
   }
 }
 
+/** 刷新页面后：若仍有进行中的批量/解析任务，恢复轮询与按钮互斥 */
+async function resumeOutlineActiveJob(pid: string) {
+  let job: PipelineJob | null | undefined
+  try {
+    const res = await api.get<{ job: PipelineJob | null }>(`/projects/${pid}/outline-active-job`)
+    job = res.data?.job
+  } catch {
+    return
+  }
+  if (!job) return
+  if (job.jobType === 'script-batch') {
+    isBatching.value = true
+    batchProgress.value = job
+    try {
+      await pollPipelineJob(
+        job.id,
+        (j) => {
+          batchProgress.value = j
+        },
+        600000,
+        2500
+      )
+      message.success('剩余集剧本已生成')
+      await afterBatchSuccess(pid)
+    } catch (e: any) {
+      message.error(e?.message || '批量生成失败')
+    } finally {
+      isBatching.value = false
+      batchProgress.value = null
+    }
+  } else if (job.jobType === 'parse-script') {
+    isParseOutlineRunning.value = true
+    parseOutlineProgress.value = job
+    try {
+      await pollPipelineJob(
+        job.id,
+        (j) => {
+          parseOutlineProgress.value = j
+        },
+        600000,
+        2500
+      )
+      message.success('解析完成')
+      await loadProject(pid)
+    } catch (e: any) {
+      message.error(e?.message || '解析失败')
+    } finally {
+      isParseOutlineRunning.value = false
+      parseOutlineProgress.value = null
+    }
+  }
+}
+
 async function runParse() {
   const id = projectId.value
   if (!id) return
+  if (isParseOutlineRunning.value) {
+    message.warning('解析任务进行中')
+    return
+  }
+  if (isBatching.value) {
+    message.warning('批量生成进行中，请完成后再解析')
+    return
+  }
   if (!selectedStyles.value.length) {
     message.warning('请至少选择一种视觉风格')
     return
@@ -339,6 +413,9 @@ onMounted(async () => {
         targetEpisodeCount.value = n
       }
     }
+    // 须在长轮询 resumeOutlineActiveJob 之前结束骨架屏，否则批量进行中刷新会一直看不到创意/梗概
+    isLoading.value = false
+    await resumeOutlineActiveJob(pid)
     const autoGen =
       route.query.autogen === '1' ||
       route.query.autogen === 'true'
@@ -497,7 +574,7 @@ watch(targetEpisodeCount, (v) => {
               <p v-if="(activePreviewEpisode as any)?.title" class="preview-ep-title">
                 {{ (activePreviewEpisode as any).title }}
               </p>
-              <NScrollbar class="preview-scroll" trigger="hover">
+              <div class="preview-scroll-wrap">
                 <div class="script-preview">
                   <div v-for="(sc, idx) in previewScenes" :key="idx" class="scene-block">
                     <div class="scene-head">
@@ -515,16 +592,16 @@ watch(targetEpisodeCount, (v) => {
                     </NButton>
                   </p>
                 </div>
-              </NScrollbar>
+              </div>
             </div>
           </div>
         </div>
       </NCard>
 
       <NCard class="mt script-gen-card" title="剧本生成">
-        <template #header-extra>
+        <div class="episode-count-row">
           <div class="episode-count-inline">
-            <NTooltip placement="top-end" :delay="200">
+            <NTooltip placement="top-start" :delay="200">
               <template #trigger>
                 <span class="episode-count-label">总集数</span>
               </template>
@@ -541,7 +618,7 @@ watch(targetEpisodeCount, (v) => {
             />
             <span class="episode-count-unit">集</span>
           </div>
-        </template>
+        </div>
         <div class="episode-presets">
           <span class="episode-presets-label">快捷</span>
           <NButton
@@ -555,12 +632,12 @@ watch(targetEpisodeCount, (v) => {
             {{ n }}
           </NButton>
         </div>
-        <p v-if="episode1HasScript" class="ok-line">
+        <p v-if="episode1HasScript && !isBatching && !isParseOutlineRunning" class="ok-line">
           <template v-if="batchAllTargetReady">
             目标 {{ effectiveTarget }} 集剧本已全部生成，可直接解析或微调总集数后再次补全。
           </template>
           <template v-else-if="episodesWithScript.length > 1">
-            已生成 {{ episodesWithScript.length }} 集有场次；目标 {{ effectiveTarget }} 集，未完成时可点下方批量补全。
+            已生成 {{ episodesWithScript.length }}/{{ effectiveTarget }} 集，点击⬇️可批量补全
           </template>
           <template v-else>
             第一集已生成；目标 {{ effectiveTarget }} 集{{ needsBatchEpisodes ? '，其余集请点下方批量。' : '。' }}
@@ -581,7 +658,7 @@ watch(targetEpisodeCount, (v) => {
         </div>
         <p
           v-if="needsBatchEpisodes && episode1HasScript && !batchAllTargetReady"
-          class="hint script-gen-hint"
+          class="hint"
         >
           耗时可离开页面稍后再看。
         </p>
@@ -602,9 +679,21 @@ watch(targetEpisodeCount, (v) => {
       </NCard>
 
       <div class="footer-parse mt">
-        <NButton type="primary" size="large" :loading="isParsing" @click="runParse">解析剧本 →</NButton>
+        <NButton
+          type="primary"
+          size="large"
+          :loading="isParsing || isParseOutlineRunning"
+          :disabled="isBatching || isParseOutlineRunning"
+          @click="runParse"
+        >
+          解析剧本 →
+        </NButton>
         <p class="footer-parse-sub">
-          将按当前总集数处理前 {{ effectiveTarget }} 集（含自动补全缺失剧本）；须先选视觉风格。
+          <template v-if="isBatching">批量生成进行中，请完成后再解析。</template>
+          <template v-else-if="isParseOutlineRunning">解析任务进行中，请稍候。</template>
+          <template v-else>
+            将按当前总集数处理前 {{ effectiveTarget }} 集（含自动补全缺失剧本）；须先选视觉风格。
+          </template>
         </p>
       </div>
       <p class="hint center">
@@ -699,22 +788,23 @@ watch(targetEpisodeCount, (v) => {
 
 .preview-split {
   --preview-pane-max: min(58vh, 560px);
-  --preview-pane-min: min(280px, var(--preview-pane-max));
+  /* 与 pane 同 cap；子项用 calc(…- title) 避免 :has() 高特异性在移动端压过 @media */
+  --preview-scroll-max: min(58vh, 560px);
   display: flex;
   gap: 14px;
-  align-items: stretch;
+  /* flex-start：避免左侧集数很多时把右侧矮内容强行拉高留白；左右各自 max-height + 内部滚动 */
+  align-items: flex-start;
   min-height: 0;
 }
 
 .preview-ep-tablist-wrap {
   flex-shrink: 0;
   width: 122px;
-  min-height: var(--preview-pane-min);
+  min-height: 0;
   max-height: var(--preview-pane-max);
   display: flex;
   flex-direction: column;
   min-width: 0;
-  align-self: stretch;
 }
 
 .preview-tab-scroll {
@@ -771,14 +861,18 @@ watch(targetEpisodeCount, (v) => {
 }
 
 .preview-ep-panel {
+  --preview-title-offset: 0px;
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  max-height: var(--preview-pane-max);
   display: flex;
   flex-direction: column;
-  min-height: var(--preview-pane-min);
-  max-height: var(--preview-pane-max);
-  height: fit-content;
   overflow: hidden;
+}
+
+.preview-ep-panel:has(.preview-ep-title) {
+  --preview-title-offset: 48px;
 }
 
 .preview-ep-title {
@@ -789,21 +883,33 @@ watch(targetEpisodeCount, (v) => {
   color: #374151;
 }
 
-.preview-scroll {
-  flex: 1;
+/* 原生滚动：用 max-height 收敛高度，不用 flex:1，避免与「内容撑开父级」互相拉扯 */
+.preview-scroll-wrap {
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: calc(var(--preview-scroll-max) - var(--preview-title-offset));
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   border-radius: 12px;
 }
 
-.preview-scroll :deep(.n-scrollbar-container) {
-  border-radius: 12px;
+/* NCard 内容区参与 flex 链时默认 min-height:auto，会阻止子项在 max-height 内滚动 */
+.preview-script-card :deep(.n-card__content) {
+  min-height: 0;
 }
 
 @media (max-width: 640px) {
   .preview-split {
     flex-direction: column;
-    --preview-pane-max: none;
+    --preview-pane-max: min(50vh, 480px);
+    --preview-scroll-max: min(50vh, 480px);
     --preview-pane-min: 0;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
   }
 
   .preview-ep-tablist-wrap {
@@ -834,8 +940,8 @@ watch(targetEpisodeCount, (v) => {
     max-height: none;
   }
 
-  .preview-scroll {
-    max-height: min(50vh, 480px);
+  .preview-scroll-wrap {
+    flex: 0 1 auto;
     min-height: 220px;
   }
 }
@@ -914,19 +1020,24 @@ watch(targetEpisodeCount, (v) => {
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
+  width: 100%;
 }
 
 .footer-parse-sub {
   margin: 0;
+  width: 100%;
   font-size: 12px;
   line-height: 1.5;
   color: #6b7280;
   text-align: right;
-  max-width: 340px;
 }
 
 .script-gen-card :deep(.n-card-header) {
   padding-bottom: 12px;
+}
+
+.episode-count-row {
+  margin-bottom: 12px;
 }
 
 .episode-count-inline {
@@ -934,6 +1045,7 @@ watch(targetEpisodeCount, (v) => {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  justify-content: flex-start;
 }
 
 .episode-count-label {
@@ -951,10 +1063,6 @@ watch(targetEpisodeCount, (v) => {
   font-size: 13px;
   color: #9ca3af;
   user-select: none;
-}
-
-.script-gen-hint {
-  margin-top: 10px;
 }
 
 .loading-bar {

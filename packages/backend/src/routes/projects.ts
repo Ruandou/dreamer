@@ -5,7 +5,9 @@ import {
   runGenerateFirstEpisode,
   runScriptBatchJob,
   runParseScriptJob,
-  DEFAULT_TARGET_EPISODES
+  DEFAULT_TARGET_EPISODES,
+  hasConcurrentOutlinePipelineJob,
+  getActiveOutlinePipelineJob
 } from '../services/project-script-jobs.js'
 
 export async function projectRoutes(fastify: FastifyInstance) {
@@ -117,6 +119,12 @@ export async function projectRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: '请先生成第一集剧本' })
       }
 
+      if (await hasConcurrentOutlinePipelineJob(projectId)) {
+        return reply.status(409).send({
+          error: '已有剧本生成或解析任务进行中，请稍后再试'
+        })
+      }
+
       const job = await prisma.pipelineJob.create({
         data: {
           projectId,
@@ -171,6 +179,12 @@ export async function projectRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: '请先生成第一集剧本' })
       }
 
+      if (await hasConcurrentOutlinePipelineJob(projectId)) {
+        return reply.status(409).send({
+          error: '已有剧本生成或解析任务进行中，请稍后再试'
+        })
+      }
+
       const job = await prisma.pipelineJob.create({
         data: {
           projectId,
@@ -189,6 +203,40 @@ export async function projectRoutes(fastify: FastifyInstance) {
         jobId: job.id,
         status: 'processing',
         message: '解析任务已启动'
+      }
+    }
+  )
+
+  /** 大纲页：是否有进行中的批量 / 解析任务（刷新页面后用于恢复互斥与轮询） */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/outline-active-job',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = (request as any).user
+      const projectId = request.params.id
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, userId: user.id }
+      })
+      if (!project) {
+        return reply.status(404).send({ error: '项目不存在' })
+      }
+      const job = await getActiveOutlinePipelineJob(projectId)
+      if (!job) {
+        return { job: null }
+      }
+      return {
+        job: {
+          id: job.id,
+          projectId: job.projectId,
+          status: job.status,
+          jobType: job.jobType,
+          currentStep: job.currentStep,
+          progress: job.progress,
+          progressMeta: job.progressMeta,
+          error: job.error,
+          createdAt: job.createdAt,
+          updatedAt: job.updatedAt
+        }
       }
     }
   )

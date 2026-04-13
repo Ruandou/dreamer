@@ -10,6 +10,35 @@ import type { ScriptContent, ScriptScene, EpisodePlan } from '@dreamer/shared/ty
 
 export const DEFAULT_TARGET_EPISODES = 36
 
+/** 与大纲页互斥的异步任务类型（批量剧本 / 解析剧本） */
+const OUTLINE_ASYNC_JOB_TYPES = ['script-batch', 'parse-script'] as const
+
+/**
+ * 是否存在进行中的批量剧本或解析任务，用于避免与另一路并发写同一项目。
+ */
+export async function hasConcurrentOutlinePipelineJob(projectId: string): Promise<boolean> {
+  const n = await prisma.pipelineJob.count({
+    where: {
+      projectId,
+      status: { in: ['pending', 'running'] },
+      jobType: { in: [...OUTLINE_ASYNC_JOB_TYPES] }
+    }
+  })
+  return n > 0
+}
+
+/** 当前进行中的大纲页异步任务（批量 / 解析），用于前端刷新后恢复状态 */
+export async function getActiveOutlinePipelineJob(projectId: string) {
+  return prisma.pipelineJob.findFirst({
+    where: {
+      projectId,
+      status: { in: ['pending', 'running'] },
+      jobType: { in: [...OUTLINE_ASYNC_JOB_TYPES] }
+    },
+    orderBy: { createdAt: 'desc' }
+  })
+}
+
 function scriptFromJson(raw: unknown): ScriptContent | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
