@@ -12,7 +12,8 @@ import {
   NSpin,
   NTooltip,
   NScrollbar,
-  useMessage
+  useMessage,
+  useDialog
 } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
 import { api, pollPipelineJob, type PipelineJob } from '@/api'
@@ -20,12 +21,13 @@ import { api, pollPipelineJob, type PipelineJob } from '@/api'
 const router = useRouter()
 const route = useRoute()
 const message = useMessage()
+const dialog = useDialog()
 const projectStore = useProjectStore()
 
 /** 与后端一致：解析可 1–200；批量生成接口要求 2–200 */
 const MIN_TARGET_EPISODES = 1
 const MAX_TARGET_EPISODES = 200
-const DEFAULT_TARGET_EPISODES = 6
+const DEFAULT_TARGET_EPISODES = 36
 
 const isLoading = ref(true)
 const generatingStatus = ref('')
@@ -97,8 +99,78 @@ const allEpisodesReady = computed(() => {
 /** 是否需要批量生成（总集数 ≥2 才有第 2 集及以后） */
 const needsBatchEpisodes = computed(() => effectiveTarget.value >= 2)
 
-/** 总集数快捷预设 */
-const EPISODE_PRESETS = [1, 6, 12, 24] as const
+/** 第一集已有可预览剧本（批量入口的前置条件） */
+const episode1HasScript = computed(
+  () => !!episode1.value && scenesFromRaw(episode1.value.rawScript).length > 0
+)
+
+/** 目标 2..N 集是否已全部就绪（批量按钮应显示完成态，不再强调「去生成」） */
+const batchAllTargetReady = computed(
+  () => needsBatchEpisodes.value && allEpisodesReady.value
+)
+
+const batchActionLabel = computed(() => {
+  if (!needsBatchEpisodes.value) return '仅 1 集无需批量'
+  if (batchAllTargetReady.value) return `目标 ${effectiveTarget.value} 集已全部生成`
+  return `批量生成至第 ${effectiveTarget.value} 集`
+})
+
+const batchButtonDisabled = computed(
+  () =>
+    isBatching.value ||
+    !episode1HasScript.value ||
+    !needsBatchEpisodes.value ||
+    batchAllTargetReady.value
+)
+
+/** 总集数快捷预设（短剧常见 50–100 集量级，大盘均值约 70–80 集/部，见行业数据报道） */
+const EPISODE_PRESETS = [1, 24, 60, 80, 100] as const
+
+function normalizeTargetInput(v: number | null | undefined): number {
+  const n = Math.floor(Number(v) || 1)
+  return Math.max(
+    MIN_TARGET_EPISODES,
+    Math.min(MAX_TARGET_EPISODES, n)
+  )
+}
+
+/** 当前项目中已有场次剧本的最高集号；无则 0 */
+function highestEpisodeNumWithScript(): number {
+  const eps = project.value?.episodes || []
+  let max = 0
+  for (const e of eps) {
+    if (scenesFromRaw((e as any).rawScript).length > 0) {
+      const n = epNum(e)
+      if (n > max) max = n
+    }
+  }
+  return max
+}
+
+/** 调高直接生效；调低时仅当会「裁到」已有高集剧本时才二次确认 */
+function onTargetEpisodeUpdate(v: number | null) {
+  const next = normalizeTargetInput(v)
+  const prev = normalizeTargetInput(targetEpisodeCount.value)
+  if (next === prev) return
+  if (next > prev) {
+    targetEpisodeCount.value = next
+    return
+  }
+  const hi = highestEpisodeNumWithScript()
+  if (hi <= next) {
+    targetEpisodeCount.value = next
+    return
+  }
+  dialog.warning({
+    title: '确认调低总集数？',
+    content: `将总集数由 ${prev} 集改为 ${next} 集。解析与批量将按新的目标集数处理；更高集数已生成的剧本仍保留在项目内，不会自动删除。`,
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      targetEpisodeCount.value = next
+    }
+  })
+}
 
 /** 已有剧本内容的集（批量完成后用于预览，不强制凑满目标集数才显示卡片） */
 const episodesWithScript = computed(() => {
@@ -108,17 +180,13 @@ const episodesWithScript = computed(() => {
     .sort((a: any, b: any) => epNum(a) - epNum(b))
 })
 
-/** 当前在「剧本预览」中选中的集（多集时以下拉为准，否则为第一集） */
+/** 当前在「剧本预览」中选中的集（多集时以左侧 Tab 为准） */
 const activePreviewEpisode = computed(() => {
   const eps = episodesWithScript.value
   if (!eps.length) return episode1.value as any
   const match = eps.find((e: any) => epNum(e) === previewEpisodeNum.value)
   return (match || episode1.value) as any
 })
-
-const previewCardTitle = computed(() =>
-  episodesWithScript.value.length > 1 ? '剧本预览' : '第一集剧本预览'
-)
 
 const previewScenes = computed(() => {
   const scenes = scenesFromRaw(activePreviewEpisode.value?.rawScript)
@@ -366,7 +434,7 @@ watch(targetEpisodeCount, (v) => {
         </NCard>
       </div>
 
-      <NCard class="mt preview-script-card" :title="previewCardTitle">
+      <NCard class="mt preview-script-card" title="剧本预览">
         <template #header-extra>
           <NButton
             v-if="activePreviewEpisode && scenesFromRaw(activePreviewEpisode.rawScript).length"
@@ -377,8 +445,17 @@ watch(targetEpisodeCount, (v) => {
             {{ showFullEpisode1 ? '收起' : '展开' }}
           </NButton>
         </template>
-        <p v-if="episodesWithScript.length > 1 && !allEpisodesReady" class="muted episode-picker">
-          当前已生成 {{ episodesWithScript.length }} 集有场次；目标 {{ effectiveTarget }} 集全部就绪后可放心点「解析剧本」。
+        <p
+          v-if="episodesWithScript.length > 1 && needsBatchEpisodes && allEpisodesReady"
+          class="episode-picker episode-picker--ok"
+        >
+          目标 {{ effectiveTarget }} 集均已就绪，可前往下方「解析剧本」。
+        </p>
+        <p
+          v-else-if="episodesWithScript.length > 1 && !allEpisodesReady"
+          class="muted episode-picker"
+        >
+          当前已生成 {{ episodesWithScript.length }} 集有场次；凑满目标 {{ effectiveTarget }} 集后再解析更稳妥。
         </p>
         <div v-if="!activePreviewEpisode || !scenesFromRaw(activePreviewEpisode.rawScript).length" class="muted">
           <p>暂无第一集剧本。从列表进入不会自动生成，请确认创意与梗概后点击下方按钮。</p>
@@ -393,11 +470,8 @@ watch(targetEpisodeCount, (v) => {
           </NButton>
         </div>
         <div v-else class="script-preview-outer">
-          <div
-            class="preview-split"
-            :class="{ 'preview-split--single': episodesWithScript.length <= 1 }"
-          >
-            <div v-if="episodesWithScript.length > 1" class="preview-ep-tablist-wrap">
+          <div class="preview-split">
+            <div class="preview-ep-tablist-wrap">
               <NScrollbar class="preview-tab-scroll" trigger="hover">
                 <nav
                   class="preview-ep-tablist-inner"
@@ -457,12 +531,13 @@ watch(targetEpisodeCount, (v) => {
               范围 {{ MIN_TARGET_EPISODES }}–{{ MAX_TARGET_EPISODES }}。解析与批量补全均按此数值；仅 1 集时无需批量。
             </NTooltip>
             <NInputNumber
-              v-model:value="targetEpisodeCount"
+              :value="targetEpisodeCount"
               :min="MIN_TARGET_EPISODES"
               :max="MAX_TARGET_EPISODES"
               :step="1"
               size="small"
               class="episode-count-input"
+              @update:value="onTargetEpisodeUpdate"
             />
             <span class="episode-count-unit">集</span>
           </div>
@@ -475,40 +550,41 @@ watch(targetEpisodeCount, (v) => {
             size="tiny"
             :type="effectiveTarget === n ? 'primary' : 'default'"
             quaternary
-            @click="targetEpisodeCount = n"
+            @click="onTargetEpisodeUpdate(n)"
           >
             {{ n }}
           </NButton>
         </div>
-        <p v-if="episode1 && scenesFromRaw(episode1.rawScript).length" class="ok-line">
-          <template v-if="episodesWithScript.length > 1">
-            已生成 {{ episodesWithScript.length }} 集有场次剧本；当前目标 {{ effectiveTarget }} 集。
+        <p v-if="episode1HasScript" class="ok-line">
+          <template v-if="batchAllTargetReady">
+            目标 {{ effectiveTarget }} 集剧本已全部生成，可直接解析或微调总集数后再次补全。
           </template>
-          <template v-else> 第一集已生成。当前目标总集数 {{ effectiveTarget }} 集。 </template>
+          <template v-else-if="episodesWithScript.length > 1">
+            已生成 {{ episodesWithScript.length }} 集有场次；目标 {{ effectiveTarget }} 集，未完成时可点下方批量补全。
+          </template>
+          <template v-else>
+            第一集已生成；目标 {{ effectiveTarget }} 集{{ needsBatchEpisodes ? '，其余集请点下方批量。' : '。' }}
+          </template>
         </p>
         <p v-if="isBatching && batchProgress?.progressMeta?.message" class="muted">
           {{ batchProgress.progressMeta.message }}
         </p>
         <div class="mt-sm">
           <NButton
-            type="primary"
+            :type="batchAllTargetReady ? 'success' : 'primary'"
             :loading="isBatching"
-            :disabled="
-              isBatching ||
-              !episode1 ||
-              !scenesFromRaw(episode1.rawScript).length ||
-              !needsBatchEpisodes
-            "
+            :disabled="batchButtonDisabled"
             @click="runBatchRemaining"
           >
-            {{
-              needsBatchEpisodes
-                ? `批量生成至第 ${effectiveTarget} 集`
-                : '仅 1 集无需批量'
-            }}
+            {{ batchActionLabel }}
           </NButton>
         </div>
-        <p class="hint script-gen-hint">批量不依赖视觉风格；耗时可离开页面稍后再看。</p>
+        <p
+          v-if="needsBatchEpisodes && episode1HasScript && !batchAllTargetReady"
+          class="hint script-gen-hint"
+        >
+          耗时可离开页面稍后再看。
+        </p>
       </NCard>
 
       <NCard class="mt" title="选择视觉风格（解析剧本前必选，可多选）">
@@ -612,12 +688,18 @@ watch(targetEpisodeCount, (v) => {
   margin-bottom: var(--spacing-sm);
 }
 
+.episode-picker--ok {
+  color: var(--color-success, #18a058);
+  font-weight: 500;
+}
+
 .script-preview-outer {
   min-height: 0;
 }
 
 .preview-split {
-  --preview-pane-height: min(58vh, 560px);
+  --preview-pane-max: min(58vh, 560px);
+  --preview-pane-min: min(280px, var(--preview-pane-max));
   display: flex;
   gap: 14px;
   align-items: stretch;
@@ -627,11 +709,12 @@ watch(targetEpisodeCount, (v) => {
 .preview-ep-tablist-wrap {
   flex-shrink: 0;
   width: 122px;
-  height: var(--preview-pane-height);
-  min-height: 280px;
+  min-height: var(--preview-pane-min);
+  max-height: var(--preview-pane-max);
   display: flex;
   flex-direction: column;
   min-width: 0;
+  align-self: stretch;
 }
 
 .preview-tab-scroll {
@@ -692,21 +775,10 @@ watch(targetEpisodeCount, (v) => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  height: var(--preview-pane-height);
-  min-height: 280px;
-}
-
-.preview-split--single .preview-ep-panel {
-  flex: 1;
-  min-width: 0;
-  width: 100%;
-  height: auto;
-  min-height: 0;
-}
-
-.preview-split--single .preview-scroll {
-  max-height: min(58vh, 560px);
-  min-height: 200px;
+  min-height: var(--preview-pane-min);
+  max-height: var(--preview-pane-max);
+  height: fit-content;
+  overflow: hidden;
 }
 
 .preview-ep-title {
@@ -728,9 +800,10 @@ watch(targetEpisodeCount, (v) => {
 }
 
 @media (max-width: 640px) {
-  .preview-split:not(.preview-split--single) {
+  .preview-split {
     flex-direction: column;
-    --preview-pane-height: auto;
+    --preview-pane-max: none;
+    --preview-pane-min: 0;
   }
 
   .preview-ep-tablist-wrap {
@@ -758,6 +831,7 @@ watch(targetEpisodeCount, (v) => {
   .preview-ep-panel {
     height: auto;
     min-height: 0;
+    max-height: none;
   }
 
   .preview-scroll {

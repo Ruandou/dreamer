@@ -8,7 +8,7 @@ import { writeScriptFromIdea, writeEpisodeForProject } from './script-writer.js'
 import { saveCharacters, saveLocations } from './script-entities.js'
 import type { ScriptContent, ScriptScene, EpisodePlan } from '@dreamer/shared/types'
 
-export const DEFAULT_TARGET_EPISODES = 6
+export const DEFAULT_TARGET_EPISODES = 36
 
 function scriptFromJson(raw: unknown): ScriptContent | null {
   if (!raw || typeof raw !== 'object') return null
