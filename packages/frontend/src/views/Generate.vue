@@ -11,6 +11,7 @@ import {
   NSkeleton,
   NSpin,
   NTooltip,
+  NScrollbar,
   useMessage
 } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
@@ -99,21 +100,6 @@ const needsBatchEpisodes = computed(() => effectiveTarget.value >= 2)
 /** 总集数快捷预设 */
 const EPISODE_PRESETS = [1, 6, 12, 24] as const
 
-/** 顶部步骤：1 创意梗概 → 2 剧本批量 → 3 风格解析 */
-const generateSteps = [
-  { id: 'idea', label: '创意与梗概' },
-  { id: 'script', label: '剧本与批量' },
-  { id: 'parse', label: '风格与解析' }
-] as const
-
-const generateFlowStep = computed(() => {
-  const ep = episode1.value as any
-  const ep1Ready = !!(ep && scenesFromRaw(ep.rawScript).length > 0)
-  if (!ep1Ready) return 1
-  if (!allEpisodesReady.value) return 2
-  return 3
-})
-
 /** 已有剧本内容的集（批量完成后用于预览，不强制凑满目标集数才显示卡片） */
 const episodesWithScript = computed(() => {
   const eps = project.value?.episodes || []
@@ -138,6 +124,10 @@ const previewScenes = computed(() => {
   const scenes = scenesFromRaw(activePreviewEpisode.value?.rawScript)
   return showFullEpisode1.value ? scenes : scenes.slice(0, 2)
 })
+
+function selectPreviewEpisode(n: number) {
+  previewEpisodeNum.value = n
+}
 
 function toggleStyle(val: string) {
   const i = selectedStyles.value.indexOf(val)
@@ -355,22 +345,6 @@ watch(targetEpisodeCount, (v) => {
       </template>
 
       <template v-else>
-      <nav class="generate-steps" aria-label="生成流程">
-        <template v-for="(step, idx) in generateSteps" :key="step.id">
-          <div
-            class="generate-step"
-            :class="{
-              'is-current': generateFlowStep === idx + 1,
-              'is-done': generateFlowStep > idx + 1
-            }"
-          >
-            <span class="generate-step-num">{{ idx + 1 }}</span>
-            <span class="generate-step-label">{{ step.label }}</span>
-          </div>
-          <div v-if="idx < generateSteps.length - 1" class="generate-step-divider" aria-hidden="true" />
-        </template>
-      </nav>
-
       <div class="two-col">
         <NCard title="故事创意">
           <NInput
@@ -392,26 +366,16 @@ watch(targetEpisodeCount, (v) => {
         </NCard>
       </div>
 
-      <NCard class="mt" :title="previewCardTitle">
+      <NCard class="mt preview-script-card" :title="previewCardTitle">
         <template #header-extra>
-          <NSpace align="center" wrap>
-            <template v-if="episodesWithScript.length > 1">
-              <span class="muted" style="font-size: 12px">第</span>
-              <select
-                v-model.number="previewEpisodeNum"
-                class="ep-select"
-                @change="showFullEpisode1 = false"
-              >
-                <option v-for="ep in episodesWithScript" :key="ep.id" :value="epNum(ep)">
-                  {{ epNum(ep) }}
-                </option>
-              </select>
-              <span class="muted" style="font-size: 12px">集</span>
-            </template>
-            <NButton size="tiny" quaternary @click="showFullEpisode1 = !showFullEpisode1">
-              {{ showFullEpisode1 ? '收起' : '展开' }}
-            </NButton>
-          </NSpace>
+          <NButton
+            v-if="activePreviewEpisode && scenesFromRaw(activePreviewEpisode.rawScript).length"
+            size="tiny"
+            quaternary
+            @click="showFullEpisode1 = !showFullEpisode1"
+          >
+            {{ showFullEpisode1 ? '收起' : '展开' }}
+          </NButton>
         </template>
         <p v-if="episodesWithScript.length > 1 && !allEpisodesReady" class="muted episode-picker">
           当前已生成 {{ episodesWithScript.length }} 集有场次；目标 {{ effectiveTarget }} 集全部就绪后可放心点「解析剧本」。
@@ -428,25 +392,58 @@ watch(targetEpisodeCount, (v) => {
             生成第一集剧本
           </NButton>
         </div>
-        <div v-else class="script-preview">
-          <p v-if="episodesWithScript.length > 1" class="muted" style="margin-bottom: 8px">
-            正在预览：第 {{ epNum(activePreviewEpisode) }} 集
-          </p>
-          <div v-for="(sc, idx) in previewScenes" :key="idx" class="scene-block">
-            <div class="scene-head">
-              Scene {{ sc.sceneNum }}. {{ sc.location }} - {{ sc.timeOfDay }}
-            </div>
-            <p class="scene-desc">{{ sc.description }}</p>
-          </div>
-          <p
-            v-if="!showFullEpisode1 && scenesFromRaw(activePreviewEpisode.rawScript).length > 2"
-            class="expand-hint muted"
+        <div v-else class="script-preview-outer">
+          <div
+            class="preview-split"
+            :class="{ 'preview-split--single': episodesWithScript.length <= 1 }"
           >
-            共 {{ scenesFromRaw(activePreviewEpisode.rawScript).length }} 场，
-            <NButton text type="primary" size="tiny" @click="showFullEpisode1 = true">
-              展开查看全部
-            </NButton>
-          </p>
+            <div v-if="episodesWithScript.length > 1" class="preview-ep-tablist-wrap">
+              <NScrollbar class="preview-tab-scroll" trigger="hover">
+                <nav
+                  class="preview-ep-tablist-inner"
+                  role="tablist"
+                  aria-label="选择预览集数"
+                >
+                  <button
+                    v-for="ep in episodesWithScript"
+                    :key="ep.id"
+                    type="button"
+                    role="tab"
+                    class="preview-ep-tab"
+                    :class="{ 'preview-ep-tab--active': epNum(ep) === previewEpisodeNum }"
+                    :aria-selected="epNum(ep) === previewEpisodeNum"
+                    @click="selectPreviewEpisode(epNum(ep))"
+                  >
+                    第 {{ epNum(ep) }} 集
+                  </button>
+                </nav>
+              </NScrollbar>
+            </div>
+            <div class="preview-ep-panel">
+              <p v-if="(activePreviewEpisode as any)?.title" class="preview-ep-title">
+                {{ (activePreviewEpisode as any).title }}
+              </p>
+              <NScrollbar class="preview-scroll" trigger="hover">
+                <div class="script-preview">
+                  <div v-for="(sc, idx) in previewScenes" :key="idx" class="scene-block">
+                    <div class="scene-head">
+                      Scene {{ sc.sceneNum }}. {{ sc.location }} - {{ sc.timeOfDay }}
+                    </div>
+                    <p class="scene-desc">{{ sc.description }}</p>
+                  </div>
+                  <p
+                    v-if="!showFullEpisode1 && scenesFromRaw(activePreviewEpisode.rawScript).length > 2"
+                    class="expand-hint muted"
+                  >
+                    共 {{ scenesFromRaw(activePreviewEpisode.rawScript).length }} 场，
+                    <NButton text type="primary" size="tiny" @click="showFullEpisode1 = true">
+                      展开查看全部
+                    </NButton>
+                  </p>
+                </div>
+              </NScrollbar>
+            </div>
+          </div>
         </div>
       </NCard>
 
@@ -615,11 +612,158 @@ watch(targetEpisodeCount, (v) => {
   margin-bottom: var(--spacing-sm);
 }
 
-.ep-select {
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-base);
+.script-preview-outer {
+  min-height: 0;
+}
+
+.preview-split {
+  --preview-pane-height: min(58vh, 560px);
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.preview-ep-tablist-wrap {
+  flex-shrink: 0;
+  width: 122px;
+  height: var(--preview-pane-height);
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.preview-tab-scroll {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  border-radius: 10px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+.preview-tab-scroll :deep(.n-scrollbar-container) {
+  border-radius: 10px;
+}
+
+.preview-ep-tablist-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.preview-ep-tab {
+  width: 100%;
+  margin: 0;
+  padding: 10px 10px;
+  text-align: left;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.3;
+  color: #6b7280;
+  transition: background 0.15s ease, color 0.15s ease;
+  font-family: inherit;
+}
+
+.preview-ep-tab:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.preview-ep-tab--active {
+  background: #6366f1;
+  color: #fff;
+  font-weight: 600;
+}
+
+.preview-ep-tab--active:hover {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.preview-ep-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: var(--preview-pane-height);
+  min-height: 280px;
+}
+
+.preview-split--single .preview-ep-panel {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+}
+
+.preview-split--single .preview-scroll {
+  max-height: min(58vh, 560px);
+  min-height: 200px;
+}
+
+.preview-ep-title {
+  flex-shrink: 0;
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.preview-scroll {
+  flex: 1;
+  min-height: 0;
+  border-radius: 12px;
+}
+
+.preview-scroll :deep(.n-scrollbar-container) {
+  border-radius: 12px;
+}
+
+@media (max-width: 640px) {
+  .preview-split:not(.preview-split--single) {
+    flex-direction: column;
+    --preview-pane-height: auto;
+  }
+
+  .preview-ep-tablist-wrap {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    max-height: 112px;
+  }
+
+  .preview-tab-scroll {
+    max-height: 112px;
+  }
+
+  .preview-ep-tablist-inner {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .preview-ep-tab {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .preview-ep-panel {
+    height: auto;
+    min-height: 0;
+  }
+
+  .preview-scroll {
+    max-height: min(50vh, 480px);
+    min-height: 220px;
+  }
 }
 
 .muted {
@@ -675,77 +819,6 @@ watch(targetEpisodeCount, (v) => {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-md);
-}
-
-.generate-steps {
-  display: flex;
-  align-items: stretch;
-  margin-bottom: var(--spacing-lg);
-  padding: 14px 10px;
-  background: #fff;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-
-.generate-step {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-  opacity: 0.5;
-  transition: opacity 0.2s ease;
-}
-
-.generate-step.is-current,
-.generate-step.is-done {
-  opacity: 1;
-}
-
-.generate-step-num {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
-  background: #e5e7eb;
-  color: #6b7280;
-}
-
-.generate-step.is-current .generate-step-num {
-  background: #6366f1;
-  color: #fff;
-}
-
-.generate-step.is-done .generate-step-num {
-  background: #d1fae5;
-  color: #047857;
-}
-
-.generate-step-label {
-  font-size: 12px;
-  color: #6b7280;
-  line-height: 1.35;
-  max-width: 7em;
-}
-
-.generate-step.is-current .generate-step-label {
-  color: #111827;
-  font-weight: 600;
-}
-
-.generate-step-divider {
-  width: 1px;
-  flex-shrink: 0;
-  align-self: stretch;
-  min-height: 44px;
-  background: #e5e7eb;
-  margin: 2px 2px 0;
 }
 
 .episode-presets {
