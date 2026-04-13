@@ -131,7 +131,8 @@ async function saveEpisodeSynopsis(episodeId: string) {
 
 <style scoped>
 .overview {
-  max-width: 720px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .muted {
   color: var(--color-text-tertiary);
