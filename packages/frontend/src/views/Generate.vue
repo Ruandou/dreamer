@@ -660,7 +660,7 @@ watch(targetEpisodeCount, (v) => {
           v-if="needsBatchEpisodes && episode1HasScript && !batchAllTargetReady"
           class="hint"
         >
-          耗时可离开页面稍后再看。
+          批量生成较耗时，后台执行；可离开，稍后在任务中心看进度。
         </p>
       </NCard>
 
