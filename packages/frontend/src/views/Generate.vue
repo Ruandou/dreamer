@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   NCard,
@@ -17,10 +17,11 @@ const route = useRoute()
 const message = useMessage()
 const projectStore = useProjectStore()
 
-const TARGET_EPISODES = 60
+const TARGET_EPISODES = 6
 
 const isLoading = ref(true)
 const generatingStatus = ref('')
+const isGeneratingFirst = ref(false)
 const selectedStyles = ref<string[]>([])
 const error = ref<string | null>(null)
 
@@ -34,8 +35,27 @@ const styleOptions = [
 ]
 
 const project = computed(() => projectStore.currentProject as any)
+
+function epNum(e: any): number {
+  return Number(e?.episodeNum)
+}
+
+function scenesFromRaw(raw: unknown): any[] {
+  let o: unknown = raw
+  if (typeof raw === 'string') {
+    try {
+      o = JSON.parse(raw)
+    } catch {
+      return []
+    }
+  }
+  if (!o || typeof o !== 'object') return []
+  const s = (o as any).scenes
+  return Array.isArray(s) ? s : []
+}
+
 const episode1 = computed(() =>
-  project.value?.episodes?.find((e: any) => e.episodeNum === 1)
+  project.value?.episodes?.find((e: any) => epNum(e) === 1)
 )
 
 const batchProgress = ref<PipelineJob | null>(null)
@@ -43,30 +63,39 @@ const isBatching = ref(false)
 const isParsing = ref(false)
 const showFullEpisode1 = ref(false)
 const previewEpisodeNum = ref(1)
-const showAllEpisodesPanel = ref(false)
 
+/** 第 1..TARGET_EPISODES 集是否均有可预览的 scenes（用于解析前校验） */
 const allEpisodesReady = computed(() => {
   const eps = project.value?.episodes || []
-  if (eps.length < TARGET_EPISODES) return false
   for (let n = 1; n <= TARGET_EPISODES; n++) {
-    const e = eps.find((x: any) => x.episodeNum === n)
+    const e = eps.find((x: any) => epNum(x) === n)
     if (!e || !scenesFromRaw(e.rawScript).length) return false
   }
   return true
 })
 
-const previewEpisode = computed(() =>
-  (project.value?.episodes || []).find((e: any) => e.episodeNum === previewEpisodeNum.value)
+/** 已有剧本内容的集（批量完成后用于预览，不强制凑满 TARGET_EPISODES 才显示卡片） */
+const episodesWithScript = computed(() => {
+  const eps = project.value?.episodes || []
+  return [...eps]
+    .filter((e: any) => scenesFromRaw(e.rawScript).length > 0)
+    .sort((a: any, b: any) => epNum(a) - epNum(b))
+})
+
+/** 当前在「剧本预览」中选中的集（多集时以下拉为准，否则为第一集） */
+const activePreviewEpisode = computed(() => {
+  const eps = episodesWithScript.value
+  if (!eps.length) return episode1.value as any
+  const match = eps.find((e: any) => epNum(e) === previewEpisodeNum.value)
+  return (match || episode1.value) as any
+})
+
+const previewCardTitle = computed(() =>
+  episodesWithScript.value.length > 1 ? '剧本预览' : '第一集剧本预览'
 )
 
-function scenesFromRaw(raw: unknown): any[] {
-  if (!raw || typeof raw !== 'object') return []
-  const s = (raw as any).scenes
-  return Array.isArray(s) ? s : []
-}
-
 const previewScenes = computed(() => {
-  const scenes = scenesFromRaw(episode1.value?.rawScript)
+  const scenes = scenesFromRaw(activePreviewEpisode.value?.rawScript)
   return showFullEpisode1.value ? scenes : scenes.slice(0, 2)
 })
 
@@ -85,17 +114,36 @@ async function loadProject(id: string) {
   const p = projectStore.currentProject as any
   if (p?.visualStyle?.length) selectedStyles.value = [...p.visualStyle]
   else selectedStyles.value = []
+  // 项目详情接口偶发只带部分 episodes；列表接口保证拉全部分集与 rawScript
+  try {
+    const { data } = await api.get<any[]>(`/episodes?projectId=${id}`)
+    if (p && Array.isArray(data) && data.length > 0) {
+      p.episodes = data
+    }
+  } catch {
+    /* 保留 getProject 自带的 episodes */
+  }
 }
 
-async function ensureFirstEpisode() {
+/** 仅用户点击「生成第一集」或 URL 带 autogen=1（快速创建）时调用，进入页面不自动请求 */
+async function runGenerateFirstEpisode() {
   const id = projectId.value
   if (!id) return
   const ep = episode1.value as any
   const hasScript = ep?.rawScript && scenesFromRaw(ep.rawScript).length > 0
   if (hasScript) return
+  isGeneratingFirst.value = true
   generatingStatus.value = '正在生成第一集剧本…'
-  await api.post(`/projects/${id}/episodes/generate-first`, {})
-  await loadProject(id)
+  try {
+    await api.post(`/projects/${id}/episodes/generate-first`, {})
+    await loadProject(id)
+    message.success('第一集剧本已生成')
+  } catch (e: any) {
+    message.error(e?.message || '生成第一集失败')
+  } finally {
+    isGeneratingFirst.value = false
+    generatingStatus.value = ''
+  }
 }
 
 async function saveDraft() {
@@ -113,11 +161,6 @@ async function saveDraft() {
 async function runBatchRemaining() {
   const id = projectId.value
   if (!id) return
-  if (!selectedStyles.value.length) {
-    message.warning('请至少选择一种视觉风格')
-    return
-  }
-  await api.put(`/projects/${id}`, { visualStyle: selectedStyles.value })
   isBatching.value = true
   batchProgress.value = null
   try {
@@ -134,7 +177,12 @@ async function runBatchRemaining() {
     )
     message.success('剩余集剧本已生成')
     await loadProject(id)
-    showAllEpisodesPanel.value = true
+    await nextTick()
+    const nums = episodesWithScript.value.map((e: any) => epNum(e))
+    if (nums.length && !nums.includes(previewEpisodeNum.value)) {
+      previewEpisodeNum.value = Math.min(...nums.filter((n) => n >= 1))
+    }
+    showFullEpisode1.value = false
   } catch (e: any) {
     message.error(e?.message || '批量生成失败')
   } finally {
@@ -178,7 +226,13 @@ onMounted(async () => {
   }
   try {
     await loadProject(pid)
-    await ensureFirstEpisode()
+    const autoGen =
+      route.query.autogen === '1' ||
+      route.query.autogen === 'true'
+    if (autoGen) {
+      await runGenerateFirstEpisode()
+      await router.replace({ path: '/generate', query: { projectId: pid } })
+    }
   } catch (e: any) {
     error.value = e?.message || '加载项目失败'
   } finally {
@@ -225,65 +279,86 @@ function reloadPage() {
         </NCard>
       </div>
 
-      <NCard class="mt" title="第一集剧本预览">
+      <NCard class="mt" :title="previewCardTitle">
         <template #header-extra>
-          <NSpace>
+          <NSpace align="center" wrap>
+            <template v-if="episodesWithScript.length > 1">
+              <span class="muted" style="font-size: 12px">第</span>
+              <select
+                v-model.number="previewEpisodeNum"
+                class="ep-select"
+                @change="showFullEpisode1 = false"
+              >
+                <option v-for="ep in episodesWithScript" :key="ep.id" :value="epNum(ep)">
+                  {{ epNum(ep) }}
+                </option>
+              </select>
+              <span class="muted" style="font-size: 12px">集</span>
+            </template>
             <NButton size="tiny" quaternary @click="showFullEpisode1 = !showFullEpisode1">
               {{ showFullEpisode1 ? '收起' : '展开' }}
             </NButton>
           </NSpace>
         </template>
-        <div v-if="!episode1 || !scenesFromRaw(episode1.rawScript).length" class="muted">暂无剧本，正在准备…</div>
+        <p v-if="episodesWithScript.length > 1 && !allEpisodesReady" class="muted episode-picker">
+          当前已生成 {{ episodesWithScript.length }} 集有场次；目标 {{ TARGET_EPISODES }} 集全部就绪后可放心点「解析剧本」。
+        </p>
+        <div v-if="!activePreviewEpisode || !scenesFromRaw(activePreviewEpisode.rawScript).length" class="muted">
+          <p>暂无第一集剧本。从列表进入不会自动生成，请确认创意与梗概后点击下方按钮。</p>
+          <NButton
+            type="primary"
+            class="mt-sm"
+            :loading="isGeneratingFirst"
+            :disabled="isGeneratingFirst"
+            @click="runGenerateFirstEpisode"
+          >
+            生成第一集剧本
+          </NButton>
+        </div>
         <div v-else class="script-preview">
+          <p v-if="episodesWithScript.length > 1" class="muted" style="margin-bottom: 8px">
+            正在预览：第 {{ epNum(activePreviewEpisode) }} 集
+          </p>
           <div v-for="(sc, idx) in previewScenes" :key="idx" class="scene-block">
             <div class="scene-head">
               Scene {{ sc.sceneNum }}. {{ sc.location }} - {{ sc.timeOfDay }}
             </div>
             <p class="scene-desc">{{ sc.description }}</p>
           </div>
-          <p v-if="!showFullEpisode1 && scenesFromRaw(episode1.rawScript).length > 2" class="muted">
-            共 {{ scenesFromRaw(episode1.rawScript).length }} 场，点击展开查看全部
+          <p
+            v-if="!showFullEpisode1 && scenesFromRaw(activePreviewEpisode.rawScript).length > 2"
+            class="muted"
+          >
+            共 {{ scenesFromRaw(activePreviewEpisode.rawScript).length }} 场，点击展开查看全部
           </p>
-        </div>
-      </NCard>
-
-      <NCard v-if="allEpisodesReady && showAllEpisodesPanel" class="mt" title="全部剧本预览">
-        <template #header-extra>
-          <NButton size="tiny" quaternary @click="showAllEpisodesPanel = false">收起</NButton>
-        </template>
-        <div class="episode-picker">
-          <span>查看集数：</span>
-          <select v-model.number="previewEpisodeNum" class="ep-select">
-            <option v-for="n in TARGET_EPISODES" :key="n" :value="n">第 {{ n }} 集</option>
-          </select>
-        </div>
-        <div v-if="previewEpisode" class="script-preview mt-sm">
-          <div v-for="(sc, idx) in scenesFromRaw(previewEpisode.rawScript)" :key="idx" class="scene-block">
-            <div class="scene-head">
-              Scene {{ sc.sceneNum }}. {{ sc.location }} - {{ sc.timeOfDay }}
-            </div>
-            <p class="scene-desc">{{ sc.description }}</p>
-          </div>
         </div>
       </NCard>
 
       <NCard class="mt" title="剧本生成">
         <p v-if="episode1 && scenesFromRaw(episode1.rawScript).length" class="ok-line">
-          第一集已生成。总集数设定：{{ TARGET_EPISODES }} 集。
+          <template v-if="episodesWithScript.length > 1">
+            已生成 {{ episodesWithScript.length }} 集有场次剧本；目标总集数 {{ TARGET_EPISODES }} 集。
+          </template>
+          <template v-else> 第一集已生成。总集数设定：{{ TARGET_EPISODES }} 集。 </template>
         </p>
         <p v-if="isBatching && batchProgress?.progressMeta?.message" class="muted">
           {{ batchProgress.progressMeta.message }}
         </p>
         <NSpace class="mt-sm">
-          <NButton type="primary" :loading="isBatching" :disabled="isBatching" @click="runBatchRemaining">
+          <NButton
+            type="primary"
+            :loading="isBatching"
+            :disabled="isBatching || !episode1 || !scenesFromRaw(episode1.rawScript).length"
+            @click="runBatchRemaining"
+          >
             生成剩余 {{ TARGET_EPISODES - 1 }} 集剧本
           </NButton>
           <NButton quaternary :disabled="isBatching">稍后再说</NButton>
         </NSpace>
-        <p class="hint">批量生成耗时较长，可离开页面稍后返回查看。</p>
+        <p class="hint">批量生成不依赖视觉风格；耗时较长时可离开页面稍后返回查看。</p>
       </NCard>
 
-      <NCard class="mt" title="选择视觉风格（可多选）">
+      <NCard class="mt" title="选择视觉风格（解析剧本前必选，可多选）">
         <div class="style-list">
           <div
             v-for="opt in styleOptions"
@@ -301,7 +376,9 @@ function reloadPage() {
         <NButton @click="handleBack">返回修改</NButton>
         <NButton type="primary" size="large" :loading="isParsing" @click="runParse">解析剧本 →</NButton>
       </div>
-      <p class="hint center">点击「解析剧本」后，将提取角色、场景并创建形象槽位，完成后进入项目详情页。</p>
+      <p class="hint center">
+        解析剧本前须至少选择一种视觉风格；点击后将提取角色、场景并创建形象槽位，完成后进入项目详情页。
+      </p>
     </template>
 
     <div v-else-if="isLoading" class="loading-state">

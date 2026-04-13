@@ -31,7 +31,7 @@ vi.mock('../src/services/project-script-jobs.js', () => ({
   runParseScriptJob: (...args: unknown[]) => mockRunParseScriptJob(...args) as Promise<void>,
   runScriptBatchJob: (...args: unknown[]) => mockRunScriptBatchJob(...args) as Promise<void>,
   runGenerateFirstEpisode: (...args: unknown[]) => mockRunGenerateFirstEpisode(...args) as Promise<void>,
-  DEFAULT_TARGET_EPISODES: 60
+  DEFAULT_TARGET_EPISODES: 6
 }))
 
 vi.mock('../src/index.js', () => ({

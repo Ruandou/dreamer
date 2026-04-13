@@ -67,7 +67,7 @@ describe('project-script-jobs helpers', () => {
     expect(p2.sceneCount).toBe(2)
   })
 
-  it('DEFAULT_TARGET_EPISODES is 60', () => {
-    expect(DEFAULT_TARGET_EPISODES).toBe(60)
+  it('DEFAULT_TARGET_EPISODES is 6', () => {
+    expect(DEFAULT_TARGET_EPISODES).toBe(6)
   })
 })

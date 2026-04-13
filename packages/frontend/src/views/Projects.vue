@@ -11,6 +11,7 @@ import {
   useDialog,
 } from "naive-ui";
 import { useProjectStore } from "@/stores/project";
+import type { Project } from "@dreamer/shared/types";
 import EmptyState from "@/components/EmptyState.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 
@@ -85,7 +86,7 @@ const handleQuickCreate = async () => {
       name,
       description: idea,
     });
-    router.push(`/generate?projectId=${project.id}`);
+    router.push(`/generate?projectId=${project.id}&autogen=1`);
   } catch (e: any) {
     message.error(e.message || "创建项目失败");
   } finally {
@@ -93,8 +94,14 @@ const handleQuickCreate = async () => {
   }
 };
 
-const handleProjectClick = (id: string) => {
-  router.push(`/project/${id}`);
+/** 已解析（库里有角色）→ 项目详情；否则 → 生成大纲页继续补全 / 解析 */
+const handleProjectClick = (project: Project) => {
+  const hasCharacters = (project.characters?.length ?? 0) > 0;
+  if (hasCharacters) {
+    router.push(`/project/${project.id}`);
+  } else {
+    router.push(`/generate?projectId=${project.id}`);
+  }
 };
 
 const handleDelete = (id: string) => {
@@ -222,7 +229,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
             :key="project.id"
             class="project-card"
             hoverable
-            @click="handleProjectClick(project.id)"
+            @click="handleProjectClick(project)"
           >
             <div class="project-card__cover">
               <div class="project-card__cover-placeholder">🎬</div>

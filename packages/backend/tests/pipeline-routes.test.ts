@@ -185,7 +185,7 @@ describe('Pipeline Routes', () => {
         jobType: 'script-batch',
         currentStep: 'script-batch',
         progress: 40,
-        progressMeta: { current: 5, total: 60, message: '正在生成第 5/60 集' },
+        progressMeta: { current: 5, total: 6, message: '正在生成第 5/6 集' },
         error: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -203,7 +203,7 @@ describe('Pipeline Routes', () => {
       expect(body.success).toBe(true)
       expect(body.data.jobType).toBe('script-batch')
       expect(body.data.progressMeta?.current).toBe(5)
-      expect(body.data.progressMeta?.message).toContain('5/60')
+      expect(body.data.progressMeta?.message).toContain('5/6')
     })
 
     it('returns 404 when job not found', async () => {

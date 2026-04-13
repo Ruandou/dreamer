@@ -16,6 +16,8 @@ export interface Project {
   visualStyle?: string[]
   storyContext?: string | null
   episodes?: Episode[]
+  /** 列表接口可能只带一条，用于判断「是否已解析出角色」 */
+  characters?: Array<{ id: string }>
   createdAt: Date
   updatedAt: Date
 }

@@ -17,7 +17,11 @@ export async function projectRoutes(fastify: FastifyInstance) {
       const user = (request as any).user
       return prisma.project.findMany({
         where: { userId: user.id },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        // 仅用于列表判断是否已解析（有角色）：take 1，避免拉全量角色
+        include: {
+          characters: { take: 1, select: { id: true } }
+        }
       })
     }
   )

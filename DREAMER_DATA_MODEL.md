@@ -15,7 +15,7 @@
 - **Composition（MVP）**：`projectId`、`episodeId`、`title`、`status`（`draft` | `processing` | `completed` | `failed`）、`outputUrl`。
 - **CompositionScene（MVP）**：`compositionId`、`sceneId`、`takeId`、`order`；无转场 / 无音轨 / 无字幕字段。
 - **Episode**：`rawScript`（Json）；**无** `sceneIndices` 持久化字段。
-- **Project**：含 `synopsis`；**Location**：字段 `name`（场地名）。
+- **Project**：含 `synopsis`、`visualStyle`（`String[]`）。**生成大纲页**：批量续写各集 `rawScript`（`generate-remaining`）**不**要求已选风格；**「解析剧本」**（`parse`）**须**至少一项 `visualStyle`。**Location**：字段 `name`（场地名）。
 
 ## Prompt 拼接（规范）
 

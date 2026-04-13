@@ -78,7 +78,10 @@ describe('Project Routes', () => {
       expect(data.length).toBe(2)
       expect(mockProjectFindMany).toHaveBeenCalledWith({
         where: { userId: 'test-user-id' },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        include: {
+          characters: { take: 1, select: { id: true } }
+        }
       })
     })
 
