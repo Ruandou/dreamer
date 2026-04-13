@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NCard, NForm, NFormItem, NInput, NButton, NSpace, useMessage } from 'naive-ui'
+import { NCard, NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
 import { api } from '@/api'
+import AuthShell from '@/components/auth/AuthShell.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -10,8 +11,13 @@ const message = useMessage()
 const formValue = ref({ name: '', email: '', password: '', confirmPassword: '' })
 const isLoading = ref(false)
 
+function safeRedirectTarget(): string {
+  const raw = route.query.redirect
+  const s = typeof raw === 'string' ? raw : Array.isArray(raw) ? (raw[0] ?? '') : ''
+  return s && s.startsWith('/') && !s.startsWith('//') ? s : '/projects'
+}
+
 const handleRegister = async () => {
-  console.log('formValue:', formValue.value)
   if (!formValue.value.name || !formValue.value.email || !formValue.value.password) {
     message.error('请填写所有必填项')
     return
@@ -39,10 +45,7 @@ const handleRegister = async () => {
       localStorage.setItem('token', res.data.accessToken)
       localStorage.setItem('user', JSON.stringify(res.data.user))
       message.success('注册成功')
-      const raw = route.query.redirect
-      const r = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : ''
-      const target = r.startsWith('/') && !r.startsWith('//') ? r : '/projects'
-      router.push(target)
+      router.push(safeRedirectTarget())
     }
   } catch (error: any) {
     message.error(error.response?.data?.error || '注册失败')
@@ -53,20 +56,21 @@ const handleRegister = async () => {
 </script>
 
 <template>
-  <div class="register-container">
-    <NCard title="注册" style="width: 400px">
+  <AuthShell>
+    <NCard title="注册" style="width: 100%">
       <NForm :model="formValue">
         <NFormItem label="名称" path="name">
-          <NInput v-model:value="formValue.name" placeholder="请输入名称" @keyup.enter="handleRegister" />
+          <NInput v-model:value="formValue.name" placeholder="请输入名称" autocomplete="name" @keyup.enter="handleRegister" />
         </NFormItem>
         <NFormItem label="邮箱" path="email">
-          <NInput v-model:value="formValue.email" placeholder="请输入邮箱" @keyup.enter="handleRegister" />
+          <NInput v-model:value="formValue.email" placeholder="请输入邮箱" autocomplete="email" @keyup.enter="handleRegister" />
         </NFormItem>
         <NFormItem label="密码" path="password">
           <NInput
             v-model:value="formValue.password"
             type="password"
             placeholder="请输入密码（至少6位）"
+            autocomplete="new-password"
             @keyup.enter="handleRegister"
           />
         </NFormItem>
@@ -75,24 +79,43 @@ const handleRegister = async () => {
             v-model:value="formValue.confirmPassword"
             type="password"
             placeholder="请再次输入密码"
+            autocomplete="new-password"
             @keyup.enter="handleRegister"
           />
         </NFormItem>
-        <NSpace justify="space-between" style="width: 100%">
-          <NButton @click="$router.push('/login')">返回登录</NButton>
-          <NButton type="primary" :loading="isLoading" @click="handleRegister">注册</NButton>
-        </NSpace>
+        <div class="auth-actions">
+          <NButton type="primary" size="large" block round :loading="isLoading" @click="handleRegister">注册</NButton>
+          <p class="auth-actions__alt">
+            已有账号？
+            <NButton text type="primary" class="auth-actions__link" @click="$router.push('/login')">返回登录</NButton>
+          </p>
+        </div>
       </NForm>
     </NCard>
-  </div>
+  </AuthShell>
 </template>
 
 <style scoped>
-.register-container {
-  height: 100vh;
+.auth-actions {
+  margin-top: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-actions__alt {
+  margin: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  flex-wrap: wrap;
+  gap: 0.125rem 0.35rem;
+  font-size: 0.875rem;
+  color: rgba(100, 116, 139, 0.95);
+}
+
+.auth-actions__link {
+  font-weight: 600;
+  padding: 0 0.25rem !important;
 }
 </style>
