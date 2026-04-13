@@ -6,9 +6,7 @@ import {
   NLayoutSider,
   NMenu,
   NButton,
-  NAvatar,
   NSpace,
-  NDropdown,
   NTag,
   NAlert,
   NProgress,
@@ -65,51 +63,50 @@ onMounted(async () => {
 
 const menuOptions: MenuOption[] = [
   {
-    label: 'AI编剧',
-    key: 'script',
-    icon: '📝',
-    onClick: () => router.push(`/project/${projectId.value}/script`)
+    label: '基础信息',
+    key: 'overview',
+    icon: () => '📋',
+    onClick: () => router.push(`/project/${projectId.value}/overview`)
   },
   {
     label: '角色库',
     key: 'characters',
-    icon: '👥',
+    icon: () => '👥',
     onClick: () => router.push(`/project/${projectId.value}/characters`)
   },
   {
-    label: '分镜控制台',
-    key: 'storyboard',
-    icon: '🎬',
-    onClick: () => router.push(`/project/${projectId.value}/storyboard`)
+    label: '场地库',
+    key: 'locations',
+    icon: () => '🏙️',
+    onClick: () => router.push(`/project/${projectId.value}/locations`)
   },
   {
-    label: '视频合成',
+    label: '分集管理',
+    key: 'episodes',
+    icon: () => '📑',
+    onClick: () => router.push(`/project/${projectId.value}/episodes`)
+  },
+  {
+    label: '成片预览',
     key: 'compose',
-    icon: '🎞️',
+    icon: () => '🎞️',
     onClick: () => router.push(`/project/${projectId.value}/compose`)
-  },
-  {
-    label: 'AI流水线',
-    key: 'pipeline',
-    icon: '⚡',
-    onClick: () => router.push(`/project/${projectId.value}/pipeline`)
   }
 ]
 
 const currentMenu = computed(() => {
   const path = route.path
-  if (path.includes('/script')) return 'script'
+  if (path.includes('/overview')) return 'overview'
   if (path.includes('/characters')) return 'characters'
-  if (path.includes('/storyboard')) return 'storyboard'
+  if (path.includes('/locations')) return 'locations'
+  if (path.includes('/episodes')) return 'episodes'
   if (path.includes('/compose')) return 'compose'
-  if (path.includes('/pipeline')) return 'pipeline'
-  return 'script'
+  /** 旧子路由仍可达：侧栏高亮归到最接近的主 Tab */
+  if (path.includes('/script')) return 'overview'
+  if (path.includes('/storyboard') || path.includes('/pipeline')) return 'episodes'
+  return 'overview'
 })
 
-const currentTabIndex = computed(() => {
-  const tabs = ['script', 'characters', 'storyboard', 'compose', 'pipeline']
-  return tabs.indexOf(currentMenu.value)
-})
 </script>
 
 <template>

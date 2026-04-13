@@ -121,6 +121,18 @@ describe('Project Routes', () => {
       const data = JSON.parse(response.payload)
       expect(data.id).toBe('proj-1')
       expect(data.name).toBe('Test Project')
+      expect(mockProjectFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'proj-1', userId: 'test-user-id' },
+          include: expect.objectContaining({
+            characters: {
+              include: {
+                images: { orderBy: { order: 'asc' } }
+              }
+            }
+          })
+        })
+      )
     })
 
     it('should return 404 when project not found', async () => {
@@ -233,6 +245,31 @@ describe('Project Routes', () => {
         where: { id: 'proj-1' },
         data: { synopsis: '梗概', visualStyle: ['cinematic'] }
       })
+    })
+  })
+
+  describe('PATCH /api/projects/:id', () => {
+    it('should mirror PUT for partial update', async () => {
+      mockProjectFindFirst.mockResolvedValue({
+        id: 'proj-1',
+        name: 'Original Name',
+        userId: 'test-user-id'
+      })
+      mockProjectUpdate.mockResolvedValue({
+        id: 'proj-1',
+        name: 'Patched',
+        userId: 'test-user-id'
+      })
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/api/projects/proj-1',
+        payload: { name: 'Patched' }
+      })
+
+      expect(response.statusCode).toBe(200)
+      const data = JSON.parse(response.payload)
+      expect(data.name).toBe('Patched')
     })
   })
 

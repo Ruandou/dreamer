@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { expandScript } from '../services/deepseek.js'
+import { runCompositionExport } from '../services/composition-export.js'
 import { verifyEpisodeOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import type { ScriptContent } from '@dreamer/shared/types'
@@ -72,7 +73,10 @@ export async function episodeRoutes(fastify: FastifyInstance) {
   )
 
   // Update episode (including script content)
-  fastify.put<{ Params: { id: string }; Body: { title?: string; script?: any; rawScript?: any } }>(
+  fastify.put<{
+    Params: { id: string }
+    Body: { title?: string; synopsis?: string | null; script?: any; rawScript?: any }
+  }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
@@ -83,12 +87,16 @@ export async function episodeRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const { title, script, rawScript } = request.body
+      const { title, synopsis, script, rawScript } = request.body
       const scriptPayload = rawScript ?? script
 
       const episode = await prisma.episode.update({
         where: { id: episodeId },
-        data: { title, ...(scriptPayload !== undefined && { rawScript: scriptPayload }) }
+        data: {
+          title,
+          ...(synopsis !== undefined && { synopsis }),
+          ...(scriptPayload !== undefined && { rawScript: scriptPayload })
+        }
       })
 
       return episode
@@ -115,6 +123,109 @@ export async function episodeRoutes(fastify: FastifyInstance) {
 
       await prisma.episode.delete({ where: { id: episodeId } })
       return reply.status(204).send()
+    }
+  )
+
+  /** 按当前集场次与已选 Take 写入时间线并导出成片（复用 Composition + ffmpeg） */
+  fastify.post<{ Params: { id: string }; Body: { title?: string } }>(
+    '/:id/compose',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request as any).user.id
+      const episodeId = request.params.id
+      const titleOverride = request.body?.title
+
+      if (!(await verifyEpisodeOwnership(userId, episodeId))) {
+        return reply.status(403).send(permissionDeniedBody)
+      }
+
+      const episode = await prisma.episode.findUnique({
+        where: { id: episodeId },
+        include: {
+          scenes: {
+            orderBy: { sceneNum: 'asc' },
+            include: {
+              takes: { where: { isSelected: true } }
+            }
+          }
+        }
+      })
+
+      if (!episode) {
+        return reply.status(404).send({ error: 'Episode not found' })
+      }
+
+      const issues: string[] = []
+      const clips: { sceneId: string; takeId: string; order: number }[] = []
+
+      let order = 0
+      for (const scene of episode.scenes) {
+        const selected = scene.takes[0]
+        if (!selected) {
+          issues.push(`第 ${scene.sceneNum} 场未选择成片 Take`)
+          continue
+        }
+        if (selected.status !== 'completed' || !selected.videoUrl) {
+          issues.push(`第 ${scene.sceneNum} 场所选 Take 尚无成片视频`)
+          continue
+        }
+        order += 1
+        clips.push({ sceneId: scene.id, takeId: selected.id, order })
+      }
+
+      if (clips.length === 0) {
+        if (episode.scenes.length === 0) {
+          return reply.status(400).send({ error: '该集暂无场次' })
+        }
+        return reply.status(400).send({ error: '无法合成', details: issues })
+      }
+
+      let composition = await prisma.composition.findFirst({
+        where: { episodeId }
+      })
+
+      const defaultTitle =
+        titleOverride?.trim() || episode.title || `第${episode.episodeNum}集`
+
+      if (!composition) {
+        composition = await prisma.composition.create({
+          data: {
+            projectId: episode.projectId,
+            episodeId,
+            title: defaultTitle
+          }
+        })
+      } else if (titleOverride?.trim()) {
+        composition = await prisma.composition.update({
+          where: { id: composition.id },
+          data: { title: titleOverride.trim() }
+        })
+      }
+
+      await prisma.compositionScene.deleteMany({ where: { compositionId: composition.id } })
+      await prisma.compositionScene.createMany({
+        data: clips.map((c) => ({
+          compositionId: composition.id,
+          sceneId: c.sceneId,
+          takeId: c.takeId,
+          order: c.order
+        }))
+      })
+
+      const exportResult = await runCompositionExport(composition.id)
+      if (!exportResult.ok) {
+        return reply.status(exportResult.httpStatus).send({
+          error: exportResult.error,
+          compositionId: composition.id
+        })
+      }
+
+      return {
+        compositionId: composition.id,
+        outputUrl: exportResult.outputUrl,
+        duration: exportResult.duration,
+        message: '合成完成'
+      }
     }
   )
 

@@ -15,7 +15,12 @@ const {
   mockShotCreate,
   mockLocationFindFirst,
   mockVerifyEpisodeOwnership,
-  mockVerifyProjectOwnership
+  mockVerifyProjectOwnership,
+  mockCompositionFindFirst,
+  mockCompositionCreate,
+  mockCompositionSceneDeleteMany,
+  mockCompositionSceneCreateMany,
+  mockRunCompositionExport
 } = vi.hoisted(() => {
   return {
     mockEpisodeFindMany: vi.fn(),
@@ -30,7 +35,16 @@ const {
     mockShotCreate: vi.fn(),
     mockLocationFindFirst: vi.fn(),
     mockVerifyEpisodeOwnership: vi.fn().mockResolvedValue(true),
-    mockVerifyProjectOwnership: vi.fn().mockResolvedValue(true)
+    mockVerifyProjectOwnership: vi.fn().mockResolvedValue(true),
+    mockCompositionFindFirst: vi.fn(),
+    mockCompositionCreate: vi.fn(),
+    mockCompositionSceneDeleteMany: vi.fn(),
+    mockCompositionSceneCreateMany: vi.fn(),
+    mockRunCompositionExport: vi.fn().mockResolvedValue({
+      ok: true,
+      outputUrl: 'https://storage.example.com/out.mp4',
+      duration: 9
+    })
   }
 })
 
@@ -45,6 +59,10 @@ vi.mock('../src/services/deepseek.js', () => ({
     },
     cost: { costCNY: 0.05 }
   })
+}))
+
+vi.mock('../src/services/composition-export.js', () => ({
+  runCompositionExport: (...args: unknown[]) => mockRunCompositionExport(...args)
 }))
 
 // Mock verifyEpisodeOwnership and verifyProjectOwnership
@@ -76,6 +94,14 @@ vi.mock('../src/index.js', () => ({
     },
     location: {
       findFirst: mockLocationFindFirst
+    },
+    composition: {
+      findFirst: mockCompositionFindFirst,
+      create: mockCompositionCreate
+    },
+    compositionScene: {
+      deleteMany: mockCompositionSceneDeleteMany,
+      createMany: mockCompositionSceneCreateMany
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()
@@ -228,6 +254,24 @@ describe('Episode Routes', () => {
       const data = JSON.parse(response.payload)
       expect(data.title).toBe('Updated Title')
     })
+
+    it('should persist synopsis when provided', async () => {
+      mockEpisodeUpdate.mockResolvedValue({
+        id: 'ep-1',
+        episodeNum: 1,
+        synopsis: '本集梗概'
+      })
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/episodes/ep-1',
+        payload: { synopsis: '本集梗概' }
+      })
+      expect(response.statusCode).toBe(200)
+      expect(mockEpisodeUpdate).toHaveBeenCalledWith({
+        where: { id: 'ep-1' },
+        data: expect.objectContaining({ synopsis: '本集梗概' })
+      })
+    })
   })
 
   describe('DELETE /api/episodes/:id', () => {
@@ -252,6 +296,89 @@ describe('Episode Routes', () => {
       })
 
       expect(response.statusCode).toBe(404)
+    })
+  })
+
+  describe('POST /api/episodes/:id/compose', () => {
+    it('returns 400 when no scenes', async () => {
+      mockEpisodeFindUnique.mockResolvedValue({
+        id: 'ep-1',
+        episodeNum: 1,
+        projectId: 'proj-1',
+        title: 'E1',
+        scenes: []
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/episodes/ep-1/compose',
+        payload: {}
+      })
+
+      expect(response.statusCode).toBe(400)
+    })
+
+    it('returns 400 when selected take missing video', async () => {
+      mockEpisodeFindUnique.mockResolvedValue({
+        id: 'ep-1',
+        episodeNum: 1,
+        projectId: 'proj-1',
+        title: 'E1',
+        scenes: [
+          {
+            id: 'sc-1',
+            sceneNum: 1,
+            takes: [{ id: 'tk-1', status: 'completed', videoUrl: null, isSelected: true }]
+          }
+        ]
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/episodes/ep-1/compose',
+        payload: {}
+      })
+
+      expect(response.statusCode).toBe(400)
+    })
+
+    it('creates composition timeline and exports', async () => {
+      mockEpisodeFindUnique.mockResolvedValue({
+        id: 'ep-1',
+        episodeNum: 1,
+        projectId: 'proj-1',
+        title: 'E1',
+        scenes: [
+          {
+            id: 'sc-1',
+            sceneNum: 1,
+            takes: [
+              {
+                id: 'tk-1',
+                status: 'completed',
+                videoUrl: 'https://cdn.example.com/a.mp4',
+                isSelected: true
+              }
+            ]
+          }
+        ]
+      })
+      mockCompositionFindFirst.mockResolvedValue(null)
+      mockCompositionCreate.mockResolvedValue({ id: 'cmp-1' })
+      mockCompositionSceneDeleteMany.mockResolvedValue({ count: 0 })
+      mockCompositionSceneCreateMany.mockResolvedValue({ count: 1 })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/episodes/ep-1/compose',
+        payload: {}
+      })
+
+      expect(response.statusCode).toBe(200)
+      const data = JSON.parse(response.payload)
+      expect(data.compositionId).toBe('cmp-1')
+      expect(data.outputUrl).toContain('out.mp4')
+      expect(mockRunCompositionExport).toHaveBeenCalledWith('cmp-1')
     })
   })
 

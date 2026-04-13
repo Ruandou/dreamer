@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify'
+import { FastifyInstance, FastifyReply } from 'fastify'
 import { prisma } from '../index.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import {
@@ -252,7 +252,11 @@ export async function projectRoutes(fastify: FastifyInstance) {
         include: {
           // 不 include DB Scene：分镜/任务走 /scenes；剧本正文在 episode.rawScript（JSON）
           episodes: true,
-          characters: true,
+          characters: {
+            include: {
+              images: { orderBy: { order: 'asc' } }
+            }
+          },
           locations: true,
           compositions: true
         }
@@ -266,6 +270,47 @@ export async function projectRoutes(fastify: FastifyInstance) {
     }
   )
 
+  async function handleProjectUpdate(
+    request: { params: { id: string }; body: Record<string, unknown> },
+    reply: FastifyReply
+  ) {
+    const user = (request as any).user as { id: string }
+    const { name, description, synopsis, visualStyle } = request.body as {
+      name?: string
+      description?: string
+      synopsis?: string | null
+      visualStyle?: string[]
+    }
+
+    const project = await prisma.project.findFirst({
+      where: { id: request.params.id, userId: user.id }
+    })
+
+    if (!project) {
+      return reply.status(404).send({ error: 'Project not found' })
+    }
+
+    const data: Record<string, unknown> = {}
+    if (name !== undefined) data.name = name
+    if (description !== undefined) data.description = description
+    if (synopsis !== undefined) data.synopsis = synopsis
+    if (visualStyle !== undefined) {
+      if (!Array.isArray(visualStyle)) {
+        return reply.status(400).send({ error: 'visualStyle 须为字符串数组' })
+      }
+      data.visualStyle = visualStyle
+    }
+
+    if (Object.keys(data).length === 0) {
+      return project
+    }
+
+    return prisma.project.update({
+      where: { id: request.params.id },
+      data
+    })
+  }
+
   // Update project
   fastify.put<{
     Params: { id: string }
@@ -278,38 +323,21 @@ export async function projectRoutes(fastify: FastifyInstance) {
   }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const user = (request as any).user
-      const { name, description, synopsis, visualStyle } = request.body
+    async (request, reply) => handleProjectUpdate(request, reply)
+  )
 
-      const project = await prisma.project.findFirst({
-        where: { id: request.params.id, userId: user.id }
-      })
-
-      if (!project) {
-        return reply.status(404).send({ error: 'Project not found' })
-      }
-
-      const data: Record<string, unknown> = {}
-      if (name !== undefined) data.name = name
-      if (description !== undefined) data.description = description
-      if (synopsis !== undefined) data.synopsis = synopsis
-      if (visualStyle !== undefined) {
-        if (!Array.isArray(visualStyle)) {
-          return reply.status(400).send({ error: 'visualStyle 须为字符串数组' })
-        }
-        data.visualStyle = visualStyle
-      }
-
-      if (Object.keys(data).length === 0) {
-        return project
-      }
-
-      return prisma.project.update({
-        where: { id: request.params.id },
-        data
-      })
+  fastify.patch<{
+    Params: { id: string }
+    Body: {
+      name?: string
+      description?: string
+      synopsis?: string | null
+      visualStyle?: string[]
     }
+  }>(
+    '/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => handleProjectUpdate(request, reply)
   )
 
   // Delete project

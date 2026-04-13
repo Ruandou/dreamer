@@ -60,7 +60,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'ProjectHome',
-        redirect: (to) => ({ name: 'ProjectScript', params: { id: to.params.id } })
+        redirect: (to) => ({ name: 'ProjectOverview', params: { id: to.params.id } })
+      },
+      {
+        path: 'overview',
+        name: 'ProjectOverview',
+        component: () => import('@/views/ProjectOverview.vue')
       },
       {
         path: 'script',
@@ -71,6 +76,16 @@ const routes: RouteRecordRaw[] = [
         path: 'characters',
         name: 'ProjectCharacters',
         component: () => import('@/views/ProjectCharacters.vue')
+      },
+      {
+        path: 'locations',
+        name: 'ProjectLocations',
+        component: () => import('@/views/ProjectLocations.vue')
+      },
+      {
+        path: 'episodes',
+        name: 'ProjectEpisodes',
+        component: () => import('@/views/ProjectEpisodes.vue')
       },
       {
         path: 'characters/:characterId',

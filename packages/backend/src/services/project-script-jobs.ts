@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../index.js'
 import { writeScriptFromIdea, writeEpisodeForProject } from './script-writer.js'
 import { saveCharacters, saveLocations } from './script-entities.js'
+import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
 import type { ScriptContent, ScriptScene, EpisodePlan } from '@dreamer/shared/types'
 
 export const DEFAULT_TARGET_EPISODES = 36
@@ -364,6 +365,8 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
     const merged = mergeEpisodesToScriptContent(capped as any)
     await saveLocations(projectId, merged)
     await ensureCharacterBaseSlot(projectId, merged)
+    await updateJob(jobId, { progress: 60, progressMeta: { message: '生成形象与场地提示词…' } })
+    await applyScriptVisualEnrichment(projectId, merged)
     await fillEpisodeSynopses(projectId)
 
     await updateJob(jobId, {

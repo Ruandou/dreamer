@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
@@ -9,7 +9,8 @@ import {
 import type { UploadFile, TreeOption } from 'naive-ui'
 import { useCharacterStore } from '@/stores/character'
 import EmptyState from '@/components/EmptyState.vue'
-import type { Character, CharacterImage } from '@dreamer/shared/types'
+import type { CharacterImage } from '@dreamer/shared/types'
+import { subscribeProjectUpdates } from '@/lib/project-sse-bridge'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,9 +31,34 @@ const imageForm = ref({
 const currentCharacterId = ref<string | null>(null)
 const expandedCharacterIds = ref<string[]>([])
 const selectedImageId = ref<string | null>(null)
+/** 已提交、等待 Worker 完成的形象图任务 */
+const generatingByImageId = ref<Record<string, boolean>>({})
+
+let unsubProjectSse: (() => void) | null = null
 
 onMounted(async () => {
   await characterStore.fetchCharacters(projectId.value)
+  unsubProjectSse = subscribeProjectUpdates(projectId.value, (p) => {
+    if (p.type !== 'image-generation') return
+    const imgId = typeof p.characterImageId === 'string' ? p.characterImageId : undefined
+    if (imgId && (p.status === 'completed' || p.status === 'failed')) {
+      const next = { ...generatingByImageId.value }
+      delete next[imgId]
+      generatingByImageId.value = next
+    }
+    if (p.status === 'completed' && p.characterImageId) {
+      void characterStore.fetchCharacters(projectId.value)
+      message.success('形象图已更新')
+    }
+    if (p.status === 'failed' && p.kind?.startsWith('character')) {
+      message.error((p.error as string) || '形象生成失败')
+    }
+  })
+})
+
+onUnmounted(() => {
+  unsubProjectSse?.()
+  unsubProjectSse = null
 })
 
 const handleCreateCharacter = async () => {
@@ -166,23 +192,48 @@ const getTypeTagType = (type: string): 'default' | 'info' | 'success' | 'warning
   return map[type] || 'default'
 }
 
-const imageActionOptions = (characterId: string, imageId: string, images: CharacterImage[]) => {
-  const options = [
-    { label: '添加子形象', key: 'add-child' },
-    { label: '删除', key: 'delete' }
-  ]
+const imageActionOptions = (_characterId: string, imageId: string, images: CharacterImage[]) => {
+  const image = images.find((i) => i.id === imageId)
+  const options: { label: string; key: string }[] = []
 
-  // If has children, offer "移出树"
-  const image = images.find(i => i.id === imageId)
-  if (image?.parentId) {
-    options.unshift({ label: '设为独立形象', key: 'detach' })
+  if (image) {
+    if (!image.parentId) {
+      options.push({ label: image.avatarUrl ? 'AI 重新生成' : 'AI 生成定妆', key: 'ai-generate' })
+    } else {
+      const parent = images.find((i) => i.id === image.parentId)
+      if (parent?.avatarUrl) {
+        options.push({ label: image.avatarUrl ? 'AI 重新生成' : 'AI 生成', key: 'ai-generate' })
+      }
+    }
   }
+
+  options.push({ label: '添加子形象', key: 'add-child' })
+  if (image?.parentId) {
+    options.push({ label: '设为独立形象', key: 'detach' })
+  }
+  options.push({ label: '删除', key: 'delete' })
 
   return options
 }
 
+async function queueGenerate(_characterId: string, imageId: string) {
+  generatingByImageId.value = { ...generatingByImageId.value, [imageId]: true }
+  try {
+    await characterStore.queueCharacterImageGenerate(imageId)
+    message.info('已提交生成，请稍候…')
+  } catch (e: any) {
+    const next = { ...generatingByImageId.value }
+    delete next[imageId]
+    generatingByImageId.value = next
+    message.error(e?.response?.data?.error || '提交失败')
+  }
+}
+
 const handleImageAction = (key: string, characterId: string, imageId: string, images: CharacterImage[]) => {
   switch (key) {
+    case 'ai-generate':
+      void queueGenerate(characterId, imageId)
+      break
     case 'add-child':
       openImageModal(characterId, imageId)
       break
@@ -192,6 +243,26 @@ const handleImageAction = (key: string, characterId: string, imageId: string, im
     case 'detach':
       handleMoveImage(characterId, imageId, undefined)
       break
+  }
+}
+
+async function confirmImageModalByAi() {
+  if (!currentCharacterId.value || !imageForm.value.name.trim()) {
+    message.warning('请输入形象名称')
+    return
+  }
+  try {
+    await characterStore.addImageSlotByAi(currentCharacterId.value, {
+      name: imageForm.value.name.trim(),
+      type: imageForm.value.type,
+      parentId: imageForm.value.parentId,
+      description: imageForm.value.description?.trim() || undefined
+    })
+    showImageModal.value = false
+    imageForm.value = { name: '', type: 'base', parentId: undefined, description: '' }
+    message.success('已创建槽位，可在菜单中选「AI 生成」')
+  } catch (e: any) {
+    message.error(e?.response?.data?.error || '创建失败')
   }
 }
 
@@ -275,7 +346,10 @@ const isCharacterExpanded = (characterId: string) => {
                 v-for="baseImage in getBaseImages(character.images || [])"
                 :key="baseImage.id"
                 class="base-image-item"
-                :class="{ 'base-image-item--selected': selectedImageId === baseImage.id }"
+                :class="{
+                  'base-image-item--selected': selectedImageId === baseImage.id,
+                  'base-image-item--generating': generatingByImageId[baseImage.id]
+                }"
                 @click="selectedImageId = baseImage.id"
               >
                 <NImage
@@ -297,23 +371,32 @@ const isCharacterExpanded = (characterId: string) => {
                   </NDropdown>
                 </div>
                 <div class="derived-images" v-if="getDerivedImages(character.images || [], baseImage.id).length > 0">
-                  <NTooltip
+                  <NDropdown
                     v-for="derived in getDerivedImages(character.images || [], baseImage.id)"
                     :key="derived.id"
+                    trigger="click"
+                    :options="imageActionOptions(character.id, derived.id, character.images || [])"
+                    @select="(key) => handleImageAction(key, character.id, derived.id, character.images || [])"
                   >
-                    <template #trigger>
-                      <div class="derived-image-thumb" @click.stop="selectedImageId = derived.id">
-                        <NImage
-                          v-if="derived.avatarUrl"
-                          :src="derived.avatarUrl"
-                          width="32"
-                          height="32"
-                          object-fit="cover"
-                        />
-                      </div>
-                    </template>
-                    <div>{{ derived.name }} ({{ getTypeLabel(derived.type) }})</div>
-                  </NTooltip>
+                    <div
+                      class="derived-image-thumb"
+                      :class="{ 'derived-image-thumb--busy': generatingByImageId[derived.id] }"
+                      @click.stop="selectedImageId = derived.id"
+                    >
+                      <NImage
+                        v-if="derived.avatarUrl"
+                        :src="derived.avatarUrl"
+                        width="32"
+                        height="32"
+                        object-fit="cover"
+                      />
+                      <span
+                        v-else
+                        class="derived-placeholder"
+                        :title="`${derived.name}（${getTypeLabel(derived.type)}）打开菜单可 AI 生成`"
+                      >+</span>
+                    </div>
+                  </NDropdown>
                 </div>
               </div>
               <div class="add-base-image-cell" @click="openImageModal(character.id)">
@@ -443,6 +526,7 @@ const isCharacterExpanded = (characterId: string) => {
       <template #footer>
         <NSpace justify="end">
           <NButton @click="showImageModal = false">取消</NButton>
+          <NButton secondary @click="confirmImageModalByAi">不上传图，AI 建槽位</NButton>
         </NSpace>
       </template>
     </NModal>
@@ -561,6 +645,11 @@ const isCharacterExpanded = (characterId: string) => {
   outline: 2px solid var(--color-primary);
 }
 
+.base-image-item--generating {
+  opacity: 0.75;
+  pointer-events: none;
+}
+
 .base-image-info {
   display: flex;
   align-items: center;
@@ -599,6 +688,23 @@ const isCharacterExpanded = (characterId: string) => {
 
 .derived-image-thumb:hover {
   opacity: 1;
+}
+
+.derived-image-thumb--busy {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.derived-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-soft);
+  border-radius: 4px;
 }
 
 .add-base-image-cell {

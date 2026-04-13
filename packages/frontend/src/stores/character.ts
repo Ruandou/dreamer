@@ -79,6 +79,26 @@ export const useCharacterStore = defineStore('character', () => {
     return res.data
   }
 
+  /** 入队文生图 / 衍生图（Worker 完成后由 SSE 通知刷新） */
+  async function queueCharacterImageGenerate(imageId: string, body?: { prompt?: string }) {
+    const res = await api.post<{ jobId: string; kind: string }>(
+      `/character-images/${imageId}/generate`,
+      body || {}
+    )
+    return res.data
+  }
+
+  /** JSON：仅建槽位并由 DeepSeek 写 prompt（无上传文件） */
+  async function addImageSlotByAi(
+    characterId: string,
+    body: { name: string; type?: string; description?: string; parentId?: string }
+  ) {
+    const res = await api.post<CharacterImage>(`/characters/${characterId}/images`, body)
+    const pid = characters.value.find((c) => c.id === characterId)?.projectId || ''
+    if (pid) await fetchCharacters(pid)
+    return res.data
+  }
+
   return {
     characters,
     isLoading,
@@ -90,6 +110,8 @@ export const useCharacterStore = defineStore('character', () => {
     addImage,
     updateImage,
     deleteImage,
-    moveImage
+    moveImage,
+    queueCharacterImageGenerate,
+    addImageSlotByAi
   }
 })

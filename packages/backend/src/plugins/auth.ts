@@ -15,6 +15,24 @@ export const authPlugin = fp(async (fastify: FastifyInstance) => {
     } catch {
       return reply.status(401).send({ error: 'Unauthorized' })
     }
+
+    const payload = request.user as { id?: string }
+    if (!payload?.id) {
+      return reply.status(401).send({ error: 'Unauthorized' })
+    }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { id: payload.id },
+      select: { id: true, email: true, name: true }
+    })
+    if (!dbUser) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: '登录已失效，请重新登录'
+      })
+    }
+
+    ;(request as any).user = dbUser
   })
 })
 
@@ -82,4 +100,23 @@ export async function verifyTaskOwnership(userId: string, taskId: string): Promi
     }
   })
   return task?.scene.episode.project.userId === userId
+}
+
+export async function verifyLocationOwnership(userId: string, locationId: string): Promise<boolean> {
+  const location = await prisma.location.findUnique({
+    where: { id: locationId },
+    include: { project: { select: { userId: true } } }
+  })
+  return location?.project.userId === userId
+}
+
+export async function verifyCharacterImageOwnership(
+  userId: string,
+  characterImageId: string
+): Promise<boolean> {
+  const image = await prisma.characterImage.findUnique({
+    where: { id: characterImageId },
+    include: { character: { include: { project: { select: { userId: true } } } } }
+  })
+  return image?.character.project.userId === userId
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
@@ -11,6 +11,7 @@ import type { UploadFile, TreeOption } from 'naive-ui'
 import { useCharacterStore } from '@/stores/character'
 import EmptyState from '@/components/EmptyState.vue'
 import type { Character, CharacterImage } from '@dreamer/shared/types'
+import { subscribeProjectUpdates } from '@/lib/project-sse-bridge'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,20 +29,70 @@ const showImageDrawer = ref(false)
 const showEditModal = ref(false)
 const showAddModal = ref(false)
 const editForm = ref({ name: '', description: '', type: 'base', parentId: undefined as string | undefined })
-const addForm = ref({ name: '', type: 'base', parentId: undefined as string | undefined })
+const addForm = ref({
+  name: '',
+  type: 'base',
+  parentId: undefined as string | undefined,
+  description: ''
+})
 const isUploading = ref(false)
 const selectedFile = ref<File | null>(null)
+const promptDraft = ref('')
+const generatingByImageId = ref<Record<string, boolean>>({})
+let unsubProjectSse: (() => void) | null = null
 
 onMounted(async () => {
   await loadCharacter()
+  unsubProjectSse = subscribeProjectUpdates(projectId.value, (p) => {
+    if (p.type !== 'image-generation') return
+    const ours =
+      p.characterId === characterId.value ||
+      (typeof p.characterImageId === 'string' &&
+        character.value?.images?.some((i) => i.id === p.characterImageId))
+    if (!ours) return
+    if (p.characterImageId && (p.status === 'completed' || p.status === 'failed')) {
+      const id = p.characterImageId as string
+      const next = { ...generatingByImageId.value }
+      delete next[id]
+      generatingByImageId.value = next
+    }
+    if (p.status === 'completed' && p.characterImageId) {
+      void loadCharacter()
+      message.success('形象图已更新')
+    }
+    if (p.status === 'failed' && String(p.kind || '').startsWith('character')) {
+      message.error((p.error as string) || '形象生成失败')
+    }
+  })
 })
+
+onUnmounted(() => {
+  unsubProjectSse?.()
+  unsubProjectSse = null
+})
+
+watch(
+  () => [selectedImageId.value, character.value?.images] as const,
+  () => {
+    const img = character.value?.images?.find((i) => i.id === selectedImageId.value)
+    promptDraft.value = img?.prompt || ''
+  },
+  { immediate: true, deep: true }
+)
 
 const loadCharacter = async () => {
   isLoading.value = true
   try {
     character.value = await characterStore.getCharacter(characterId.value)
-    if (character.value?.images?.length) {
-      selectedImageId.value = character.value.images[0].id
+    const imgs = character.value?.images || []
+    const keep = selectedImageId.value && imgs.some((i) => i.id === selectedImageId.value)
+    const id = keep ? selectedImageId.value : imgs[0]?.id
+    if (id) {
+      selectedImageId.value = id
+      selectedImage.value = imgs.find((i) => i.id === id) || null
+    } else {
+      selectedImageId.value = null
+      selectedImage.value = null
     }
   } finally {
     isLoading.value = false
@@ -105,7 +156,8 @@ const openAddModal = (parentId?: string) => {
   addForm.value = {
     name: '',
     type: parentId ? 'outfit' : 'base',
-    parentId
+    parentId,
+    description: ''
   }
   selectedFile.value = null
   showAddModal.value = true
@@ -143,6 +195,59 @@ const confirmAddImage = async () => {
   }
 }
 
+const addByAiLoading = ref(false)
+const confirmAddImageByAi = async () => {
+  if (!addForm.value.name.trim()) {
+    message.warning('请输入形象名称')
+    return
+  }
+  addByAiLoading.value = true
+  try {
+    await characterStore.addImageSlotByAi(characterId.value, {
+      name: addForm.value.name.trim(),
+      type: addForm.value.type,
+      parentId: addForm.value.parentId,
+      description: addForm.value.description?.trim() || undefined
+    })
+    showAddModal.value = false
+    selectedFile.value = null
+    message.success('已创建槽位，可编辑英文提示词后点「提交生成」')
+    await loadCharacter()
+  } catch (e: any) {
+    message.error(e?.response?.data?.error || '创建失败')
+  } finally {
+    addByAiLoading.value = false
+  }
+}
+
+async function savePromptDraft() {
+  if (!selectedImage.value) return
+  try {
+    await characterStore.updateImage(characterId.value, selectedImage.value.id, {
+      prompt: promptDraft.value || null
+    })
+    message.success('提示词已保存')
+    await loadCharacter()
+  } catch (e: any) {
+    message.error(e?.response?.data?.error || '保存失败')
+  }
+}
+
+async function queueSelectedGenerate() {
+  if (!selectedImage.value) return
+  const id = selectedImage.value.id
+  generatingByImageId.value = { ...generatingByImageId.value, [id]: true }
+  try {
+    await characterStore.queueCharacterImageGenerate(id)
+    message.info('已提交生成，请稍候…')
+  } catch (e: any) {
+    const next = { ...generatingByImageId.value }
+    delete next[id]
+    generatingByImageId.value = next
+    message.error(e?.response?.data?.error || '提交失败')
+  }
+}
+
 const handleDrop = async ({ node, dragNode, dropPosition }: { node: TreeOption, dragNode: TreeOption, dropPosition: 'before' | 'after' | 'inside' }) => {
   const dragImage = dragNode.data as CharacterImage
   const targetImage = node.data as CharacterImage
@@ -165,14 +270,24 @@ const handleDrop = async ({ node, dragNode, dropPosition }: { node: TreeOption, 
 const imageActionOptions = computed(() => {
   if (!selectedImage.value) return []
 
-  const options = [
-    { label: '添加子形象', key: 'add-child' },
-    { label: '删除', key: 'delete' }
-  ]
+  const img = selectedImage.value
+  const images = character.value?.images || []
+  const options: { label: string; key: string }[] = []
 
-  if (selectedImage.value.parentId) {
-    options.unshift({ label: '设为独立形象', key: 'detach' })
+  if (!img.parentId) {
+    options.push({ label: img.avatarUrl ? 'AI 重新生成' : 'AI 生成定妆', key: 'ai-generate' })
+  } else {
+    const parent = images.find((i) => i.id === img.parentId)
+    if (parent?.avatarUrl) {
+      options.push({ label: img.avatarUrl ? 'AI 重新生成' : 'AI 生成', key: 'ai-generate' })
+    }
   }
+
+  options.push({ label: '添加子形象', key: 'add-child' })
+  if (img.parentId) {
+    options.push({ label: '设为独立形象', key: 'detach' })
+  }
+  options.push({ label: '删除', key: 'delete' })
 
   return options
 })
@@ -181,6 +296,9 @@ const handleImageAction = (key: string) => {
   if (!selectedImage.value) return
 
   switch (key) {
+    case 'ai-generate':
+      void queueSelectedGenerate()
+      break
     case 'add-child':
       openAddModal(selectedImage.value.id)
       break
@@ -224,8 +342,6 @@ const renderSuffix = ({ option }: { option: TreeOption }) => {
     }, () => getTypeLabel(img.type))
   ])
 }
-
-import { h } from 'vue'
 </script>
 
 <template>
@@ -338,6 +454,27 @@ import { h } from 'vue'
               <p v-if="selectedImage.parentId" class="preview-parent">
                 衍生自: {{ character.images?.find(i => i.id === selectedImage.parentId)?.name }}
               </p>
+              <div class="prompt-block">
+                <h5 class="prompt-block__title">文生图提示词（英文）</h5>
+                <NInput
+                  v-model:value="promptDraft"
+                  type="textarea"
+                  placeholder="解析或手动填写；保存后再生成"
+                  :rows="4"
+                />
+                <NSpace style="margin-top: 10px" wrap>
+                  <NButton size="small" @click="savePromptDraft">保存提示词</NButton>
+                  <NButton
+                    size="small"
+                    type="primary"
+                    :loading="generatingByImageId[selectedImage.id]"
+                    :disabled="!!selectedImage.parentId && !character.images?.find((i) => i.id === selectedImage.parentId)?.avatarUrl"
+                    @click="queueSelectedGenerate"
+                  >
+                    提交 AI 生成
+                  </NButton>
+                </NSpace>
+              </div>
             </div>
           </template>
           <EmptyState
@@ -380,6 +517,21 @@ import { h } from 'vue'
             <p v-if="selectedImage.description" class="drawer-desc">
               {{ selectedImage.description }}
             </p>
+            <div class="prompt-block" style="margin-top: 12px">
+              <h5 class="prompt-block__title">文生图提示词</h5>
+              <NInput v-model:value="promptDraft" type="textarea" :rows="3" />
+              <NSpace style="margin-top: 8px">
+                <NButton size="tiny" @click="savePromptDraft">保存</NButton>
+                <NButton
+                  size="tiny"
+                  type="primary"
+                  :loading="generatingByImageId[selectedImage.id]"
+                  @click="queueSelectedGenerate"
+                >
+                  生成
+                </NButton>
+              </NSpace>
+            </div>
           </div>
         </div>
       </NDrawerContent>
@@ -410,6 +562,9 @@ import { h } from 'vue'
             </NTag>
           </NSpace>
         </NFormItem>
+        <NFormItem v-if="addForm.parentId" label="说明（可选，AI 建槽用）" path="description">
+          <NInput v-model:value="addForm.description" type="textarea" :rows="2" placeholder="如：夜礼服、战斗伤痕妆" />
+        </NFormItem>
         <NFormItem label="参考图" path="file">
           <NUpload
             accept="image/*"
@@ -427,6 +582,9 @@ import { h } from 'vue'
       <template #footer>
         <NSpace justify="end">
           <NButton @click="showAddModal = false">取消</NButton>
+          <NButton secondary :loading="addByAiLoading" @click="confirmAddImageByAi">
+            不上传图，AI 建槽位
+          </NButton>
           <NButton type="primary" :loading="isUploading" @click="confirmAddImage">
             创建形象
           </NButton>
@@ -610,5 +768,18 @@ import { h } from 'vue'
   margin-top: var(--spacing-sm);
   font-size: var(--font-size-sm);
   color: var(--color-success);
+}
+
+.prompt-block {
+  margin-top: var(--spacing-md);
+  text-align: left;
+  width: 100%;
+}
+
+.prompt-block__title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 var(--spacing-xs);
+  color: var(--color-text-secondary);
 }
 </style>

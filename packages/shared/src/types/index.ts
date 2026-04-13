@@ -32,6 +32,7 @@ export interface ProjectLocation {
   timeOfDay?: string | null
   characters: string[]
   description?: string | null
+  imagePrompt?: string | null
   imageUrl?: string | null
   createdAt: Date
   updatedAt: Date
@@ -101,6 +102,7 @@ export interface CharacterImage {
   id: string
   characterId: string
   name: string
+  prompt?: string | null
   avatarUrl?: string
   parentId?: string  // 父节点，null 为基础形象
   type: string       // base/outfit/expression/pose

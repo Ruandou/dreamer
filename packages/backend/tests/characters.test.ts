@@ -9,6 +9,7 @@ const {
   mockCharacterUpdate,
   mockCharacterDelete,
   mockCharacterImageFindMany,
+  mockCharacterImageFindFirst,
   mockCharacterImageFindUnique,
   mockCharacterImageUpdate,
   mockCharacterImageDelete,
@@ -23,6 +24,7 @@ const {
     mockCharacterUpdate: vi.fn(),
     mockCharacterDelete: vi.fn(),
     mockCharacterImageFindMany: vi.fn(),
+    mockCharacterImageFindFirst: vi.fn(),
     mockCharacterImageFindUnique: vi.fn(),
     mockCharacterImageUpdate: vi.fn(),
     mockCharacterImageDelete: vi.fn(),
@@ -31,6 +33,17 @@ const {
     mockProjectFindFirst: vi.fn()
   }
 })
+
+const { mockGenerateCharacterSlotImagePrompt } = vi.hoisted(() => ({
+  mockGenerateCharacterSlotImagePrompt: vi.fn().mockResolvedValue({
+    prompt: 'English portrait prompt for test',
+    cost: { costCNY: 0.01, inputTokens: 10, outputTokens: 20 }
+  })
+}))
+
+vi.mock('../src/services/deepseek.js', () => ({
+  generateCharacterSlotImagePrompt: (...args: unknown[]) => mockGenerateCharacterSlotImagePrompt(...args)
+}))
 
 // Mock storage service
 vi.mock('../src/services/storage.js', () => ({
@@ -59,6 +72,7 @@ vi.mock('../src/index.js', () => ({
     },
     characterImage: {
       findMany: mockCharacterImageFindMany,
+      findFirst: mockCharacterImageFindFirst,
       findUnique: mockCharacterImageFindUnique,
       update: mockCharacterImageUpdate,
       delete: mockCharacterImageDelete,
@@ -223,6 +237,76 @@ describe('Character Routes', () => {
     })
   })
 
+  describe('POST /api/characters/:id/images (JSON, AI 建槽)', () => {
+    it('should create image slot with DeepSeek prompt when not multipart', async () => {
+      mockCharacterImageFindFirst.mockResolvedValue({ id: 'base-1', characterId: 'char-1' })
+      mockCharacterFindUnique.mockResolvedValue({
+        id: 'char-1',
+        name: '主角',
+        description: '年轻侦探',
+        projectId: 'proj-1'
+      })
+      mockCharacterImageAggregate.mockResolvedValue({ _max: { order: 0 } })
+      mockCharacterImageCreate.mockResolvedValue({
+        id: 'img-new',
+        characterId: 'char-1',
+        name: '夜礼服',
+        type: 'outfit',
+        prompt: 'English portrait prompt for test',
+        avatarUrl: null,
+        order: 1
+      })
+      mockCharacterFindMany.mockResolvedValue([
+        {
+          id: 'char-1',
+          name: '主角',
+          projectId: 'proj-1',
+          images: [{ id: 'img-new', name: '夜礼服', type: 'outfit', prompt: 'English portrait prompt for test' }]
+        }
+      ])
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/characters/char-1/images',
+        headers: { 'content-type': 'application/json' },
+        payload: {
+          name: '夜礼服',
+          type: 'outfit',
+          parentId: 'base-1',
+          description: '宴会造型'
+        }
+      })
+
+      expect(response.statusCode).toBe(201)
+      expect(mockGenerateCharacterSlotImagePrompt).toHaveBeenCalled()
+      expect(mockCharacterImageCreate).toHaveBeenCalled()
+      const createArg = mockCharacterImageCreate.mock.calls[0][0]
+      expect(createArg.data.prompt).toBe('English portrait prompt for test')
+      expect(createArg.data.avatarUrl).toBeNull()
+    })
+
+    it('should return 400 when JSON body missing name', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/characters/char-1/images',
+        headers: { 'content-type': 'application/json' },
+        payload: { type: 'base' }
+      })
+      expect(response.statusCode).toBe(400)
+    })
+
+    it('should return 400 when parentId invalid for JSON path', async () => {
+      mockCharacterImageFindFirst.mockResolvedValue(null)
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/characters/char-1/images',
+        headers: { 'content-type': 'application/json' },
+        payload: { name: 'x', parentId: 'bad-parent' }
+      })
+      expect(response.statusCode).toBe(400)
+    })
+  })
+
   describe('PUT /api/characters/:id/images/:imageId', () => {
     it('should update character image', async () => {
       mockCharacterImageUpdate.mockResolvedValue({
@@ -243,6 +327,25 @@ describe('Character Routes', () => {
       expect(response.statusCode).toBe(200)
       const data = JSON.parse(response.payload)
       expect(data.name).toBe('Updated Image')
+    })
+
+    it('should persist prompt when provided', async () => {
+      mockCharacterImageUpdate.mockResolvedValue({
+        id: 'img-1',
+        name: 'X',
+        prompt: 'a cinematic portrait'
+      })
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/characters/char-1/images/img-1',
+        payload: { prompt: 'a cinematic portrait' }
+      })
+      expect(response.statusCode).toBe(200)
+      expect(mockCharacterImageUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ prompt: 'a cinematic portrait' })
+        })
+      )
     })
   })
 

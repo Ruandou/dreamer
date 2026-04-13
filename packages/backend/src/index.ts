@@ -14,6 +14,9 @@ import { ssePlugin } from './plugins/sse.js'
 import { projectRoutes } from './routes/projects.js'
 import { episodeRoutes } from './routes/episodes.js'
 import { characterRoutes } from './routes/characters.js'
+import { characterImageRoutes } from './routes/character-images.js'
+import { locationRoutes } from './routes/locations.js'
+import { takeRoutes } from './routes/takes.js'
 import { sceneRoutes } from './routes/scenes.js'
 import { taskRoutes } from './routes/tasks.js'
 import { compositionRoutes } from './routes/compositions.js'
@@ -79,6 +82,9 @@ async function start() {
     await fastify.register(projectRoutes, { prefix: '/api/projects' })
     await fastify.register(episodeRoutes, { prefix: '/api/episodes' })
     await fastify.register(characterRoutes, { prefix: '/api/characters' })
+    await fastify.register(characterImageRoutes, { prefix: '/api/character-images' })
+    await fastify.register(locationRoutes, { prefix: '/api/locations' })
+    await fastify.register(takeRoutes, { prefix: '/api/takes' })
     await fastify.register(sceneRoutes, { prefix: '/api/scenes' })
     await fastify.register(taskRoutes, { prefix: '/api/tasks' })
     await fastify.register(compositionRoutes, { prefix: '/api/compositions' })

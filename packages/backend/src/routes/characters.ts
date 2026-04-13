@@ -3,6 +3,7 @@ import { prisma } from '../index.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { verifyCharacterOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
+import { generateCharacterSlotImagePrompt } from '../services/deepseek.js'
 
 export async function characterRoutes(fastify: FastifyInstance) {
   // List characters for a project (with images)
@@ -122,8 +123,11 @@ export async function characterRoutes(fastify: FastifyInstance) {
 
   // ===== Image Management =====
 
-  // Add image to character
-  fastify.post<{ Params: { id: string } }>(
+  // Add image to character（multipart 上传文件，或 JSON 仅建槽位并由 DeepSeek 写 prompt）
+  fastify.post<{
+    Params: { id: string }
+    Body?: { name?: string; type?: string; description?: string; parentId?: string }
+  }>(
     '/:id/images',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
@@ -132,6 +136,75 @@ export async function characterRoutes(fastify: FastifyInstance) {
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
         return reply.status(403).send(permissionDeniedBody)
+      }
+
+      const isMultipart = typeof (request as any).isMultipart === 'function' && (request as any).isMultipart()
+      if (!isMultipart) {
+        const { name, type, description, parentId } = (request.body || {}) as {
+          name?: string
+          type?: string
+          description?: string
+          parentId?: string
+        }
+        if (!name?.trim()) {
+          return reply.status(400).send({ error: 'Name is required' })
+        }
+
+        let parentSummary: string | null = null
+        if (parentId) {
+          const parent = await prisma.characterImage.findFirst({
+            where: { id: parentId, characterId }
+          })
+          if (!parent) {
+            return reply.status(400).send({ error: 'Invalid parentId' })
+          }
+          parentSummary = [parent.name, parent.description].filter(Boolean).join(' — ')
+        }
+
+        const character = await prisma.character.findUnique({ where: { id: characterId } })
+        const slotType = type || 'base'
+
+        try {
+          const { prompt } = await generateCharacterSlotImagePrompt({
+            characterName: character?.name || '',
+            characterDescription: character?.description,
+            slotName: name.trim(),
+            slotType,
+            slotDescription: description || null,
+            parentSlotSummary: parentSummary
+          })
+
+          const maxOrder = await prisma.characterImage.aggregate({
+            where: { characterId, parentId: parentId || null },
+            _max: { order: true }
+          })
+
+          const image = await prisma.characterImage.create({
+            data: {
+              characterId,
+              name: name.trim(),
+              parentId: parentId || null,
+              type: slotType,
+              description,
+              prompt,
+              avatarUrl: null,
+              order: (maxOrder._max.order || 0) + 1
+            }
+          })
+
+          return reply.status(201).send(JSON.parse(JSON.stringify(image)))
+        } catch (e: any) {
+          if (e?.name === 'DeepSeekAuthError') {
+            return reply.status(401).send({ error: 'AI 服务认证失败', message: e.message })
+          }
+          if (e?.name === 'DeepSeekRateLimitError') {
+            return reply.status(429).send({ error: 'AI 服务请求受限', message: e.message })
+          }
+          return reply.status(500).send({
+            error: '生成提示词失败',
+            message: e instanceof Error ? e.message : '未知错误'
+          })
+        }
       }
 
       // Parse multipart form - collect fields first
@@ -203,7 +276,10 @@ export async function characterRoutes(fastify: FastifyInstance) {
   )
 
   // Update image
-  fastify.put<{ Params: { id: string; imageId: string }; Body: { name?: string; type?: string; description?: string; order?: number } }>(
+  fastify.put<{
+    Params: { id: string; imageId: string }
+    Body: { name?: string; type?: string; description?: string; order?: number; prompt?: string | null }
+  }>(
     '/:id/images/:imageId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
@@ -214,11 +290,11 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const { name, type, description, order } = request.body
+      const { name, type, description, order, prompt } = request.body
 
       const image = await prisma.characterImage.update({
         where: { id: imageId },
-        data: { name, type, description, order }
+        data: { name, type, description, order, prompt }
       })
 
       return image

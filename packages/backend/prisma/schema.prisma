@@ -89,6 +89,7 @@ model CharacterImage {
   characterId String
   character     Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
   name          String
+  prompt        String?
   avatarUrl     String?
   parentId      String?
   type          String   @default("base")
@@ -192,6 +193,7 @@ model Location {
   timeOfDay   String?
   characters  String[] @default([])
   description String?
+  imagePrompt String?
   imageUrl    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

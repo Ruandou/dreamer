@@ -1,0 +1,143 @@
+/**
+ * 解析剧本后：用 DeepSeek 补全角色多形象 prompt 与场地定场图 imagePrompt
+ */
+
+import { prisma } from '../index.js'
+import type { ScriptContent } from '@dreamer/shared/types'
+import { fetchScriptVisualEnrichmentJson } from './deepseek.js'
+
+interface ParsedLocation {
+  name: string
+  imagePrompt?: string
+}
+
+interface ParsedCharImage {
+  name: string
+  type?: string
+  description?: string
+  prompt?: string
+}
+
+interface ParsedCharacter {
+  name: string
+  images?: ParsedCharImage[]
+}
+
+interface VisualPayload {
+  locations?: ParsedLocation[]
+  characters?: ParsedCharacter[]
+}
+
+function extractJsonObject(text: string): string {
+  const t = text.trim()
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fence?.[1]) return fence[1].trim()
+  const start = t.indexOf('{')
+  const end = t.lastIndexOf('}')
+  if (start >= 0 && end > start) return t.slice(start, end + 1)
+  return t
+}
+
+export async function applyScriptVisualEnrichment(projectId: string, script: ScriptContent): Promise<void> {
+  const locations = await prisma.location.findMany({ where: { projectId }, orderBy: { name: 'asc' } })
+  const characters = await prisma.character.findMany({
+    where: { projectId },
+    orderBy: { name: 'asc' },
+    include: { images: { orderBy: { order: 'asc' } } }
+  })
+
+  const locationLines = locations
+    .map((l) => `${l.name} | ${(l.description || '').slice(0, 200)}`)
+    .join('\n')
+  const characterLines = characters
+    .map((c) => `${c.name} | ${(c.description || '').slice(0, 200)}`)
+    .join('\n')
+
+  let payload: VisualPayload
+  try {
+    const { jsonText } = await fetchScriptVisualEnrichmentJson({
+      scriptSummary: `${script.title}\n${script.summary}`,
+      locationLines,
+      characterLines
+    })
+    const raw = extractJsonObject(jsonText)
+    payload = JSON.parse(raw) as VisualPayload
+  } catch (e) {
+    console.warn('[applyScriptVisualEnrichment] AI 解析跳过:', e)
+    return
+  }
+
+  if (Array.isArray(payload.locations)) {
+    for (const loc of payload.locations) {
+      if (!loc?.name || !loc.imagePrompt?.trim()) continue
+      await prisma.location.updateMany({
+        where: { projectId, name: loc.name },
+        data: { imagePrompt: loc.imagePrompt.trim() }
+      })
+    }
+  }
+
+  if (!Array.isArray(payload.characters)) return
+
+  for (const pc of payload.characters) {
+    if (!pc?.name) continue
+    const character = characters.find((c) => c.name === pc.name)
+    if (!character) continue
+
+    const images = Array.isArray(pc.images) ? pc.images : []
+    let baseImageId: string | null =
+      character.images.find((i) => i.type === 'base' && !i.parentId)?.id || null
+
+    for (const slot of images) {
+      if (!slot?.name || !slot.prompt?.trim()) continue
+      const type = (slot.type || 'base').toLowerCase()
+      const prompt = slot.prompt.trim()
+      const desc = slot.description?.trim() || null
+
+      if (type === 'base') {
+        const existingBase = character.images.find((i) => i.type === 'base' && !i.parentId)
+        if (existingBase) {
+          await prisma.characterImage.update({
+            where: { id: existingBase.id },
+            data: { prompt, description: desc ?? existingBase.description, name: slot.name }
+          })
+          baseImageId = existingBase.id
+        } else {
+          const created = await prisma.characterImage.create({
+            data: {
+              characterId: character.id,
+              name: slot.name,
+              type: 'base',
+              description: desc,
+              prompt,
+              avatarUrl: null,
+              order: 0
+            }
+          })
+          baseImageId = created.id
+          character.images.push(created)
+        }
+        continue
+      }
+
+      if ((type === 'outfit' || type === 'expression' || type === 'pose') && baseImageId) {
+        const maxOrder = await prisma.characterImage.aggregate({
+          where: { characterId: character.id, parentId: baseImageId },
+          _max: { order: true }
+        })
+        await prisma.characterImage.create({
+          data: {
+            characterId: character.id,
+            name: slot.name,
+            parentId: baseImageId,
+            type,
+            description: desc,
+            prompt,
+            avatarUrl: null,
+            order: (maxOrder._max.order || 0) + 1
+          }
+        })
+      }
+    }
+  }
+}

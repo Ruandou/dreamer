@@ -298,3 +298,112 @@ export async function optimizePrompt(prompt: string, context?: string): Promise<
 
   throw lastError || new Error('提示词优化失败')
 }
+
+/** 为角色形象槽位生成英文文生图提示词（单行，无 markdown） */
+export async function generateCharacterSlotImagePrompt(input: {
+  characterName: string
+  characterDescription?: string | null
+  slotName: string
+  slotType: string
+  slotDescription?: string | null
+  parentSlotSummary?: string | null
+}): Promise<{ prompt: string; cost: DeepSeekCost }> {
+  const deepseek = getDeepSeekClient()
+  try {
+  const user = [
+    `角色名：${input.characterName}`,
+    input.characterDescription ? `角色设定：${input.characterDescription}` : '',
+    `形象槽位名称：${input.slotName}`,
+    `槽位类型：${input.slotType}（base 为基础定妆，outfit 为换装需与基础形象一致的人物特征）`,
+    input.slotDescription ? `槽位说明：${input.slotDescription}` : '',
+    input.parentSlotSummary ? `父级基础形象参考：${input.parentSlotSummary}` : '',
+    '',
+    '请输出一条英文的 AI 绘画提示词（写实或半写实风格短剧角色定妆），只输出提示词本身，不要引号或解释。'
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  const completion = await deepseek.chat.completions.create({
+    model: 'deepseek-chat',
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You write concise English text-to-image prompts for character reference sheets. Output only the prompt text.'
+      },
+      { role: 'user', content: user }
+    ],
+    temperature: 0.6,
+    max_tokens: 400
+  })
+
+  const cost = calculateDeepSeekCost(completion.usage)
+  const raw = completion.choices[0]?.message?.content?.trim() || ''
+  const prompt = raw.replace(/^["']|["']$/g, '').trim()
+  if (!prompt) {
+    throw new Error('DeepSeek API 返回为空')
+  }
+  return { prompt, cost }
+  } catch (error: any) {
+    if (error?.status === 401 || error?.status === 403) {
+      throw new DeepSeekAuthError()
+    }
+    if (error?.status === 429 || error?.message?.includes('rate_limit')) {
+      throw new DeepSeekRateLimitError()
+    }
+    throw error
+  }
+}
+
+export async function fetchScriptVisualEnrichmentJson(input: {
+  scriptSummary: string
+  locationLines: string
+  characterLines: string
+}): Promise<{ jsonText: string; cost: DeepSeekCost }> {
+  const deepseek = getDeepSeekClient()
+  try {
+  const user = [
+    '根据下列剧本梗概与实体列表，输出 **仅一段合法 JSON**（不要 markdown 代码块），结构为：',
+    '{"locations":[{"name":"场地名","imagePrompt":"英文定场图提示词"}],',
+    '"characters":[{"name":"角色名","images":[{"name":"形象名","type":"base|outfit","description":"可选中文说明","prompt":"英文定妆提示词"}]}]}',
+    '',
+    '规则：每个剧本中出现的角色至少给 1 个 type 为 base 的形象；若有换装可追加 outfit。',
+    'locations 数组覆盖下列场地名；characters 覆盖下列角色名。',
+    '',
+    `剧本梗概：\n${input.scriptSummary.slice(0, 8000)}`,
+    '',
+    `场地（每行：名称 | 已有描述）：\n${input.locationLines || '(无)'}`,
+    '',
+    `角色（每行：名称 | 已有描述）：\n${input.characterLines || '(无)'}`
+  ].join('\n')
+
+  const completion = await deepseek.chat.completions.create({
+    model: 'deepseek-chat',
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You output only compact JSON for a Chinese short-drama production tool. No markdown, no commentary.'
+      },
+      { role: 'user', content: user }
+    ],
+    temperature: 0.4,
+    max_tokens: 4096
+  })
+
+  const cost = calculateDeepSeekCost(completion.usage)
+  const jsonText = completion.choices[0]?.message?.content?.trim() || ''
+  if (!jsonText) {
+    throw new Error('DeepSeek API 返回为空')
+  }
+  return { jsonText, cost }
+  } catch (error: any) {
+    if (error?.status === 401 || error?.status === 403) {
+      throw new DeepSeekAuthError()
+    }
+    if (error?.status === 429 || error?.message?.includes('rate_limit')) {
+      throw new DeepSeekRateLimitError()
+    }
+    throw error
+  }
+}

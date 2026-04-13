@@ -72,12 +72,13 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
           const avatarUrl = await generateTextToImageAndPersist(data.prompt)
           const updated = await prisma.characterImage.update({
             where: { id: data.characterImageId },
-            data: { avatarUrl }
+            data: { avatarUrl, prompt: data.prompt }
           })
           notify(userId, projectId, {
             status: 'completed',
             kind: data.kind,
-            characterImageId: updated.id
+            characterImageId: updated.id,
+            characterId: updated.characterId
           })
           return { characterImageId: updated.id }
         }
@@ -89,12 +90,13 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
           )
           const updated = await prisma.characterImage.update({
             where: { id: data.characterImageId },
-            data: { avatarUrl }
+            data: { avatarUrl, prompt: data.editPrompt }
           })
           notify(userId, projectId, {
             status: 'completed',
             kind: data.kind,
-            characterImageId: updated.id
+            characterImageId: updated.id,
+            characterId: updated.characterId
           })
           return { characterImageId: updated.id }
         }
@@ -143,11 +145,21 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
-      notify(userId, projectId, {
+      const failPayload: Record<string, unknown> = {
         status: 'failed',
         kind: data.kind,
         error: message
-      })
+      }
+      if ('characterImageId' in data && (data as { characterImageId?: string }).characterImageId) {
+        failPayload.characterImageId = (data as { characterImageId: string }).characterImageId
+      }
+      if ('characterId' in data && (data as { characterId?: string }).characterId) {
+        failPayload.characterId = (data as { characterId: string }).characterId
+      }
+      if ('locationId' in data && (data as { locationId?: string }).locationId) {
+        failPayload.locationId = (data as { locationId: string }).locationId
+      }
+      notify(userId, projectId, failPayload)
       throw error
     }
   },

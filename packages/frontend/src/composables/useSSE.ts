@@ -1,5 +1,6 @@
 import { ref, onUnmounted } from 'vue'
 import { useNotification } from 'naive-ui'
+import { emitProjectUpdateForProject, type ProjectSsePayload } from '@/lib/project-sse-bridge'
 
 export interface TaskUpdate {
   taskId: string
@@ -71,11 +72,17 @@ export function useSSE() {
     }
   }
 
-  const handleProjectUpdate = (data: any) => {
+  const handleProjectUpdate = (data: ProjectSsePayload) => {
+    if (data?.projectId) {
+      emitProjectUpdateForProject(data)
+    }
+    if (data?.type === 'image-generation') {
+      return
+    }
     const notification = useNotification()
     notification.info({
       title: '项目更新',
-      content: data.message || '项目有新更新',
+      content: (data as { message?: string }).message || '项目有新更新',
       duration: 3000
     })
   }
