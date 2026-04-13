@@ -18,6 +18,21 @@ export interface Project {
   episodes?: Episode[]
   /** 列表接口可能只带一条，用于判断「是否已解析出角色」 */
   characters?: Array<{ id: string }>
+  /** Prisma `Location` 表：项目下的场地库（勿与 DOM `Location`、剧本里的场景地点字符串混淆） */
+  locations?: ProjectLocation[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+/** 项目场地库一行（对应 Prisma `Location`，字段 `name` 映射库列 `location`） */
+export interface ProjectLocation {
+  id: string
+  projectId: string
+  name: string
+  timeOfDay?: string | null
+  characters: string[]
+  description?: string | null
+  imageUrl?: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -255,6 +270,48 @@ export interface VideoJobData {
   imageUrls?: string[]
   duration?: number
 }
+
+/** BullMQ 图片生成任务（Worker 消费，HTTP 仅入队） */
+export interface ImageGenerationJobBase {
+  userId: string
+  projectId: string
+}
+
+export type ImageGenerationJobData =
+  | (ImageGenerationJobBase & {
+      kind: 'character_base_create'
+      characterId: string
+      name: string
+      prompt: string
+    })
+  | (ImageGenerationJobBase & {
+      kind: 'character_base_regenerate'
+      characterImageId: string
+      prompt: string
+    })
+  | (ImageGenerationJobBase & {
+      kind: 'character_derived_regenerate'
+      characterImageId: string
+      referenceImageUrl: string
+      editPrompt: string
+      strength?: number
+    })
+  | (ImageGenerationJobBase & {
+      kind: 'character_derived_create'
+      characterId: string
+      parentImageId: string
+      name: string
+      type?: string
+      description: string
+      referenceImageUrl: string
+      editPrompt: string
+      strength?: number
+    })
+  | (ImageGenerationJobBase & {
+      kind: 'location_establishing'
+      locationId: string
+      prompt: string
+    })
 
 // ============ Pipeline Types ============
 
