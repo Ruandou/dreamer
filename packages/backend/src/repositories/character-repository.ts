@@ -94,6 +94,12 @@ export class CharacterRepository {
     return this.prisma.character.findMany({ where: { projectId } })
   }
 
+  findFirstByProjectAndName(projectId: string, name: string) {
+    return this.prisma.character.findFirst({
+      where: { projectId, name }
+    })
+  }
+
   findFirstBaseImage(characterId: string) {
     return this.prisma.characterImage.findFirst({
       where: { characterId, type: 'base' }

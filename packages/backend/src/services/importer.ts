@@ -2,33 +2,69 @@ import { normalizeProjectDefaultAspectRatio } from '../lib/project-aspect.js'
 import { projectRepository } from '../repositories/project-repository.js'
 import { characterRepository } from '../repositories/character-repository.js'
 import { episodeRepository } from '../repositories/episode-repository.js'
+import type { ParsedScript, ParsedCharacter } from './ai/parser.js'
+import { normalizeParsedCharacterList } from './ai/parsed-script-types.js'
 
-export interface ParsedCharacter {
-  name: string
-  description: string
-}
-
-export interface ParsedScript {
-  projectName?: string
-  description?: string
-  characters: ParsedCharacter[]
-  episodes: {
-    episodeNum: number
-    title: string
-    script: any
-    scenes: {
-      sceneNum: number
-      description: string
-      prompt: string
-    }[]
-  }[]
-}
+export type { ParsedScript, ParsedCharacter }
 
 export interface ImportResults {
   episodesCreated: number
   episodesUpdated: number
   charactersCreated: number
   scenesCreated: number
+}
+
+async function createCharacterImagesForCharacter(
+  characterId: string,
+  char: ParsedCharacter
+) {
+  const [normalized] = normalizeParsedCharacterList([char])
+  const images = normalized.images || []
+  let baseImageId: string | null = null
+
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i]
+    const type = (img.type || 'base').toLowerCase()
+
+    if (type === 'base') {
+      const row = await characterRepository.createCharacterImage({
+        characterId,
+        name: img.name,
+        type: 'base',
+        description: img.description || undefined,
+        prompt: null,
+        avatarUrl: null,
+        order: i
+      })
+      baseImageId = row.id
+      continue
+    }
+
+    if (!baseImageId) {
+      const baseRow = await characterRepository.createCharacterImage({
+        characterId,
+        name: '基础形象',
+        type: 'base',
+        description: char.description || undefined,
+        prompt: null,
+        avatarUrl: null,
+        order: 0
+      })
+      baseImageId = baseRow.id
+    }
+
+    const maxOrder = await characterRepository.maxSiblingOrder(characterId, baseImageId)
+    await characterRepository.createCharacterImage({
+      characterId,
+      name: img.name,
+      type,
+      parentId: baseImageId,
+      description: img.description || undefined,
+      prompt: null,
+      avatarUrl: null,
+      order: (maxOrder._max.order ?? 0) + 1
+    })
+  }
 }
 
 export async function importParsedData(projectId: string, parsed: ParsedScript): Promise<ImportResults> {
@@ -43,12 +79,13 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
   const sceneAspectRatio = normalizeProjectDefaultAspectRatio(projectRow?.aspectRatio)
 
   for (const char of parsed.characters) {
-    await characterRepository.createCharacter({
+    const character = await characterRepository.createCharacter({
       projectId,
       name: char.name,
       description: char.description || `从剧本导入的角色: ${char.name}`
     })
     results.charactersCreated++
+    await createCharacterImagesForCharacter(character.id, char)
   }
 
   for (const episodeData of parsed.episodes) {

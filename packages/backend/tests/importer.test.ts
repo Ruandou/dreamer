@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Use vi.hoisted to define mocks before module loading
 const {
   mockCharacterCreate,
+  mockCharacterImageCreate,
+  mockCharacterImageAggregate,
   mockEpisodeFindUnique,
   mockEpisodeCreate,
   mockEpisodeUpdate,
@@ -14,6 +16,8 @@ const {
 } = vi.hoisted(() => {
   return {
     mockCharacterCreate: vi.fn(),
+    mockCharacterImageCreate: vi.fn(),
+    mockCharacterImageAggregate: vi.fn(),
     mockEpisodeFindUnique: vi.fn(),
     mockEpisodeCreate: vi.fn(),
     mockEpisodeUpdate: vi.fn(),
@@ -30,6 +34,10 @@ vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     character: {
       create: mockCharacterCreate
+    },
+    characterImage: {
+      create: mockCharacterImageCreate,
+      aggregate: mockCharacterImageAggregate
     },
     episode: {
       findUnique: mockEpisodeFindUnique,
@@ -59,6 +67,10 @@ describe('Importer Service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockProjectFindUnique.mockResolvedValue({ aspectRatio: '9:16' })
+    mockCharacterImageCreate.mockImplementation((args: { data: { name?: string } }) =>
+      Promise.resolve({ id: `img-${args.data.name || 'x'}`, ...args.data })
+    )
+    mockCharacterImageAggregate.mockResolvedValue({ _max: { order: null } })
   })
 
   describe('importParsedData', () => {

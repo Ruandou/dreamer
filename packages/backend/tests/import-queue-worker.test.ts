@@ -10,6 +10,7 @@ const {
   mockWorkerOn,
   mockWorkerClose,
   mockQueueClose,
+  mockEpisodeFindMany,
   capturedProcessor
 } = vi.hoisted(() => ({
   mockImportTaskUpdate: vi.fn(),
@@ -17,6 +18,7 @@ const {
   mockCharacterCreate: vi.fn(),
   mockEpisodeCreate: vi.fn(),
   mockSceneCreate: vi.fn(),
+  mockEpisodeFindMany: vi.fn().mockResolvedValue([]),
   mockWorkerOn: vi.fn(),
   mockWorkerClose: vi.fn().mockResolvedValue(undefined),
   mockQueueClose: vi.fn().mockResolvedValue(undefined),
@@ -61,7 +63,8 @@ vi.mock('../src/lib/prisma.js', () => ({
       create: mockCharacterCreate
     },
     episode: {
-      create: mockEpisodeCreate
+      create: mockEpisodeCreate,
+      findMany: mockEpisodeFindMany
     },
     scene: {
       create: mockSceneCreate
@@ -108,6 +111,10 @@ vi.mock('../src/services/importer.js', () => ({
     episodes: 1,
     scenes: 1
   })
+}))
+
+vi.mock('../src/services/script-visual-enrich.js', () => ({
+  applyScriptVisualEnrichment: vi.fn().mockResolvedValue(undefined)
 }))
 
 // Import after mocks

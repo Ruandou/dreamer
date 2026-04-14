@@ -27,12 +27,11 @@ import {
 } from './storyboard-generator.js'
 
 import {
-  mergeEpisodesToScriptContent,
   areEpisodeScriptsComplete,
   buildEpisodePlansFromDbEpisodes,
   DEFAULT_TARGET_EPISODES
 } from './project-script-jobs.js'
-import { saveCharacters, saveLocations } from './script-entities.js'
+import { runParseScriptEntityPipeline } from './parse-script-entity-pipeline.js'
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
 
 import type {
@@ -107,12 +106,14 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
       })
       await updateJobProgress(jobId, { progress: 25 })
 
-      script = mergeEpisodesToScriptContent(existingEpisodes)
-      await saveCharacters(projectId, script)
-      await saveLocations(projectId, script)
+      if (!projectMeta?.userId) {
+        throw new Error('流水线缺少项目用户，无法执行角色身份合并')
+      }
+      script = await runParseScriptEntityPipeline(projectId, projectMeta.userId, te)
 
+      const episodesForPlan = await pipelineRepository.findEpisodesUpTo(projectId, te)
       await updateStepProgress(jobId, 'episode-split', 'processing')
-      episodes = buildEpisodePlansFromDbEpisodes(existingEpisodes, script)
+      episodes = buildEpisodePlansFromDbEpisodes(episodesForPlan, script)
       await updateStepResult(jobId, 'episode-split', {
         status: 'completed',
         output: { episodes, skipped: true }
@@ -136,10 +137,6 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
       })
       await updateJobProgress(jobId, { progress: 25 })
 
-      // 保存角色和场地
-      await saveCharacters(projectId, script)
-      await saveLocations(projectId, script)
-
       // ========== 步骤 2: 智能分集 ==========
       await updateStepProgress(jobId, 'episode-split', 'processing')
 
@@ -153,6 +150,11 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
         output: { episodes }
       })
       await updateJobProgress(jobId, { currentStep: 'episode-split', progress: 45 })
+
+      if (!projectMeta?.userId) {
+        throw new Error('流水线缺少项目用户，无法执行角色身份合并')
+      }
+      script = await runParseScriptEntityPipeline(projectId, projectMeta.userId, te)
     }
 
     // 与「解析剧本」一致：落库场地/角色后生成定场图与定妆提示词（此前仅 parse-script 会调，流水线缺这一段导致有场地无 imagePrompt）

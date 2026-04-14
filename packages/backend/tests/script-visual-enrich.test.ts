@@ -8,6 +8,7 @@ const {
   mockCharacterImageCreate,
   mockCharacterImageAggregate,
   mockFetchScriptVisualEnrichmentJson,
+  mockGenerateCharacterSlotImagePrompt,
   mockProjectFindUnique
 } = vi.hoisted(() => ({
   mockLocationFindMany: vi.fn(),
@@ -17,11 +18,16 @@ const {
   mockCharacterImageCreate: vi.fn(),
   mockCharacterImageAggregate: vi.fn(),
   mockFetchScriptVisualEnrichmentJson: vi.fn(),
+  mockGenerateCharacterSlotImagePrompt: vi.fn().mockResolvedValue({
+    prompt: '兜底定妆提示词',
+    cost: { costCNY: 0, inputTokens: 0, outputTokens: 0 }
+  }),
   mockProjectFindUnique: vi.fn()
 }))
 
 vi.mock('../src/services/ai/deepseek.js', () => ({
-  fetchScriptVisualEnrichmentJson: (...args: unknown[]) => mockFetchScriptVisualEnrichmentJson(...args)
+  fetchScriptVisualEnrichmentJson: (...args: unknown[]) => mockFetchScriptVisualEnrichmentJson(...args),
+  generateCharacterSlotImagePrompt: (...args: unknown[]) => mockGenerateCharacterSlotImagePrompt(...args)
 }))
 
 vi.mock('../src/lib/prisma.js', () => ({
@@ -72,7 +78,16 @@ describe('applyScriptVisualEnrichment', () => {
         id: 'ch1',
         projectId: 'p1',
         name: '阿伟',
-        images: [{ id: 'b1', type: 'base', parentId: null, name: '默认', description: null }]
+        images: [
+          {
+            id: 'b1',
+            type: 'base',
+            parentId: null,
+            name: '默认',
+            description: null,
+            prompt: '已有定妆'
+          }
+        ]
       }
     ])
   })

@@ -69,8 +69,31 @@ describe('Parser Service', () => {
       const result = await parseScriptDocument(jsonContent, 'json')
 
       expect(result.parsed.characters).toHaveLength(2)
-      expect(result.parsed.characters[0]).toEqual({ name: 'Alice', description: '' })
-      expect(result.parsed.characters[1]).toEqual({ name: 'Bob', description: '' })
+      expect(result.parsed.characters[0].name).toBe('Alice')
+      expect(result.parsed.characters[0].images?.[0]?.type).toBe('base')
+      expect(result.parsed.characters[1].name).toBe('Bob')
+    })
+
+    it('should normalize nested character images from JSON', async () => {
+      const jsonContent = JSON.stringify({
+        projectName: 'P',
+        characters: [
+          {
+            name: '宋应星',
+            description: '主角',
+            images: [
+              { name: '基础形象', type: 'base', description: '书生' },
+              { name: '官服', type: 'outfit', description: '紫色官服' }
+            ]
+          }
+        ],
+        episodes: []
+      })
+      const result = await parseScriptDocument(jsonContent, 'json')
+      expect(result.parsed.characters[0].name).toBe('宋应星')
+      expect(result.parsed.characters[0].images).toHaveLength(2)
+      expect(result.parsed.characters[0].images?.[0].type).toBe('base')
+      expect(result.parsed.characters[0].images?.[1].type).toBe('outfit')
     })
 
     it('should handle empty characters array', async () => {

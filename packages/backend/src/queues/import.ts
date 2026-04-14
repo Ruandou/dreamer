@@ -3,6 +3,9 @@ import IORedis from 'ioredis'
 import { parseScriptDocument } from '../services/ai/parser.js'
 import { importParsedData } from '../services/importer.js'
 import { importWorkerService } from '../services/import-worker-service.js'
+import { projectRepository } from '../repositories/project-repository.js'
+import { mergeEpisodesToScriptContent } from '../services/project-script-jobs.js'
+import { applyScriptVisualEnrichment } from '../services/script-visual-enrich.js'
 
 // Connection - lazy init
 let _connection: IORedis | null = null
@@ -67,6 +70,12 @@ export const importWorker = new Worker<ImportJobData>(
 
       // Import to database
       const results = await importParsedData(targetProjectId, parsed)
+
+      const episodes = await projectRepository.findManyEpisodesOrdered(targetProjectId)
+      if (episodes.length > 0) {
+        const merged = mergeEpisodesToScriptContent(episodes as any)
+        await applyScriptVisualEnrichment(targetProjectId, merged)
+      }
 
       await importWorkerService.markCompleted(taskId, results)
 

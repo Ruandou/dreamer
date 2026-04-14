@@ -68,6 +68,7 @@ export function buildScriptVisualEnrichmentUserContent(input: {
     '4. **expression / pose**（表情/姿态）：相对 base 明确保持不变与仅变化；建议先锁身份（与 base 同一人）再写表情或体态的差异，避免写成全新人物。',
     '5. 衍生推荐句式：与基础定妆为同一人；保持……不变；仅变化：……。若输出缺显式锚定，服务端可能在落库时补前缀，模型仍应优先输出完整句。',
     '6. 有换装、明显表情或姿态差异时再追加衍生条目；无则不必凑数。',
+    '7. **铁律**：每条 characters[].images[] 必须包含非空的「prompt」字符串（中文定妆/换装提示词）；description 仅作辅助说明，不可替代 prompt。',
     'locations 数组覆盖下列场地名；characters 覆盖下列角色名。',
     '',
     `剧本梗概：\n${input.scriptSummary.slice(0, 8000)}`,

@@ -5,10 +5,9 @@
 import { Prisma } from '@prisma/client'
 import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import { projectRepository } from '../repositories/project-repository.js'
-import { characterRepository } from '../repositories/character-repository.js'
 import { writeScriptFromIdea, writeEpisodeForProject } from './script-writer.js'
-import { saveCharacters, saveLocations } from './script-entities.js'
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
+import { runParseScriptEntityPipeline } from './parse-script-entity-pipeline.js'
 import type { ScriptContent, ScriptScene, EpisodePlan } from '@dreamer/shared/types'
 
 export const DEFAULT_TARGET_EPISODES = 36
@@ -29,7 +28,8 @@ export async function getActiveOutlinePipelineJob(projectId: string) {
   return pipelineRepository.getActiveOutlinePipelineJob(projectId)
 }
 
-function scriptFromJson(raw: unknown): ScriptContent | null {
+/** 将分集 rawScript 转为 ScriptContent（无效则 null） */
+export function scriptFromJson(raw: unknown): ScriptContent | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
   if (!Array.isArray((o as any).scenes)) return null
@@ -127,16 +127,6 @@ export function mergeEpisodesToScriptContent(
     summary: baseSummary,
     metadata: {},
     scenes: allScenes
-  }
-}
-
-async function ensureCharacterBaseSlot(projectId: string, script: ScriptContent) {
-  await saveCharacters(projectId, script)
-  const characters = await characterRepository.findManyByProject(projectId)
-  for (const c of characters) {
-    const existing = await characterRepository.findFirstBaseImage(c.id)
-    if (existing) continue
-    await characterRepository.createDefaultBaseCharacterImage(c.id)
   }
 }
 
@@ -312,10 +302,7 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
 
     await updateJob(jobId, { progress: 30, progressMeta: { message: '提取角色与场景…' } })
 
-    const capped = project.episodes.filter((e) => e.episodeNum <= targetEpisodes)
-    const merged = mergeEpisodesToScriptContent(capped as any)
-    await saveLocations(projectId, merged)
-    await ensureCharacterBaseSlot(projectId, merged)
+    const merged = await runParseScriptEntityPipeline(projectId, project.userId, targetEpisodes)
     await updateJob(jobId, { progress: 60, progressMeta: { message: '生成形象与场地提示词…' } })
     await applyScriptVisualEnrichment(projectId, merged)
     await fillEpisodeSynopses(projectId)

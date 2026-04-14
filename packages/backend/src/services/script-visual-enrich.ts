@@ -6,7 +6,7 @@ import type { ScriptContent } from '@dreamer/shared/types'
 import { projectRepository } from '../repositories/project-repository.js'
 import { locationRepository } from '../repositories/location-repository.js'
 import { characterRepository } from '../repositories/character-repository.js'
-import { fetchScriptVisualEnrichmentJson } from './ai/deepseek.js'
+import { fetchScriptVisualEnrichmentJson, generateCharacterSlotImagePrompt } from './ai/deepseek.js'
 import type { ModelCallLogContext } from './ai/api-logger.js'
 
 interface ParsedLocation {
@@ -131,6 +131,53 @@ function resolveDbLocationName(dbNames: readonly string[], aiName: string | unde
   }
 
   return tryOne(aiName)
+}
+
+/** 视觉补全后仍为空的槽位，用单槽提示词生成补写（须已具备 description 或角色描述） */
+export async function fillMissingCharacterImagePrompts(
+  projectId: string,
+  log: ModelCallLogContext
+): Promise<void> {
+  const characters = await characterRepository.findManyByProjectNameAscWithImages(projectId)
+  const fallbackLog: ModelCallLogContext = { ...log, op: 'character_slot_prompt_fallback' }
+
+  for (const c of characters) {
+    const baseImg = c.images.find((i) => i.type === 'base' && !i.parentId)
+    const basePrompt = baseImg?.prompt?.trim() || null
+
+    for (const img of c.images) {
+      if (img.prompt?.trim()) continue
+
+      const parentSlotSummary =
+        img.parentId && img.type !== 'base'
+          ? c.images.find((i) => i.id === img.parentId)?.prompt?.trim() || basePrompt
+          : basePrompt
+
+      try {
+        const { prompt } = await generateCharacterSlotImagePrompt(
+          {
+            characterName: c.name,
+            characterDescription: c.description,
+            slotName: img.name,
+            slotType: img.type || 'base',
+            slotDescription: img.description,
+            parentSlotSummary: parentSlotSummary || undefined
+          },
+          fallbackLog
+        )
+        if (prompt?.trim()) {
+          await characterRepository.updateCharacterImage(img.id, { prompt })
+        }
+      } catch (e) {
+        console.warn('[fillMissingCharacterImagePrompts] 失败', {
+          projectId,
+          characterId: c.id,
+          imageId: img.id,
+          error: e
+        })
+      }
+    }
+  }
 }
 
 export async function applyScriptVisualEnrichment(projectId: string, script: ScriptContent): Promise<void> {
@@ -290,4 +337,6 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
       }
     }
   }
+
+  await fillMissingCharacterImagePrompts(projectId, visualLog)
 }
