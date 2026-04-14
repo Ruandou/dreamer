@@ -2,28 +2,39 @@
 
 ## 环境变量加载
 
-**关键规则**: `dotenv/config` 必须在所有依赖环境变量的导入之前同步执行。
+**关键规则**：在 ESM 里，**所有** `import` 会先完成依赖解析；若写成「先 `config()` 再 `import` 业务路由」，路由链里的模块仍可能在 `dotenv` 之前执行，导致 `process.env.ARK_*` 等读为空。
 
-### 正确的代码顺序
+### 正确做法
+
+`packages/backend/src/bootstrap-env.ts` 内只做 `dotenv.config`（路径用 `import.meta.url` 指向**仓库根** `.env`）。**`index.ts` 与 `worker.ts` 的第一行**必须是：
 
 ```typescript
-// index.ts 第一行必须是 dotenv/config
-import { config } from 'dotenv'
-config({ path: '../../.env' })
-
-// 然后才能导入其他模块
-import Fastify from 'fastify'
-import { PrismaClient } from '@prisma/client'
-// ...
+import './bootstrap-env.js'
 ```
+
+然后再 `import Fastify` / 路由 / `PrismaClient` 等。
 
 ### 禁止
 
 ```typescript
+// 错误：其它 import 仍可能先于 config() 执行（ESM 提升 / 依赖顺序）
+import { config } from 'dotenv'
+config({ path: '../../.env' })
+import Fastify from 'fastify' // 若 Fastify 之前的路由链已读 env，仍可能踩坑
+
 // 错误！PrismaClient 在 dotenv 之前被初始化
 import { PrismaClient } from '@prisma/client'  // ❌
 import 'dotenv/config'  // 太晚了
 ```
+
+### 防回归（避免反复踩坑）
+
+| 场景 | 做法 |
+|------|------|
+| 新增后端入口（脚本 / 子进程） | 第一行 `import './bootstrap-env.js'`（路径相对该入口），或 `node --import ./dist/bootstrap-env.js …` |
+| 改 `index.ts` / `worker.ts` | **禁止**在 `import './bootstrap-env.js'` 之上再加任何会加载业务代码的 `import` |
+| 单测只 `import` 某个 service | 已在 `vitest.config.ts` 里 `setupFiles: ['./src/bootstrap-env.ts']`，一般无需再抄 |
+| 生产 `pnpm start` | `package.json` 已用 `node --import ./dist/bootstrap-env.js`，勿删 |
 
 ## 启动命令
 

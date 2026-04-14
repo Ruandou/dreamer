@@ -1,4 +1,7 @@
 // Worker entry point - run separately from the main API server
+/** 勿删、勿后移：须为全文件第一个 import（与 index.ts 同理） */
+import './bootstrap-env.js'
+
 import { videoWorker } from './queues/video.js'
 import { importWorker } from './queues/import.js'
 import { closeImageWorker } from './queues/image.js'

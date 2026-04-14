@@ -2,6 +2,9 @@
  * 火山方舟 OpenAI 兼容图片接口（文生图 / 指令编辑）
  * 模型 ID 可通过环境变量覆盖；默认文生图 / 参考图编辑均为方舟 Seedream 5.0 Lite。
  * 若 `ARK_IMAGE_EDIT_MODEL` 指向 SeedEdit，会附带 `guidance_scale`（仅 SeedEdit 路径使用）。
+ *
+ * `size`：方舟返回 InvalidParameter 时常见「总像素须 ≥ 3686400」（约 1920×1920），
+ * 故默认与过小尺寸会规范化为 `1920x1920`；`adaptive` 在部分模型上可能低于下限，一并提升。
  */
 import { uploadFile, generateFileKey } from './storage.js'
 
@@ -20,6 +23,32 @@ export class ArkImageError extends Error {
     super(message)
     this.name = 'ArkImageError'
   }
+}
+
+/** 方舟 images/generations 对 `WxH` 总像素下限（错误文案：at least 3686400 pixels） */
+export const ARK_IMAGE_MIN_TOTAL_PIXELS = 3686400
+
+const DEFAULT_ARK_IMAGE_SIZE = '1920x1920'
+
+/**
+ * 将请求中的 size 规范为方舟可接受的 WxH；低于下限或 adaptive/非法时退回默认。
+ */
+export function normalizeArkImageSize(size: string | undefined): string {
+  const raw = (size || '').trim().toLowerCase()
+  if (!raw || raw === 'adaptive') {
+    return DEFAULT_ARK_IMAGE_SIZE
+  }
+  const m = raw.match(/^(\d+)\s*x\s*(\d+)$/i)
+  if (!m) return DEFAULT_ARK_IMAGE_SIZE
+  const w = parseInt(m[1], 10)
+  const h = parseInt(m[2], 10)
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w < 1 || h < 1) {
+    return DEFAULT_ARK_IMAGE_SIZE
+  }
+  if (w * h >= ARK_IMAGE_MIN_TOTAL_PIXELS) {
+    return `${w}x${h}`
+  }
+  return DEFAULT_ARK_IMAGE_SIZE
 }
 
 function getAuthHeaders(): Record<string, string> {
@@ -111,7 +140,7 @@ export async function generateTextToImage(prompt: string, options: TextToImageOp
   const body: Record<string, unknown> = {
     model: options.model || DEFAULT_T2I_MODEL,
     prompt,
-    size: options.size || '1024x1024',
+    size: normalizeArkImageSize(options.size),
     n: options.n ?? 1,
     response_format: 'url'
   }
@@ -135,7 +164,7 @@ export async function generateImageEdit(
     prompt,
     image: imagePayload,
     response_format: 'url',
-    size: options.size || 'adaptive',
+    size: normalizeArkImageSize(options.size || 'adaptive'),
     watermark: options.watermark ?? false
   }
   if (imageEditModelUsesGuidanceScale(model)) {

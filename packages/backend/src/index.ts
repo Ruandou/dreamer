@@ -1,5 +1,5 @@
-import { config } from 'dotenv'
-config({ path: '../../.env' })
+/** 勿删、勿后移：须为全文件第一个 import，否则 ESM 下 ARK_* 等会在 dotenv 之前被读成空 */
+import './bootstrap-env.js'
 
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
