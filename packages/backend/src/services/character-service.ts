@@ -13,13 +13,22 @@ function toJsonSafe<T>(value: T): T {
 export type CreateImageSlotJsonResult =
   | { ok: true; image: CharacterImage }
   | { ok: false; error: 'invalid_parent' }
+  | { ok: false; error: 'base_exists' }
   | { ok: false; error: 'deepseek_auth'; message: string }
   | { ok: false; error: 'deepseek_rate'; message: string }
   | { ok: false; error: 'prompt_failed'; message: string }
 
+export type CreateImageFromUploadedFileResult =
+  | { ok: true; image: CharacterImage }
+  | { ok: false; error: 'base_exists' }
+
 export type MoveCharacterImageResult =
   | { ok: true; image: CharacterImage }
   | { ok: false; reason: 'circular' }
+
+export type DeleteCharacterImageResult =
+  | { ok: true }
+  | { ok: false; error: 'not_found' | 'cannot_delete_base' }
 
 export type UploadCharacterImageAvatarResult =
   | { ok: true; image: CharacterImage }
@@ -69,7 +78,14 @@ export class CharacterService {
     }
 
     const character = await this.repository.findCharacterById(characterId)
-    const slotType = type || 'base'
+    const slotType = (type || 'base').toLowerCase()
+
+    if (!parentId && slotType === 'base') {
+      const n = await this.repository.countRootBaseImages(characterId)
+      if (n >= 1) {
+        return { ok: false, error: 'base_exists' }
+      }
+    }
 
     try {
       const { prompt } = await generateCharacterSlotImagePrompt(
@@ -128,8 +144,16 @@ export class CharacterService {
     description?: string
     fileBuffer: Buffer
     fileMimeType: string
-  }): Promise<CharacterImage> {
+  }): Promise<CreateImageFromUploadedFileResult> {
     const { characterId, name, parentId, type, description, fileBuffer, fileMimeType } = params
+
+    const resolvedType = (type || 'base').toLowerCase()
+    if (!parentId && resolvedType === 'base') {
+      const n = await this.repository.countRootBaseImages(characterId)
+      if (n >= 1) {
+        return { ok: false, error: 'base_exists' }
+      }
+    }
 
     const key = generateFileKey('assets', `upload_${Date.now()}.png`)
     const avatarUrl = await uploadFile('assets', key, fileBuffer, fileMimeType)
@@ -140,13 +164,13 @@ export class CharacterService {
       characterId,
       name,
       parentId: parentId || null,
-      type: type || 'base',
+      type: resolvedType,
       description,
       avatarUrl,
       order: (maxOrder._max.order || 0) + 1
     })
 
-    return toJsonSafe(image)
+    return { ok: true, image: toJsonSafe(image) }
   }
 
   /** 为已有形象槽位上传/替换定妆图（本地文件 → 对象存储） */
@@ -180,7 +204,18 @@ export class CharacterService {
     return this.repository.updateCharacterImage(imageId, data)
   }
 
-  async deleteImageWithDescendants(imageId: string): Promise<void> {
+  async deleteImageWithDescendants(
+    characterId: string,
+    imageId: string
+  ): Promise<DeleteCharacterImageResult> {
+    const img = await this.repository.findCharacterImageById(imageId)
+    if (!img || img.characterId !== characterId) {
+      return { ok: false, error: 'not_found' }
+    }
+    if (img.type === 'base' && !img.parentId) {
+      return { ok: false, error: 'cannot_delete_base' }
+    }
+
     const deleteChildren = async (parentId: string) => {
       const children = await this.repository.findImagesByParentId(parentId)
       for (const child of children) {
@@ -190,6 +225,7 @@ export class CharacterService {
     }
     await deleteChildren(imageId)
     await this.repository.deleteCharacterImageById(imageId)
+    return { ok: true }
   }
 
   /** 将 imageId 移到 parentId 下是否会成环：沿 parentId 向上若遇到 imageId 则非法（与原路由 checkAncestor 一致） */

@@ -65,6 +65,13 @@ export class CharacterRepository {
     })
   }
 
+  /** 无父级且 type=base 的槽位数（每角色仅允许一个） */
+  countRootBaseImages(characterId: string) {
+    return this.prisma.characterImage.count({
+      where: { characterId, type: 'base', parentId: null }
+    })
+  }
+
   createCharacterImage(data: Prisma.CharacterImageUncheckedCreateInput) {
     return this.prisma.characterImage.create({ data })
   }

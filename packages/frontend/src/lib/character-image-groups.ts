@@ -4,6 +4,17 @@ function byOrder(a: CharacterImage, b: CharacterImage): number {
   return (a.order ?? 0) - (b.order ?? 0)
 }
 
+/** 是否已有「无父级 + type=base」的定妆槽（每角色仅允许一个） */
+export function hasRootBaseImage(images: CharacterImage[] | undefined): boolean {
+  if (!images?.length) return false
+  return images.some((img) => img.type === 'base' && !img.parentId)
+}
+
+/** 无父级且 type=base：唯一基础定妆，不可删除 */
+export function isRootBaseImage(img: CharacterImage | undefined | null): boolean {
+  return Boolean(img && img.type === 'base' && !img.parentId)
+}
+
 /** 主栏展示的基础形象：仅 type=base 且无父；若无则退化为全部无父节点（兼容旧数据） */
 export function getDisplayBaseImages(images: CharacterImage[]): CharacterImage[] {
   const sorted = [...images].sort(byOrder)

@@ -9,20 +9,15 @@ import {
   NForm,
   NFormItem,
   NInput,
-  NImage,
-  NUpload,
   NPopconfirm,
   NTag,
-  NAvatar,
   useMessage,
-  NDropdown,
   NSpin,
   NEmpty
 } from 'naive-ui'
-import type { UploadFileInfo } from 'naive-ui'
 import { useCharacterStore } from '@/stores/character'
 import EmptyState from '@/components/EmptyState.vue'
-import type { Character, CharacterImage } from '@dreamer/shared/types'
+import type { Character } from '@dreamer/shared/types'
 import { subscribeProjectUpdates } from '@/lib/project-sse-bridge'
 import { getDisplayBaseImages, getDisplayDerivedImages } from '@/lib/character-image-groups'
 import { fetchInFlightImageJobsForProject } from '@/lib/pending-image-jobs'
@@ -71,18 +66,7 @@ watch(projectId, async (id) => {
 })
 
 const showCreateModal = ref(false)
-const showImageModal = ref(false)
 const newCharacter = ref({ name: '', description: '' })
-const imageForm = ref({
-  name: '',
-  type: 'base',
-  parentId: undefined as string | undefined,
-  description: ''
-})
-const currentCharacterId = ref<string | null>(null)
-const selectedImageId = ref<string | null>(null)
-/** 已提交、等待 Worker 完成的形象图任务 */
-const generatingByImageId = ref<Record<string, boolean>>({})
 /** 尚无形象行、仅「新建定妆/衍生」队列任务可绑定的角色级 loading（与 Bull 任务 binding 一一对应） */
 const generatingCharacterPendingCreate = ref<Record<string, boolean>>({})
 
@@ -90,13 +74,7 @@ let unsubProjectSse: (() => void) | null = null
 
 async function hydrateGeneratingFromQueue() {
   try {
-    const { characterImageIds, characterIdsWithPendingNewImage } =
-      await fetchInFlightImageJobsForProject(projectId.value)
-    const next = { ...generatingByImageId.value }
-    for (const id of characterImageIds) {
-      next[id] = true
-    }
-    generatingByImageId.value = next
+    const { characterIdsWithPendingNewImage } = await fetchInFlightImageJobsForProject(projectId.value)
     const nextCh: Record<string, boolean> = {}
     for (const cid of characterIdsWithPendingNewImage) {
       nextCh[cid] = true
@@ -112,7 +90,6 @@ onMounted(async () => {
   await hydrateGeneratingFromQueue()
   unsubProjectSse = subscribeProjectUpdates(projectId.value, (p) => {
     if (p.type !== 'image-generation') return
-    const imgId = typeof p.characterImageId === 'string' ? p.characterImageId : undefined
     const k = typeof p.kind === 'string' ? p.kind : ''
     if (
       (p.status === 'completed' || p.status === 'failed') &&
@@ -122,11 +99,6 @@ onMounted(async () => {
       const nextC = { ...generatingCharacterPendingCreate.value }
       delete nextC[p.characterId as string]
       generatingCharacterPendingCreate.value = nextC
-    }
-    if (imgId && (p.status === 'completed' || p.status === 'failed')) {
-      const next = { ...generatingByImageId.value }
-      delete next[imgId]
-      generatingByImageId.value = next
     }
     if (p.status === 'completed' && p.characterImageId) {
       void characterStore.fetchCharacters(projectId.value)
@@ -163,46 +135,8 @@ const handleDeleteCharacter = async (id: string) => {
   message.success('角色已删除')
 }
 
-const openImageModal = (characterId: string, parentId?: string) => {
-  currentCharacterId.value = characterId
-  imageForm.value = {
-    name: '',
-    type: parentId ? 'outfit' : 'base',
-    parentId,
-    description: ''
-  }
-  showImageModal.value = true
-}
-
-const handleImageUpload = async (options: { file: UploadFileInfo }) => {
-  if (!currentCharacterId.value || !imageForm.value.name) {
-    message.warning('请输入形象名称')
-    return
-  }
-  const file = options.file.file
-  if (file) {
-    await characterStore.addImage(
-      currentCharacterId.value,
-      file,
-      imageForm.value.name,
-      imageForm.value.parentId,
-      imageForm.value.type,
-      imageForm.value.description
-    )
-    showImageModal.value = false
-    imageForm.value = { name: '', type: 'base', parentId: undefined, description: '' }
-    message.success('形象添加成功')
-  }
-}
-
-const handleDeleteImage = async (characterId: string, imageId: string) => {
-  await characterStore.deleteImage(characterId, imageId)
-  message.success('形象已删除')
-}
-
-const handleMoveImage = async (characterId: string, imageId: string, newParentId?: string) => {
-  await characterStore.moveImage(characterId, imageId, newParentId)
-  message.success('形象已移动')
+function goCharacterDetail(characterId: string) {
+  void router.push(`/project/${projectId.value}/characters/${characterId}`)
 }
 
 const getCharacterInitials = (name: string) => {
@@ -215,106 +149,26 @@ const getAvatarBgColor = (name: string) => {
   return colors[index]
 }
 
-const getTypeLabel = (type: string) => {
-  const map: Record<string, string> = {
-    base: '基础',
-    outfit: '服装',
-    expression: '表情',
-    pose: '姿态'
-  }
-  return map[type] || type
-}
-
-const imageActionOptions = (_characterId: string, imageId: string, images: CharacterImage[]) => {
-  const image = images.find((i) => i.id === imageId)
-  const options: { label: string; key: string }[] = []
-  const bases = getDisplayBaseImages(images)
-  const primary = bases[0]
-  const looseUnderPrimary = Boolean(
-    image &&
-      !image.parentId &&
-      image.type !== 'base' &&
-      primary?.type === 'base' &&
-      primary.id
-  )
-
-  if (image) {
-    if (image.type === 'base' && !image.parentId) {
-      options.push({ label: image.avatarUrl ? 'AI 重新生成' : 'AI 生成定妆', key: 'ai-generate' })
-    } else {
-      const parentId = image.parentId || (looseUnderPrimary ? primary!.id : undefined)
-      const parent = parentId ? images.find((i) => i.id === parentId) : undefined
-      if (parent?.avatarUrl) {
-        options.push({ label: image.avatarUrl ? 'AI 重新生成' : 'AI 生成', key: 'ai-generate' })
+/** 卡片顶部叠放：已有定妆图 URL 的槽位（基础优先，再衍生），最多 6 张 */
+function previewAvatarImages(character: Character): { id: string; url: string }[] {
+  const images = character.images || []
+  const out: { id: string; url: string }[] = []
+  const seen = new Set<string>()
+  for (const base of getDisplayBaseImages(images)) {
+    const u = base.avatarUrl?.trim()
+    if (u && !seen.has(base.id)) {
+      seen.add(base.id)
+      out.push({ id: base.id, url: u })
+    }
+    for (const d of getDisplayDerivedImages(images, base.id)) {
+      const du = d.avatarUrl?.trim()
+      if (du && !seen.has(d.id)) {
+        seen.add(d.id)
+        out.push({ id: d.id, url: du })
       }
     }
   }
-
-  options.push({ label: '添加子形象', key: 'add-child' })
-  if (looseUnderPrimary && primary) {
-    options.push({ label: `关联到「${primary.name}」`, key: 'attach-primary' })
-  }
-  if (image?.parentId) {
-    options.push({ label: '设为独立形象', key: 'detach' })
-  }
-  options.push({ label: '删除', key: 'delete' })
-
-  return options
-}
-
-async function queueGenerate(_characterId: string, imageId: string) {
-  generatingByImageId.value = { ...generatingByImageId.value, [imageId]: true }
-  try {
-    await characterStore.queueCharacterImageGenerate(imageId)
-    message.info('已提交生成，请稍候…')
-  } catch (e: any) {
-    const next = { ...generatingByImageId.value }
-    delete next[imageId]
-    generatingByImageId.value = next
-    message.error(e?.response?.data?.error || '提交失败')
-  }
-}
-
-const handleImageAction = (key: string, characterId: string, imageId: string, images: CharacterImage[]) => {
-  switch (key) {
-    case 'ai-generate':
-      void queueGenerate(characterId, imageId)
-      break
-    case 'add-child':
-      openImageModal(characterId, imageId)
-      break
-    case 'attach-primary': {
-      const primary = getDisplayBaseImages(images)[0]
-      if (primary) void handleMoveImage(characterId, imageId, primary.id)
-      break
-    }
-    case 'delete':
-      handleDeleteImage(characterId, imageId)
-      break
-    case 'detach':
-      handleMoveImage(characterId, imageId, undefined)
-      break
-  }
-}
-
-async function confirmImageModalByAi() {
-  if (!currentCharacterId.value || !imageForm.value.name.trim()) {
-    message.warning('请输入形象名称')
-    return
-  }
-  try {
-    await characterStore.addImageSlotByAi(currentCharacterId.value, {
-      name: imageForm.value.name.trim(),
-      type: imageForm.value.type,
-      parentId: imageForm.value.parentId,
-      description: imageForm.value.description?.trim() || undefined
-    })
-    showImageModal.value = false
-    imageForm.value = { name: '', type: 'base', parentId: undefined, description: '' }
-    message.success('已创建槽位，可在菜单中选「AI 生成」')
-  } catch (e: any) {
-    message.error(e?.response?.data?.error || '创建失败')
-  }
+  return out.slice(0, 6)
 }
 
 </script>
@@ -323,7 +177,7 @@ async function confirmImageModalByAi() {
   <div class="characters-page">
     <div class="characters-toolbar">
       <p class="characters-toolbar__hint">
-        定妆与衍生形象一览；点卡片下方进入详情可管理形象树与提示词。
+        每角色仅一个基础定妆，衍生形象挂在该定妆下；点「详情与形象树」可管理提示词与图片。
       </p>
       <div class="characters-toolbar__row">
         <NInput
@@ -399,125 +253,69 @@ async function confirmImageModalByAi() {
           hoverable
           :segmented="{ content: true, footer: 'soft' }"
         >
-          <!-- Avatar Section - Base Images -->
-          <div class="character-card__avatar">
-            <div v-if="getDisplayBaseImages(character.images || []).length === 0" class="avatar-placeholder-container">
+          <div
+            class="character-card__body"
+            role="link"
+            tabindex="0"
+            @click="goCharacterDetail(character.id)"
+            @keydown.enter.prevent="goCharacterDetail(character.id)"
+          >
+            <!-- 顶部：仅展示已生成图，高度撑满；点击整块进形象树 -->
+            <div class="character-card__avatar">
+              <template v-if="previewAvatarImages(character).length === 0">
+                <div class="card-avatar-placeholder">
+                  <span
+                    class="card-avatar-placeholder__initial"
+                    :style="{ color: getAvatarBgColor(character.name) }"
+                  >{{ getCharacterInitials(character.name) }}</span>
+                </div>
+              </template>
               <div
-                class="character-avatar-placeholder"
-                :style="{ background: getAvatarBgColor(character.name) }"
-              >
-                <NAvatar :size="64" round>
-                  {{ getCharacterInitials(character.name) }}
-                </NAvatar>
-              </div>
-              <NButton
-                size="small"
-                class="add-base-image-btn"
-                @click.stop="openImageModal(character.id)"
-              >
-                添加基础形象
-              </NButton>
-            </div>
-            <div v-else class="base-images-grid">
-              <div
-                v-for="baseImage in getDisplayBaseImages(character.images || [])"
-                :key="baseImage.id"
-                class="base-image-cluster"
+                v-else
+                class="card-avatar-row"
+                role="presentation"
+                :aria-label="`${character.name} 的定妆图`"
               >
                 <div
-                  class="base-image-item"
-                  :class="{
-                    'base-image-item--selected': selectedImageId === baseImage.id,
-                    'base-image-item--generating': generatingByImageId[baseImage.id]
-                  }"
-                  @click="selectedImageId = baseImage.id"
+                  v-for="item in previewAvatarImages(character)"
+                  :key="item.id"
+                  class="card-avatar-row__cell"
                 >
-                  <NImage
-                    v-if="baseImage.avatarUrl"
-                    :src="baseImage.avatarUrl"
-                    width="100%"
-                    height="140"
-                    object-fit="cover"
-                    preview
-                  />
-                  <div class="base-image-info">
-                    <span class="base-image-name">{{ baseImage.name }}</span>
-                    <NDropdown
-                      trigger="click"
-                      :options="imageActionOptions(character.id, baseImage.id, character.images || [])"
-                      @select="(key) => handleImageAction(key, character.id, baseImage.id, character.images || [])"
-                    >
-                      <NButton size="tiny" quaternary @click.stop>⋯</NButton>
-                    </NDropdown>
-                  </div>
+                  <img :src="item.url" :alt="`${character.name} 定妆图`" />
                 </div>
-                <div
-                  v-if="getDisplayDerivedImages(character.images || [], baseImage.id).length > 0"
-                  class="derived-images"
-                >
-                  <NDropdown
-                    v-for="derived in getDisplayDerivedImages(character.images || [], baseImage.id)"
-                    :key="derived.id"
-                    trigger="click"
-                    :options="imageActionOptions(character.id, derived.id, character.images || [])"
-                    @select="(key) => handleImageAction(key, character.id, derived.id, character.images || [])"
-                  >
-                    <div
-                      class="derived-image-thumb"
-                      :class="{ 'derived-image-thumb--busy': generatingByImageId[derived.id] }"
-                      @click.stop="selectedImageId = derived.id"
-                    >
-                      <NImage
-                        v-if="derived.avatarUrl"
-                        :src="derived.avatarUrl"
-                        width="32"
-                        height="32"
-                        object-fit="cover"
-                      />
-                      <span
-                        v-else
-                        class="derived-placeholder"
-                        :title="`${derived.name}（${getTypeLabel(derived.type)}）打开菜单可 AI 生成`"
-                      >+</span>
-                    </div>
-                  </NDropdown>
-                </div>
-              </div>
-              <div class="add-base-image-cell" @click="openImageModal(character.id)">
-                <span>+ 添加形象</span>
               </div>
             </div>
-          </div>
 
-          <!-- Info Section -->
-          <div class="character-card__info">
-            <div class="character-card__title-row">
-              <h3 class="character-card__name">{{ character.name }}</h3>
-              <NTag
-                v-if="imageStats(character).total > 0"
-                size="small"
-                round
-                :bordered="false"
-              >
-                {{ formatImageStatsLine(character) }}
-              </NTag>
-              <NTag v-else size="small" round :bordered="false" type="warning">
-                待添加形象
-              </NTag>
+            <!-- Info Section -->
+            <div class="character-card__info">
+              <div class="character-card__title-row">
+                <h3 class="character-card__name">{{ character.name }}</h3>
+                <NTag
+                  v-if="imageStats(character).total > 0"
+                  size="small"
+                  round
+                  :bordered="false"
+                >
+                  {{ formatImageStatsLine(character) }}
+                </NTag>
+                <NTag v-else size="small" round :bordered="false" type="warning">
+                  待添加形象
+                </NTag>
+              </div>
+              <p class="character-card__desc">
+                {{ character.description || '暂无描述' }}
+              </p>
             </div>
-            <p class="character-card__desc">
-              {{ character.description || '暂无描述' }}
-            </p>
           </div>
 
           <template #footer>
-            <div class="character-card__actions">
+            <div class="character-card__actions" @click.stop>
               <NSpace justify="space-between" class="character-card__actions-inner">
                 <NButton
                   type="primary"
                   size="small"
                   secondary
-                  @click="router.push(`/project/${projectId}/characters/${character.id}`)"
+                  @click="goCharacterDetail(character.id)"
                 >
                   详情与形象树
                 </NButton>
@@ -569,70 +367,6 @@ async function confirmImageModalByAi() {
       </template>
     </NModal>
 
-    <!-- Add Image Modal -->
-    <NModal
-      v-model:show="showImageModal"
-      preset="card"
-      :title="imageForm.parentId ? '添加衍生形象' : '添加基础形象'"
-      style="width: 480px"
-    >
-      <NForm :model="imageForm" label-placement="top">
-        <NFormItem label="形象名称" path="name">
-          <NInput v-model:value="imageForm.name" placeholder="如：日常装、战斗版、微笑表情" />
-        </NFormItem>
-        <NFormItem label="类型" path="type">
-          <NSpace>
-            <NTag
-              :type="imageForm.type === 'base' ? 'success' : 'default'"
-              :bordered="imageForm.type !== 'base'"
-              checkable
-              @click="imageForm.type = 'base'"
-            >基础</NTag>
-            <NTag
-              :type="imageForm.type === 'outfit' ? 'info' : 'default'"
-              :bordered="imageForm.type !== 'outfit'"
-              checkable
-              @click="imageForm.type = 'outfit'"
-            >服装</NTag>
-            <NTag
-              :type="imageForm.type === 'expression' ? 'warning' : 'default'"
-              :bordered="imageForm.type !== 'expression'"
-              checkable
-              @click="imageForm.type = 'expression'"
-            >表情</NTag>
-            <NTag
-              :type="imageForm.type === 'pose' ? 'default' : 'default'"
-              :bordered="imageForm.type !== 'pose'"
-              checkable
-              @click="imageForm.type = 'pose'"
-            >姿态</NTag>
-          </NSpace>
-        </NFormItem>
-        <NFormItem v-if="imageForm.parentId" label="衍生形象说明" path="description">
-          <NInput
-            v-model:value="imageForm.description"
-            type="textarea"
-            placeholder="描述该衍生形象的特点..."
-            :rows="2"
-          />
-        </NFormItem>
-        <NFormItem label="参考图" path="file">
-          <NUpload
-            accept="image/*"
-            :max="1"
-            @change="(options: any) => handleImageUpload(options)"
-          >
-            <NButton>选择图片</NButton>
-          </NUpload>
-        </NFormItem>
-      </NForm>
-      <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showImageModal = false">取消</NButton>
-          <NButton secondary @click="confirmImageModalByAi">不上传图，AI 建槽位</NButton>
-        </NSpace>
-      </template>
-    </NModal>
   </div>
 </template>
 
@@ -739,150 +473,53 @@ async function confirmImageModalByAi() {
   padding-top: var(--spacing-sm);
 }
 
+.character-card__body {
+  cursor: pointer;
+}
+
 .character-card__avatar {
-  margin: calc(var(--spacing-md) * -1);
-  margin-bottom: var(--spacing-md);
-  min-height: 160px;
-  background: var(--color-bg-gray);
-}
-
-.avatar-placeholder-container {
+  margin: calc(var(--spacing-md) * -1) calc(var(--spacing-md) * -1) var(--spacing-md);
   height: 160px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-sm);
-}
-
-.character-avatar-placeholder {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 32px;
-  font-weight: var(--font-weight-bold);
-}
-
-.add-base-image-btn {
-  opacity: 0.8;
-}
-
-.base-images-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm);
-}
-
-.base-image-cluster {
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--color-bg-white);
-}
-
-.base-image-item {
-  position: relative;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: white;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.base-image-item:hover {
-  transform: scale(1.02);
-  box-shadow: var(--shadow-md);
-}
-
-.base-image-item--selected {
-  outline: 2px solid var(--color-primary);
-}
-
-.base-image-item--generating {
-  opacity: 0.75;
-  pointer-events: none;
-}
-
-.base-image-info {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: white;
-}
-
-.base-image-name {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-primary);
-  font-weight: var(--font-weight-medium);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.derived-images {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 6px;
   background: var(--color-bg-gray);
-  border-top: 1px solid var(--color-border-light);
-}
-
-.derived-image-thumb {
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
   overflow: hidden;
-  cursor: pointer;
-  opacity: 0.7;
-  transition: opacity 0.2s;
 }
 
-.derived-image-thumb:hover {
-  opacity: 1;
+.card-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-gray);
 }
 
-.derived-image-thumb--busy {
-  opacity: 0.5;
+.card-avatar-placeholder__initial {
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0.35;
+}
+
+.card-avatar-row {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.card-avatar-row__cell {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: var(--color-bg-gray);
+}
+
+.card-avatar-row__cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
   pointer-events: none;
-}
-
-.derived-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  font-size: 14px;
-  color: var(--color-text-tertiary);
-  background: var(--color-bg-soft);
-  border-radius: 4px;
-}
-
-.add-base-image-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100px;
-  border: 2px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: var(--font-size-sm);
-}
-
-.add-base-image-cell:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background: var(--color-primary-light);
 }
 
 .character-card__info {

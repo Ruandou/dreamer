@@ -133,6 +133,9 @@ export async function characterRoutes(fastify: FastifyInstance) {
         })
 
         if (!result.ok) {
+          if (result.error === 'base_exists') {
+            return reply.status(409).send({ error: '每个角色只能有一个基础形象（无父级的定妆槽）' })
+          }
           if (result.error === 'invalid_parent') {
             return reply.status(400).send({ error: 'Invalid parentId' })
           }
@@ -190,7 +193,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.' })
       }
 
-      const image = await characterService.createImageFromUploadedFile({
+      const fileResult = await characterService.createImageFromUploadedFile({
         characterId,
         name,
         parentId,
@@ -200,7 +203,14 @@ export async function characterRoutes(fastify: FastifyInstance) {
         fileMimeType
       })
 
-      return reply.status(201).send(image)
+      if (!fileResult.ok) {
+        if (fileResult.error === 'base_exists') {
+          return reply.status(409).send({ error: '每个角色只能有一个基础形象（无父级的定妆槽）' })
+        }
+        return reply.status(400).send({ error: '创建失败' })
+      }
+
+      return reply.status(201).send(fileResult.image)
     }
   )
 
@@ -289,7 +299,14 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      await characterService.deleteImageWithDescendants(imageId)
+      const del = await characterService.deleteImageWithDescendants(characterId, imageId)
+
+      if (!del.ok) {
+        if (del.error === 'not_found') {
+          return reply.status(404).send({ error: 'Image not found' })
+        }
+        return reply.status(400).send({ error: '基础形象不可删除' })
+      }
 
       return reply.status(204).send()
     }

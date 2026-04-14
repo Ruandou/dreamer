@@ -15,14 +15,20 @@ import {
   NTree,
   NDropdown,
   NSpin,
-  NBackTop
+  NBackTop,
+  NAlert
 } from 'naive-ui'
 import type { UploadFileInfo, TreeOption } from 'naive-ui'
 import { useCharacterStore } from '@/stores/character'
 import EmptyState from '@/components/EmptyState.vue'
 import type { Character, CharacterImage } from '@dreamer/shared/types'
 import { subscribeProjectUpdates } from '@/lib/project-sse-bridge'
-import { getDisplayBaseImages, getDisplayDerivedImages } from '@/lib/character-image-groups'
+import {
+  getDisplayBaseImages,
+  getDisplayDerivedImages,
+  hasRootBaseImage,
+  isRootBaseImage
+} from '@/lib/character-image-groups'
 import { fetchInFlightImageJobsForProject } from '@/lib/pending-image-jobs'
 
 const route = useRoute()
@@ -84,10 +90,19 @@ onUnmounted(() => {
   unsubProjectSse = null
 })
 
+/** 右侧详情必须以 character.images 为准；树节点上的 option.data 可能与刷新后的数组不同步 */
 watch(
   () => [selectedImageId.value, character.value?.images] as const,
   () => {
-    const img = character.value?.images?.find((i) => i.id === selectedImageId.value)
+    const id = selectedImageId.value
+    const imgs = character.value?.images
+    if (!id || !imgs?.length) {
+      selectedImage.value = null
+      promptDraft.value = ''
+      return
+    }
+    const img = imgs.find((i) => i.id === id) ?? null
+    selectedImage.value = img
     promptDraft.value = img?.prompt || ''
   },
   { immediate: true, deep: true }
@@ -140,10 +155,8 @@ const loadCharacter = async () => {
     const id = keep ? selectedImageId.value : imgs[0]?.id
     if (id) {
       selectedImageId.value = id
-      selectedImage.value = imgs.find((i) => i.id === id) || null
     } else {
       selectedImageId.value = null
-      selectedImage.value = null
     }
   } finally {
     isLoading.value = false
@@ -157,6 +170,14 @@ function sortImagesByOrder(a: CharacterImage, b: CharacterImage): number {
 function formatImageCostYuan(n: number): string {
   return n.toFixed(4)
 }
+
+const characterHasRootBase = computed(() => hasRootBaseImage(character.value?.images))
+
+/** 多条无父级 base（历史数据）：提示合并删除 */
+const multipleRootBases = computed(() => {
+  const imgs = character.value?.images ?? []
+  return imgs.filter((i) => i.type === 'base' && !i.parentId).length > 1
+})
 
 const treeData = computed<CharacterTreeOption[]>(() => {
   if (!character.value?.images) return []
@@ -196,9 +217,9 @@ const treeData = computed<CharacterTreeOption[]>(() => {
   })
 })
 
-const handleNodeClick = (option: CharacterTreeOption) => {
-  selectedImageId.value = option.key as string
-  selectedImage.value = option.data as CharacterImage
+function onTreeSelectedKeys(keys: Array<string | number>) {
+  const k = keys[0]
+  selectedImageId.value = k != null ? String(k) : null
 }
 
 const handleBack = () => {
@@ -211,17 +232,11 @@ const handleDeleteImage = async (imageId: string) => {
   await loadCharacter()
 }
 
-const handleMoveToRoot = async (imageId: string) => {
-  await characterStore.moveImage(characterId.value, imageId, undefined)
-  message.success('已移为独立形象')
-  await loadCharacter()
-}
-
-const openAddModal = (parentId?: string) => {
+const openAddModal = () => {
   addForm.value = {
     name: '',
-    type: parentId ? 'outfit' : 'base',
-    parentId,
+    type: 'base',
+    parentId: undefined,
     description: ''
   }
   selectedFile.value = null
@@ -359,7 +374,6 @@ const handleDrop = async ({
 }
 
 const treeNodeProps = (option: CharacterTreeOption) => ({
-  onClick: () => handleNodeClick(option),
   onDrop: (e: DragEvent) => {
     e.preventDefault()
     const dragNode = JSON.parse(e.dataTransfer?.getData('node') || '{}')
@@ -393,14 +407,12 @@ const imageActionOptions = computed(() => {
     }
   }
 
-  options.push({ label: '添加子形象', key: 'add-child' })
   if (looseUnderPrimary && primary) {
     options.push({ label: `关联到「${primary.name}」`, key: 'attach-primary' })
   }
-  if (img.parentId) {
-    options.push({ label: '设为独立形象', key: 'detach' })
+  if (!isRootBaseImage(img)) {
+    options.push({ label: '删除', key: 'delete' })
   }
-  options.push({ label: '删除', key: 'delete' })
 
   return options
 })
@@ -411,9 +423,6 @@ const handleImageAction = async (key: string) => {
   switch (key) {
     case 'ai-generate':
       void queueSelectedGenerate()
-      break
-    case 'add-child':
-      openAddModal(selectedImage.value.id)
       break
     case 'attach-primary': {
       const imgs = character.value?.images || []
@@ -427,9 +436,6 @@ const handleImageAction = async (key: string) => {
     }
     case 'delete':
       handleDeleteImage(selectedImage.value.id)
-      break
-    case 'detach':
-      handleMoveToRoot(selectedImage.value.id)
       break
   }
 }
@@ -500,7 +506,7 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
         </div>
       </div>
       <div class="detail-header__right">
-        <NButton type="primary" @click="openAddModal()">
+        <NButton v-if="!characterHasRootBase" type="primary" @click="openAddModal()">
           <template #icon>+</template>
           添加基础形象
         </NButton>
@@ -516,7 +522,7 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
     <EmptyState
       v-else-if="!character || treeData.length === 0"
       title="暂无形象"
-      description="添加角色的基础形象和衍生形象"
+      description="每角色仅一个基础定妆；添加后可在此管理衍生形象与提示词"
       icon="🎭"
     >
       <template #action>
@@ -531,17 +537,32 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
       <!-- Tree View -->
       <div class="tree-panel">
         <div class="tree-panel__header">
-          <h3>形象树</h3>
-          <NTag size="small" round>{{ treeData.length }} 个基础形象</NTag>
+          <div class="tree-panel__title-wrap">
+            <h3>形象结构</h3>
+            <p class="tree-panel__hint">基础定妆向下分支为衍生；点击行切换右侧详情，三角仅展开/收起</p>
+          </div>
+          <NTag size="small" round>节点连线</NTag>
         </div>
+        <NAlert
+          v-if="multipleRootBases"
+          type="warning"
+          show-icon
+          style="margin-bottom: 12px"
+          title="检测到多个基础定妆"
+        >
+          当前规则为每角色仅保留一个无父级的「基础」槽。请将多余项改为衍生（指定父级）或修改类型后，再删除不需要的节点；基础定妆本身不可删除。
+        </NAlert>
         <div class="tree-panel__body">
           <NTree
+            class="character-image-tree"
             :data="treeData"
-            block-node
-            expand-on-click
+            block-line
+            show-line
+            default-expand-all
+            :cancelable="false"
             selectable
             :selected-keys="selectedImageId ? [selectedImageId] : []"
-            :default-expanded-keys="treeData.map(n => n.key as string)"
+            @update:selected-keys="onTreeSelectedKeys"
             :node-props="treeNodeProps"
             :render-suffix="renderSuffix"
           />
@@ -563,6 +584,7 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
         </div>
         <div class="preview-panel__body">
           <template v-if="selectedImage">
+            <div :key="selectedImage.id" class="preview-panel__selected">
             <div class="preview-image-wrap">
               <NImage
                 v-if="selectedImage.avatarUrl"
@@ -643,6 +665,7 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
                   </NButton>
                 </NSpace>
               </div>
+            </div>
             </div>
           </template>
           <EmptyState
@@ -779,8 +802,13 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
 .tree-panel__header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
+}
+
+.tree-panel__title-wrap {
+  min-width: 0;
 }
 
 .tree-panel__header h3 {
@@ -788,6 +816,22 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
   margin: 0;
+}
+
+.tree-panel__hint {
+  margin: 4px 0 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+  color: var(--color-text-tertiary);
+}
+
+.character-image-tree {
+  --n-node-content-height: 34px;
+}
+
+.character-image-tree :deep(.n-tree-node-wrapper) {
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
 .tree-panel__body {
@@ -822,6 +866,14 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
 }
 
 .preview-panel__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.preview-panel__selected {
   flex: 1;
   display: flex;
   flex-direction: column;

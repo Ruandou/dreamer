@@ -15,6 +15,7 @@ const {
   mockCharacterImageDelete,
   mockCharacterImageCreate,
   mockCharacterImageAggregate,
+  mockCharacterImageCount,
   mockProjectFindFirst
 } = vi.hoisted(() => {
   return {
@@ -30,6 +31,7 @@ const {
     mockCharacterImageDelete: vi.fn(),
     mockCharacterImageCreate: vi.fn(),
     mockCharacterImageAggregate: vi.fn(),
+    mockCharacterImageCount: vi.fn(),
     mockProjectFindFirst: vi.fn()
   }
 })
@@ -77,7 +79,8 @@ vi.mock('../src/lib/prisma.js', () => ({
       update: mockCharacterImageUpdate,
       delete: mockCharacterImageDelete,
       create: mockCharacterImageCreate,
-      aggregate: mockCharacterImageAggregate
+      aggregate: mockCharacterImageAggregate,
+      count: mockCharacterImageCount
     },
     project: {
       findFirst: mockProjectFindFirst
@@ -112,6 +115,7 @@ describe('Character Routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockCharacterImageCount.mockResolvedValue(0)
   })
 
   describe('GET /api/characters', () => {
@@ -305,6 +309,58 @@ describe('Character Routes', () => {
       })
       expect(response.statusCode).toBe(400)
     })
+
+    it('should return 409 when second root base slot is requested (JSON)', async () => {
+      mockCharacterImageCount.mockResolvedValue(1)
+      mockCharacterFindUnique.mockResolvedValue({
+        id: 'char-1',
+        name: '主角',
+        description: '',
+        projectId: 'proj-1'
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/characters/char-1/images',
+        headers: { 'content-type': 'application/json' },
+        payload: { name: '第二套基础', type: 'base' }
+      })
+
+      expect(response.statusCode).toBe(409)
+      expect(mockGenerateCharacterSlotImagePrompt).not.toHaveBeenCalled()
+      expect(mockCharacterImageCreate).not.toHaveBeenCalled()
+    })
+
+    it('should return 201 when creating first root base slot (JSON)', async () => {
+      mockCharacterImageCount.mockResolvedValue(0)
+      mockCharacterFindUnique.mockResolvedValue({
+        id: 'char-1',
+        name: '主角',
+        description: '',
+        projectId: 'proj-1'
+      })
+      mockCharacterImageAggregate.mockResolvedValue({ _max: { order: 0 } })
+      mockCharacterImageCreate.mockResolvedValue({
+        id: 'img-base',
+        characterId: 'char-1',
+        name: '主定妆',
+        type: 'base',
+        prompt: 'p',
+        avatarUrl: null,
+        order: 0
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/characters/char-1/images',
+        headers: { 'content-type': 'application/json' },
+        payload: { name: '主定妆', type: 'base' }
+      })
+
+      expect(response.statusCode).toBe(201)
+      expect(mockGenerateCharacterSlotImagePrompt).toHaveBeenCalled()
+      expect(mockCharacterImageCreate).toHaveBeenCalled()
+    })
   })
 
   describe('PUT /api/characters/:id/images/:imageId', () => {
@@ -351,6 +407,12 @@ describe('Character Routes', () => {
 
   describe('DELETE /api/characters/:id/images/:imageId', () => {
     it('should delete character image', async () => {
+      mockCharacterImageFindUnique.mockResolvedValue({
+        id: 'img-1',
+        characterId: 'char-1',
+        type: 'outfit',
+        parentId: 'base-1'
+      })
       mockCharacterImageFindMany.mockResolvedValue([]) // No children
       mockCharacterImageDelete.mockResolvedValue({ id: 'img-1' })
 
@@ -363,6 +425,12 @@ describe('Character Routes', () => {
     })
 
     it('should delete image with children', async () => {
+      mockCharacterImageFindUnique.mockResolvedValue({
+        id: 'img-1',
+        characterId: 'char-1',
+        type: 'outfit',
+        parentId: 'base-1'
+      })
       mockCharacterImageFindMany.mockResolvedValueOnce([
         { id: 'child-1', parentId: 'img-1' }
       ])
@@ -376,6 +444,25 @@ describe('Character Routes', () => {
       })
 
       expect(response.statusCode).toBe(204)
+    })
+
+    it('should return 400 when deleting root base image', async () => {
+      mockCharacterImageFindUnique.mockResolvedValue({
+        id: 'img-base',
+        characterId: 'char-1',
+        type: 'base',
+        parentId: null
+      })
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/characters/char-1/images/img-base'
+      })
+
+      expect(response.statusCode).toBe(400)
+      const body = JSON.parse(response.payload)
+      expect(body.error).toContain('基础形象')
+      expect(mockCharacterImageDelete).not.toHaveBeenCalled()
     })
 
     it('should return 403 when user does not own character', async () => {
