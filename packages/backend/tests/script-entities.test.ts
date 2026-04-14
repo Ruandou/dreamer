@@ -97,7 +97,8 @@ describe('script-entities', () => {
     expect(mockLocationUpsert).toHaveBeenCalledTimes(2)
     expect(mockLocationUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { projectId_name: { projectId: 'proj-1', name: '大堂' } }
+        where: { projectId_name: { projectId: 'proj-1', name: '大堂' } },
+        update: expect.objectContaining({ deletedAt: null })
       })
     )
   })

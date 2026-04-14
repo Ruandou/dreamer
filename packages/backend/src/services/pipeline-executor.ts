@@ -131,7 +131,7 @@ async function saveSegments(
     let locationId: string | undefined
     if (segment.location) {
       const location = await prisma.location.findFirst({
-        where: { projectId, name: segment.location }
+        where: { projectId, name: segment.location, deletedAt: null }
       })
       locationId = location?.id
     }
@@ -385,7 +385,7 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
     })
 
     const locations = await prisma.location.findMany({
-      where: { projectId }
+      where: { projectId, deletedAt: null }
     })
 
     // 转换素材

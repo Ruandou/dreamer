@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import Fastify, { FastifyInstance } from 'fastify'
+import multipart from '@fastify/multipart'
 
 const {
   mockVerifyProjectOwnership,
@@ -7,14 +8,20 @@ const {
   mockLocationFindMany,
   mockLocationFindUnique,
   mockLocationUpdate,
-  mockImageQueueAdd
+  mockSceneUpdateMany,
+  mockImageQueueAdd,
+  mockUploadFile,
+  mockGenerateFileKey
 } = vi.hoisted(() => ({
   mockVerifyProjectOwnership: vi.fn().mockResolvedValue(true),
   mockVerifyLocationOwnership: vi.fn().mockResolvedValue(true),
   mockLocationFindMany: vi.fn(),
   mockLocationFindUnique: vi.fn(),
   mockLocationUpdate: vi.fn(),
-  mockImageQueueAdd: vi.fn()
+  mockSceneUpdateMany: vi.fn(),
+  mockImageQueueAdd: vi.fn(),
+  mockUploadFile: vi.fn(),
+  mockGenerateFileKey: vi.fn()
 }))
 
 vi.mock('../src/plugins/auth.js', () => ({
@@ -27,11 +34,20 @@ vi.mock('../src/index.js', () => ({
     location: {
       findMany: mockLocationFindMany,
       findUnique: mockLocationFindUnique,
+      findFirst: mockLocationFindUnique,
       update: mockLocationUpdate
+    },
+    scene: {
+      updateMany: mockSceneUpdateMany
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()
   }
+}))
+
+vi.mock('../src/services/storage.js', () => ({
+  uploadFile: (...args: unknown[]) => mockUploadFile(...args),
+  generateFileKey: (...args: unknown[]) => mockGenerateFileKey(...args)
 }))
 
 vi.mock('../src/queues/image.js', () => ({
@@ -46,6 +62,7 @@ describe('Location routes', () => {
 
   beforeAll(async () => {
     app = Fastify({ logger: false })
+    await app.register(multipart)
     app.decorate('authenticate', async (request: any) => {
       request.user = { id: 'u1', email: 'a@b.c' }
     })
@@ -62,6 +79,9 @@ describe('Location routes', () => {
     mockVerifyProjectOwnership.mockResolvedValue(true)
     mockVerifyLocationOwnership.mockResolvedValue(true)
     mockImageQueueAdd.mockResolvedValue({ id: 'jq-1' })
+    mockSceneUpdateMany.mockResolvedValue({ count: 0 })
+    mockUploadFile.mockResolvedValue('https://minio.example.com/assets/x.png')
+    mockGenerateFileKey.mockReturnValue('assets/k.png')
   })
 
   it('GET / requires projectId', async () => {
@@ -160,5 +180,64 @@ describe('Location routes', () => {
     mockVerifyProjectOwnership.mockResolvedValueOnce(false)
     const res = await app.inject({ method: 'GET', url: '/api/locations?projectId=p1' })
     expectPermissionDeniedPayload(res)
+  })
+
+  it('DELETE /:id clears scene refs and soft-deletes', async () => {
+    mockLocationFindUnique.mockResolvedValue({ id: 'l1', projectId: 'p1', name: '咖啡厅' })
+    mockLocationUpdate.mockResolvedValue({ id: 'l1', deletedAt: new Date() })
+    const res = await app.inject({ method: 'DELETE', url: '/api/locations/l1' })
+    expect(res.statusCode).toBe(204)
+    expect(mockSceneUpdateMany).toHaveBeenCalledWith({
+      where: { locationId: 'l1' },
+      data: { locationId: null }
+    })
+    expect(mockLocationUpdate).toHaveBeenCalledWith({
+      where: { id: 'l1' },
+      data: { deletedAt: expect.any(Date) }
+    })
+  })
+
+  it('POST /:id/image returns 400 when not multipart', async () => {
+    mockLocationFindUnique.mockResolvedValue({ id: 'l1', name: 'a', projectId: 'p1' })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/locations/l1/image',
+      payload: {}
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('POST /:id/image uploads and updates location', async () => {
+    mockLocationFindUnique.mockResolvedValue({ id: 'l1', name: 'a', projectId: 'p1' })
+    mockLocationUpdate.mockResolvedValue({
+      id: 'l1',
+      imageUrl: 'https://minio.example.com/assets/x.png',
+      imageCost: null
+    })
+    const boundary = 'boundaryloc123'
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64'
+    )
+    const pre = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n`,
+      'utf8'
+    )
+    const post = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8')
+    const payload = Buffer.concat([pre, png, post])
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/locations/l1/image',
+      payload,
+      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockUploadFile).toHaveBeenCalled()
+    expect(mockLocationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'l1' },
+        data: { imageUrl: 'https://minio.example.com/assets/x.png', imageCost: null }
+      })
+    )
   })
 })

@@ -150,17 +150,20 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
           const { url: imageUrl, imageCost } = await generateTextToImageAndPersist(data.prompt, {
             size: imageSize
           })
-          const updated = await prisma.location.update({
-            where: { id: data.locationId },
+          const write = await prisma.location.updateMany({
+            where: { id: data.locationId, deletedAt: null },
             data: { imageUrl, imageCost: imageCost ?? null }
           })
+          if (write.count === 0) {
+            return { locationId: data.locationId, imageCost: null }
+          }
           notify(userId, projectId, {
             status: 'completed',
             kind: data.kind,
-            locationId: updated.id,
+            locationId: data.locationId,
             imageCost: imageCost ?? null
           })
-          return { locationId: updated.id, imageCost: imageCost ?? null }
+          return { locationId: data.locationId, imageCost: imageCost ?? null }
         }
       }
     } catch (error: unknown) {

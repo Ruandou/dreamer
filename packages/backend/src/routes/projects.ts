@@ -283,7 +283,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
               images: { orderBy: { order: 'asc' } }
             }
           },
-          locations: true,
+          locations: { where: { deletedAt: null } },
           compositions: true
         }
       })

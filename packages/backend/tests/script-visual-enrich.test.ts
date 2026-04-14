@@ -71,7 +71,7 @@ describe('applyScriptVisualEnrichment', () => {
     await applyScriptVisualEnrichment('p1', script)
 
     expect(mockLocationUpdateMany).toHaveBeenCalledWith({
-      where: { projectId: 'p1', name: '咖啡厅' },
+      where: { projectId: 'p1', name: '咖啡厅', deletedAt: null },
       data: { imagePrompt: '温馨咖啡厅内景，暖光，木质桌椅' }
     })
   })

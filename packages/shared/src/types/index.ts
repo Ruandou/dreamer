@@ -38,6 +38,8 @@ export interface ProjectLocation {
   imageUrl?: string | null
   /** 定场图最近一次成功生成的估算成本（元），来自方舟 usage 换算 */
   imageCost?: number | null
+  /** 软删除时间；列表接口不返回已删除行 */
+  deletedAt?: Date | null
   createdAt: Date
   updatedAt: Date
 }

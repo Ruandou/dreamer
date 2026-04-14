@@ -200,6 +200,7 @@ model Location {
   imagePrompt String?
   imageUrl    String?
   imageCost   Float? // 定场图最近一次成功：估算成本（元）
+  deletedAt   DateTime? // 软删除：列表不展示，费用统计仍计入该行
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -207,6 +208,7 @@ model Location {
 
   @@unique([projectId, name])
   @@index([projectId])
+  @@index([projectId, deletedAt])
 }
 
 model Take {

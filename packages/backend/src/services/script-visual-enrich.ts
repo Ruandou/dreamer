@@ -68,7 +68,10 @@ function extractJsonObject(text: string): string {
 }
 
 export async function applyScriptVisualEnrichment(projectId: string, script: ScriptContent): Promise<void> {
-  const locations = await prisma.location.findMany({ where: { projectId }, orderBy: { name: 'asc' } })
+  const locations = await prisma.location.findMany({
+    where: { projectId, deletedAt: null },
+    orderBy: { name: 'asc' }
+  })
   const characters = await prisma.character.findMany({
     where: { projectId },
     orderBy: { name: 'asc' },
@@ -100,7 +103,7 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
     for (const loc of payload.locations) {
       if (!loc?.name || !loc.imagePrompt?.trim()) continue
       await prisma.location.updateMany({
-        where: { projectId, name: loc.name },
+        where: { projectId, name: loc.name, deletedAt: null },
         data: { imagePrompt: loc.imagePrompt.trim() }
       })
     }

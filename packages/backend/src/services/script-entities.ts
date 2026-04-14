@@ -77,7 +77,11 @@ export async function saveLocations(projectId: string, script: ScriptContent) {
       where: {
         projectId_name: { projectId, name: locationName }
       },
-      update: { timeOfDay: info.timeOfDay, description: info.description },
+      update: {
+        timeOfDay: info.timeOfDay,
+        description: info.description,
+        deletedAt: null
+      },
       create: {
         projectId,
         name: locationName,

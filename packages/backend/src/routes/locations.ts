@@ -1,8 +1,11 @@
 import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
+import { uploadFile, generateFileKey } from '../services/storage.js'
 import { verifyLocationOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { imageQueue } from '../queues/image.js'
+
+const LOCATION_IMAGE_UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 
 function buildStyledPrompt(visualStyle: string[] | undefined, core: string): string {
   const vs = (visualStyle || []).filter(Boolean).join(', ')
@@ -31,7 +34,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
       }
 
       return prisma.location.findMany({
-        where: { projectId },
+        where: { projectId, deletedAt: null },
         orderBy: { name: 'asc' }
       })
     }
@@ -54,7 +57,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
     }
 
     const rows = await prisma.location.findMany({
-      where: { projectId },
+      where: { projectId, deletedAt: null },
       include: { project: true },
       orderBy: { name: 'asc' }
     })
@@ -130,7 +133,9 @@ export async function locationRoutes(fastify: FastifyInstance) {
     }
 
     if (Object.keys(data).length === 0) {
-      const loc = await prisma.location.findUnique({ where: { id: locationId } })
+      const loc = await prisma.location.findFirst({
+        where: { id: locationId, deletedAt: null }
+      })
       return loc || reply.status(404).send({ error: 'Location not found' })
     }
 
@@ -139,6 +144,98 @@ export async function locationRoutes(fastify: FastifyInstance) {
       data
     })
   })
+
+  fastify.delete<{ Params: { id: string } }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const locationId = request.params.id
+
+    if (!(await verifyLocationOwnership(userId, locationId))) {
+      return reply.status(403).send(permissionDeniedBody)
+    }
+
+    const existing = await prisma.location.findFirst({
+      where: { id: locationId, deletedAt: null }
+    })
+    if (!existing) {
+      return reply.status(404).send({ error: 'Location not found' })
+    }
+
+    await prisma.scene.updateMany({
+      where: { locationId },
+      data: { locationId: null }
+    })
+
+    await prisma.location.update({
+      where: { id: locationId },
+      data: { deletedAt: new Date() }
+    })
+    return reply.status(204).send()
+  })
+
+  /** 本地上传定场图（multipart，字段名 file） */
+  fastify.post<{ Params: { id: string } }>(
+    '/:id/image',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request as any).user.id
+      const locationId = request.params.id
+
+      if (!(await verifyLocationOwnership(userId, locationId))) {
+        return reply.status(403).send(permissionDeniedBody)
+      }
+
+      const location = await prisma.location.findFirst({
+        where: { id: locationId, deletedAt: null }
+      })
+      if (!location) {
+        return reply.status(404).send({ error: 'Location not found' })
+      }
+
+      const isMultipart =
+        typeof (request as any).isMultipart === 'function' && (request as any).isMultipart()
+      if (!isMultipart) {
+        return reply.status(400).send({ error: '请使用 multipart 上传，字段名 file' })
+      }
+
+      let fileBuffer: Buffer | null = null
+      let fileMimeType = ''
+
+      const parts = request.parts()
+      for await (const part of parts) {
+        if (part.type === 'file') {
+          const buffers: Buffer[] = []
+          for await (const chunk of part.file) {
+            buffers.push(chunk)
+          }
+          const buf = Buffer.concat(buffers)
+          if (!fileBuffer) {
+            fileBuffer = buf
+            fileMimeType = part.mimetype
+          }
+        }
+      }
+
+      if (!fileBuffer) {
+        return reply.status(400).send({ error: '未上传文件' })
+      }
+
+      if (!(LOCATION_IMAGE_UPLOAD_TYPES as readonly string[]).includes(fileMimeType)) {
+        return reply.status(400).send({ error: '仅支持 JPEG、PNG、WebP' })
+      }
+
+      const ext =
+        fileMimeType === 'image/jpeg' ? 'jpg' : fileMimeType === 'image/png' ? 'png' : 'webp'
+      const key = generateFileKey('assets', `location_${locationId}_${Date.now()}.${ext}`)
+      const imageUrl = await uploadFile('assets', key, fileBuffer, fileMimeType)
+
+      const updated = await prisma.location.update({
+        where: { id: locationId },
+        data: { imageUrl, imageCost: null }
+      })
+
+      return reply.status(200).send(updated)
+    }
+  )
 
   fastify.post<{ Params: { id: string }; Body: { prompt?: string } }>(
     '/:id/generate-image',
@@ -152,8 +249,8 @@ export async function locationRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const location = await prisma.location.findUnique({
-        where: { id: locationId },
+      const location = await prisma.location.findFirst({
+        where: { id: locationId, deletedAt: null },
         include: { project: true }
       })
 

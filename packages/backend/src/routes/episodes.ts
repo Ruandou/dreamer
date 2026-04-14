@@ -285,7 +285,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
             let locationId: string | undefined
             if (sc.location) {
               const loc = await prisma.location.findFirst({
-                where: { projectId: episode.projectId, name: sc.location }
+                where: { projectId: episode.projectId, name: sc.location, deletedAt: null }
               })
               locationId = loc?.id
             }

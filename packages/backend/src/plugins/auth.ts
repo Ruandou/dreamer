@@ -103,8 +103,8 @@ export async function verifyTaskOwnership(userId: string, taskId: string): Promi
 }
 
 export async function verifyLocationOwnership(userId: string, locationId: string): Promise<boolean> {
-  const location = await prisma.location.findUnique({
-    where: { id: locationId },
+  const location = await prisma.location.findFirst({
+    where: { id: locationId, deletedAt: null },
     include: { project: { select: { userId: true } } }
   })
   return location?.project.userId === userId
