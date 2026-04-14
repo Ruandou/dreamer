@@ -2,7 +2,7 @@
  * 从数据库读取 SceneDialogue，组装成 Seedance 音频参数
  */
 
-import { prisma } from '../lib/prisma.js'
+import { sceneRepository } from '../repositories/scene-repository.js'
 import type {
   VoiceSegment as VoiceSegmentType,
   Character,
@@ -12,13 +12,7 @@ import type {
 } from '@dreamer/shared/types'
 
 export async function buildSeedanceAudio(sceneId: string): Promise<SeedanceAudioPayload> {
-  const rows = await prisma.sceneDialogue.findMany({
-    where: { sceneId },
-    orderBy: { order: 'asc' },
-    include: {
-      character: true
-    }
-  })
+  const rows = await sceneRepository.findDialoguesBySceneWithCharacter(sceneId)
 
   const audioSegments: SeedanceAudioSegment[] = rows.map((vs, idx) => ({
     character_tag: `@Character${idx + 1}`,
@@ -34,11 +28,7 @@ export async function buildSeedanceAudio(sceneId: string): Promise<SeedanceAudio
 export async function getSceneVoiceSegments(
   sceneId: string
 ): Promise<Array<VoiceSegmentType & { character: Character }>> {
-  const results = await prisma.sceneDialogue.findMany({
-    where: { sceneId },
-    orderBy: { order: 'asc' },
-    include: { character: true }
-  })
+  const results = await sceneRepository.findDialoguesBySceneWithCharacter(sceneId)
 
   return results.map((r) => ({
     id: r.id,

@@ -1,8 +1,7 @@
 import type { Episode, Prisma } from '@prisma/client'
-import { prisma } from '../lib/prisma.js'
 import { expandScript } from './deepseek.js'
 import { runCompositionExport } from './composition-export.js'
-import { EpisodeRepository } from '../repositories/episode-repository.js'
+import { episodeRepository, type EpisodeRepository } from '../repositories/episode-repository.js'
 
 function buildScenePrompt(scene: {
   location?: string
@@ -261,5 +260,4 @@ export class EpisodeService {
   }
 }
 
-export const episodeRepository = new EpisodeRepository(prisma)
 export const episodeService = new EpisodeService(episodeRepository)

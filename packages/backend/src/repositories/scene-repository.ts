@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
 
 export class SceneRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -98,4 +99,14 @@ export class SceneRepository {
       }
     })
   }
+
+  findDialoguesBySceneWithCharacter(sceneId: string) {
+    return this.prisma.sceneDialogue.findMany({
+      where: { sceneId },
+      orderBy: { order: 'asc' },
+      include: { character: true }
+    })
+  }
 }
+
+export const sceneRepository = new SceneRepository(prisma)

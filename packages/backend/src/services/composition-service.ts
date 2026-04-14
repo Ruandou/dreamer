@@ -1,6 +1,8 @@
-import { prisma } from '../lib/prisma.js'
 import { runCompositionExport } from './composition-export.js'
-import { CompositionRepository } from '../repositories/composition-repository.js'
+import {
+  compositionRepository,
+  type CompositionRepository
+} from '../repositories/composition-repository.js'
 
 export class CompositionService {
   constructor(private readonly repo: CompositionRepository) {}
@@ -69,5 +71,4 @@ export class CompositionService {
   }
 }
 
-export const compositionRepository = new CompositionRepository(prisma)
 export const compositionService = new CompositionService(compositionRepository)

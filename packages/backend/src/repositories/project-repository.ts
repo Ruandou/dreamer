@@ -147,6 +147,13 @@ export class ProjectRepository {
       data: { synopsis }
     })
   }
+
+  findUserIdAndVisualStyle(projectId: string) {
+    return this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { userId: true, visualStyle: true }
+    })
+  }
 }
 
 export const projectRepository = new ProjectRepository(prisma)

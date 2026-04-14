@@ -1,6 +1,6 @@
 import type { Take } from '@prisma/client'
 import { TakeRepository } from '../repositories/take-repository.js'
-import { takeRepository } from './take-service.js'
+import { takeRepository } from '../repositories/take-repository.js'
 
 export type TaskWithSceneMeta = Take & {
   sceneNum: number

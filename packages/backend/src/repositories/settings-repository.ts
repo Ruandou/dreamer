@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
 
 const userSettingsSelect = {
   id: true,
@@ -36,3 +37,5 @@ export class SettingsRepository {
     })
   }
 }
+
+export const settingsRepository = new SettingsRepository(prisma)

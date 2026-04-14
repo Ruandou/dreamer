@@ -1,7 +1,7 @@
 // API 调用日志服务
 
 import type { Prisma } from '@prisma/client'
-import { prisma } from '../lib/prisma.js'
+import { modelApiCallRepository } from '../repositories/model-api-call-repository.js'
 
 /** 业务侧传入：标识「谁在什么操作里」触发了模型调用，写入 requestParams.op */
 export interface ModelCallLogContext {
@@ -42,20 +42,18 @@ export async function recordModelApiCall(input: RecordModelApiCallInput): Promis
     console.log(
       `[model-api] ${input.provider} ${input.model} ${input.status}${op ? ` op=${op}` : ''}`
     )
-    await prisma.modelApiCall.create({
-      data: {
-        userId: input.userId,
-        model: input.model,
-        provider: input.provider,
-        prompt: truncateForModelLog(input.prompt),
-        requestParams: input.requestParams ? JSON.stringify(input.requestParams) : null,
-        externalTaskId: null,
-        status: input.status,
-        responseData: input.responseData ? JSON.stringify(input.responseData) : null,
-        cost: input.cost ?? undefined,
-        errorMsg: input.errorMsg ?? null,
-        takeId: input.takeId ?? null
-      }
+    await modelApiCallRepository.create({
+      userId: input.userId,
+      model: input.model,
+      provider: input.provider,
+      prompt: truncateForModelLog(input.prompt),
+      requestParams: input.requestParams ? JSON.stringify(input.requestParams) : null,
+      externalTaskId: null,
+      status: input.status,
+      responseData: input.responseData ? JSON.stringify(input.responseData) : null,
+      cost: input.cost ?? undefined,
+      errorMsg: input.errorMsg ?? null,
+      takeId: input.takeId ?? null
     })
   } catch (e) {
     console.error('[model-api] recordModelApiCall failed（本条不会出现在模型日志页）', e)
@@ -81,24 +79,24 @@ export interface ApiCallResult {
 }
 
 export async function logApiCall(params: ApiCallParams, result?: ApiCallResult) {
-  return prisma.modelApiCall.create({
-    data: {
-      userId: params.userId,
-      model: params.model,
-      provider: params.provider,
-      prompt: truncateForModelLog(params.prompt),
-      requestParams: params.requestParams ? JSON.stringify(params.requestParams) : null,
-      externalTaskId: result?.externalTaskId,
-      status: result?.error ? 'failed' : result?.videoUrl ? 'completed' : 'processing',
-      responseData: result ? JSON.stringify({
-        videoUrl: result.videoUrl,
-        thumbnailUrl: result.thumbnailUrl
-      }) : null,
-      cost: result?.cost,
-      duration: result?.duration,
-      errorMsg: result?.error,
-      takeId: params.takeId
-    }
+  return modelApiCallRepository.create({
+    userId: params.userId,
+    model: params.model,
+    provider: params.provider,
+    prompt: truncateForModelLog(params.prompt),
+    requestParams: params.requestParams ? JSON.stringify(params.requestParams) : null,
+    externalTaskId: result?.externalTaskId,
+    status: result?.error ? 'failed' : result?.videoUrl ? 'completed' : 'processing',
+    responseData: result
+      ? JSON.stringify({
+          videoUrl: result.videoUrl,
+          thumbnailUrl: result.thumbnailUrl
+        })
+      : null,
+    cost: result?.cost,
+    duration: result?.duration,
+    errorMsg: result?.error,
+    takeId: params.takeId
   })
 }
 
@@ -109,15 +107,12 @@ export async function updateApiCall(externalTaskId: string, update: {
   duration?: number
   errorMsg?: string
 }) {
-  return prisma.modelApiCall.updateMany({
-    where: { externalTaskId },
-    data: {
-      status: update.status,
-      responseData: update.responseData ? JSON.stringify(update.responseData) : undefined,
-      cost: update.cost,
-      duration: update.duration,
-      errorMsg: update.errorMsg
-    }
+  return modelApiCallRepository.updateManyByExternalTaskId(externalTaskId, {
+    status: update.status,
+    responseData: update.responseData ? JSON.stringify(update.responseData) : undefined,
+    cost: update.cost,
+    duration: update.duration,
+    errorMsg: update.errorMsg
   })
 }
 
@@ -161,10 +156,9 @@ export async function getApiCalls(userId: string, options?: {
   if (st && ['completed', 'failed', 'processing'].includes(st)) {
     ands.push({ status: st })
   }
-  return prisma.modelApiCall.findMany({
-    where: { AND: ands },
-    orderBy: { createdAt: 'desc' },
-    take: options?.limit || 50,
-    skip: options?.offset || 0
-  })
+  return modelApiCallRepository.findMany(
+    { AND: ands },
+    options?.limit || 50,
+    options?.offset || 0
+  )
 }

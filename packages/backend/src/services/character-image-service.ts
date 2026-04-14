@@ -1,7 +1,9 @@
 import type { ImageGenerationJobData } from '@dreamer/shared/types'
-import { prisma } from '../lib/prisma.js'
 import { imageQueue } from '../queues/image.js'
-import { CharacterImageRepository } from '../repositories/character-image-repository.js'
+import {
+  characterImageRepository,
+  type CharacterImageRepository
+} from '../repositories/character-image-repository.js'
 import { buildCharacterImageStyledPrompt } from '../lib/character-image-prompt.js'
 
 export interface ImageQueueAdapter {
@@ -80,5 +82,4 @@ export class CharacterImageService {
   }
 }
 
-export const characterImageRepository = new CharacterImageRepository(prisma)
 export const characterImageService = new CharacterImageService(characterImageRepository, imageQueue)

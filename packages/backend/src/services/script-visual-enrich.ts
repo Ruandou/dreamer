@@ -2,8 +2,10 @@
  * 解析剧本后：用 DeepSeek 补全角色多形象 prompt 与场地定场图 imagePrompt
  */
 
-import { prisma } from '../lib/prisma.js'
 import type { ScriptContent } from '@dreamer/shared/types'
+import { projectRepository } from '../repositories/project-repository.js'
+import { locationRepository } from '../repositories/location-repository.js'
+import { characterRepository } from '../repositories/character-repository.js'
 import { fetchScriptVisualEnrichmentJson } from './deepseek.js'
 import type { ModelCallLogContext } from './api-logger.js'
 
@@ -132,10 +134,7 @@ function resolveDbLocationName(dbNames: readonly string[], aiName: string | unde
 }
 
 export async function applyScriptVisualEnrichment(projectId: string, script: ScriptContent): Promise<void> {
-  const projectRow = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { userId: true, visualStyle: true }
-  })
+  const projectRow = await projectRepository.findUserIdAndVisualStyle(projectId)
   if (!projectRow) {
     throw new Error('视觉补全失败：项目不存在，无法写入模型审计日志与定场/定妆提示词')
   }
@@ -145,15 +144,8 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
     op: 'script_visual_enrichment'
   }
 
-  const locations = await prisma.location.findMany({
-    where: { projectId, deletedAt: null },
-    orderBy: { name: 'asc' }
-  })
-  const characters = await prisma.character.findMany({
-    where: { projectId },
-    orderBy: { name: 'asc' },
-    include: { images: { orderBy: { order: 'asc' } } }
-  })
+  const locations = await locationRepository.findManyByProjectOrdered(projectId)
+  const characters = await characterRepository.findManyByProjectNameAscWithImages(projectId)
 
   const projectVisualStyleLine =
     (projectRow.visualStyle || []).filter(Boolean).join('、') || '（未指定，定场图第4段可写通用电影级画质词）'
@@ -209,10 +201,11 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
       const prompt = sanitizeLocationImagePromptForImageApi(raw)
       const resolvedName = resolveDbLocationName(dbLocationNames, loc?.name)
       if (!resolvedName) continue
-      const r = await prisma.location.updateMany({
-        where: { projectId, name: resolvedName, deletedAt: null },
-        data: { imagePrompt: prompt }
-      })
+      const r = await locationRepository.updateManyActiveImagePromptByProjectAndName(
+        projectId,
+        resolvedName,
+        prompt
+      )
       locationPromptWrites += r.count
     }
   }
@@ -252,23 +245,22 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
       if (type === 'base') {
         const existingBase = character.images.find((i) => i.type === 'base' && !i.parentId)
         if (existingBase) {
-          await prisma.characterImage.update({
-            where: { id: existingBase.id },
-            data: { prompt, description: desc ?? existingBase.description, name: slot.name }
+          await characterRepository.updateCharacterImage(existingBase.id, {
+            prompt,
+            description: desc ?? existingBase.description ?? undefined,
+            name: slot.name
           })
           baseImageId = existingBase.id
           lastBasePrompt = prompt
         } else {
-          const created = await prisma.characterImage.create({
-            data: {
-              characterId: character.id,
-              name: slot.name,
-              type: 'base',
-              description: desc,
-              prompt,
-              avatarUrl: null,
-              order: 0
-            }
+          const created = await characterRepository.createCharacterImage({
+            characterId: character.id,
+            name: slot.name,
+            type: 'base',
+            description: desc ?? undefined,
+            prompt,
+            avatarUrl: null,
+            order: 0
           })
           baseImageId = created.id
           lastBasePrompt = prompt
@@ -282,21 +274,16 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
         if (!parentId) continue
 
         const finalPrompt = buildDerivativePrompt(lastBasePrompt, prompt)
-        const maxOrder = await prisma.characterImage.aggregate({
-          where: { characterId: character.id, parentId },
-          _max: { order: true }
-        })
-        const created = await prisma.characterImage.create({
-          data: {
-            characterId: character.id,
-            name: slot.name,
-            parentId,
-            type,
-            description: desc,
-            prompt: finalPrompt,
-            avatarUrl: null,
-            order: (maxOrder._max.order || 0) + 1
-          }
+        const maxOrder = await characterRepository.maxSiblingOrder(character.id, parentId)
+        const created = await characterRepository.createCharacterImage({
+          characterId: character.id,
+          name: slot.name,
+          parentId,
+          type,
+          description: desc ?? undefined,
+          prompt: finalPrompt,
+          avatarUrl: null,
+          order: (maxOrder._max.order || 0) + 1
         })
         character.images.push(created)
         if (!baseImageId) baseImageId = parentId

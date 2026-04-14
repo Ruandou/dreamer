@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
 
 export class CharacterImageRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -20,3 +21,5 @@ export class CharacterImageRepository {
     })
   }
 }
+
+export const characterImageRepository = new CharacterImageRepository(prisma)

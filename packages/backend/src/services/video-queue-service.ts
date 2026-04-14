@@ -1,4 +1,4 @@
-import { takeRepository } from './take-service.js'
+import { takeRepository } from '../repositories/take-repository.js'
 
 /**
  * 视频生成 Worker 的数据库编排（Take / Scene 状态），与 HTTP 解耦。

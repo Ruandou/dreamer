@@ -2,7 +2,7 @@
  * 成片导出：供 compositions 路由与按集 compose 复用
  */
 
-import { prisma } from '../lib/prisma.js'
+import { compositionRepository } from '../repositories/composition-repository.js'
 import { composeVideo, type CompositionClip } from './ffmpeg.js'
 
 export type CompositionExportResult =
@@ -10,10 +10,7 @@ export type CompositionExportResult =
   | { ok: false; error: string; httpStatus: number }
 
 export async function runCompositionExport(compositionId: string): Promise<CompositionExportResult> {
-  const composition = await prisma.composition.findUnique({
-    where: { id: compositionId },
-    include: { scenes: { orderBy: { order: 'asc' }, include: { take: true } } }
-  })
+  const composition = await compositionRepository.findUniqueForExport(compositionId)
 
   if (!composition) {
     return { ok: false, error: 'Composition not found', httpStatus: 404 }
@@ -23,10 +20,7 @@ export async function runCompositionExport(compositionId: string): Promise<Compo
     return { ok: false, error: 'No clips to export', httpStatus: 400 }
   }
 
-  await prisma.composition.update({
-    where: { id: compositionId },
-    data: { status: 'processing' }
-  })
+  await compositionRepository.update(compositionId, { status: 'processing' })
 
   try {
     const clips: CompositionClip[] = []
@@ -47,22 +41,16 @@ export async function runCompositionExport(compositionId: string): Promise<Compo
       segments: clips
     })
 
-    await prisma.composition.update({
-      where: { id: compositionId },
-      data: {
-        status: 'completed',
-        outputUrl: result.outputUrl
-      }
+    await compositionRepository.update(compositionId, {
+      status: 'completed',
+      outputUrl: result.outputUrl
     })
 
     return { ok: true, outputUrl: result.outputUrl, duration: result.duration }
   } catch (error) {
     console.error('Export failed:', error)
 
-    await prisma.composition.update({
-      where: { id: compositionId },
-      data: { status: 'failed' }
-    })
+    await compositionRepository.update(compositionId, { status: 'failed' })
 
     const message = error instanceof Error ? error.message : 'Unknown error'
     return { ok: false, error: message, httpStatus: 500 }

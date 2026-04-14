@@ -60,6 +60,39 @@ export class LocationRepository {
       data: { imageUrl: data.imageUrl, imageCost: data.imageCost }
     })
   }
+
+  /** 文学剧本落库：按项目+场地名 upsert，并恢复软删 */
+  upsertFromScriptScene(
+    projectId: string,
+    locationName: string,
+    info: { timeOfDay?: string; description?: string }
+  ) {
+    return this.prisma.location.upsert({
+      where: { projectId_name: { projectId, name: locationName } },
+      update: {
+        timeOfDay: info.timeOfDay,
+        description: info.description,
+        deletedAt: null
+      },
+      create: {
+        projectId,
+        name: locationName,
+        timeOfDay: info.timeOfDay || '日',
+        description: info.description
+      }
+    })
+  }
+
+  updateManyActiveImagePromptByProjectAndName(
+    projectId: string,
+    locationName: string,
+    imagePrompt: string
+  ) {
+    return this.prisma.location.updateMany({
+      where: { projectId, name: locationName, deletedAt: null },
+      data: { imagePrompt }
+    })
+  }
 }
 
 export const locationRepository = new LocationRepository(prisma)

@@ -1,6 +1,5 @@
-import { prisma } from '../lib/prisma.js'
 import { getDeepSeekBalance } from './deepseek.js'
-import { StatsRepository } from '../repositories/stats-repository.js'
+import { statsRepository, type StatsRepository } from '../repositories/stats-repository.js'
 
 export interface ProjectCostStats {
   projectId: string
@@ -251,5 +250,4 @@ export class StatsService {
   }
 }
 
-export const statsRepository = new StatsRepository(prisma)
 export const statsService = new StatsService(statsRepository)

@@ -1,6 +1,5 @@
 import type { Take } from '@prisma/client'
-import { prisma } from '../lib/prisma.js'
-import { TakeRepository } from '../repositories/take-repository.js'
+import { takeRepository, type TakeRepository } from '../repositories/take-repository.js'
 
 export class TakeService {
   constructor(private readonly repository: TakeRepository) {}
@@ -17,5 +16,4 @@ export class TakeService {
   }
 }
 
-export const takeRepository = new TakeRepository(prisma)
 export const takeService = new TakeService(takeRepository)

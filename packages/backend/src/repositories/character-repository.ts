@@ -16,6 +16,15 @@ export class CharacterRepository {
     })
   }
 
+  /** 视觉补全：与剧本实体列表一致按角色名排序 */
+  findManyByProjectNameAscWithImages(projectId: string) {
+    return this.prisma.character.findMany({
+      where: { projectId },
+      orderBy: { name: 'asc' },
+      include: { images: { orderBy: { order: 'asc' } } }
+    })
+  }
+
   findUniqueWithImagesOrdered(characterId: string) {
     return this.prisma.character.findUnique({
       where: { id: characterId },
@@ -99,6 +108,19 @@ export class CharacterRepository {
         type: 'base',
         avatarUrl: null,
         order: 0
+      }
+    })
+  }
+
+  /** 文学剧本落库：按项目+姓名 upsert，无则创建占位描述 */
+  upsertPlaceholderByProjectName(projectId: string, name: string) {
+    return this.prisma.character.upsert({
+      where: { projectId_name: { projectId, name } },
+      update: {},
+      create: {
+        projectId,
+        name,
+        description: `角色: ${name}`
       }
     })
   }

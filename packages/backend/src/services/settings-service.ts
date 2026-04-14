@@ -1,7 +1,6 @@
 import type { Prisma } from '@prisma/client'
-import { prisma } from '../lib/prisma.js'
 import { getDeepSeekBalance } from './deepseek.js'
-import { SettingsRepository } from '../repositories/settings-repository.js'
+import { settingsRepository, type SettingsRepository } from '../repositories/settings-repository.js'
 
 export class SettingsService {
   constructor(private readonly repo: SettingsRepository) {}
@@ -114,5 +113,4 @@ export class SettingsService {
   }
 }
 
-export const settingsRepository = new SettingsRepository(prisma)
 export const settingsService = new SettingsService(settingsRepository)

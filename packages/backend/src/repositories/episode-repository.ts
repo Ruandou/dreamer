@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
 
 export class EpisodeRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -12,6 +13,14 @@ export class EpisodeRepository {
 
   findUnique(episodeId: string) {
     return this.prisma.episode.findUnique({ where: { id: episodeId } })
+  }
+
+  /** 导入剧本：按 projectId + episodeNum 唯一键，带 scenes（用于替换分镜） */
+  findUniqueByProjectEpisodeWithScenes(projectId: string, episodeNum: number) {
+    return this.prisma.episode.findUnique({
+      where: { projectId_episodeNum: { projectId, episodeNum } },
+      include: { scenes: true }
+    })
   }
 
   findUniqueWithScenesTakesForCompose(episodeId: string) {
@@ -101,3 +110,5 @@ export class EpisodeRepository {
     return this.prisma.shot.create({ data })
   }
 }
+
+export const episodeRepository = new EpisodeRepository(prisma)

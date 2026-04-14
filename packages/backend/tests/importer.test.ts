@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Use vi.hoisted to define mocks before module loading
 const {
   mockCharacterCreate,
-  mockEpisodeFindFirst,
+  mockEpisodeFindUnique,
   mockEpisodeCreate,
   mockEpisodeUpdate,
   mockSceneDeleteMany,
@@ -14,7 +14,7 @@ const {
 } = vi.hoisted(() => {
   return {
     mockCharacterCreate: vi.fn(),
-    mockEpisodeFindFirst: vi.fn(),
+    mockEpisodeFindUnique: vi.fn(),
     mockEpisodeCreate: vi.fn(),
     mockEpisodeUpdate: vi.fn(),
     mockSceneDeleteMany: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock('../src/lib/prisma.js', () => ({
       create: mockCharacterCreate
     },
     episode: {
-      findFirst: mockEpisodeFindFirst,
+      findUnique: mockEpisodeFindUnique,
       create: mockEpisodeCreate,
       update: mockEpisodeUpdate
     },
@@ -84,7 +84,7 @@ describe('Importer Service', () => {
       }
 
       // First call returns null (episode doesn't exist), subsequent calls also return null
-      mockEpisodeFindFirst.mockResolvedValue(null)
+      mockEpisodeFindUnique.mockResolvedValue(null)
       mockEpisodeCreate.mockResolvedValue({ id: 'ep-1', episodeNum: 1 })
       mockCharacterCreate.mockResolvedValue({ id: 'char-1' })
       mockSceneCreate.mockImplementation((args: { data: { sceneNum: number } }) =>
@@ -117,7 +117,7 @@ describe('Importer Service', () => {
       }
 
       // Episode exists
-      mockEpisodeFindFirst.mockResolvedValue({
+      mockEpisodeFindUnique.mockResolvedValue({
         id: 'ep-1',
         episodeNum: 1,
         scenes: [{ id: 'old-scene-1' }]

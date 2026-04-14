@@ -1,9 +1,8 @@
 import type { VideoJobData, VideoModel } from '@dreamer/shared/types'
-import { prisma } from '../lib/prisma.js'
 import { videoQueue } from '../queues/video.js'
 import { optimizePrompt } from './deepseek.js'
 import { stitchScenePrompt } from './scene-prompt.js'
-import { SceneRepository } from '../repositories/scene-repository.js'
+import { sceneRepository, type SceneRepository } from '../repositories/scene-repository.js'
 
 export interface VideoQueueLike {
   add(name: string, data: VideoJobData): Promise<unknown>
@@ -244,5 +243,4 @@ export class SceneService {
   }
 }
 
-export const sceneRepository = new SceneRepository(prisma)
 export const sceneService = new SceneService(sceneRepository, videoQueue)

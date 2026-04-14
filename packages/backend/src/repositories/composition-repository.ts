@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
 
 export class CompositionRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -63,4 +64,19 @@ export class CompositionRepository {
       include: { scenes: { orderBy: { order: 'asc' } } }
     })
   }
+
+  /** 成片导出：分镜顺序 + 每段 take 视频 URL */
+  findUniqueForExport(compositionId: string) {
+    return this.prisma.composition.findUnique({
+      where: { id: compositionId },
+      include: {
+        scenes: {
+          orderBy: { order: 'asc' },
+          include: { take: true }
+        }
+      }
+    })
+  }
 }
+
+export const compositionRepository = new CompositionRepository(prisma)

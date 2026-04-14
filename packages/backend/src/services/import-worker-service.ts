@@ -1,9 +1,6 @@
 import type { Prisma } from '@prisma/client'
-import { prisma } from '../lib/prisma.js'
 import { importRepository } from '../repositories/import-repository.js'
-import { ProjectRepository } from '../repositories/project-repository.js'
-
-const projectRepo = new ProjectRepository(prisma)
+import { projectRepository } from '../repositories/project-repository.js'
 
 export const importWorkerService = {
   markProcessing(taskId: string) {
@@ -11,7 +8,7 @@ export const importWorkerService = {
   },
 
   createProjectForImport(data: { name: string; description: string; userId: string }) {
-    return projectRepo.create({
+    return projectRepository.create({
       name: data.name,
       description: data.description,
       userId: data.userId
