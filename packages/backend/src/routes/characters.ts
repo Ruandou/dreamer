@@ -1,9 +1,7 @@
 import { FastifyInstance } from 'fastify'
-import { prisma } from '../index.js'
-import { uploadFile, generateFileKey } from '../services/storage.js'
 import { verifyCharacterOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
-import { generateCharacterSlotImagePrompt } from '../services/deepseek.js'
+import { characterService } from '../services/character-service.js'
 
 export async function characterRoutes(fastify: FastifyInstance) {
   // List characters for a project (with images)
@@ -18,17 +16,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const characters = await prisma.character.findMany({
-        where: { projectId },
-        include: {
-          images: {
-            orderBy: { order: 'asc' }
-          }
-        },
-        orderBy: { createdAt: 'asc' }
-      })
-
-      return characters
+      return characterService.listByProject(projectId)
     }
   )
 
@@ -44,14 +32,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const character = await prisma.character.findUnique({
-        where: { id: characterId },
-        include: {
-          images: {
-            orderBy: { order: 'asc' }
-          }
-        }
-      })
+      const character = await characterService.getWithImages(characterId)
 
       if (!character) {
         return reply.status(404).send({ error: 'Character not found' })
@@ -73,9 +54,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const character = await prisma.character.create({
-        data: { projectId, name, description }
-      })
+      const character = await characterService.createCharacter(projectId, name, description)
 
       return reply.status(201).send(character)
     }
@@ -95,12 +74,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
 
       const { name, description } = request.body
 
-      const character = await prisma.character.update({
-        where: { id: characterId },
-        data: { name, description }
-      })
-
-      return character
+      return characterService.updateCharacter(characterId, { name, description })
     }
   )
 
@@ -116,7 +90,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      await prisma.character.delete({ where: { id: characterId } })
+      await characterService.deleteCharacter(characterId)
       return reply.status(204).send()
     }
   )
@@ -138,7 +112,8 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const isMultipart = typeof (request as any).isMultipart === 'function' && (request as any).isMultipart()
+      const isMultipart =
+        typeof (request as any).isMultipart === 'function' && (request as any).isMultipart()
       if (!isMultipart) {
         const { name, type, description, parentId } = (request.body || {}) as {
           name?: string
@@ -150,70 +125,30 @@ export async function characterRoutes(fastify: FastifyInstance) {
           return reply.status(400).send({ error: 'Name is required' })
         }
 
-        let parentSummary: string | null = null
-        if (parentId) {
-          const parent = await prisma.characterImage.findFirst({
-            where: { id: parentId, characterId }
-          })
-          if (!parent) {
+        const result = await characterService.createImageSlotWithAiPrompt(characterId, userId, {
+          name,
+          type,
+          description,
+          parentId
+        })
+
+        if (!result.ok) {
+          if (result.error === 'invalid_parent') {
             return reply.status(400).send({ error: 'Invalid parentId' })
           }
-          parentSummary = [parent.name, parent.description].filter(Boolean).join(' — ')
-        }
-
-        const character = await prisma.character.findUnique({ where: { id: characterId } })
-        const slotType = type || 'base'
-
-        try {
-          const { prompt } = await generateCharacterSlotImagePrompt(
-            {
-              characterName: character?.name || '',
-              characterDescription: character?.description,
-              slotName: name.trim(),
-              slotType,
-              slotDescription: description || null,
-              parentSlotSummary: parentSummary
-            },
-            character
-              ? {
-                  userId,
-                  projectId: character.projectId,
-                  op: 'character_slot_image_prompt'
-                }
-              : undefined
-          )
-
-          const maxOrder = await prisma.characterImage.aggregate({
-            where: { characterId, parentId: parentId || null },
-            _max: { order: true }
-          })
-
-          const image = await prisma.characterImage.create({
-            data: {
-              characterId,
-              name: name.trim(),
-              parentId: parentId || null,
-              type: slotType,
-              description,
-              prompt,
-              avatarUrl: null,
-              order: (maxOrder._max.order || 0) + 1
-            }
-          })
-
-          return reply.status(201).send(JSON.parse(JSON.stringify(image)))
-        } catch (e: any) {
-          if (e?.name === 'DeepSeekAuthError') {
-            return reply.status(401).send({ error: 'AI 服务认证失败', message: e.message })
+          if (result.error === 'deepseek_auth') {
+            return reply.status(401).send({ error: 'AI 服务认证失败', message: result.message })
           }
-          if (e?.name === 'DeepSeekRateLimitError') {
-            return reply.status(429).send({ error: 'AI 服务请求受限', message: e.message })
+          if (result.error === 'deepseek_rate') {
+            return reply.status(429).send({ error: 'AI 服务请求受限', message: result.message })
           }
           return reply.status(500).send({
             error: '生成提示词失败',
-            message: e instanceof Error ? e.message : '未知错误'
+            message: result.message
           })
         }
+
+        return reply.status(201).send(result.image)
       }
 
       // Parse multipart form - collect fields first
@@ -234,7 +169,6 @@ export async function characterRoutes(fastify: FastifyInstance) {
           fileBuffer = Buffer.concat(buffers)
           fileMimeType = part.mimetype
         } else {
-          // field
           const value = await part.value
           if (part.fieldname === 'name') name = value as string
           else if (part.fieldname === 'parentId') parentId = value as string || undefined
@@ -251,36 +185,22 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Name is required' })
       }
 
-      // Validate file type
       const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
       if (!allowedTypes.includes(fileMimeType)) {
         return reply.status(400).send({ error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.' })
       }
 
-      // Generate key and upload
-      const key = generateFileKey('assets', `upload_${Date.now()}.png`)
-      const avatarUrl = await uploadFile('assets', key, fileBuffer, fileMimeType)
-
-      // Get max order for siblings
-      const maxOrder = await prisma.characterImage.aggregate({
-        where: { characterId, parentId: parentId || null },
-        _max: { order: true }
+      const image = await characterService.createImageFromUploadedFile({
+        characterId,
+        name,
+        parentId,
+        type,
+        description,
+        fileBuffer,
+        fileMimeType
       })
 
-      const image = await prisma.characterImage.create({
-        data: {
-          characterId,
-          name,
-          parentId: parentId || null,
-          type: type || 'base',
-          description,
-          avatarUrl,
-          order: (maxOrder._max.order || 0) + 1
-        }
-      })
-
-      // Return plain object to avoid Prisma serialization issues with self-reference
-      return reply.status(201).send(JSON.parse(JSON.stringify(image)))
+      return reply.status(201).send(image)
     }
   )
 
@@ -301,12 +221,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
 
       const { name, type, description, order, prompt } = request.body
 
-      const image = await prisma.characterImage.update({
-        where: { id: imageId },
-        data: { name, type, description, order, prompt }
-      })
-
-      return image
+      return characterService.updateCharacterImage(imageId, { name, type, description, order, prompt })
     }
   )
 
@@ -322,19 +237,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      // Delete children first (recursive)
-      const deleteChildren = async (parentId: string) => {
-        const children = await prisma.characterImage.findMany({
-          where: { parentId }
-        })
-        for (const child of children) {
-          await deleteChildren(child.id)
-          await prisma.characterImage.delete({ where: { id: child.id } })
-        }
-      }
-
-      await deleteChildren(imageId)
-      await prisma.characterImage.delete({ where: { id: imageId } })
+      await characterService.deleteImageWithDescendants(imageId)
 
       return reply.status(204).send()
     }
@@ -354,35 +257,13 @@ export async function characterRoutes(fastify: FastifyInstance) {
 
       const { parentId } = request.body
 
-      // Prevent circular reference
-      if (parentId) {
-        const checkAncestor = async (id: string, targetId: string): Promise<boolean> => {
-          if (id === targetId) return true
-          const image = await prisma.characterImage.findUnique({ where: { id } })
-          if (!image || !image.parentId) return false
-          return checkAncestor(image.parentId, targetId)
-        }
+      const result = await characterService.moveCharacterImage(characterId, imageId, parentId)
 
-        if (await checkAncestor(parentId, imageId)) {
-          return reply.status(400).send({ error: 'Cannot move image under its own descendant' })
-        }
+      if (!result.ok) {
+        return reply.status(400).send({ error: 'Cannot move image under its own descendant' })
       }
 
-      // Get max order for new siblings
-      const maxOrder = await prisma.characterImage.aggregate({
-        where: { characterId, parentId: parentId || null },
-        _max: { order: true }
-      })
-
-      const image = await prisma.characterImage.update({
-        where: { id: imageId },
-        data: {
-          parentId: parentId || null,
-          order: (maxOrder._max.order || 0) + 1
-        }
-      })
-
-      return image
+      return result.image
     }
   )
 }
