@@ -72,7 +72,7 @@ vi.mock('../src/lib/prisma.js', () => ({
 }))
 
 // Mock parser
-vi.mock('../src/services/parser.js', () => ({
+vi.mock('../src/services/ai/parser.js', () => ({
   parseScriptDocument: vi.fn().mockResolvedValue({
     parsed: {
       projectName: '测试项目',

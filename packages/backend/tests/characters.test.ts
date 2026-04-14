@@ -41,7 +41,7 @@ const { mockGenerateCharacterSlotImagePrompt } = vi.hoisted(() => ({
   })
 }))
 
-vi.mock('../src/services/deepseek.js', () => ({
+vi.mock('../src/services/ai/deepseek.js', () => ({
   generateCharacterSlotImagePrompt: (...args: unknown[]) => mockGenerateCharacterSlotImagePrompt(...args)
 }))
 

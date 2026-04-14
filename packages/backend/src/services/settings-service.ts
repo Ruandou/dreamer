@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client'
-import { getDeepSeekBalance } from './deepseek.js'
+import { getDeepSeekBalance } from './ai/deepseek.js'
 import { settingsRepository, type SettingsRepository } from '../repositories/settings-repository.js'
 
 export class SettingsService {

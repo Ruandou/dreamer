@@ -9,7 +9,7 @@ import {
   generateImageEdit,
   generateImageEditAndPersist,
   remoteImageUrlToDataUrl
-} from '../src/services/image-generation.js'
+} from '../src/services/ai/image-generation.js'
 
 describe('image-generation edit & persist helpers', () => {
   let prevKey: string | undefined

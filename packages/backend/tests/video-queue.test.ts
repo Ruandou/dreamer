@@ -52,13 +52,13 @@ vi.mock('../src/plugins/sse.js', () => ({
 }))
 
 // Mock services
-vi.mock('../src/services/wan26.js', () => ({
+vi.mock('../src/services/ai/wan26.js', () => ({
   submitWan26Task: vi.fn(),
   waitForWan26Completion: vi.fn(),
   calculateWan26Cost: vi.fn()
 }))
 
-vi.mock('../src/services/seedance.js', () => ({
+vi.mock('../src/services/ai/seedance.js', () => ({
   submitSeedanceTask: vi.fn(),
   waitForSeedanceCompletion: vi.fn(),
   calculateSeedanceCost: vi.fn()

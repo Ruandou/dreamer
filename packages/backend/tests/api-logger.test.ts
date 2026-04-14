@@ -18,7 +18,7 @@ import {
   recordModelApiCall,
   truncateForModelLog,
   MODEL_LOG_PROMPT_MAX
-} from '../src/services/api-logger.js'
+} from '../src/services/ai/api-logger.js'
 import { prisma } from '../src/lib/prisma.js'
 
 describe('ApiLogger Service', () => {

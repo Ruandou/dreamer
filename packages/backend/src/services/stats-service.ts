@@ -1,4 +1,4 @@
-import { getDeepSeekBalance } from './deepseek.js'
+import { getDeepSeekBalance } from './ai/deepseek.js'
 import { statsRepository, type StatsRepository } from '../repositories/stats-repository.js'
 
 export interface ProjectCostStats {

@@ -1,6 +1,6 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
-import { parseScriptDocument } from '../services/parser.js'
+import { parseScriptDocument } from '../services/ai/parser.js'
 import { importParsedData } from '../services/importer.js'
 import { importWorkerService } from '../services/import-worker-service.js'
 

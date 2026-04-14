@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { parseScriptDocument } from '../src/services/parser.js'
+import { parseScriptDocument } from '../src/services/ai/parser.js'
 
 // Mock OpenAI
 const mockCreate = vi.fn()

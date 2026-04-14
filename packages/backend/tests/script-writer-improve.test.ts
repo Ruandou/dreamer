@@ -15,7 +15,7 @@ vi.mock('openai', () => ({
   }))
 }))
 
-vi.mock('../src/services/model-call-log.js', () => ({
+vi.mock('../src/services/ai/model-call-log.js', () => ({
   logDeepSeekChat: vi.fn().mockResolvedValue(undefined)
 }))
 

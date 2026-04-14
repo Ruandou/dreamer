@@ -26,7 +26,7 @@ vi.mock('../src/queues/import.js', () => ({
 }))
 
 // Mock parser
-vi.mock('../src/services/parser.js', () => ({
+vi.mock('../src/services/ai/parser.js', () => ({
   parseScriptDocument: vi.fn().mockResolvedValue({
     parsed: {
       projectName: 'Test Project',

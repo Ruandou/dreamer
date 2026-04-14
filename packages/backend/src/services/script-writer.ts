@@ -1,8 +1,8 @@
 import OpenAI from 'openai'
 import type { ScriptContent, ScriptScene, ScriptDialogueLine, Character } from '@dreamer/shared/types'
-import { calculateDeepSeekCost, type DeepSeekCost, DeepSeekAuthError, DeepSeekRateLimitError } from './deepseek.js'
-import type { ModelCallLogContext } from './api-logger.js'
-import { logDeepSeekChat } from './model-call-log.js'
+import { calculateDeepSeekCost, type DeepSeekCost, DeepSeekAuthError, DeepSeekRateLimitError } from './ai/deepseek.js'
+import type { ModelCallLogContext } from './ai/api-logger.js'
+import { logDeepSeekChat } from './ai/model-call-log.js'
 
 // Script Writer System Prompt
 const SCRIPT_WRITER_PROMPT = `你是一个专业的短视频剧本作家，擅长创作适合AI视频生成的高质量短剧剧本。

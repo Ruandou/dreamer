@@ -17,7 +17,7 @@ import {
   waitForSeedanceCompletion,
   calculateSeedanceCost,
   type SeedanceGenerateRequest
-} from '../src/services/seedance.js'
+} from '../src/services/ai/seedance.js'
 
 describe('Seedance Service', () => {
   beforeEach(() => {

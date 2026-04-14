@@ -1,5 +1,5 @@
 import type { Episode, Prisma } from '@prisma/client'
-import { expandScript } from './deepseek.js'
+import { expandScript } from './ai/deepseek.js'
 import { runCompositionExport } from './composition-export.js'
 import { episodeRepository, type EpisodeRepository } from '../repositories/episode-repository.js'
 

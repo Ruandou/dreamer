@@ -18,14 +18,14 @@ import {
   expandScript,
   optimizePrompt,
   type DeepSeekBalance
-} from '../src/services/deepseek.js'
+} from '../src/services/ai/deepseek.js'
 
 // Mock OpenAI client
 const { mockCreate } = vi.hoisted(() => ({
   mockCreate: vi.fn()
 }))
 
-vi.mock('../src/services/model-call-log.js', () => ({
+vi.mock('../src/services/ai/model-call-log.js', () => ({
   logDeepSeekChat: vi.fn().mockResolvedValue(undefined)
 }))
 
@@ -214,7 +214,7 @@ describe('DeepSeek Service', () => {
 
   describe('expandScript', () => {
     it('should expand script with project context', async () => {
-      const { expandScript } = await import('../src/services/deepseek.js')
+      const { expandScript } = await import('../src/services/ai/deepseek.js')
 
       mockCreate.mockResolvedValueOnce({
         choices: [{
@@ -243,7 +243,7 @@ describe('DeepSeek Service', () => {
     })
 
     it('should expand script without project context', async () => {
-      const { expandScript } = await import('../src/services/deepseek.js')
+      const { expandScript } = await import('../src/services/ai/deepseek.js')
 
       mockCreate.mockResolvedValueOnce({
         choices: [{
@@ -271,7 +271,7 @@ describe('DeepSeek Service', () => {
     })
 
     it('should throw DeepSeekAuthError on 401', async () => {
-      const { expandScript } = await import('../src/services/deepseek.js')
+      const { expandScript } = await import('../src/services/ai/deepseek.js')
 
       const authError = new Error('Unauthorized')
       authError.status = 401
@@ -281,7 +281,7 @@ describe('DeepSeek Service', () => {
     })
 
     it('should throw error on API failure', async () => {
-      const { expandScript } = await import('../src/services/deepseek.js')
+      const { expandScript } = await import('../src/services/ai/deepseek.js')
 
       mockCreate.mockRejectedValueOnce(new Error('API Error'))
 
@@ -291,7 +291,7 @@ describe('DeepSeek Service', () => {
 
   describe('optimizePrompt', () => {
     it('should optimize prompt with context', async () => {
-      const { optimizePrompt } = await import('../src/services/deepseek.js')
+      const { optimizePrompt } = await import('../src/services/ai/deepseek.js')
 
       mockCreate.mockResolvedValueOnce({
         choices: [{
@@ -309,7 +309,7 @@ describe('DeepSeek Service', () => {
     })
 
     it('should optimize prompt without context', async () => {
-      const { optimizePrompt } = await import('../src/services/deepseek.js')
+      const { optimizePrompt } = await import('../src/services/ai/deepseek.js')
 
       mockCreate.mockResolvedValueOnce({
         choices: [{
@@ -326,7 +326,7 @@ describe('DeepSeek Service', () => {
     })
 
     it('should throw DeepSeekAuthError on 401', async () => {
-      const { optimizePrompt } = await import('../src/services/deepseek.js')
+      const { optimizePrompt } = await import('../src/services/ai/deepseek.js')
 
       const authError = new Error('Unauthorized')
       authError.status = 401
@@ -389,7 +389,7 @@ describe('DeepSeek Service', () => {
 
   describe('generateCharacterSlotImagePrompt', () => {
     it('returns trimmed prompt and cost', async () => {
-      const { generateCharacterSlotImagePrompt } = await import('../src/services/deepseek.js')
+      const { generateCharacterSlotImagePrompt } = await import('../src/services/ai/deepseek.js')
       mockCreate.mockResolvedValueOnce({
         choices: [{ message: { content: '"正面半身肖像，柔和布光，写实"' } }],
         usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }
@@ -410,7 +410,7 @@ describe('DeepSeek Service', () => {
     })
 
     it('uses base slot system prompt with 七分身 for base type', async () => {
-      const { generateCharacterSlotImagePrompt } = await import('../src/services/deepseek.js')
+      const { generateCharacterSlotImagePrompt } = await import('../src/services/ai/deepseek.js')
       mockCreate.mockResolvedValueOnce({
         choices: [{ message: { content: '七分身，中灰背景，写实' } }],
         usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 }
@@ -431,7 +431,7 @@ describe('DeepSeek Service', () => {
 
   describe('fetchScriptVisualEnrichmentJson', () => {
     it('returns jsonText from model', async () => {
-      const { fetchScriptVisualEnrichmentJson } = await import('../src/services/deepseek.js')
+      const { fetchScriptVisualEnrichmentJson } = await import('../src/services/ai/deepseek.js')
       mockCreate.mockResolvedValueOnce({
         choices: [{ message: { content: '{"locations":[],"characters":[]}' } }],
         usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 }
@@ -452,7 +452,7 @@ describe('DeepSeek Service', () => {
         buildScriptVisualEnrichmentUserContent,
         SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT,
         SCRIPT_VISUAL_ENRICH_LOCATION_RULES_IN_USER
-      } = await import('../src/services/deepseek.js')
+      } = await import('../src/services/ai/deepseek.js')
       mockCreate.mockResolvedValueOnce({
         choices: [{ message: { content: '{}' } }],
         usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }

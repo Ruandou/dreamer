@@ -7,8 +7,8 @@ import {
   arkImageSizeFromProjectAspectRatio,
   imageJobPrompt,
   imageJobModel
-} from '../services/image-generation.js'
-import { recordModelApiCall } from '../services/api-logger.js'
+} from '../services/ai/image-generation.js'
+import { recordModelApiCall } from '../services/ai/api-logger.js'
 import { sendProjectUpdate } from '../plugins/sse.js'
 import { imageQueueService } from '../services/image-queue-service.js'
 

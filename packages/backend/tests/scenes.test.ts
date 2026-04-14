@@ -50,7 +50,7 @@ vi.mock('../src/plugins/auth.js', () => ({
   verifyEpisodeOwnership: (...args: unknown[]) => mockVerifyEpisodeOwnership(...args)
 }))
 
-vi.mock('../src/services/deepseek.js', () => ({
+vi.mock('../src/services/ai/deepseek.js', () => ({
   optimizePrompt: vi.fn().mockResolvedValue({
     optimized: 'optimized prompt',
     cost: { costCNY: 0.01 }

@@ -23,7 +23,7 @@ const {
 })
 
 // Mock deepseek
-vi.mock('../src/services/deepseek.js', () => ({
+vi.mock('../src/services/ai/deepseek.js', () => ({
   getDeepSeekBalance: vi.fn().mockResolvedValue({
     isAvailable: true,
     balanceInfos: [{ currency: 'CNY', totalBalance: 10.5, grantedBalance: 5, toppedUpBalance: 5.5 }]

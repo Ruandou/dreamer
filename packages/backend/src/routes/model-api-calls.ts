@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { listModelApiCallsForUser } from '../services/model-api-call-service.js'
+import { listModelApiCallsForUser } from '../services/ai/model-api-call-service.js'
 
 export async function modelApiCallRoutes(fastify: FastifyInstance) {
   fastify.get<{

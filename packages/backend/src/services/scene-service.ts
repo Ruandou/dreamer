@@ -1,6 +1,6 @@
 import type { VideoJobData, VideoModel } from '@dreamer/shared/types'
 import { videoQueue } from '../queues/video.js'
-import { optimizePrompt } from './deepseek.js'
+import { optimizePrompt } from './ai/deepseek.js'
 import { stitchScenePrompt } from './scene-prompt.js'
 import { sceneRepository, type SceneRepository } from '../repositories/scene-repository.js'
 

@@ -20,7 +20,7 @@ const {
   mockProjectFindUnique: vi.fn()
 }))
 
-vi.mock('../src/services/deepseek.js', () => ({
+vi.mock('../src/services/ai/deepseek.js', () => ({
   fetchScriptVisualEnrichmentJson: (...args: unknown[]) => mockFetchScriptVisualEnrichmentJson(...args)
 }))
 

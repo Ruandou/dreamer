@@ -10,7 +10,7 @@ const { mockUserFindUnique, mockUserUpdate } = vi.hoisted(() => {
 })
 
 // Mock deepseek
-vi.mock('../src/services/deepseek.js', () => ({
+vi.mock('../src/services/ai/deepseek.js', () => ({
   getDeepSeekBalance: vi.fn().mockResolvedValue({ balance: 10.5, totalGranted: 10.5 })
 }))
 

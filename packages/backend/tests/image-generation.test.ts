@@ -11,7 +11,7 @@ import {
   DEFAULT_T2I_MODEL,
   DEFAULT_EDIT_MODEL,
   generateTextToImage
-} from '../src/services/image-generation.js'
+} from '../src/services/ai/image-generation.js'
 import type { ImageGenerationJobData } from '@dreamer/shared/types'
 
 describe('image-generation', () => {

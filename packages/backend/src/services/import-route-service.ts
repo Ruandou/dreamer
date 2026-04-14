@@ -1,5 +1,5 @@
 import { importQueue } from '../queues/import.js'
-import { parseScriptDocument } from './parser.js'
+import { parseScriptDocument } from './ai/parser.js'
 import { ImportRepository, importRepository } from '../repositories/import-repository.js'
 
 export type PreviewImportResult =

@@ -1,6 +1,6 @@
 import type { CharacterImage, Prisma } from '@prisma/client'
 import { uploadFile, generateFileKey } from './storage.js'
-import { generateCharacterSlotImagePrompt } from './deepseek.js'
+import { generateCharacterSlotImagePrompt } from './ai/deepseek.js'
 import {
   CharacterRepository,
   characterRepository

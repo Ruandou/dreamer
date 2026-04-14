@@ -15,7 +15,7 @@ import {
   waitForWan26Completion,
   calculateWan26Cost,
   type Wan26GenerateRequest
-} from '../src/services/wan26.js'
+} from '../src/services/ai/wan26.js'
 
 describe('Wan26 Service', () => {
   beforeEach(() => {

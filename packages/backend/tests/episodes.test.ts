@@ -49,7 +49,7 @@ const {
 })
 
 // Mock deepseek
-vi.mock('../src/services/deepseek.js', () => ({
+vi.mock('../src/services/ai/deepseek.js', () => ({
   expandScript: vi.fn().mockResolvedValue({
     script: {
       title: 'Expanded Episode',

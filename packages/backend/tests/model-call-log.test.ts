@@ -10,7 +10,7 @@ vi.mock('../src/services/ai/api-logger.js', async (importOriginal) => {
   }
 })
 
-import { logDeepSeekChat } from '../src/services/model-call-log.js'
+import { logDeepSeekChat } from '../src/services/ai/model-call-log.js'
 
 describe('model-call-log', () => {
   beforeEach(() => {

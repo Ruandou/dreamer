@@ -2,11 +2,11 @@ import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
 import type { VideoJobData } from '@dreamer/shared/types'
 import { videoQueueService } from '../services/video-queue-service.js'
-import { submitWan26Task, waitForWan26Completion, calculateWan26Cost } from '../services/wan26.js'
-import { submitSeedanceTask, waitForSeedanceCompletion, calculateSeedanceCost } from '../services/seedance.js'
+import { submitWan26Task, waitForWan26Completion, calculateWan26Cost } from '../services/ai/wan26.js'
+import { submitSeedanceTask, waitForSeedanceCompletion, calculateSeedanceCost } from '../services/ai/seedance.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { sendTaskUpdate } from '../plugins/sse.js'
-import { logApiCall, updateApiCall } from '../services/api-logger.js'
+import { logApiCall, updateApiCall } from '../services/ai/api-logger.js'
 
 const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null

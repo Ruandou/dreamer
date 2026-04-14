@@ -85,13 +85,13 @@ vi.mock('../src/plugins/sse.js', () => ({
   sendTaskUpdate: mockSendTaskUpdate
 }))
 
-vi.mock('../src/services/wan26.js', () => ({
+vi.mock('../src/services/ai/wan26.js', () => ({
   submitWan26Task: mockSubmitWan26Task,
   waitForWan26Completion: mockWaitForWan26Completion,
   calculateWan26Cost: mockCalculateWan26Cost
 }))
 
-vi.mock('../src/services/seedance.js', () => ({
+vi.mock('../src/services/ai/seedance.js', () => ({
   submitSeedanceTask: mockSubmitSeedanceTask,
   waitForSeedanceCompletion: mockWaitForSeedanceCompletion,
   calculateSeedanceCost: mockCalculateSeedanceCost
@@ -102,7 +102,7 @@ vi.mock('../src/services/storage.js', () => ({
   generateFileKey: mockGenerateFileKey
 }))
 
-vi.mock('../src/services/api-logger.js', () => ({
+vi.mock('../src/services/ai/api-logger.js', () => ({
   logApiCall: mockLogApiCall,
   updateApiCall: mockUpdateApiCall
 }))

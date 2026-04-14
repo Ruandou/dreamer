@@ -6,8 +6,8 @@ import type { ScriptContent } from '@dreamer/shared/types'
 import { projectRepository } from '../repositories/project-repository.js'
 import { locationRepository } from '../repositories/location-repository.js'
 import { characterRepository } from '../repositories/character-repository.js'
-import { fetchScriptVisualEnrichmentJson } from './deepseek.js'
-import type { ModelCallLogContext } from './api-logger.js'
+import { fetchScriptVisualEnrichmentJson } from './ai/deepseek.js'
+import type { ModelCallLogContext } from './ai/api-logger.js'
 
 interface ParsedLocation {
   name: string
