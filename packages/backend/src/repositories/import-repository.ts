@@ -1,10 +1,15 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
 
 export class ImportRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   create(data: Prisma.ImportTaskUncheckedCreateInput) {
     return this.prisma.importTask.create({ data })
+  }
+
+  update(taskId: string, data: Prisma.ImportTaskUncheckedUpdateInput) {
+    return this.prisma.importTask.update({ where: { id: taskId }, data })
   }
 
   findById(taskId: string) {
@@ -24,3 +29,5 @@ export class ImportRepository {
     return this.prisma.importTask.count({ where: { userId } })
   }
 }
+
+export const importRepository = new ImportRepository(prisma)

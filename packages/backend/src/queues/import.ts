@@ -1,8 +1,8 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
-import { prisma } from '../lib/prisma.js'
 import { parseScriptDocument } from '../services/parser.js'
 import { importParsedData } from '../services/importer.js'
+import { importWorkerService } from '../services/import-worker-service.js'
 
 // Connection - lazy init
 let _connection: IORedis | null = null
@@ -43,11 +43,7 @@ export const importWorker = new Worker<ImportJobData>(
     console.log(`Processing import job ${job.id}, taskId: ${taskId}`)
 
     try {
-      // Update task status to processing
-      await prisma.importTask.update({
-        where: { id: taskId },
-        data: { status: 'processing' }
-      })
+      await importWorkerService.markProcessing(taskId)
 
       // Parse the document
       const { parsed } = await parseScriptDocument(content, type, {
@@ -59,45 +55,26 @@ export const importWorker = new Worker<ImportJobData>(
       // If no projectId provided, create a new project
       let targetProjectId = projectId
       if (!targetProjectId) {
-        const project = await prisma.project.create({
-          data: {
-            name: parsed.projectName || '未命名项目',
-            description: parsed.description || '',
-            userId
-          }
+        const project = await importWorkerService.createProjectForImport({
+          name: parsed.projectName || '未命名项目',
+          description: parsed.description || '',
+          userId
         })
         targetProjectId = project.id
 
-        // Update task with projectId
-        await prisma.importTask.update({
-          where: { id: taskId },
-          data: { projectId: targetProjectId }
-        })
+        await importWorkerService.updateTaskProjectId(taskId, targetProjectId)
       }
 
       // Import to database
       const results = await importParsedData(targetProjectId, parsed)
 
-      // Update task as completed
-      await prisma.importTask.update({
-        where: { id: taskId },
-        data: {
-          status: 'completed',
-          result: results as any
-        }
-      })
+      await importWorkerService.markCompleted(taskId, results)
 
       console.log(`Import job ${job.id} completed successfully`)
     } catch (error: any) {
       console.error(`Import job ${job.id} failed:`, error.message)
 
-      await prisma.importTask.update({
-        where: { id: taskId },
-        data: {
-          status: 'failed',
-          errorMsg: error.message
-        }
-      })
+      await importWorkerService.markFailed(taskId, error.message)
 
       throw error
     }

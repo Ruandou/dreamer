@@ -1,7 +1,6 @@
-import { prisma } from '../lib/prisma.js'
 import { importQueue } from '../queues/import.js'
 import { parseScriptDocument } from './parser.js'
-import { ImportRepository } from '../repositories/import-repository.js'
+import { ImportRepository, importRepository } from '../repositories/import-repository.js'
 
 export type PreviewImportResult =
   | {
@@ -42,8 +41,8 @@ export class ImportRouteService {
       return {
         ok: true,
         preview: {
-          projectName: parsed.projectName,
-          description: parsed.description,
+          projectName: parsed.projectName ?? '',
+          description: parsed.description ?? '',
           characters: parsed.characters,
           episodes: parsed.episodes.map(ep => ({
             episodeNum: ep.episodeNum,
@@ -129,5 +128,4 @@ export class ImportRouteService {
   }
 }
 
-export const importRepository = new ImportRepository(prisma)
 export const importRouteService = new ImportRouteService(importRepository)

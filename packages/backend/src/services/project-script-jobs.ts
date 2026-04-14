@@ -3,7 +3,9 @@
  */
 
 import { Prisma } from '@prisma/client'
-import { prisma } from '../lib/prisma.js'
+import { pipelineRepository } from '../repositories/pipeline-repository.js'
+import { projectRepository } from '../repositories/project-repository.js'
+import { characterRepository } from '../repositories/character-repository.js'
 import { writeScriptFromIdea, writeEpisodeForProject } from './script-writer.js'
 import { saveCharacters, saveLocations } from './script-entities.js'
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
@@ -11,20 +13,11 @@ import type { ScriptContent, ScriptScene, EpisodePlan } from '@dreamer/shared/ty
 
 export const DEFAULT_TARGET_EPISODES = 36
 
-/** 与大纲页互斥的异步任务类型（含「生成第一集」的 Pipeline 标记，防并发写同一项目） */
-const OUTLINE_ASYNC_JOB_TYPES = ['script-batch', 'parse-script', 'script-first'] as const
-
 /**
  * 是否存在进行中的批量剧本或解析任务，用于避免与另一路并发写同一项目。
  */
 export async function hasConcurrentOutlinePipelineJob(projectId: string): Promise<boolean> {
-  const n = await prisma.pipelineJob.count({
-    where: {
-      projectId,
-      status: { in: ['pending', 'running'] },
-      jobType: { in: [...OUTLINE_ASYNC_JOB_TYPES] }
-    }
-  })
+  const n = await pipelineRepository.countOutlineAsyncJobs(projectId)
   return n > 0
 }
 
@@ -33,24 +26,7 @@ export async function hasConcurrentOutlinePipelineJob(projectId: string): Promis
  * 优先返回 parse-script，再 script-batch，再 script-first，避免误取非解析任务。
  */
 export async function getActiveOutlinePipelineJob(projectId: string) {
-  const active = {
-    projectId,
-    status: { in: ['pending', 'running'] as string[] }
-  }
-  const parse = await prisma.pipelineJob.findFirst({
-    where: { ...active, jobType: 'parse-script' },
-    orderBy: { createdAt: 'desc' }
-  })
-  if (parse) return parse
-  const batch = await prisma.pipelineJob.findFirst({
-    where: { ...active, jobType: 'script-batch' },
-    orderBy: { createdAt: 'desc' }
-  })
-  if (batch) return batch
-  return prisma.pipelineJob.findFirst({
-    where: { ...active, jobType: 'script-first' },
-    orderBy: { createdAt: 'desc' }
-  })
+  return pipelineRepository.getActiveOutlinePipelineJob(projectId)
 }
 
 function scriptFromJson(raw: unknown): ScriptContent | null {
@@ -118,10 +94,7 @@ async function updateJob(
       data.progressMeta === null ? Prisma.JsonNull : (data.progressMeta as Prisma.InputJsonValue)
   }
 
-  await prisma.pipelineJob.update({
-    where: { id: jobId },
-    data: payload
-  })
+  await pipelineRepository.updateJob(jobId, payload)
 }
 
 /** 合并多集 rawScript 为单一 ScriptContent（供实体提取 / 分镜等） */
@@ -159,29 +132,16 @@ export function mergeEpisodesToScriptContent(
 
 async function ensureCharacterBaseSlot(projectId: string, script: ScriptContent) {
   await saveCharacters(projectId, script)
-  const characters = await prisma.character.findMany({ where: { projectId } })
+  const characters = await characterRepository.findManyByProject(projectId)
   for (const c of characters) {
-    const existing = await prisma.characterImage.findFirst({
-      where: { characterId: c.id, type: 'base' }
-    })
+    const existing = await characterRepository.findFirstBaseImage(c.id)
     if (existing) continue
-    await prisma.characterImage.create({
-      data: {
-        characterId: c.id,
-        name: '默认形象',
-        type: 'base',
-        avatarUrl: null,
-        order: 0
-      }
-    })
+    await characterRepository.createDefaultBaseCharacterImage(c.id)
   }
 }
 
 async function fillEpisodeSynopses(projectId: string) {
-  const episodes = await prisma.episode.findMany({
-    where: { projectId },
-    orderBy: { episodeNum: 'asc' }
-  })
+  const episodes = await projectRepository.findManyEpisodesOrdered(projectId)
   for (const ep of episodes) {
     if (ep.synopsis?.trim()) continue
     const sc = scriptFromJson(ep.rawScript)
@@ -190,15 +150,12 @@ async function fillEpisodeSynopses(projectId: string) {
       sc.summary?.trim() ||
       sc.scenes[0]?.description?.slice(0, 200) ||
       `第${ep.episodeNum}集`
-    await prisma.episode.update({
-      where: { id: ep.id },
-      data: { synopsis }
-    })
+    await projectRepository.updateEpisodeSynopsis(ep.id, synopsis)
   }
 }
 
 export async function runGenerateFirstEpisode(projectId: string) {
-  const project = await prisma.project.findUnique({ where: { id: projectId } })
+  const project = await projectRepository.findUniqueById(projectId)
   if (!project) throw new Error('PROJECT_NOT_FOUND')
 
   const idea = project.description?.trim() || project.name
@@ -208,27 +165,12 @@ export async function runGenerateFirstEpisode(projectId: string) {
 
   const storyContext = [project.synopsis || script.summary, script.summary].filter(Boolean).join('\n').slice(0, 12000)
 
-  await prisma.project.update({
-    where: { id: projectId },
-    data: {
-      synopsis: script.summary,
-      storyContext
-    }
+  await projectRepository.update(projectId, {
+    synopsis: script.summary,
+    storyContext
   })
 
-  await prisma.episode.upsert({
-    where: { projectId_episodeNum: { projectId, episodeNum: 1 } },
-    update: {
-      title: script.title,
-      rawScript: script as object
-    },
-    create: {
-      projectId,
-      episodeNum: 1,
-      title: script.title,
-      rawScript: script as object
-    }
-  })
+  await projectRepository.upsertEpisodeFirstFromScript(projectId, script)
 }
 
 /**
@@ -258,10 +200,7 @@ export async function runGenerateFirstEpisodePipelineJob(jobId: string, projectI
 export async function runScriptBatchJob(jobId: string, projectId: string, targetEpisodes: number) {
   await updateJob(jobId, { status: 'running', currentStep: 'script-batch', progress: 0 })
 
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: { episodes: { orderBy: { episodeNum: 'asc' } } }
-  })
+  const project = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
   if (!project) {
     await updateJob(jobId, { status: 'failed', error: '项目不存在' })
     return
@@ -272,9 +211,7 @@ export async function runScriptBatchJob(jobId: string, projectId: string, target
 
   try {
     for (let n = 2; n <= targetEpisodes; n++) {
-      const existing = await prisma.episode.findUnique({
-        where: { projectId_episodeNum: { projectId, episodeNum: n } }
-      })
+      const existing = await projectRepository.findEpisodeByProjectNum(projectId, n)
       if (existing && scriptFromJson(existing.rawScript)) {
         const pct = Math.round(((n - 1) / Math.max(1, targetEpisodes - 1)) * 100)
         await updateJob(jobId, {
@@ -290,27 +227,10 @@ export async function runScriptBatchJob(jobId: string, projectId: string, target
         op: 'script_batch_write_episode'
       })
 
-      await prisma.episode.upsert({
-        where: { projectId_episodeNum: { projectId, episodeNum: n } },
-        update: {
-          title: script.title,
-          synopsis: script.summary,
-          rawScript: script as object
-        },
-        create: {
-          projectId,
-          episodeNum: n,
-          title: script.title,
-          synopsis: script.summary,
-          rawScript: script as object
-        }
-      })
+      await projectRepository.upsertEpisodeBatchFromScript(projectId, n, script)
 
       rolling = [rolling, `第${n}集：${script.summary}`].join('\n').slice(-12000)
-      await prisma.project.update({
-        where: { id: projectId },
-        data: { storyContext: rolling }
-      })
+      await projectRepository.update(projectId, { storyContext: rolling })
 
       const pct = Math.round(((n - 1) / Math.max(1, targetEpisodes - 1)) * 100)
       await updateJob(jobId, {
@@ -340,18 +260,14 @@ export async function runScriptBatchJob(jobId: string, projectId: string, target
 
 /** 补全缺失集 rawScript（在解析前调用） */
 export async function ensureAllEpisodeScripts(projectId: string, targetEpisodes: number) {
-  const ep1 = await prisma.episode.findUnique({
-    where: { projectId_episodeNum: { projectId, episodeNum: 1 } }
-  })
+  const ep1 = await projectRepository.findEpisodeByProjectNum(projectId, 1)
   if (!ep1 || !scriptFromJson(ep1.rawScript)) {
     await runGenerateFirstEpisode(projectId)
   }
 
   let needBatch = false
   for (let n = 2; n <= targetEpisodes; n++) {
-    const ep = await prisma.episode.findUnique({
-      where: { projectId_episodeNum: { projectId, episodeNum: n } }
-    })
+    const ep = await projectRepository.findEpisodeByProjectNum(projectId, n)
     if (!ep || !scriptFromJson(ep.rawScript)) {
       needBatch = true
       break
@@ -359,24 +275,19 @@ export async function ensureAllEpisodeScripts(projectId: string, targetEpisodes:
   }
   if (!needBatch) return
 
-  const job = await prisma.pipelineJob.create({
-    data: {
-      projectId,
-      status: 'running',
-      jobType: 'script-batch',
-      currentStep: 'script-batch',
-      progress: 0
-    }
+  const job = await pipelineRepository.createPipelineJob({
+    projectId,
+    status: 'running',
+    jobType: 'script-batch',
+    currentStep: 'script-batch',
+    progress: 0
   })
   try {
     await runScriptBatchJob(job.id, projectId, targetEpisodes)
   } finally {
-    const j = await prisma.pipelineJob.findUnique({ where: { id: job.id } })
+    const j = await pipelineRepository.findUniqueJob(job.id)
     if (j?.status === 'running') {
-      await prisma.pipelineJob.update({
-        where: { id: job.id },
-        data: { status: 'completed', progress: 100 }
-      })
+      await pipelineRepository.updateJob(job.id, { status: 'completed', progress: 100 })
     }
   }
 }
@@ -387,10 +298,7 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
   try {
     await ensureAllEpisodeScripts(projectId, targetEpisodes)
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: { episodes: { orderBy: { episodeNum: 'asc' } } }
-    })
+    const project = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
     if (!project) {
       await updateJob(jobId, { status: 'failed', error: '项目不存在' })
       return

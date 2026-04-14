@@ -1,6 +1,5 @@
 import bcrypt from 'bcrypt'
-import { prisma } from '../lib/prisma.js'
-import { UserRepository } from '../repositories/user-repository.js'
+import { UserRepository, userRepository } from '../repositories/user-repository.js'
 
 export type SafeUser = {
   id: string
@@ -70,5 +69,4 @@ export class AuthService {
   }
 }
 
-export const userRepository = new UserRepository(prisma)
 export const authService = new AuthService(userRepository)

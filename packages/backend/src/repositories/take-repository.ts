@@ -7,6 +7,14 @@ export class TakeRepository {
     return this.prisma.take.findUnique({ where: { id } })
   }
 
+  /** 视频队列：解析任务所属用户（SSE / 日志） */
+  findByIdWithProjectChain(taskId: string) {
+    return this.prisma.take.findUnique({
+      where: { id: taskId },
+      include: { scene: { include: { episode: { include: { project: true } } } } }
+    })
+  }
+
   clearSelectionForScene(sceneId: string) {
     return this.prisma.take.updateMany({
       where: { sceneId },

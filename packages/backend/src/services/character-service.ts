@@ -1,8 +1,10 @@
 import type { CharacterImage, Prisma } from '@prisma/client'
-import { prisma } from '../lib/prisma.js'
 import { uploadFile, generateFileKey } from './storage.js'
 import { generateCharacterSlotImagePrompt } from './deepseek.js'
-import { CharacterRepository } from '../repositories/character-repository.js'
+import {
+  CharacterRepository,
+  characterRepository
+} from '../repositories/character-repository.js'
 
 function toJsonSafe<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -198,5 +200,4 @@ export class CharacterService {
   }
 }
 
-export const characterRepository = new CharacterRepository(prisma)
 export const characterService = new CharacterService(characterRepository)

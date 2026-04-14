@@ -1,7 +1,7 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
-import { prisma } from '../lib/prisma.js'
 import type { VideoJobData } from '@dreamer/shared/types'
+import { videoQueueService } from '../services/video-queue-service.js'
 import { submitWan26Task, waitForWan26Completion, calculateWan26Cost } from '../services/wan26.js'
 import { submitSeedanceTask, waitForSeedanceCompletion, calculateSeedanceCost } from '../services/seedance.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
@@ -34,11 +34,7 @@ export const videoWorker = new Worker<VideoJobData>(
     const effectiveDuration = duration || 5
 
     // Get userId for SSE notification
-    const task = await prisma.take.findUnique({
-      where: { id: taskId },
-      include: { scene: { include: { episode: { include: { project: true } } } } }
-    })
-    const userId = task?.scene.episode.project.userId
+    const userId = await videoQueueService.getProjectUserIdForTask(taskId)
 
     // 在try-catch外部声明变量，确保在catch块中可访问
     let videoUrl: string = ''
@@ -49,10 +45,7 @@ export const videoWorker = new Worker<VideoJobData>(
 
     try {
       // Update task status to processing
-      await prisma.take.update({
-        where: { id: taskId },
-        data: { status: 'processing' }
-      })
+      await videoQueueService.setTaskProcessing(taskId)
 
       // Send SSE notification
       if (userId) {
@@ -60,10 +53,7 @@ export const videoWorker = new Worker<VideoJobData>(
       }
 
       // Update scene status
-      await prisma.scene.update({
-        where: { id: sceneId },
-        data: { status: 'generating' }
-      })
+      await videoQueueService.setSceneGenerating(sceneId)
 
       if (model === 'wan2.6') {
         // Wan 2.6 API call
@@ -91,10 +81,7 @@ export const videoWorker = new Worker<VideoJobData>(
         externalTaskId = response.taskId
 
         // Save external task ID to both Take and ApiCall
-        await prisma.take.update({
-          where: { id: taskId },
-          data: { externalTaskId }
-        })
+        await videoQueueService.setTaskExternalTaskId(taskId, externalTaskId)
 
         if (apiCallId) {
           await updateApiCall(externalTaskId, { status: 'processing' })
@@ -148,10 +135,7 @@ export const videoWorker = new Worker<VideoJobData>(
         externalTaskId = response.taskId
 
         // Save external task ID to both Take and ApiCall
-        await prisma.take.update({
-          where: { id: taskId },
-          data: { externalTaskId }
-        })
+        await videoQueueService.setTaskExternalTaskId(taskId, externalTaskId)
 
         if (apiCallId) {
           await updateApiCall(externalTaskId, { status: 'processing' })
@@ -208,22 +192,14 @@ export const videoWorker = new Worker<VideoJobData>(
       }
 
       // Update task as completed
-      await prisma.take.update({
-        where: { id: taskId },
-        data: {
-          status: 'completed',
-          videoUrl: uploadedVideoUrl,
-          thumbnailUrl: uploadedThumbnailUrl,
-          cost,
-          duration: effectiveDuration
-        }
+      await videoQueueService.setTaskCompleted(taskId, {
+        videoUrl: uploadedVideoUrl,
+        thumbnailUrl: uploadedThumbnailUrl,
+        cost,
+        duration: effectiveDuration
       })
 
-      // Update scene status
-      await prisma.scene.update({
-        where: { id: sceneId },
-        data: { status: 'completed' }
-      })
+      await videoQueueService.setSceneCompleted(sceneId)
 
       // Send SSE notification
       if (userId) {
@@ -249,19 +225,12 @@ export const videoWorker = new Worker<VideoJobData>(
       }
 
       // Update task as failed
-      await prisma.take.update({
-        where: { id: taskId },
-        data: {
-          status: 'failed',
-          errorMsg: error instanceof Error ? error.message : 'Unknown error'
-        }
-      })
+      await videoQueueService.setTaskFailed(
+        taskId,
+        error instanceof Error ? error.message : 'Unknown error'
+      )
 
-      // Update scene status
-      await prisma.scene.update({
-        where: { id: sceneId },
-        data: { status: 'failed' }
-      })
+      await videoQueueService.setSceneFailed(sceneId)
 
       // Send SSE notification
       if (userId) {

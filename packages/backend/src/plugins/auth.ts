@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import fp from 'fastify-plugin'
-import { prisma } from '../lib/prisma.js'
+import { userRepository } from '../repositories/user-repository.js'
+import { ownershipRepository } from '../repositories/ownership-repository.js'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -21,10 +22,7 @@ export const authPlugin = fp(async (fastify: FastifyInstance) => {
       return reply.status(401).send({ error: 'Unauthorized' })
     }
 
-    const dbUser = await prisma.user.findUnique({
-      where: { id: payload.id },
-      select: { id: true, email: true, name: true }
-    })
+    const dbUser = await userRepository.findForAuthSession(payload.id)
     if (!dbUser) {
       return reply.status(401).send({
         error: 'Unauthorized',
@@ -38,85 +36,49 @@ export const authPlugin = fp(async (fastify: FastifyInstance) => {
 
 // Helper to verify user owns the project
 export async function verifyProjectOwnership(userId: string, projectId: string): Promise<boolean> {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { userId: true }
-  })
+  const project = await ownershipRepository.findProjectForOwnership(projectId)
   return project?.userId === userId
 }
 
 // Helper to verify user owns the episode's project
 export async function verifyEpisodeOwnership(userId: string, episodeId: string): Promise<boolean> {
-  const episode = await prisma.episode.findUnique({
-    where: { id: episodeId },
-    include: { project: { select: { userId: true } } }
-  })
+  const episode = await ownershipRepository.findEpisodeWithProjectUser(episodeId)
   return episode?.project.userId === userId
 }
 
 // Helper to verify user owns the episode scene's project（场次 Scene）
 export async function verifySceneOwnership(userId: string, sceneId: string): Promise<boolean> {
-  const scene = await prisma.scene.findUnique({
-    where: { id: sceneId },
-    include: { episode: { include: { project: { select: { userId: true } } } } }
-  })
+  const scene = await ownershipRepository.findSceneWithProjectUser(sceneId)
   return scene?.episode.project.userId === userId
 }
 
 // Helper to verify user owns the character's project
 export async function verifyCharacterOwnership(userId: string, characterId: string): Promise<boolean> {
-  const character = await prisma.character.findUnique({
-    where: { id: characterId },
-    include: { project: { select: { userId: true } } }
-  })
+  const character = await ownershipRepository.findCharacterWithProjectUser(characterId)
   return character?.project.userId === userId
 }
 
 // Helper to verify user owns the composition's project
 export async function verifyCompositionOwnership(userId: string, compositionId: string): Promise<boolean> {
-  const composition = await prisma.composition.findUnique({
-    where: { id: compositionId },
-    include: { project: { select: { userId: true } } }
-  })
+  const composition = await ownershipRepository.findCompositionWithProjectUser(compositionId)
   return composition?.project.userId === userId
 }
 
 // Helper to verify user owns the take's scene's project
 export async function verifyTaskOwnership(userId: string, taskId: string): Promise<boolean> {
-  const task = await prisma.take.findUnique({
-    where: { id: taskId },
-    include: {
-      scene: {
-        include: {
-          episode: {
-            include: {
-              project: {
-                select: { userId: true }
-              }
-            }
-          }
-        }
-      }
-    }
-  })
+  const task = await ownershipRepository.findTakeWithProjectUser(taskId)
   return task?.scene.episode.project.userId === userId
 }
 
 export async function verifyLocationOwnership(userId: string, locationId: string): Promise<boolean> {
-  const location = await prisma.location.findFirst({
-    where: { id: locationId, deletedAt: null },
-    include: { project: { select: { userId: true } } }
-  })
-  return location?.project.userId === userId
+  const row = await ownershipRepository.findLocationWithProjectUser(locationId)
+  return row?.project.userId === userId
 }
 
 export async function verifyCharacterImageOwnership(
   userId: string,
   characterImageId: string
 ): Promise<boolean> {
-  const image = await prisma.characterImage.findUnique({
-    where: { id: characterImageId },
-    include: { character: { include: { project: { select: { userId: true } } } } }
-  })
+  const image = await ownershipRepository.findCharacterImageWithProjectUser(characterImageId)
   return image?.character.project.userId === userId
 }

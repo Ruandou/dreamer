@@ -1,7 +1,6 @@
 import type { Prisma, Project } from '@prisma/client'
-import { prisma } from '../lib/prisma.js'
 import { normalizeProjectDefaultAspectRatio } from '../lib/project-aspect.js'
-import { ProjectRepository } from '../repositories/project-repository.js'
+import { ProjectRepository, projectRepository } from '../repositories/project-repository.js'
 import {
   runGenerateFirstEpisodePipelineJob,
   runScriptBatchJob,
@@ -278,5 +277,4 @@ export class ProjectService {
   }
 }
 
-export const projectRepository = new ProjectRepository(prisma)
 export const projectService = new ProjectService(projectRepository)

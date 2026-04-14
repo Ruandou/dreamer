@@ -1,7 +1,6 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
 import type { ImageGenerationJobData } from '@dreamer/shared/types'
-import { prisma } from '../lib/prisma.js'
 import {
   generateTextToImageAndPersist,
   generateImageEditAndPersist,
@@ -11,6 +10,7 @@ import {
 } from '../services/image-generation.js'
 import { recordModelApiCall } from '../services/api-logger.js'
 import { sendProjectUpdate } from '../plugins/sse.js'
+import { imageQueueService } from '../services/image-queue-service.js'
 
 const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null
@@ -46,10 +46,7 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
     const { userId, projectId } = data
     console.log(`[image-generation] job ${job.id} kind=${data.kind}`)
 
-    const projectRow = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { aspectRatio: true }
-    })
+    const projectRow = await imageQueueService.getProjectAspectRatio(projectId)
     const imageSize = arkImageSizeFromProjectAspectRatio(projectRow?.aspectRatio)
 
     try {
@@ -58,20 +55,15 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
           const { url: avatarUrl, imageCost } = await generateTextToImageAndPersist(data.prompt, {
             size: imageSize
           })
-          const maxOrder = await prisma.characterImage.aggregate({
-            where: { characterId: data.characterId, parentId: null },
-            _max: { order: true }
-          })
-          const image = await prisma.characterImage.create({
-            data: {
-              characterId: data.characterId,
-              name: data.name,
-              parentId: null,
-              type: 'base',
-              avatarUrl,
-              imageCost: imageCost ?? null,
-              order: (maxOrder._max.order || 0) + 1
-            }
+          const maxOrder = await imageQueueService.maxOrderForCharacterSlot(data.characterId, null)
+          const image = await imageQueueService.createCharacterImageBase({
+            characterId: data.characterId,
+            name: data.name,
+            parentId: null,
+            type: 'base',
+            avatarUrl,
+            imageCost: imageCost ?? null,
+            order: (maxOrder._max.order || 0) + 1
           })
           notify(userId, projectId, {
             status: 'completed',
@@ -100,9 +92,10 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
           const { url: avatarUrl, imageCost } = await generateTextToImageAndPersist(data.prompt, {
             size: imageSize
           })
-          const updated = await prisma.characterImage.update({
-            where: { id: data.characterImageId },
-            data: { avatarUrl, prompt: data.prompt, imageCost: imageCost ?? null }
+          const updated = await imageQueueService.updateCharacterImageAvatar(data.characterImageId, {
+            avatarUrl,
+            prompt: data.prompt,
+            imageCost: imageCost ?? null
           })
           notify(userId, projectId, {
             status: 'completed',
@@ -133,9 +126,10 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             data.editPrompt,
             { strength: data.strength ?? 0.35, size: imageSize }
           )
-          const updated = await prisma.characterImage.update({
-            where: { id: data.characterImageId },
-            data: { avatarUrl, prompt: data.editPrompt, imageCost: imageCost ?? null }
+          const updated = await imageQueueService.updateCharacterImageAvatar(data.characterImageId, {
+            avatarUrl,
+            prompt: data.editPrompt,
+            imageCost: imageCost ?? null
           })
           notify(userId, projectId, {
             status: 'completed',
@@ -166,21 +160,19 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             data.editPrompt,
             { strength: data.strength ?? 0.35, size: imageSize }
           )
-          const maxOrder = await prisma.characterImage.aggregate({
-            where: { characterId: data.characterId, parentId: data.parentImageId },
-            _max: { order: true }
-          })
-          const image = await prisma.characterImage.create({
-            data: {
-              characterId: data.characterId,
-              name: data.name,
-              parentId: data.parentImageId,
-              type: data.type || 'expression',
-              description: data.description,
-              avatarUrl,
-              imageCost: imageCost ?? null,
-              order: (maxOrder._max.order || 0) + 1
-            }
+          const maxOrder = await imageQueueService.maxOrderForCharacterSlot(
+            data.characterId,
+            data.parentImageId
+          )
+          const image = await imageQueueService.createCharacterImageDerived({
+            characterId: data.characterId,
+            name: data.name,
+            parentId: data.parentImageId,
+            type: data.type || 'expression',
+            description: data.description,
+            avatarUrl,
+            imageCost: imageCost ?? null,
+            order: (maxOrder._max.order || 0) + 1
           })
           notify(userId, projectId, {
             status: 'completed',
@@ -209,9 +201,9 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
           const { url: imageUrl, imageCost } = await generateTextToImageAndPersist(data.prompt, {
             size: imageSize
           })
-          const write = await prisma.location.updateMany({
-            where: { id: data.locationId, deletedAt: null },
-            data: { imageUrl, imageCost: imageCost ?? null }
+          const write = await imageQueueService.updateLocationEstablishingImage(data.locationId, {
+            imageUrl,
+            imageCost: imageCost ?? null
           })
           if (write.count === 0) {
             await recordModelApiCall({

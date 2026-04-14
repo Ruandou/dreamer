@@ -1,7 +1,6 @@
-import { prisma } from '../lib/prisma.js'
 import { executePipelineJob } from './pipeline-executor.js'
 import { pipelineAspectRatioFromProjectDefault } from '../lib/project-aspect.js'
-import { PipelineRepository } from '../repositories/pipeline-repository.js'
+import { pipelineRepository, PipelineRepository } from '../repositories/pipeline-repository.js'
 
 export class PipelineRouteService {
   constructor(private readonly repo: PipelineRepository) {}
@@ -184,5 +183,4 @@ export class PipelineRouteService {
   }
 }
 
-export const pipelineRepository = new PipelineRepository(prisma)
 export const pipelineRouteService = new PipelineRouteService(pipelineRepository)

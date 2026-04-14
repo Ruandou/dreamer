@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
 
 export class CharacterRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -79,4 +80,28 @@ export class CharacterRepository {
   deleteCharacterImageById(id: string) {
     return this.prisma.characterImage.delete({ where: { id } })
   }
+
+  findManyByProject(projectId: string) {
+    return this.prisma.character.findMany({ where: { projectId } })
+  }
+
+  findFirstBaseImage(characterId: string) {
+    return this.prisma.characterImage.findFirst({
+      where: { characterId, type: 'base' }
+    })
+  }
+
+  createDefaultBaseCharacterImage(characterId: string) {
+    return this.prisma.characterImage.create({
+      data: {
+        characterId,
+        name: '默认形象',
+        type: 'base',
+        avatarUrl: null,
+        order: 0
+      }
+    })
+  }
 }
+
+export const characterRepository = new CharacterRepository(prisma)

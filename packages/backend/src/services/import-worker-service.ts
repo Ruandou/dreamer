@@ -1,0 +1,38 @@
+import type { Prisma } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
+import { importRepository } from '../repositories/import-repository.js'
+import { ProjectRepository } from '../repositories/project-repository.js'
+
+const projectRepo = new ProjectRepository(prisma)
+
+export const importWorkerService = {
+  markProcessing(taskId: string) {
+    return importRepository.update(taskId, { status: 'processing' })
+  },
+
+  createProjectForImport(data: { name: string; description: string; userId: string }) {
+    return projectRepo.create({
+      name: data.name,
+      description: data.description,
+      userId: data.userId
+    })
+  },
+
+  updateTaskProjectId(taskId: string, projectId: string) {
+    return importRepository.update(taskId, { projectId })
+  },
+
+  markCompleted(taskId: string, result: unknown) {
+    return importRepository.update(taskId, {
+      status: 'completed',
+      result: result as Prisma.InputJsonValue
+    })
+  },
+
+  markFailed(taskId: string, errorMsg: string) {
+    return importRepository.update(taskId, {
+      status: 'failed',
+      errorMsg
+    })
+  }
+}

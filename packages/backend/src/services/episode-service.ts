@@ -185,7 +185,7 @@ export class EpisodeService {
 
       const updatedEpisode = await this.repo.update(episodeId, {
         title: script.title || episode.title,
-        rawScript: script as Prisma.InputJsonValue
+        rawScript: script as unknown as Prisma.InputJsonValue
       })
 
       if (script.scenes && script.scenes.length > 0) {
