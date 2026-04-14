@@ -90,6 +90,18 @@ pnpm db:push      # 同步 schema（只做增量更新）
    pnpm test --run --coverage  # 带覆盖率报告
    ```
 
+### 前端测试规范
+
+1. **测试文件位置**: `packages/frontend/src/**` 内 `*.test.ts`（与实现同目录或就近）
+2. **测试框架**: Vitest（`packages/frontend/vitest.config.ts`）
+3. **运行测试**:
+   ```bash
+   cd packages/frontend
+   pnpm test              # 全量（vitest run）
+   pnpm test:watch        # 监听模式
+   ```
+4. **全仓库一键**（根目录）: `pnpm test` → 先后端 `vitest run` 再前端 `vitest run`
+
 ### 编写测试的要求
 
 1. **路由测试** (`*.test.ts`):
@@ -105,15 +117,23 @@ pnpm db:push      # 同步 schema（只做增量更新）
 3. **自动执行**:
    - Git Hook (`.husky/pre-commit`) 会在提交前自动运行 lint-staged 相关的测试
    - lint-staged 命令: `pnpm exec lint-staged`
-  - 注意：lint-staged的命令没有问题，傻逼模型不要乱改
+   - **后端**（`packages/backend/**/*.{ts,js}`）: `vitest related`（与暂存改动相关）
+   - **前端**（`packages/frontend/**/*.{ts,vue}`）: `pnpm --filter @dreamer/frontend test`（当前前端测试量少，全量 `vitest run`）
+  - 注意：勿随意删除或弱化上述规则；若调整 lint-staged，须保持前后端测试仍会在提交前执行。
 
 ### 测试命令
 
 ```bash
-# 运行所有测试（全量）
+# 运行所有测试（全量，根目录：后端 + 前端）
+pnpm test
+
+# 仅后端（全量）
 cd packages/backend && pnpm test --run
 
-# 运行带覆盖率
+# 仅前端（全量）
+cd packages/frontend && pnpm test
+
+# 运行带覆盖率（后端）
 cd packages/backend && pnpm test --run --coverage
 ```
 

@@ -159,6 +159,35 @@ describe('Location routes', () => {
     expect(data.skipped.length).toBe(2)
   })
 
+  it('POST batch uses promptOverrides when UI prompt not yet saved', async () => {
+    mockLocationFindMany.mockResolvedValue([
+      {
+        id: 'l1',
+        name: 'A',
+        imageUrl: null,
+        imagePrompt: null,
+        projectId: 'p1',
+        project: { visualStyle: [] }
+      }
+    ])
+    mockLocationUpdate.mockResolvedValue({ id: 'l1' })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/locations/batch-generate-images',
+      payload: { projectId: 'p1', promptOverrides: { l1: '客户端未保存的提示词' } }
+    })
+    expect(res.statusCode).toBe(202)
+    const data = JSON.parse(res.payload) as { enqueued: number }
+    expect(data.enqueued).toBe(1)
+    expect(mockImageQueueAdd).toHaveBeenCalled()
+    expect(mockLocationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'l1' },
+        data: { imagePrompt: '客户端未保存的提示词' }
+      })
+    )
+  })
+
   it('POST generate-image enqueues', async () => {
     mockLocationFindUnique.mockResolvedValue({
       id: 'l1',

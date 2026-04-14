@@ -13,6 +13,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import type { Character, CharacterImage } from '@dreamer/shared/types'
 import { subscribeProjectUpdates } from '@/lib/project-sse-bridge'
 import { getDisplayBaseImages, getDisplayDerivedImages } from '@/lib/character-image-groups'
+import { fetchInFlightImageJobsForProject } from '@/lib/pending-image-jobs'
 
 const route = useRoute()
 const router = useRouter()
@@ -44,6 +45,7 @@ let unsubProjectSse: (() => void) | null = null
 
 onMounted(async () => {
   await loadCharacter()
+  await hydrateGeneratingFromQueue()
   unsubProjectSse = subscribeProjectUpdates(projectId.value, (p) => {
     if (p.type !== 'image-generation') return
     const ours =
@@ -80,6 +82,23 @@ watch(
   },
   { immediate: true, deep: true }
 )
+
+/** 刷新后从 BullMQ 恢复「生成中」按钮状态 */
+async function hydrateGeneratingFromQueue() {
+  try {
+    const { characterImageIds } = await fetchInFlightImageJobsForProject(projectId.value)
+    const imgs = character.value?.images || []
+    const next = { ...generatingByImageId.value }
+    for (const id of characterImageIds) {
+      if (imgs.some((i) => i.id === id)) {
+        next[id] = true
+      }
+    }
+    generatingByImageId.value = next
+  } catch {
+    // 忽略拉取失败
+  }
+}
 
 const loadCharacter = async () => {
   isLoading.value = true
@@ -234,25 +253,43 @@ const confirmAddImageByAi = async () => {
   }
 }
 
-async function savePromptDraft() {
-  if (!selectedImage.value) return
+function isPromptDirty(): boolean {
+  if (!selectedImage.value) return false
+  return (
+    (promptDraft.value || '').trim() !== (selectedImage.value.prompt || '').trim()
+  )
+}
+
+/** 有未保存改动时写入服务端；silent 时不弹出「提示词已保存」 */
+async function savePromptDraftIfDirty(silent = false): Promise<boolean> {
+  if (!selectedImage.value || !isPromptDirty()) return true
   try {
     await characterStore.updateImage(characterId.value, selectedImage.value.id, {
       prompt: promptDraft.value || null
     })
-    message.success('提示词已保存')
+    if (!silent) message.success('提示词已保存')
     await loadCharacter()
+    return true
   } catch (e: any) {
     message.error(e?.response?.data?.error || '保存失败')
+    return false
   }
+}
+
+async function savePromptDraft() {
+  if (!selectedImage.value) return
+  await savePromptDraftIfDirty(false)
 }
 
 async function queueSelectedGenerate() {
   if (!selectedImage.value) return
   const id = selectedImage.value.id
+  const ok = await savePromptDraftIfDirty(true)
+  if (!ok) return
   generatingByImageId.value = { ...generatingByImageId.value, [id]: true }
   try {
-    await characterStore.queueCharacterImageGenerate(id)
+    const p = promptDraft.value.trim()
+    await characterStore.queueCharacterImageGenerate(id, p ? { prompt: p } : undefined)
     message.info('已提交生成，请稍候…')
   } catch (e: any) {
     const next = { ...generatingByImageId.value }

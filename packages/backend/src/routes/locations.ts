@@ -42,11 +42,17 @@ export async function locationRoutes(fastify: FastifyInstance) {
 
   /** 须在 /:id 之前注册，否则会被当成 id。仅对尚未有定场图（无 imageUrl）的场地入队。 */
   fastify.post<{
-    Body: { projectId: string }
+    Body: { projectId: string; promptOverrides?: Record<string, string> }
   }>('/batch-generate-images', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const userId = (request as any).user.id
     const body = request.body || {}
     const projectId = body.projectId
+    const promptOverrides =
+      body.promptOverrides &&
+      typeof body.promptOverrides === 'object' &&
+      !Array.isArray(body.promptOverrides)
+        ? (body.promptOverrides as Record<string, string>)
+        : undefined
 
     if (!projectId || typeof projectId !== 'string') {
       return reply.status(400).send({ error: '缺少 projectId' })
@@ -71,7 +77,16 @@ export async function locationRoutes(fastify: FastifyInstance) {
         skipped.push({ id: location.id, name: location.name, reason: '已有定场图' })
         continue
       }
-      const effective = (location.imagePrompt || '').trim()
+      const override = promptOverrides?.[location.id]
+      const effectiveRaw =
+        override !== undefined ? String(override).trim() : (location.imagePrompt || '').trim()
+      if (override !== undefined && effectiveRaw !== (location.imagePrompt || '').trim()) {
+        await prisma.location.update({
+          where: { id: location.id },
+          data: { imagePrompt: effectiveRaw || null }
+        })
+      }
+      const effective = effectiveRaw
       if (!effective) {
         skipped.push({ id: location.id, name: location.name, reason: '缺少定场图提示词' })
         continue

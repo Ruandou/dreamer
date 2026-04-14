@@ -17,6 +17,7 @@
     "docker:up": "cd docker && docker compose up -d",
     "docker:down": "cd docker && docker compose down",
     "start": "pnpm --filter @dreamer/backend run start",
+    "test": "pnpm --filter @dreamer/backend exec vitest run && pnpm --filter @dreamer/frontend test",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -28,6 +29,9 @@
   "lint-staged": {
     "packages/backend/**/*.{ts,js}": [
       "pnpm --filter @dreamer/backend test -- related --run"
+    ],
+    "packages/frontend/**/*.{ts,vue}": [
+      "pnpm --filter @dreamer/frontend test -- related --run"
     ]
   },
   "engines": {

@@ -12,6 +12,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import type { CharacterImage } from '@dreamer/shared/types'
 import { subscribeProjectUpdates } from '@/lib/project-sse-bridge'
 import { getDisplayBaseImages, getDisplayDerivedImages } from '@/lib/character-image-groups'
+import { fetchInFlightImageJobsForProject } from '@/lib/pending-image-jobs'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,14 +35,46 @@ const expandedCharacterIds = ref<string[]>([])
 const selectedImageId = ref<string | null>(null)
 /** 已提交、等待 Worker 完成的形象图任务 */
 const generatingByImageId = ref<Record<string, boolean>>({})
+/** 尚无形象行、仅「新建定妆/衍生」队列任务可绑定的角色级 loading（与 Bull 任务 binding 一一对应） */
+const generatingCharacterPendingCreate = ref<Record<string, boolean>>({})
 
 let unsubProjectSse: (() => void) | null = null
 
+async function hydrateGeneratingFromQueue() {
+  try {
+    const { characterImageIds, characterIdsWithPendingNewImage } =
+      await fetchInFlightImageJobsForProject(projectId.value)
+    const next = { ...generatingByImageId.value }
+    for (const id of characterImageIds) {
+      next[id] = true
+    }
+    generatingByImageId.value = next
+    const nextCh: Record<string, boolean> = {}
+    for (const cid of characterIdsWithPendingNewImage) {
+      nextCh[cid] = true
+    }
+    generatingCharacterPendingCreate.value = nextCh
+  } catch {
+    // 忽略拉取失败
+  }
+}
+
 onMounted(async () => {
   await characterStore.fetchCharacters(projectId.value)
+  await hydrateGeneratingFromQueue()
   unsubProjectSse = subscribeProjectUpdates(projectId.value, (p) => {
     if (p.type !== 'image-generation') return
     const imgId = typeof p.characterImageId === 'string' ? p.characterImageId : undefined
+    const k = typeof p.kind === 'string' ? p.kind : ''
+    if (
+      (p.status === 'completed' || p.status === 'failed') &&
+      (k === 'character_base_create' || k === 'character_derived_create') &&
+      typeof p.characterId === 'string'
+    ) {
+      const nextC = { ...generatingCharacterPendingCreate.value }
+      delete nextC[p.characterId as string]
+      generatingCharacterPendingCreate.value = nextC
+    }
     if (imgId && (p.status === 'completed' || p.status === 'failed')) {
       const next = { ...generatingByImageId.value }
       delete next[imgId]
@@ -290,6 +323,7 @@ const isCharacterExpanded = (characterId: string) => {
           v-for="character in characterStore.characters"
           :key="character.id"
           class="character-card"
+          :class="{ 'character-card--pending-new-image': generatingCharacterPendingCreate[character.id] }"
           hoverable
         >
           <!-- Avatar Section - Base Images -->
@@ -547,6 +581,11 @@ const isCharacterExpanded = (characterId: string) => {
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   min-height: 400px;
+}
+
+.character-card--pending-new-image {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 0;
 }
 
 .characters-grid {

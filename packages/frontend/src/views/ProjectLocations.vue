@@ -18,6 +18,7 @@ import type { ProjectLocation } from '@dreamer/shared/types'
 import { api } from '@/api'
 import { useProjectStore } from '@/stores/project'
 import { subscribeProjectUpdates, type ProjectSsePayload } from '@/lib/project-sse-bridge'
+import { fetchInFlightImageJobsForProject } from '@/lib/pending-image-jobs'
 
 const route = useRoute()
 const message = useMessage()
@@ -33,6 +34,8 @@ const localFileInputRef = ref<HTMLInputElement | null>(null)
 const localUploadTargetId = ref<string | null>(null)
 /** 定场图生成中（入队后到 SSE 完成/失败），用于卡片 loading */
 const pendingLocationIds = ref<string[]>([])
+/** 最近一次从服务端加载后的 imagePrompt 快照，用于判断「仅改提示词未点保存」 */
+const locationSavedPrompts = ref<Record<string, string>>({})
 
 function addPending(id: string) {
   if (!pendingLocationIds.value.includes(id)) {
@@ -63,6 +66,11 @@ async function load(opts?: { silent?: boolean }) {
   try {
     const res = await api.get<ProjectLocation[]>(`/locations?projectId=${projectId.value}`)
     locations.value = res.data
+    const nextSaved: Record<string, string> = {}
+    for (const l of locations.value) {
+      nextSaved[l.id] = (l.imagePrompt ?? '').trim()
+    }
+    locationSavedPrompts.value = nextSaved
     for (const id of [...pendingLocationIds.value]) {
       const row = locations.value.find((l) => l.id === id)
       if (row?.imageUrl && String(row.imageUrl).trim()) {
@@ -107,8 +115,22 @@ function clearPendingPoll() {
   }
 }
 
+/** 刷新后从 BullMQ 恢复定场图卡片的生成中状态 */
+async function hydratePendingFromQueue() {
+  try {
+    const { locationIds } = await fetchInFlightImageJobsForProject(projectId.value)
+    const known = new Set(locations.value.map((l) => l.id))
+    for (const id of locationIds) {
+      if (known.has(id)) addPending(id)
+    }
+  } catch {
+    // 忽略拉取失败
+  }
+}
+
 onMounted(async () => {
   await load()
+  await hydratePendingFromQueue()
   attachProjectSse()
 })
 
@@ -121,6 +143,7 @@ watch(
     unsubProjectSse?.()
     unsubProjectSse = null
     await load()
+    await hydratePendingFromQueue()
     attachProjectSse()
   }
 )
@@ -143,7 +166,7 @@ onUnmounted(() => {
   unsubProjectSse = null
 })
 
-async function save(loc: ProjectLocation) {
+async function save(loc: ProjectLocation, opts?: { silent?: boolean }): Promise<boolean> {
   savingId.value = loc.id
   try {
     await api.put(`/locations/${loc.id}`, {
@@ -151,19 +174,39 @@ async function save(loc: ProjectLocation) {
       imagePrompt: loc.imagePrompt,
       timeOfDay: loc.timeOfDay
     })
-    message.success('已保存')
+    if (!opts?.silent) message.success('已保存')
+    locationSavedPrompts.value = {
+      ...locationSavedPrompts.value,
+      [loc.id]: (loc.imagePrompt || '').trim()
+    }
     await projectStore.getProject(projectId.value)
+    return true
   } catch (e: any) {
     message.error(e?.response?.data?.error || '保存失败')
+    return false
   } finally {
     savingId.value = null
   }
 }
 
+function isLocationPromptDirty(loc: ProjectLocation): boolean {
+  const cur = (loc.imagePrompt || '').trim()
+  const saved = locationSavedPrompts.value[loc.id] ?? ''
+  return cur !== saved
+}
+
 async function generate(loc: ProjectLocation) {
+  if (isLocationPromptDirty(loc)) {
+    const ok = await save(loc, { silent: true })
+    if (!ok) return
+  }
   addPending(loc.id)
   try {
-    const res = await api.post<{ jobId: string }>(`/locations/${loc.id}/generate-image`, {})
+    const p = (loc.imagePrompt || '').trim()
+    const res = await api.post<{ jobId: string }>(
+      `/locations/${loc.id}/generate-image`,
+      p ? { prompt: p } : {}
+    )
     message.success(`已入队生成（任务 ${res.data.jobId}）`)
   } catch (e: any) {
     removePending(loc.id)
@@ -214,13 +257,27 @@ async function removeLocation(loc: ProjectLocation) {
 async function generateAllMissing() {
   batchGenerating.value = true
   try {
+    for (const l of locations.value) {
+      if (isLocationPromptDirty(l)) {
+        const ok = await save(l, { silent: true })
+        if (!ok) return
+      }
+    }
     const res = await api.post<{
       enqueued: number
       enqueuedLocationIds?: string[]
       jobIds: string[]
       skipped: { id: string; name: string; reason: string }[]
     }>('/locations/batch-generate-images', {
-      projectId: projectId.value
+      projectId: projectId.value,
+      ...(() => {
+        const promptOverrides: Record<string, string> = {}
+        for (const l of locations.value) {
+          const t = (l.imagePrompt ?? '').trim()
+          if (t) promptOverrides[l.id] = t
+        }
+        return Object.keys(promptOverrides).length > 0 ? { promptOverrides } : {}
+      })()
     })
     const { enqueued, skipped, enqueuedLocationIds } = res.data
     if (enqueued > 0) {
