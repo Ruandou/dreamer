@@ -2,11 +2,22 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
-  NGrid, NGi, NImage, NImageGroup, NUpload, NPopconfirm, NTag, NTooltip,
-  NAvatar, NScrollbar, useMessage, NIcon, NTree, NButtonGroup, NDropdown
+  NCard,
+  NButton,
+  NSpace,
+  NModal,
+  NForm,
+  NFormItem,
+  NInput,
+  NImage,
+  NUpload,
+  NPopconfirm,
+  NTag,
+  NAvatar,
+  useMessage,
+  NDropdown
 } from 'naive-ui'
-import type { UploadFile } from 'naive-ui'
+import type { UploadFileInfo } from 'naive-ui'
 import { useCharacterStore } from '@/stores/character'
 import EmptyState from '@/components/EmptyState.vue'
 import type { CharacterImage } from '@dreamer/shared/types'
@@ -31,7 +42,6 @@ const imageForm = ref({
   description: ''
 })
 const currentCharacterId = ref<string | null>(null)
-const expandedCharacterIds = ref<string[]>([])
 const selectedImageId = ref<string | null>(null)
 /** 已提交、等待 Worker 完成的形象图任务 */
 const generatingByImageId = ref<Record<string, boolean>>({})
@@ -126,7 +136,7 @@ const openImageModal = (characterId: string, parentId?: string) => {
   showImageModal.value = true
 }
 
-const handleImageUpload = async (options: { file: UploadFile }) => {
+const handleImageUpload = async (options: { file: UploadFileInfo }) => {
   if (!currentCharacterId.value || !imageForm.value.name) {
     message.warning('请输入形象名称')
     return
@@ -269,18 +279,6 @@ async function confirmImageModalByAi() {
   }
 }
 
-const toggleCharacterExpand = (characterId: string) => {
-  const idx = expandedCharacterIds.value.indexOf(characterId)
-  if (idx >= 0) {
-    expandedCharacterIds.value.splice(idx, 1)
-  } else {
-    expandedCharacterIds.value.push(characterId)
-  }
-}
-
-const isCharacterExpanded = (characterId: string) => {
-  return expandedCharacterIds.value.includes(characterId)
-}
 </script>
 
 <template>

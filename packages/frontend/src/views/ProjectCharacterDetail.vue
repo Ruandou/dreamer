@@ -2,12 +2,24 @@
 import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
-  NImage, NImageGroup, NUpload, NPopconfirm, NTag, NTooltip,
-  NAvatar, useMessage, NIcon, NTree, NDropdown, NDrawer, NDrawerContent,
-  NSpin, NBackTop
+  NButton,
+  NSpace,
+  NModal,
+  NForm,
+  NFormItem,
+  NInput,
+  NImage,
+  NUpload,
+  NTag,
+  useMessage,
+  NTree,
+  NDropdown,
+  NDrawer,
+  NDrawerContent,
+  NSpin,
+  NBackTop
 } from 'naive-ui'
-import type { UploadFile, TreeOption } from 'naive-ui'
+import type { UploadFileInfo, TreeOption } from 'naive-ui'
 import { useCharacterStore } from '@/stores/character'
 import EmptyState from '@/components/EmptyState.vue'
 import type { Character, CharacterImage } from '@dreamer/shared/types'
@@ -28,9 +40,7 @@ const isLoading = ref(true)
 const selectedImageId = ref<string | null>(null)
 const selectedImage = ref<CharacterImage | null>(null)
 const showImageDrawer = ref(false)
-const showEditModal = ref(false)
 const showAddModal = ref(false)
-const editForm = ref({ name: '', description: '', type: 'base', parentId: undefined as string | undefined })
 const addForm = ref({
   name: '',
   type: 'base',
@@ -42,6 +52,8 @@ const selectedFile = ref<File | null>(null)
 const promptDraft = ref('')
 const generatingByImageId = ref<Record<string, boolean>>({})
 let unsubProjectSse: (() => void) | null = null
+
+type CharacterTreeOption = TreeOption & { data?: CharacterImage }
 
 onMounted(async () => {
   await loadCharacter()
@@ -127,11 +139,11 @@ function formatImageCostYuan(n: number): string {
   return n.toFixed(4)
 }
 
-const treeData = computed<TreeOption[]>(() => {
+const treeData = computed<CharacterTreeOption[]>(() => {
   if (!character.value?.images) return []
 
   const images = character.value.images
-  const imageMap = new Map<string, TreeOption>()
+  const imageMap = new Map<string, CharacterTreeOption>()
   images.forEach((img) => {
     imageMap.set(img.id, {
       key: img.id,
@@ -141,7 +153,7 @@ const treeData = computed<TreeOption[]>(() => {
     })
   })
 
-  function subtree(parentId: string): TreeOption[] {
+  function subtree(parentId: string): CharacterTreeOption[] {
     return images
       .filter((i) => i.parentId === parentId)
       .sort(sortImagesByOrder)
@@ -158,12 +170,14 @@ const treeData = computed<TreeOption[]>(() => {
       const n = imageMap.get(img.id)!
       return { ...n, children: subtree(img.id) }
     })
-    topLevel.sort((a, b) => sortImagesByOrder(a.data as CharacterImage, b.data as CharacterImage))
+    topLevel.sort((a, b) =>
+      sortImagesByOrder(a.data as CharacterImage, b.data as CharacterImage)
+    )
     return { ...raw, children: topLevel }
   })
 })
 
-const handleNodeClick = (option: TreeOption) => {
+const handleNodeClick = (option: CharacterTreeOption) => {
   selectedImageId.value = option.key as string
   selectedImage.value = option.data as CharacterImage
   showImageDrawer.value = true
@@ -196,7 +210,7 @@ const openAddModal = (parentId?: string) => {
   showAddModal.value = true
 }
 
-const handleFileChange = (options: { file: UploadFile }) => {
+const handleFileChange = (options: { file: UploadFileInfo }) => {
   selectedFile.value = options.file.file as File
 }
 
@@ -299,7 +313,15 @@ async function queueSelectedGenerate() {
   }
 }
 
-const handleDrop = async ({ node, dragNode, dropPosition }: { node: TreeOption, dragNode: TreeOption, dropPosition: 'before' | 'after' | 'inside' }) => {
+const handleDrop = async ({
+  node,
+  dragNode,
+  dropPosition
+}: {
+  node: TreeOption
+  dragNode: TreeOption
+  dropPosition: 'before' | 'after' | 'inside'
+}) => {
   const dragImage = dragNode.data as CharacterImage
   const targetImage = node.data as CharacterImage
 
@@ -317,6 +339,19 @@ const handleDrop = async ({ node, dragNode, dropPosition }: { node: TreeOption, 
     await loadCharacter()
   }
 }
+
+const treeNodeProps = (option: CharacterTreeOption) => ({
+  onClick: () => handleNodeClick(option),
+  onDrop: (e: DragEvent) => {
+    e.preventDefault()
+    const dragNode = JSON.parse(e.dataTransfer?.getData('node') || '{}')
+    const idx = (e as unknown as { index?: number }).index
+    const dropPosition = idx === 0 ? 'inside' : idx === 1 ? 'after' : 'before'
+    void handleDrop({ node: option, dragNode, dropPosition })
+  },
+  onDragover: (e: DragEvent) => e.preventDefault(),
+  draggable: true
+})
 
 const imageActionOptions = computed(() => {
   if (!selectedImage.value) return []
@@ -402,7 +437,22 @@ const getTypeTagType = (type: string): 'success' | 'info' | 'warning' | 'default
   return map[type] || 'default'
 }
 
-const renderSuffix = ({ option }: { option: TreeOption }) => {
+/** 供模板在回调外安全读取（避免 v-if 收窄在箭头函数内丢失） */
+const selectedImageParentName = computed(() => {
+  const s = selectedImage.value
+  const pid = s?.parentId
+  if (!pid) return undefined
+  return character.value?.images?.find((i) => i.id === pid)?.name
+})
+
+const selectedImageGenerateDisabled = computed(() => {
+  const s = selectedImage.value
+  if (!s) return true
+  if (!s.parentId) return false
+  return !character.value?.images?.find((i) => i.id === s.parentId)?.avatarUrl
+})
+
+const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
   const img = option.data as CharacterImage
   return h('div', { class: 'tree-node-suffix' }, [
     h(NTag, {
@@ -475,17 +525,7 @@ const renderSuffix = ({ option }: { option: TreeOption }) => {
             selectable
             :selected-keys="selectedImageId ? [selectedImageId] : []"
             :default-expanded-keys="treeData.map(n => n.key as string)"
-            :node-props="(option: TreeOption) => ({
-              onClick: () => handleNodeClick(option),
-              onDrop: (e: DragEvent) => {
-                e.preventDefault()
-                const dragNode = JSON.parse(e.dataTransfer?.getData('node') || '{}')
-                const dropPosition = e.index === 0 ? 'inside' : (e.index === 1 ? 'after' : 'before')
-                handleDrop({ node: option, dragNode, dropPosition })
-              },
-              onDragover: (e: DragEvent) => e.preventDefault(),
-              draggable: true
-            })"
+            :node-props="treeNodeProps"
             :render-suffix="renderSuffix"
           />
         </div>
@@ -528,7 +568,7 @@ const renderSuffix = ({ option }: { option: TreeOption }) => {
                 {{ selectedImage.description }}
               </p>
               <p v-if="selectedImage.parentId" class="preview-parent">
-                衍生自: {{ character.images?.find(i => i.id === selectedImage.parentId)?.name }}
+                衍生自: {{ selectedImageParentName }}
               </p>
               <div class="prompt-block">
                 <h5 class="prompt-block__title">文生图提示词（中文）</h5>
@@ -544,7 +584,7 @@ const renderSuffix = ({ option }: { option: TreeOption }) => {
                     size="small"
                     type="primary"
                     :loading="generatingByImageId[selectedImage.id]"
-                    :disabled="!!selectedImage.parentId && !character.images?.find((i) => i.id === selectedImage.parentId)?.avatarUrl"
+                    :disabled="selectedImageGenerateDisabled"
                     @click="queueSelectedGenerate"
                   >
                     提交 AI 生成

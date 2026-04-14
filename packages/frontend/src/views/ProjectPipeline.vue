@@ -2,16 +2,29 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  NCard, NButton, NSpace, NEmpty, NModal, NForm, NFormItem, NInput,
-  NInputGroup, NAlert, NSteps, NStep, NSpin, NTag, NProgress,
-  useMessage, NScrollbar, NCollapse, NCollapseItem, NDivider
+  NCard,
+  NButton,
+  NSpace,
+  NModal,
+  NForm,
+  NFormItem,
+  NInput,
+  NInputGroup,
+  NInputGroupLabel,
+  NSelect,
+  NAlert,
+  NSteps,
+  NStep,
+  NSpin,
+  NTag,
+  NProgress,
+  useMessage
 } from 'naive-ui'
 import {
   executePipeline,
   getPipelineJob,
   getPipelineStatus,
-  type PipelineJob,
-  type PipelineStepResult
+  type PipelineJob
 } from '@/api'
 import EmptyState from '@/components/EmptyState.vue'
 
@@ -53,12 +66,19 @@ const currentStepIndex = computed(() => {
   return idx >= 0 ? idx : 0
 })
 
-// Step statuses from job results
-const stepStatuses = computed(() => {
-  if (!currentJob.value?.stepResults) return steps.map(() => 'pending')
-  return steps.map(step => {
-    const result = currentJob.value?.stepResults?.find(r => r.step === step.id)
-    return result?.status || 'pending'
+// Step statuses from job results（NStep status：wait | process | finish | error）
+const stepStatuses = computed((): Array<'wait' | 'process' | 'finish' | 'error'> => {
+  if (!currentJob.value?.stepResults) return steps.map(() => 'wait')
+  return steps.map((step) => {
+    const result = currentJob.value?.stepResults?.find((r) => r.step === step.id)
+    const s = result?.status || 'pending'
+    const map: Record<string, 'wait' | 'process' | 'finish' | 'error'> = {
+      pending: 'wait',
+      processing: 'process',
+      completed: 'finish',
+      failed: 'error'
+    }
+    return map[s] ?? 'wait'
   })
 })
 
@@ -109,7 +129,7 @@ const startPolling = () => {
           isRunning.value = false
         } else if (result.data.status === 'failed') {
           error.value = result.data.error || '流水线执行失败'
-          message.error(error.value)
+          message.error(error.value ?? '流水线执行失败')
           stopPolling()
           isRunning.value = false
         }
@@ -163,8 +183,9 @@ const executePipelineAsync = async () => {
       throw new Error(result.error || '启动失败')
     }
   } catch (e: any) {
-    error.value = e.message || '执行失败'
-    message.error(error.value)
+    const msg = e?.message || '执行失败'
+    error.value = msg
+    message.error(msg)
   } finally {
     isExecuting.value = false
   }

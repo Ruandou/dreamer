@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { NModal } from 'naive-ui'
 
-const props = defineProps<{
+defineProps<{
   show: boolean
   videoUrl?: string
   thumbnailUrl?: string
@@ -121,9 +121,6 @@ const handleMouseMove = () => {
   }, 3000)
 }
 
-const close = () => {
-  emit('update:show', false)
-}
 </script>
 
 <template>
@@ -131,7 +128,6 @@ const close = () => {
     :show="show"
     preset="card"
     :style="{ width: '90%', maxWidth: '900px' }"
-    :title="null"
     @update:show="(v) => emit('update:show', v)"
   >
     <div class="video-player" @mousemove="handleMouseMove">

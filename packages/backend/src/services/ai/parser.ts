@@ -13,7 +13,7 @@ import {
   normalizeParsedCharacterList
 } from './parsed-script-types.js'
 
-export type { ParsedCharacter, ParsedCharacterImage }
+export type { ParsedCharacter }
 export { DeepSeekAuthError, DeepSeekRateLimitError }
 
 /** 与 DeepSeek 计价结构一致（解析路径默认未计缓存命中） */

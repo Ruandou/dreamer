@@ -134,7 +134,7 @@ function resolveDbLocationName(dbNames: readonly string[], aiName: string | unde
 }
 
 /** 视觉补全后仍为空的槽位，用单槽提示词生成补写（须已具备 description 或角色描述） */
-export async function fillMissingCharacterImagePrompts(
+async function fillMissingCharacterImagePrompts(
   projectId: string,
   log: ModelCallLogContext
 ): Promise<void> {

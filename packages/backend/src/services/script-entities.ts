@@ -34,6 +34,24 @@ export function isCrowdExtraCharacterName(raw: string): boolean {
   return false
 }
 
+/** 从剧本中收集去重称谓（排除群演占位），供身份合并模型输入 */
+export function collectUniqueCharacterNamesFromScript(script: ScriptContent): string[] {
+  const set = new Set<string>()
+  for (const scene of script.scenes || []) {
+    for (const c of scene.characters || []) {
+      if (isCrowdExtraCharacterName(c)) continue
+      const t = c.trim()
+      if (t) set.add(t)
+    }
+    for (const d of scene.dialogues || []) {
+      if (isCrowdExtraCharacterName(d.character)) continue
+      const t = d.character.trim()
+      if (t) set.add(t)
+    }
+  }
+  return [...set].sort()
+}
+
 export async function saveCharacters(projectId: string, script: ScriptContent) {
   const characterNames = new Set<string>()
 

@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { NCard, NButton, NSpace, NUpload, NInput, NResult, NSpin, NText, NAlert, NModal, NDescriptions, NDescriptionsItem, NTag, NCollapse, NCollapseItem } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
 import { importProject, getImportTaskStatus, previewImport, type PreviewResult } from '@/api'
-import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 
 const router = useRouter()

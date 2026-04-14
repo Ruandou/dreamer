@@ -10,9 +10,7 @@ import {
 } from './deepseek-client.js'
 import type { ParsedCharacter } from './parsed-script-types.js'
 import { normalizeParsedCharacterList } from './parsed-script-types.js'
-import { isCrowdExtraCharacterName } from '../script-entities.js'
-
-export interface CharacterIdentityMergeResult {
+interface CharacterIdentityMergeResult {
   characters: ParsedCharacter[]
   /** 非规范称谓 -> 规范名（含与自身相等的映射时可忽略） */
   aliasToCanonical: Record<string, string>
@@ -70,23 +68,6 @@ function buildMergeUserScript(script: ScriptContent, uniqueNames: string[]): str
     lines.push(`场${scene.sceneNum}：角色=${ch || '—'}；说话人=${sp || '—'}`)
   }
   return lines.join('\n\n')
-}
-
-export function collectUniqueCharacterNamesFromScript(script: ScriptContent): string[] {
-  const set = new Set<string>()
-  for (const scene of script.scenes || []) {
-    for (const c of scene.characters || []) {
-      if (isCrowdExtraCharacterName(c)) continue
-      const t = c.trim()
-      if (t) set.add(t)
-    }
-    for (const d of scene.dialogues || []) {
-      if (isCrowdExtraCharacterName(d.character)) continue
-      const t = d.character.trim()
-      if (t) set.add(t)
-    }
-  }
-  return [...set].sort()
 }
 
 function normalizeMergePayload(data: any): CharacterIdentityMergeResult {

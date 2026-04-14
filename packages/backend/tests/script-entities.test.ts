@@ -13,7 +13,12 @@ vi.mock('../src/lib/prisma.js', () => ({
   }
 }))
 
-import { saveCharacters, saveLocations, isCrowdExtraCharacterName } from '../src/services/script-entities.js'
+import {
+  saveCharacters,
+  saveLocations,
+  isCrowdExtraCharacterName,
+  collectUniqueCharacterNamesFromScript
+} from '../src/services/script-entities.js'
 
 const script: ScriptContent = {
   title: 'Test',
@@ -45,6 +50,34 @@ describe('script-entities', () => {
     vi.clearAllMocks()
     mockCharacterUpsert.mockResolvedValue({})
     mockLocationUpsert.mockResolvedValue({})
+  })
+
+  it('collectUniqueCharacterNamesFromScript dedupes and excludes crowd placeholders', () => {
+    const s: ScriptContent = {
+      title: 'T',
+      summary: 'S',
+      scenes: [
+        {
+          sceneNum: 1,
+          location: '街',
+          timeOfDay: '日',
+          characters: ['张三', '群演', '李四'],
+          description: 'x',
+          dialogues: [{ character: '张三', content: '你好' }],
+          actions: []
+        },
+        {
+          sceneNum: 2,
+          location: '巷',
+          timeOfDay: '夜',
+          characters: ['李四'],
+          description: 'y',
+          dialogues: [{ character: '路人甲', content: '…' }],
+          actions: []
+        }
+      ]
+    }
+    expect(collectUniqueCharacterNamesFromScript(s)).toEqual(['张三', '李四'])
   })
 
   it('isCrowdExtraCharacterName matches placeholders but not named roles', () => {

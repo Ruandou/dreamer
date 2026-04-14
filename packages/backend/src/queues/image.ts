@@ -39,7 +39,7 @@ function notify(
   }
 }
 
-export const imageWorker = new Worker<ImageGenerationJobData>(
+const imageWorker = new Worker<ImageGenerationJobData>(
   'image-generation',
   async (job) => {
     const data = job.data

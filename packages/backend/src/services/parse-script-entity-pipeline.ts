@@ -8,10 +8,8 @@ import { characterRepository } from '../repositories/character-repository.js'
 import { projectRepository } from '../repositories/project-repository.js'
 import { saveCharacters, saveLocations } from './script-entities.js'
 import { normalizeScriptContent } from './character-identity-normalize.js'
-import {
-  fetchCharacterIdentityMerge,
-  collectUniqueCharacterNamesFromScript
-} from './ai/character-identity-merge.js'
+import { fetchCharacterIdentityMerge } from './ai/character-identity-merge.js'
+import { collectUniqueCharacterNamesFromScript } from './script-entities.js'
 import type { ParsedCharacter } from './ai/parsed-script-types.js'
 import { normalizeParsedCharacterList } from './ai/parsed-script-types.js'
 import { mergeEpisodesToScriptContent, scriptFromJson } from './project-script-jobs.js'
