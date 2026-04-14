@@ -12,6 +12,7 @@ import {
   NEmpty,
   NSpin,
   NPopconfirm,
+  NTooltip,
   useMessage
 } from 'naive-ui'
 import type { ProjectLocation } from '@dreamer/shared/types'
@@ -336,7 +337,18 @@ async function generateAllMissing() {
       <NEmpty v-if="!loading && locations.length === 0" description="暂无场地，请先解析剧本" />
       <NGrid v-else cols="1 s:2 m:3" responsive="screen" x-gap="16" y-gap="16">
         <NGi v-for="loc in locations" :key="loc.id">
-          <NCard size="small" :title="loc.name">
+          <NCard size="small">
+            <template #header>
+              <div class="loc-card-title-wrap">
+                <NTooltip v-if="loc.name" placement="top-start" :show-arrow="false">
+                  <template #trigger>
+                    <span class="loc-card-title">{{ loc.name }}</span>
+                  </template>
+                  {{ loc.name }}
+                </NTooltip>
+                <span v-else class="loc-card-title muted">未命名场地</span>
+              </div>
+            </template>
             <template #header-extra>
               <NPopconfirm
                 positive-text="删除"
@@ -476,5 +488,25 @@ async function generateAllMissing() {
 }
 .loc-cost-placeholder {
   display: inline-block;
+}
+/* 让标题区在「删除」按钮旁可收缩，否则 flex 子项默认 min-width:auto 会撑开不换行 */
+:deep(.n-card-header__main) {
+  min-width: 0;
+  overflow: hidden;
+}
+.loc-card-title-wrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.loc-card-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+}
+.loc-card-title.muted {
+  color: var(--color-text-tertiary);
 }
 </style>

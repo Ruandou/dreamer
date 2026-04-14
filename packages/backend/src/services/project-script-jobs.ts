@@ -187,8 +187,28 @@ export async function runGenerateFirstEpisodePipelineJob(jobId: string, projectI
   }
 }
 
-export async function runScriptBatchJob(jobId: string, projectId: string, targetEpisodes: number) {
-  await updateJob(jobId, { status: 'running', currentStep: 'script-batch', progress: 0 })
+export type RunScriptBatchJobOptions = {
+  /** 嵌入「解析剧本」任务：不另建 script-batch，进度写在同一 job 上，且结束时保持 running 供后续解析步骤 */
+  embeddedInParse?: boolean
+}
+
+export async function runScriptBatchJob(
+  jobId: string,
+  projectId: string,
+  targetEpisodes: number,
+  opts?: RunScriptBatchJobOptions
+) {
+  const embedded = Boolean(opts?.embeddedInParse)
+  if (embedded) {
+    await updateJob(jobId, {
+      status: 'running',
+      currentStep: 'parse-script',
+      progress: 8,
+      progressMeta: { message: '补全或批量生成剩余剧集…' }
+    })
+  } else {
+    await updateJob(jobId, { status: 'running', currentStep: 'script-batch', progress: 0 })
+  }
 
   const project = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
   if (!project) {
@@ -199,13 +219,17 @@ export async function runScriptBatchJob(jobId: string, projectId: string, target
   const synopsis = project.synopsis || ''
   let rolling = project.storyContext || synopsis
 
+  const mapBatchProgressToParseRange = (batchPct: number) =>
+    Math.min(28, 8 + Math.round((Math.min(100, batchPct) / 100) * 20))
+
   try {
     for (let n = 2; n <= targetEpisodes; n++) {
       const existing = await projectRepository.findEpisodeByProjectNum(projectId, n)
       if (existing && scriptFromJson(existing.rawScript)) {
         const pct = Math.round(((n - 1) / Math.max(1, targetEpisodes - 1)) * 100)
+        const progress = embedded ? mapBatchProgressToParseRange(pct) : Math.min(99, pct)
         await updateJob(jobId, {
-          progress: Math.min(99, pct),
+          progress,
           progressMeta: { current: n, total: targetEpisodes, message: `第 ${n} 集已存在，跳过` }
         })
         continue
@@ -223,8 +247,9 @@ export async function runScriptBatchJob(jobId: string, projectId: string, target
       await projectRepository.update(projectId, { storyContext: rolling })
 
       const pct = Math.round(((n - 1) / Math.max(1, targetEpisodes - 1)) * 100)
+      const progress = embedded ? mapBatchProgressToParseRange(pct) : Math.min(99, pct)
       await updateJob(jobId, {
-        progress: Math.min(99, pct),
+        progress,
         progressMeta: {
           current: n,
           total: targetEpisodes,
@@ -233,12 +258,25 @@ export async function runScriptBatchJob(jobId: string, projectId: string, target
       })
     }
 
-    await updateJob(jobId, {
-      status: 'completed',
-      progress: 100,
-      currentStep: 'completed',
-      progressMeta: { current: targetEpisodes, total: targetEpisodes, message: '批量剧本已完成' }
-    })
+    if (embedded) {
+      await updateJob(jobId, {
+        status: 'running',
+        currentStep: 'parse-script',
+        progress: 28,
+        progressMeta: {
+          current: targetEpisodes,
+          total: targetEpisodes,
+          message: '剧集已齐备，继续解析…'
+        }
+      })
+    } else {
+      await updateJob(jobId, {
+        status: 'completed',
+        progress: 100,
+        currentStep: 'completed',
+        progressMeta: { current: targetEpisodes, total: targetEpisodes, message: '批量剧本已完成' }
+      })
+    }
   } catch (e: any) {
     await updateJob(jobId, {
       status: 'failed',
@@ -248,11 +286,24 @@ export async function runScriptBatchJob(jobId: string, projectId: string, target
   }
 }
 
-/** 补全缺失集 rawScript（在解析前调用） */
-export async function ensureAllEpisodeScripts(projectId: string, targetEpisodes: number) {
+/**
+ * 补全缺失集 rawScript（在解析前调用）。
+ * @param reusePipelineJobId 若传入（通常为当前 parse-script 的 jobId），则不再新建 script-batch，把批量进度写到同一任务上，避免前端优先展示 parse 时长期卡在 5%。
+ */
+export async function ensureAllEpisodeScripts(
+  projectId: string,
+  targetEpisodes: number,
+  reusePipelineJobId?: string
+) {
   const ep1 = await projectRepository.findEpisodeByProjectNum(projectId, 1)
   if (!ep1 || !scriptFromJson(ep1.rawScript)) {
     await runGenerateFirstEpisode(projectId)
+    if (reusePipelineJobId) {
+      await updateJob(reusePipelineJobId, {
+        progress: 7,
+        progressMeta: { message: '已补全第一集，检查其余剧集…' }
+      })
+    }
   }
 
   let needBatch = false
@@ -264,6 +315,11 @@ export async function ensureAllEpisodeScripts(projectId: string, targetEpisodes:
     }
   }
   if (!needBatch) return
+
+  if (reusePipelineJobId) {
+    await runScriptBatchJob(reusePipelineJobId, projectId, targetEpisodes, { embeddedInParse: true })
+    return
+  }
 
   const job = await pipelineRepository.createPipelineJob({
     projectId,
@@ -286,7 +342,7 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
   await updateJob(jobId, { status: 'running', currentStep: 'parse-script', progress: 5 })
 
   try {
-    await ensureAllEpisodeScripts(projectId, targetEpisodes)
+    await ensureAllEpisodeScripts(projectId, targetEpisodes, jobId)
 
     const project = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
     if (!project) {
