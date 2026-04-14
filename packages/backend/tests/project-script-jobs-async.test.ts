@@ -5,7 +5,7 @@ const { mockCount, mockFindFirst } = vi.hoisted(() => ({
   mockFindFirst: vi.fn()
 }))
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     pipelineJob: {
       count: mockCount,

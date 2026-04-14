@@ -1,4 +1,4 @@
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import { normalizeProjectDefaultAspectRatio } from '../lib/project-aspect.js'
 
 export interface ParsedCharacter {

@@ -43,7 +43,7 @@ vi.mock('../src/services/project-script-jobs.js', () => ({
   DEFAULT_TARGET_EPISODES: 36
 }))
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     project: {
       findMany: mockProjectFindMany,

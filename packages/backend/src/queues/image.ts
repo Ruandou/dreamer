@@ -1,7 +1,7 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
 import type { ImageGenerationJobData } from '@dreamer/shared/types'
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import {
   generateTextToImageAndPersist,
   generateImageEditAndPersist,

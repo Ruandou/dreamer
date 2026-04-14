@@ -39,4 +39,22 @@ export class TakeRepository {
       orderBy: { createdAt: 'desc' }
     })
   }
+
+  findScenesWithTakesByProject(projectId: string) {
+    return this.prisma.scene.findMany({
+      where: {
+        episode: { projectId }
+      },
+      include: {
+        takes: true
+      }
+    })
+  }
+
+  updateScene(sceneId: string, data: Prisma.SceneUpdateInput) {
+    return this.prisma.scene.update({
+      where: { id: sceneId },
+      data
+    })
+  }
 }

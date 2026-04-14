@@ -32,7 +32,7 @@ vi.mock('../src/plugins/auth.js', () => ({
   verifyProjectOwnership: (...args: unknown[]) => mockVerifyProjectOwnership(...args)
 }))
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     take: {
       findUnique: mockTakeFindUnique,

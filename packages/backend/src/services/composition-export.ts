@@ -2,7 +2,7 @@
  * 成片导出：供 compositions 路由与按集 compose 复用
  */
 
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import { composeVideo, type CompositionClip } from './ffmpeg.js'
 
 export type CompositionExportResult =

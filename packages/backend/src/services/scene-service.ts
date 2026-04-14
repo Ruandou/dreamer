@@ -1,5 +1,5 @@
 import type { VideoJobData, VideoModel } from '@dreamer/shared/types'
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import { videoQueue } from '../queues/video.js'
 import { optimizePrompt } from './deepseek.js'
 import { stitchScenePrompt } from './scene-prompt.js'

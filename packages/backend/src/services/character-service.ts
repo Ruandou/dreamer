@@ -1,5 +1,5 @@
 import type { CharacterImage, Prisma } from '@prisma/client'
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import { uploadFile, generateFileKey } from './storage.js'
 import { generateCharacterSlotImagePrompt } from './deepseek.js'
 import { CharacterRepository } from '../repositories/character-repository.js'

@@ -8,7 +8,6 @@ import multipart from '@fastify/multipart'
 import staticFiles from '@fastify/static'
 import swagger from '@fastify/swagger'
 import swaggerUI from '@fastify/swagger-ui'
-import { PrismaClient } from '@prisma/client'
 import { authPlugin } from './plugins/auth.js'
 import { ssePlugin } from './plugins/sse.js'
 import { projectRoutes } from './routes/projects.js'
@@ -28,8 +27,7 @@ import { pipelineRoutes } from './routes/pipeline.js'
 import { imageGenerationJobRoutes } from './routes/image-generation-jobs.js'
 import { modelApiCallRoutes } from './routes/model-api-calls.js'
 
-// Initialize Prisma with explicit DATABASE_URL
-export const prisma = new PrismaClient()
+export { prisma } from './lib/prisma.js'
 
 const fastify = Fastify({
   logger: true

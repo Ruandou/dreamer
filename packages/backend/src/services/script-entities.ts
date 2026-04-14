@@ -2,7 +2,7 @@
  * 从文学剧本 ScriptContent 落库 Character / Location（供 Pipeline 与解析任务复用）
  */
 
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import type { ScriptContent } from '@dreamer/shared/types'
 
 /**

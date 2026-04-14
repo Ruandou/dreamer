@@ -1,9 +1,7 @@
 import { FastifyInstance } from 'fastify'
-import { prisma } from '../index.js'
-import { runCompositionExport } from '../services/composition-export.js'
-import { uploadFile, generateFileKey } from '../services/storage.js'
 import { verifyCompositionOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
+import { compositionService } from '../services/composition-service.js'
 
 export async function compositionRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { projectId: string } }>(
@@ -17,11 +15,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      return prisma.composition.findMany({
-        where: { projectId },
-        include: { scenes: { orderBy: { order: 'asc' } } },
-        orderBy: { createdAt: 'desc' }
-      })
+      return compositionService.listByProject(projectId)
     }
   )
 
@@ -36,30 +30,13 @@ export async function compositionRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const composition = await prisma.composition.findUnique({
-        where: { id: compositionId },
-        include: {
-          scenes: {
-            orderBy: { order: 'asc' },
-            include: { take: true, scene: true }
-          }
-        }
-      })
+      const composition = await compositionService.getDetailEnriched(compositionId)
 
       if (!composition) {
         return reply.status(404).send({ error: 'Composition not found' })
       }
 
-      const enrichedScenes = composition.scenes.map((row) => ({
-        ...row,
-        videoUrl: row.take.videoUrl || null,
-        thumbnailUrl: row.take.thumbnailUrl || null
-      }))
-
-      return {
-        ...composition,
-        scenes: enrichedScenes
-      }
+      return composition
     }
   )
 
@@ -74,9 +51,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const composition = await prisma.composition.create({
-        data: { projectId, episodeId, title }
-      })
+      const composition = await compositionService.create(projectId, episodeId, title)
 
       return reply.status(201).send(composition)
     }
@@ -95,12 +70,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
 
       const { title } = request.body
 
-      const composition = await prisma.composition.update({
-        where: { id: compositionId },
-        data: { title }
-      })
-
-      return composition
+      return compositionService.updateTitle(compositionId, title)
     }
   )
 
@@ -115,17 +85,19 @@ export async function compositionRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const composition = await prisma.composition.findUnique({ where: { id: compositionId } })
-      if (!composition) {
+      const deleted = await compositionService.deleteIfExists(compositionId)
+      if (!deleted) {
         return reply.status(404).send({ error: 'Composition not found' })
       }
 
-      await prisma.composition.delete({ where: { id: compositionId } })
       return reply.status(204).send()
     }
   )
 
-  fastify.put<{ Params: { id: string }; Body: { clips: Array<{ sceneId: string; takeId: string; order: number }> } }>(
+  fastify.put<{
+    Params: { id: string }
+    Body: { clips: Array<{ sceneId: string; takeId: string; order: number }> }
+  }>(
     '/:id/timeline',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
@@ -138,23 +110,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
 
       const { clips } = request.body
 
-      await prisma.compositionScene.deleteMany({ where: { compositionId } })
-
-      if (clips.length > 0) {
-        await prisma.compositionScene.createMany({
-          data: clips.map((c) => ({
-            compositionId,
-            sceneId: c.sceneId,
-            takeId: c.takeId,
-            order: c.order
-          }))
-        })
-      }
-
-      return prisma.composition.findUnique({
-        where: { id: compositionId },
-        include: { scenes: { orderBy: { order: 'asc' } } }
-      })
+      return compositionService.updateTimeline(compositionId, clips)
     }
   )
 
@@ -169,7 +125,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const result = await runCompositionExport(compositionId)
+      const result = await compositionService.exportComposition(compositionId)
       if (!result.ok) {
         if (result.httpStatus === 500) {
           return reply.status(500).send({

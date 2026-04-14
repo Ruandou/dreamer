@@ -28,7 +28,7 @@ const {
 const mockExecutePipelineJob = vi.fn()
 
 // Mock the index.js module
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     project: {
       findFirst: mockProjectFindFirst,

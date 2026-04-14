@@ -1,15 +1,5 @@
-import { FastifyInstance, FastifyReply } from 'fastify'
-import { prisma } from '../index.js'
-import { permissionDeniedBody } from '../lib/http-errors.js'
-import {
-  runGenerateFirstEpisodePipelineJob,
-  runScriptBatchJob,
-  runParseScriptJob,
-  DEFAULT_TARGET_EPISODES,
-  hasConcurrentOutlinePipelineJob,
-  getActiveOutlinePipelineJob
-} from '../services/project-script-jobs.js'
-import { normalizeProjectDefaultAspectRatio } from '../lib/project-aspect.js'
+import { FastifyInstance } from 'fastify'
+import { projectService } from '../services/project-service.js'
 
 export async function projectRoutes(fastify: FastifyInstance) {
   // List projects
@@ -18,14 +8,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     { preHandler: [fastify.authenticate] },
     async (request) => {
       const user = (request as any).user
-      return prisma.project.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'desc' },
-        // 仅用于列表判断是否已解析（有角色）：take 1，避免拉全量角色
-        include: {
-          characters: { take: 1, select: { id: true } }
-        }
-      })
+      return projectService.listProjects(user.id)
     }
   )
 
@@ -39,15 +22,10 @@ export async function projectRoutes(fastify: FastifyInstance) {
       const user = (request as any).user
       const { name, description, aspectRatio } = request.body
 
-      const project = await prisma.project.create({
-        data: {
-          name,
-          description,
-          userId: user.id,
-          ...(aspectRatio !== undefined && {
-            aspectRatio: normalizeProjectDefaultAspectRatio(aspectRatio)
-          })
-        }
+      const project = await projectService.createProject(user.id, {
+        name,
+        description,
+        aspectRatio
       })
 
       return reply.status(201).send(project)
@@ -66,50 +44,17 @@ export async function projectRoutes(fastify: FastifyInstance) {
       const projectId = request.params.id
       const { description } = request.body || {}
 
-      const project = await prisma.project.findFirst({
-        where: { id: projectId, userId: user.id }
-      })
-      if (!project) {
-        return reply.status(404).send({ error: '项目不存在' })
-      }
-
-      if (description?.trim()) {
-        await prisma.project.update({
-          where: { id: projectId },
-          data: { description: description.trim() }
-        })
-      }
-
-      if (await hasConcurrentOutlinePipelineJob(projectId)) {
-        return reply.status(409).send({
-          error: '已有剧本生成或解析任务进行中，请稍后再试'
-        })
-      }
-
-      const job = await prisma.pipelineJob.create({
-        data: {
-          projectId,
-          status: 'pending',
-          jobType: 'script-first',
-          currentStep: 'script-first',
-          progress: 0
-        }
+      const result = await projectService.generateFirstEpisode(user.id, projectId, {
+        description
       })
 
-      try {
-        await runGenerateFirstEpisodePipelineJob(job.id, projectId)
-      } catch (e: any) {
-        return reply.status(500).send({ error: e?.message || '生成第一集失败' })
+      if (!result.ok) {
+        return reply.status(result.status).send({ error: result.error })
       }
 
-      const updated = await prisma.project.findUnique({
-        where: { id: projectId },
-        include: { episodes: { where: { episodeNum: 1 } } }
-      })
-      const ep1 = updated?.episodes[0]
       return {
-        episode: ep1,
-        synopsis: updated?.synopsis
+        episode: result.episode,
+        synopsis: result.synopsis
       }
     }
   )
@@ -124,51 +69,22 @@ export async function projectRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const user = (request as any).user
       const projectId = request.params.id
-      const targetEpisodes = request.body?.targetEpisodes ?? DEFAULT_TARGET_EPISODES
+      const targetEpisodes = request.body?.targetEpisodes
 
-      const project = await prisma.project.findFirst({
-        where: { id: projectId, userId: user.id }
-      })
-      if (!project) {
-        return reply.status(404).send({ error: '项目不存在' })
+      const result = await projectService.generateRemainingEpisodes(
+        user.id,
+        projectId,
+        targetEpisodes
+      )
+
+      if (!result.ok) {
+        return reply.status(result.status).send({ error: result.error })
       }
-
-      if (targetEpisodes < 2 || targetEpisodes > 200) {
-        return reply.status(400).send({ error: 'targetEpisodes 须在 2–200 之间' })
-      }
-
-      const ep1 = await prisma.episode.findUnique({
-        where: { projectId_episodeNum: { projectId, episodeNum: 1 } }
-      })
-      const rs = ep1?.rawScript as any
-      if (!ep1 || !rs || !Array.isArray(rs.scenes) || rs.scenes.length === 0) {
-        return reply.status(400).send({ error: '请先生成第一集剧本' })
-      }
-
-      if (await hasConcurrentOutlinePipelineJob(projectId)) {
-        return reply.status(409).send({
-          error: '已有剧本生成或解析任务进行中，请稍后再试'
-        })
-      }
-
-      const job = await prisma.pipelineJob.create({
-        data: {
-          projectId,
-          status: 'pending',
-          jobType: 'script-batch',
-          currentStep: 'script-batch',
-          progress: 0
-        }
-      })
-
-      void runScriptBatchJob(job.id, projectId, targetEpisodes).catch(err => {
-        console.error('script-batch job failed', err)
-      })
 
       return {
-        jobId: job.id,
+        jobId: result.jobId,
         status: 'processing',
-        targetEpisodes,
+        targetEpisodes: result.targetEpisodes,
         message: '任务已启动'
       }
     }
@@ -184,49 +100,16 @@ export async function projectRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const user = (request as any).user
       const projectId = request.params.id
-      const targetEpisodes = request.body?.targetEpisodes ?? DEFAULT_TARGET_EPISODES
+      const targetEpisodes = request.body?.targetEpisodes
 
-      const project = await prisma.project.findFirst({
-        where: { id: projectId, userId: user.id },
-        include: { episodes: { where: { episodeNum: 1 } } }
-      })
-      if (!project) {
-        return reply.status(404).send({ error: '项目不存在' })
+      const result = await projectService.parseScript(user.id, projectId, targetEpisodes)
+
+      if (!result.ok) {
+        return reply.status(result.status).send({ error: result.error })
       }
-
-      if (!project.visualStyle?.length) {
-        return reply.status(400).send({ error: '请至少选择一种视觉风格' })
-      }
-
-      const ep1 = project.episodes[0]
-      const raw = ep1?.rawScript
-      const scenes = raw && typeof raw === 'object' ? (raw as any).scenes : null
-      if (!raw || typeof raw !== 'object' || !Array.isArray(scenes) || scenes.length === 0) {
-        return reply.status(400).send({ error: '请先生成第一集剧本' })
-      }
-
-      if (await hasConcurrentOutlinePipelineJob(projectId)) {
-        return reply.status(409).send({
-          error: '已有剧本生成或解析任务进行中，请稍后再试'
-        })
-      }
-
-      const job = await prisma.pipelineJob.create({
-        data: {
-          projectId,
-          status: 'pending',
-          jobType: 'parse-script',
-          currentStep: 'parse-script',
-          progress: 0
-        }
-      })
-
-      void runParseScriptJob(job.id, projectId, targetEpisodes).catch(err => {
-        console.error('parse-script job failed', err)
-      })
 
       return {
-        jobId: job.id,
+        jobId: result.jobId,
         status: 'processing',
         message: '解析任务已启动'
       }
@@ -240,30 +123,15 @@ export async function projectRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const user = (request as any).user
       const projectId = request.params.id
-      const project = await prisma.project.findFirst({
-        where: { id: projectId, userId: user.id }
-      })
-      if (!project) {
-        return reply.status(404).send({ error: '项目不存在' })
+
+      const result = await projectService.getOutlineActiveJob(user.id, projectId)
+      if (!result.ok) {
+        return reply.status(result.status).send({ error: result.error })
       }
-      const job = await getActiveOutlinePipelineJob(projectId)
-      if (!job) {
+      if (!result.job) {
         return { job: null }
       }
-      return {
-        job: {
-          id: job.id,
-          projectId: job.projectId,
-          status: job.status,
-          jobType: job.jobType,
-          currentStep: job.currentStep,
-          progress: job.progress,
-          progressMeta: job.progressMeta,
-          error: job.error,
-          createdAt: job.createdAt,
-          updatedAt: job.updatedAt
-        }
-      }
+      return { job: result.job }
     }
   )
 
@@ -273,20 +141,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const user = (request as any).user
-      const project = await prisma.project.findFirst({
-        where: { id: request.params.id, userId: user.id },
-        include: {
-          // 不 include DB Scene：分镜/任务走 /scenes；剧本正文在 episode.rawScript（JSON）
-          episodes: true,
-          characters: {
-            include: {
-              images: { orderBy: { order: 'asc' } }
-            }
-          },
-          locations: { where: { deletedAt: null } },
-          compositions: true
-        }
-      })
+      const project = await projectService.getProjectDetail(user.id, request.params.id)
 
       if (!project) {
         return reply.status(404).send({ error: 'Project not found' })
@@ -298,7 +153,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
 
   async function handleProjectUpdate(
     request: { params: { id: string }; body: Record<string, unknown> },
-    reply: FastifyReply
+    reply: import('fastify').FastifyReply
   ) {
     const user = (request as any).user as { id: string }
     const { name, description, synopsis, visualStyle, aspectRatio } = request.body as {
@@ -309,39 +164,19 @@ export async function projectRoutes(fastify: FastifyInstance) {
       aspectRatio?: string
     }
 
-    const project = await prisma.project.findFirst({
-      where: { id: request.params.id, userId: user.id }
+    const result = await projectService.updateProject(user.id, request.params.id, {
+      name,
+      description,
+      synopsis,
+      visualStyle,
+      aspectRatio
     })
 
-    if (!project) {
-      return reply.status(404).send({ error: 'Project not found' })
+    if (!result.ok) {
+      return reply.status(result.status).send({ error: result.error })
     }
 
-    const data: Record<string, unknown> = {}
-    if (name !== undefined) data.name = name
-    if (description !== undefined) data.description = description
-    if (synopsis !== undefined) data.synopsis = synopsis
-    if (visualStyle !== undefined) {
-      if (!Array.isArray(visualStyle)) {
-        return reply.status(400).send({ error: 'visualStyle 须为字符串数组' })
-      }
-      data.visualStyle = visualStyle
-    }
-    if (aspectRatio !== undefined) {
-      if (typeof aspectRatio !== 'string') {
-        return reply.status(400).send({ error: 'aspectRatio 须为字符串' })
-      }
-      data.aspectRatio = normalizeProjectDefaultAspectRatio(aspectRatio)
-    }
-
-    if (Object.keys(data).length === 0) {
-      return project
-    }
-
-    return prisma.project.update({
-      where: { id: request.params.id },
-      data
-    })
+    return result.project
   }
 
   // Update project
@@ -382,15 +217,10 @@ export async function projectRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const user = (request as any).user
 
-      const project = await prisma.project.findFirst({
-        where: { id: request.params.id, userId: user.id }
-      })
-
-      if (!project) {
+      const deleted = await projectService.deleteProject(user.id, request.params.id)
+      if (!deleted) {
         return reply.status(404).send({ error: 'Project not found' })
       }
-
-      await prisma.project.delete({ where: { id: request.params.id } })
 
       return reply.status(204).send()
     }

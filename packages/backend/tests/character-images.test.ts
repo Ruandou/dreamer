@@ -17,7 +17,7 @@ vi.mock('../src/plugins/auth.js', () => ({
   verifyCharacterImageOwnership: (...args: unknown[]) => mockVerifyCharacterImageOwnership(...args)
 }))
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     characterImage: {
       findUnique: mockCharacterImageFindUnique,

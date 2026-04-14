@@ -1,6 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { prisma } from '../index.js'
-import bcrypt from 'bcrypt'
+import { authService } from '../services/auth-service.js'
 
 export async function authRoutes(fastify: FastifyInstance) {
   // Register
@@ -9,26 +8,21 @@ export async function authRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { email, password, name } = request.body
 
-      const existing = await prisma.user.findUnique({ where: { email } })
-      if (existing) {
+      const result = await authService.register(email, password, name)
+      if (!result.ok) {
         return reply.status(400).send({ error: 'Email already registered' })
       }
 
-      const hashedPassword = await bcrypt.hash(password, 10)
-      const user = await prisma.user.create({
-        data: { email, password: hashedPassword, name }
-      })
-
-      const accessToken = fastify.jwt.sign({ id: user.id, email: user.email })
+      const accessToken = fastify.jwt.sign({ id: result.user.id, email: result.user.email })
       const refreshToken = fastify.jwt.sign(
-        { id: user.id, email: user.email },
+        { id: result.user.id, email: result.user.email },
         { expiresIn: '7d' }
       )
 
       return {
         accessToken,
         refreshToken,
-        user: { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt }
+        user: result.user
       }
     }
   )
@@ -39,26 +33,21 @@ export async function authRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { email, password } = request.body
 
-      const user = await prisma.user.findUnique({ where: { email } })
-      if (!user) {
+      const result = await authService.login(email, password)
+      if (!result.ok) {
         return reply.status(401).send({ error: 'Invalid credentials' })
       }
 
-      const valid = await bcrypt.compare(password, user.password)
-      if (!valid) {
-        return reply.status(401).send({ error: 'Invalid credentials' })
-      }
-
-      const accessToken = fastify.jwt.sign({ id: user.id, email: user.email })
+      const accessToken = fastify.jwt.sign({ id: result.user.id, email: result.user.email })
       const refreshToken = fastify.jwt.sign(
-        { id: user.id, email: user.email },
+        { id: result.user.id, email: result.user.email },
         { expiresIn: '7d' }
       )
 
       return {
         accessToken,
         refreshToken,
-        user: { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt }
+        user: result.user
       }
     }
   )
@@ -69,11 +58,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     { preHandler: [fastify.authenticate] },
     async (request) => {
       const user = (request as any).user
-      const current = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: { id: true, email: true, name: true, createdAt: true }
-      })
-      return current
+      return authService.getMe(user.id)
     }
   )
 }

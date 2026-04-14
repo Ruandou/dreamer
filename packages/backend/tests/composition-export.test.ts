@@ -5,7 +5,7 @@ const { mockCompositionFindUnique, mockCompositionUpdate } = vi.hoisted(() => ({
   mockCompositionUpdate: vi.fn()
 }))
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     composition: {
       findUnique: mockCompositionFindUnique,

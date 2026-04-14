@@ -49,7 +49,7 @@ vi.mock('bullmq', () => ({
 }))
 
 // Mock prisma
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     importTask: {
       update: mockImportTaskUpdate

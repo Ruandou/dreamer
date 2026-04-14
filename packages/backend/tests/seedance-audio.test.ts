@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockFindMany = vi.fn()
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     sceneDialogue: {
       findMany: (...args: unknown[]) => mockFindMany(...args)

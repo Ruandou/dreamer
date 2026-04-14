@@ -1,5 +1,5 @@
 import type { ImageGenerationJobData } from '@dreamer/shared/types'
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import { imageQueue } from '../queues/image.js'
 import { CharacterImageRepository } from '../repositories/character-image-repository.js'
 import { buildCharacterImageStyledPrompt } from '../lib/character-image-prompt.js'

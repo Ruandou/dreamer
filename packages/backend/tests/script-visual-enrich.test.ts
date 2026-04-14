@@ -24,7 +24,7 @@ vi.mock('../src/services/deepseek.js', () => ({
   fetchScriptVisualEnrichmentJson: (...args: unknown[]) => mockFetchScriptVisualEnrichmentJson(...args)
 }))
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     project: {
       findUnique: mockProjectFindUnique

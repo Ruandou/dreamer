@@ -3,7 +3,7 @@
  * 负责在后台执行 Pipeline 各步骤并更新 Job 状态
  */
 
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import {
   writeScriptFromIdea
 } from './script-writer.js'

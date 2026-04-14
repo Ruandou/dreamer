@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify'
-import { prisma } from '../index.js'
 import { verifyTaskOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
+import { taskService } from '../services/task-service.js'
 
 export async function taskRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
@@ -15,9 +15,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const task = await prisma.take.findUnique({
-        where: { id: taskId }
-      })
+      const task = await taskService.getById(taskId)
 
       if (!task) {
         return reply.status(404).send({ error: 'Task not found' })
@@ -38,26 +36,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const scenes = await prisma.scene.findMany({
-        where: {
-          episode: { projectId }
-        },
-        include: {
-          takes: true
-        }
-      })
-
-      const tasks = scenes.flatMap((scene) =>
-        scene.takes.map((task) => ({
-          ...task,
-          sceneNum: scene.sceneNum,
-          sceneDescription: scene.description
-        }))
-      )
-
-      return tasks.sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
+      return taskService.listByProject(projectId)
     }
   )
 
@@ -72,29 +51,12 @@ export async function taskRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const task = await prisma.take.findUnique({
-        where: { id: taskId }
-      })
-
-      if (!task) {
-        return reply.status(404).send({ error: 'Task not found' })
+      const result = await taskService.cancelTask(taskId)
+      if (!result.ok) {
+        return reply.status(result.status).send({ error: result.error })
       }
 
-      if (task.status === 'completed' || task.status === 'failed') {
-        return reply.status(400).send({ error: 'Cannot cancel a completed or failed task' })
-      }
-
-      const updatedTask = await prisma.take.update({
-        where: { id: taskId },
-        data: { status: 'failed', errorMsg: 'Cancelled by user' }
-      })
-
-      await prisma.scene.update({
-        where: { id: task.sceneId },
-        data: { status: 'pending' }
-      })
-
-      return updatedTask
+      return result.task
     }
   )
 
@@ -109,41 +71,12 @@ export async function taskRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const task = await prisma.take.findUnique({
-        where: { id: taskId }
-      })
-
-      if (!task) {
-        return reply.status(404).send({ error: 'Task not found' })
+      const result = await taskService.retryTask(taskId)
+      if (!result.ok) {
+        return reply.status(result.status).send({ error: result.error })
       }
 
-      if (task.status !== 'failed') {
-        return reply.status(400).send({ error: 'Can only retry failed tasks' })
-      }
-
-      const newTask = await prisma.take.create({
-        data: {
-          sceneId: task.sceneId,
-          model: task.model,
-          status: 'queued',
-          prompt: task.prompt
-        }
-      })
-
-      await prisma.scene.update({
-        where: { id: task.sceneId },
-        data: { status: 'generating' }
-      })
-
-      const { videoQueue } = await import('../queues/video.js')
-      await videoQueue.add('generate-video', {
-        sceneId: task.sceneId,
-        taskId: newTask.id,
-        prompt: task.prompt,
-        model: task.model as 'wan2.6' | 'seedance2.0'
-      })
-
-      return newTask
+      return result.task
     }
   )
 }

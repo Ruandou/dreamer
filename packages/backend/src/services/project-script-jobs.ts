@@ -3,7 +3,7 @@
  */
 
 import { Prisma } from '@prisma/client'
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import { writeScriptFromIdea, writeEpisodeForProject } from './script-writer.js'
 import { saveCharacters, saveLocations } from './script-entities.js'
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'

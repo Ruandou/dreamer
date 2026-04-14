@@ -15,7 +15,7 @@ vi.mock('../src/services/deepseek.js', () => ({
 }))
 
 // Mock the index.js module
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     user: {
       findUnique: mockUserFindUnique,

@@ -32,7 +32,7 @@ const mockTakeFindUnique = vi.fn()
 const mockTakeUpdate = vi.fn()
 const mockSceneUpdate = vi.fn()
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     take: {
       findUnique: mockTakeFindUnique,

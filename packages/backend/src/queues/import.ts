@@ -1,6 +1,6 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import { parseScriptDocument } from '../services/parser.js'
 import { importParsedData } from '../services/importer.js'
 

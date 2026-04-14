@@ -1,7 +1,7 @@
 // API 调用日志服务
 
 import type { Prisma } from '@prisma/client'
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 
 /** 业务侧传入：标识「谁在什么操作里」触发了模型调用，写入 requestParams.op */
 export interface ModelCallLogContext {

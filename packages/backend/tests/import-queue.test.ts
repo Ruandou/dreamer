@@ -31,7 +31,7 @@ vi.mock('bullmq', () => {
 const mockImportTaskUpdate = vi.fn()
 const mockProjectCreate = vi.fn()
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     importTask: {
       update: mockImportTaskUpdate

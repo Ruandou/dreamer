@@ -57,7 +57,7 @@ vi.mock('../src/services/deepseek.js', () => ({
   })
 }))
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     scene: {
       findMany: mockSceneFindMany,

@@ -5,7 +5,7 @@ const { mockFindMany } = vi.hoisted(() => ({
   mockFindMany: vi.fn()
 }))
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     modelApiCall: {
       findMany: mockFindMany

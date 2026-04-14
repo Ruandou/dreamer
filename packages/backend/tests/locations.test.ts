@@ -29,7 +29,7 @@ vi.mock('../src/plugins/auth.js', () => ({
   verifyLocationOwnership: (...args: unknown[]) => mockVerifyLocationOwnership(...args)
 }))
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     location: {
       findMany: mockLocationFindMany,

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock prisma before importing the module
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     modelApiCall: {
       create: vi.fn(),
@@ -19,7 +19,7 @@ import {
   truncateForModelLog,
   MODEL_LOG_PROMPT_MAX
 } from '../src/services/api-logger.js'
-import { prisma } from '../src/index.js'
+import { prisma } from '../src/lib/prisma.js'
 
 describe('ApiLogger Service', () => {
   beforeEach(() => {

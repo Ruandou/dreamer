@@ -2,7 +2,7 @@
  * 解析剧本后：用 DeepSeek 补全角色多形象 prompt 与场地定场图 imagePrompt
  */
 
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import type { ScriptContent } from '@dreamer/shared/types'
 import { fetchScriptVisualEnrichmentJson } from './deepseek.js'
 import type { ModelCallLogContext } from './api-logger.js'

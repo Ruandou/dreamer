@@ -2,7 +2,7 @@
  * 从数据库读取 SceneDialogue，组装成 Seedance 音频参数
  */
 
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import type {
   VoiceSegment as VoiceSegmentType,
   Character,

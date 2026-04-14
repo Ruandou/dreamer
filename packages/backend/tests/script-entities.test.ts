@@ -6,7 +6,7 @@ const { mockCharacterUpsert, mockLocationUpsert } = vi.hoisted(() => ({
   mockLocationUpsert: vi.fn()
 }))
 
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     character: { upsert: mockCharacterUpsert },
     location: { upsert: mockLocationUpsert }

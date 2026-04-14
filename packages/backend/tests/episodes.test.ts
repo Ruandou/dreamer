@@ -72,7 +72,7 @@ vi.mock('../src/plugins/auth.js', () => ({
 }))
 
 // Mock the index.js module
-vi.mock('../src/index.js', () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     episode: {
       findMany: mockEpisodeFindMany,

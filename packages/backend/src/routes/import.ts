@@ -1,10 +1,7 @@
 import { FastifyInstance } from 'fastify'
-import { prisma } from '../index.js'
-import { importQueue } from '../queues/import.js'
-import { parseScriptDocument } from '../services/parser.js'
-import { importParsedData, type ParsedScript } from '../services/importer.js'
 import { verifyProjectOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
+import { importRouteService } from '../services/import-route-service.js'
 
 export async function importRoutes(fastify: FastifyInstance) {
   // 预览解析结果（不保存到数据库）
@@ -19,41 +16,20 @@ export async function importRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { content, type } = request.body
 
-      if (!content) {
-        return reply.status(400).send({ error: '缺少必要参数' })
+      const userId = (request as { user: { id: string } }).user.id
+      const result = await importRouteService.previewImport(userId, content, type)
+
+      if (!result.ok) {
+        return reply.status(result.status).send({
+          error: result.error,
+          ...(result.message ? { message: result.message } : {})
+        })
       }
 
-      try {
-        const userId = (request as { user: { id: string } }).user.id
-        const { parsed, cost } = await parseScriptDocument(content, type, {
-          userId,
-          op: 'import_preview_parse'
-        })
-
-        return {
-          success: true,
-          preview: {
-            projectName: parsed.projectName,
-            description: parsed.description,
-            characters: parsed.characters,
-            episodes: parsed.episodes.map(ep => ({
-              episodeNum: ep.episodeNum,
-              title: ep.title,
-              sceneCount: ep.scenes.length,
-              scenes: ep.scenes.slice(0, 3).map(s => ({
-                sceneNum: s.sceneNum,
-                description: s.description.slice(0, 100) + (s.description.length > 100 ? '...' : '')
-              }))
-            }))
-          },
-          aiCost: cost?.costCNY || 0
-        }
-      } catch (error) {
-        console.error('Preview failed:', error)
-        return reply.status(400).send({
-          error: '解析预览失败',
-          message: error instanceof Error ? error.message : '未知错误'
-        })
+      return {
+        success: true,
+        preview: result.preview,
+        aiCost: result.aiCost
       }
     }
   )
@@ -79,30 +55,17 @@ export async function importRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      // 创建导入任务
-      const task = await prisma.importTask.create({
-        data: {
-          userId,
-          projectId,
-          content,
-          type,
-          status: 'pending'
-        }
-      })
-
-      // 加入队列
-      await importQueue.add('import-script', {
-        taskId: task.id,
-        projectId,
+      const { taskId, status } = await importRouteService.enqueueScriptImport(
         userId,
+        projectId,
         content,
         type
-      })
+      )
 
       return {
         success: true,
-        taskId: task.id,
-        status: 'pending'
+        taskId,
+        status
       }
     }
   )
@@ -124,28 +87,12 @@ export async function importRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: '缺少必要参数' })
       }
 
-      // 创建导入任务（projectId 稍后由 worker 更新）
-      const task = await prisma.importTask.create({
-        data: {
-          userId,
-          content,
-          type,
-          status: 'pending'
-        }
-      })
-
-      // 加入队列
-      await importQueue.add('import-project', {
-        taskId: task.id,
-        userId,
-        content,
-        type
-      })
+      const { taskId, status } = await importRouteService.enqueueProjectImport(userId, content, type)
 
       return {
         success: true,
-        taskId: task.id,
-        status: 'pending'
+        taskId,
+        status
       }
     }
   )
@@ -160,9 +107,7 @@ export async function importRoutes(fastify: FastifyInstance) {
       const userId = (request as any).user.id
       const taskId = request.params.id
 
-      const task = await prisma.importTask.findUnique({
-        where: { id: taskId }
-      })
+      const task = await importRouteService.getImportTask(taskId)
 
       if (!task) {
         return reply.status(404).send({ error: '任务不存在' })
@@ -187,18 +132,7 @@ export async function importRoutes(fastify: FastifyInstance) {
       const limit = request.query.limit || 50
       const offset = request.query.offset || 0
 
-      const tasks = await prisma.importTask.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset
-      })
-
-      const total = await prisma.importTask.count({
-        where: { userId }
-      })
-
-      return { tasks, total }
+      return importRouteService.listImportTasks(userId, limit, offset)
     }
   )
 }

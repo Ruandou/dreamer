@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client'
 import type { ImageGenerationJobData } from '@dreamer/shared/types'
-import { prisma } from '../index.js'
+import { prisma } from '../lib/prisma.js'
 import { imageQueue } from '../queues/image.js'
 import { sanitizeLocationImagePromptForImageApi } from './script-visual-enrich.js'
 import { LocationRepository } from '../repositories/location-repository.js'
