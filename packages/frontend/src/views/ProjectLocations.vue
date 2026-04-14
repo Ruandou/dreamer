@@ -123,7 +123,7 @@ async function generate(loc: ProjectLocation) {
             <NInput
               v-model:value="loc.imagePrompt"
               type="textarea"
-              placeholder="定场图英文提示词"
+              placeholder="定场图提示词（中文）"
               :rows="3"
               style="margin-top: 8px"
             />

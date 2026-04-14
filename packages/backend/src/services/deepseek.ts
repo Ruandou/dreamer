@@ -299,7 +299,7 @@ export async function optimizePrompt(prompt: string, context?: string): Promise<
   throw lastError || new Error('提示词优化失败')
 }
 
-/** 为角色形象槽位生成英文文生图提示词（单行，无 markdown） */
+/** 为角色形象槽位生成中文文生图提示词（单行，无 markdown），便于用户阅读且适配国产绘图模型 */
 export async function generateCharacterSlotImagePrompt(input: {
   characterName: string
   characterDescription?: string | null
@@ -318,7 +318,7 @@ export async function generateCharacterSlotImagePrompt(input: {
     input.slotDescription ? `槽位说明：${input.slotDescription}` : '',
     input.parentSlotSummary ? `父级基础形象参考：${input.parentSlotSummary}` : '',
     '',
-    '请输出一条英文的 AI 绘画提示词（写实或半写实风格短剧角色定妆），只输出提示词本身，不要引号或解释。'
+    '请输出一条中文的 AI 绘画提示词（写实或半写实风格、短剧角色定妆），只输出提示词正文，不要引号或解释。'
   ]
     .filter(Boolean)
     .join('\n')
@@ -329,7 +329,7 @@ export async function generateCharacterSlotImagePrompt(input: {
       {
         role: 'system',
         content:
-          'You write concise English text-to-image prompts for character reference sheets. Output only the prompt text.'
+          '你是短剧角色定妆提示词撰写助手。只输出中文提示词正文，可包含景别、光影、服装与材质等关键词；除专有名词外不要使用英文。'
       },
       { role: 'user', content: user }
     ],
@@ -364,14 +364,14 @@ export async function fetchScriptVisualEnrichmentJson(input: {
   try {
   const user = [
     '根据下列剧本梗概与实体列表，输出 **仅一段合法 JSON**（不要 markdown 代码块），结构为：',
-    '{"locations":[{"name":"场地名","imagePrompt":"英文定场图提示词"}],',
-    '"characters":[{"name":"角色名","images":[{"name":"形象名","type":"base|outfit|expression|pose","description":"可选中文说明","prompt":"英文提示词"}]}]}',
+    '{"locations":[{"name":"场地名","imagePrompt":"中文定场图提示词"}],',
+    '"characters":[{"name":"角色名","images":[{"name":"形象名","type":"base|outfit|expression|pose","description":"可选中文说明","prompt":"中文提示词"}]}]}',
     '',
     '规则（角色 images 数组顺序很重要）：',
     '1. 每个角色的 images 里 **必须先写至少 1 条 type 为 base 的定妆**（可与默认基础形象对应），再写衍生。',
-    '2. **base**：prompt 为完整英文定妆/定装提示词，用作该角色主参考图。',
-    '3. **outfit / expression / pose**（衍生）：必须相对上述 base 写「关联词」——用英文明确 **与 base 保持一致** 的部分（脸型、年龄感、五官比例、发型底色、体型等）以及 **仅变化** 的部分（服装款式与颜色 / 表情肌肉 / 体态与动作）。',
-    '   推荐句式：Same person as the base reference; keep […] unchanged; only change: […]。禁止写成与 base 无关的全新人物设定。',
+    '2. **base**：prompt 为完整中文定妆/定装提示词，用作该角色主参考图（用户可直接阅读）。',
+    '3. **outfit / expression / pose**（衍生）：必须相对上述 base 写「关联词」——用中文明确 **与 base 保持一致** 的部分（脸型、年龄感、五官比例、发型底色、体型等）以及 **仅变化** 的部分（服装款式与颜色 / 表情肌肉 / 体态与动作）。',
+    '   推荐句式：与基础定妆为同一人；保持……不变；仅变化：……。禁止写成与 base 无关的全新人物设定。',
     '4. 有换装、明显表情或姿态差异时再追加衍生条目；无则不必凑数。',
     'locations 数组覆盖下列场地名；characters 覆盖下列角色名。',
     '',
@@ -388,7 +388,7 @@ export async function fetchScriptVisualEnrichmentJson(input: {
       {
         role: 'system',
         content:
-          'You output only compact JSON for a Chinese short-drama production tool. No markdown, no commentary.'
+          '你只输出紧凑的合法 JSON，供中文短剧生产工具使用；不要 markdown、不要解释。imagePrompt 与 prompt 字段一律使用中文。'
       },
       { role: 'user', content: user }
     ],

@@ -23,18 +23,19 @@ interface ParsedCharacter {
   images?: ParsedCharImage[]
 }
 
-/** 衍生 prompt：若模型未写「相对 base」句式，则补锚定并摘要基础定妆，便于与主参考图一致 */
+/** 衍生 prompt：若模型未写「相对 base」句式，则补锚定并摘要基础定妆，便于与主参考图一致（中英句式均识别） */
 function buildDerivativePrompt(baseAnchor: string | null | undefined, derivativePrompt: string): string {
   const d = derivativePrompt.trim()
   if (!d) return d
   if (/same\s+(person|identity|character|face)/i.test(d)) return d
   if (/base\s+reference/i.test(d)) return d
   if (/unchanged|consistent\s+with/i.test(d)) return d
+  if (/同一人|与基础|保持一致|参考基础|与基础定妆|相同人物|同一人物/i.test(d)) return d
   const b = (baseAnchor || '').trim().replace(/\s+/g, ' ')
   if (b.length >= 12) {
-    return `Same person as the base reference; keep continuity with base traits (${b.slice(0, 220)}); only alter per variant: ${d}`
+    return `与基础定妆为同一人；保持与基础形象一致的特征（${b.slice(0, 220)}）；本套仅变化：${d}`
   }
-  return `Same person as the base reference portrait for this role; keep facial structure, age, and skin tone consistent; ${d}`
+  return `与基础定妆为同一人；保持面部结构与年龄感一致；${d}`
 }
 
 function isDerivedImageType(t: string): t is 'outfit' | 'expression' | 'pose' {

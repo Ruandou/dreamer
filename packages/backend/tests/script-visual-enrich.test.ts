@@ -62,7 +62,7 @@ describe('applyScriptVisualEnrichment', () => {
   it('updates location imagePrompt from AI JSON', async () => {
     mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
       jsonText: JSON.stringify({
-        locations: [{ name: '咖啡厅', imagePrompt: 'cozy cafe interior' }],
+        locations: [{ name: '咖啡厅', imagePrompt: '温馨咖啡厅内景，暖光，木质桌椅' }],
         characters: []
       })
     })
@@ -72,7 +72,7 @@ describe('applyScriptVisualEnrichment', () => {
 
     expect(mockLocationUpdateMany).toHaveBeenCalledWith({
       where: { projectId: 'p1', name: '咖啡厅' },
-      data: { imagePrompt: 'cozy cafe interior' }
+      data: { imagePrompt: '温馨咖啡厅内景，暖光，木质桌椅' }
     })
   })
 
@@ -83,7 +83,7 @@ describe('applyScriptVisualEnrichment', () => {
         characters: [
           {
             name: '阿伟',
-            images: [{ name: '默认', type: 'base', prompt: 'young man in suit' }]
+            images: [{ name: '默认', type: 'base', prompt: '穿西装的年轻男子' }]
           }
         ]
       })
@@ -94,7 +94,7 @@ describe('applyScriptVisualEnrichment', () => {
     expect(mockCharacterImageUpdate).toHaveBeenCalledWith({
       where: { id: 'b1' },
       data: expect.objectContaining({
-        prompt: 'young man in suit',
+        prompt: '穿西装的年轻男子',
         name: '默认'
       })
     })
@@ -108,8 +108,8 @@ describe('applyScriptVisualEnrichment', () => {
           {
             name: '阿伟',
             images: [
-              { name: '夜礼服', type: 'outfit', prompt: 'red evening gown' },
-              { name: '默认', type: 'base', prompt: 'young man portrait' }
+              { name: '夜礼服', type: 'outfit', prompt: '红色晚礼服' },
+              { name: '默认', type: 'base', prompt: '年轻男子肖像' }
             ]
           }
         ]
@@ -123,7 +123,7 @@ describe('applyScriptVisualEnrichment', () => {
     expect(mockCharacterImageUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'b1' },
-        data: expect.objectContaining({ prompt: 'young man portrait' })
+        data: expect.objectContaining({ prompt: '年轻男子肖像' })
       })
     )
     expect(mockCharacterImageCreate).toHaveBeenCalledWith(
@@ -132,7 +132,7 @@ describe('applyScriptVisualEnrichment', () => {
           name: '夜礼服',
           type: 'outfit',
           parentId: 'b1',
-          prompt: expect.stringMatching(/Same person as the base reference.*red evening gown/s)
+          prompt: expect.stringMatching(/与基础定妆为同一人.*红色晚礼服/s)
         })
       })
     )
@@ -146,8 +146,8 @@ describe('applyScriptVisualEnrichment', () => {
           {
             name: '阿伟',
             images: [
-              { name: '默认', type: 'base', prompt: 'base prompt' },
-              { name: '夜礼服', type: 'outfit', prompt: 'tuxedo same face' }
+              { name: '默认', type: 'base', prompt: '基础定妆提示词' },
+              { name: '夜礼服', type: 'outfit', prompt: '礼服造型 same face' }
             ]
           }
         ]
@@ -164,7 +164,7 @@ describe('applyScriptVisualEnrichment', () => {
           name: '夜礼服',
           type: 'outfit',
           parentId: 'b1',
-          prompt: 'tuxedo same face'
+          prompt: '礼服造型 same face'
         })
       })
     )

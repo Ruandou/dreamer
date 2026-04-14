@@ -60,7 +60,7 @@ describe('Character image routes', () => {
   it('POST generate base queues character_base_regenerate', async () => {
     mockCharacterImageFindUnique.mockResolvedValue({
       id: 'img-1',
-      prompt: 'English prompt',
+      prompt: '中文提示词',
       parentId: null,
       character: {
         project: { id: 'p1', visualStyle: ['cinematic'] }

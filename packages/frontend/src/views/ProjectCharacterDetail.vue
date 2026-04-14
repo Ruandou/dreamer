@@ -225,7 +225,7 @@ const confirmAddImageByAi = async () => {
     })
     showAddModal.value = false
     selectedFile.value = null
-    message.success('已创建槽位，可编辑英文提示词后点「提交生成」')
+    message.success('已创建槽位，可编辑提示词后点「提交生成」')
     await loadCharacter()
   } catch (e: any) {
     message.error(e?.response?.data?.error || '创建失败')
@@ -494,7 +494,7 @@ const renderSuffix = ({ option }: { option: TreeOption }) => {
                 衍生自: {{ character.images?.find(i => i.id === selectedImage.parentId)?.name }}
               </p>
               <div class="prompt-block">
-                <h5 class="prompt-block__title">文生图提示词（英文）</h5>
+                <h5 class="prompt-block__title">文生图提示词（中文）</h5>
                 <NInput
                   v-model:value="promptDraft"
                   type="textarea"

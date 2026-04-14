@@ -36,7 +36,7 @@ const {
 
 const { mockGenerateCharacterSlotImagePrompt } = vi.hoisted(() => ({
   mockGenerateCharacterSlotImagePrompt: vi.fn().mockResolvedValue({
-    prompt: 'English portrait prompt for test',
+    prompt: '中文定妆提示词用于测试',
     cost: { costCNY: 0.01, inputTokens: 10, outputTokens: 20 }
   })
 }))
@@ -252,7 +252,7 @@ describe('Character Routes', () => {
         characterId: 'char-1',
         name: '夜礼服',
         type: 'outfit',
-        prompt: 'English portrait prompt for test',
+        prompt: '中文定妆提示词用于测试',
         avatarUrl: null,
         order: 1
       })
@@ -261,7 +261,7 @@ describe('Character Routes', () => {
           id: 'char-1',
           name: '主角',
           projectId: 'proj-1',
-          images: [{ id: 'img-new', name: '夜礼服', type: 'outfit', prompt: 'English portrait prompt for test' }]
+          images: [{ id: 'img-new', name: '夜礼服', type: 'outfit', prompt: '中文定妆提示词用于测试' }]
         }
       ])
 
@@ -281,7 +281,7 @@ describe('Character Routes', () => {
       expect(mockGenerateCharacterSlotImagePrompt).toHaveBeenCalled()
       expect(mockCharacterImageCreate).toHaveBeenCalled()
       const createArg = mockCharacterImageCreate.mock.calls[0][0]
-      expect(createArg.data.prompt).toBe('English portrait prompt for test')
+      expect(createArg.data.prompt).toBe('中文定妆提示词用于测试')
       expect(createArg.data.avatarUrl).toBeNull()
     })
 
