@@ -219,9 +219,11 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
       id: job.id,
       projectId: job.projectId,
       projectName: job.project?.name,
+      jobType: job.jobType,
       status: job.status,
       currentStep: job.currentStep,
       progress: job.progress,
+      progressMeta: job.progressMeta,
       error: job.error,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt

@@ -12,6 +12,7 @@ import { useCharacterStore } from '@/stores/character'
 import EmptyState from '@/components/EmptyState.vue'
 import type { Character, CharacterImage } from '@dreamer/shared/types'
 import { subscribeProjectUpdates } from '@/lib/project-sse-bridge'
+import { getDisplayBaseImages, getDisplayDerivedImages } from '@/lib/character-image-groups'
 
 const route = useRoute()
 const router = useRouter()
@@ -99,13 +100,16 @@ const loadCharacter = async () => {
   }
 }
 
+function sortImagesByOrder(a: CharacterImage, b: CharacterImage): number {
+  return (a.order ?? 0) - (b.order ?? 0)
+}
+
 const treeData = computed<TreeOption[]>(() => {
   if (!character.value?.images) return []
 
+  const images = character.value.images
   const imageMap = new Map<string, TreeOption>()
-  const roots: TreeOption[] = []
-
-  character.value.images.forEach(img => {
+  images.forEach((img) => {
     imageMap.set(img.id, {
       key: img.id,
       label: img.name,
@@ -114,20 +118,26 @@ const treeData = computed<TreeOption[]>(() => {
     })
   })
 
-  character.value.images.forEach(img => {
-    const node = imageMap.get(img.id)!
-    if (img.parentId) {
-      const parent = imageMap.get(img.parentId)
-      if (parent) {
-        parent.children = parent.children || []
-        parent.children.push(node)
-      }
-    } else {
-      roots.push(node)
-    }
-  })
+  function subtree(parentId: string): TreeOption[] {
+    return images
+      .filter((i) => i.parentId === parentId)
+      .sort(sortImagesByOrder)
+      .map((i) => {
+        const raw = imageMap.get(i.id)!
+        return { ...raw, children: subtree(i.id) }
+      })
+  }
 
-  return roots
+  const bases = getDisplayBaseImages(images)
+  return bases.map((base) => {
+    const raw = imageMap.get(base.id)!
+    const topLevel = getDisplayDerivedImages(images, base.id).map((img) => {
+      const n = imageMap.get(img.id)!
+      return { ...n, children: subtree(img.id) }
+    })
+    topLevel.sort((a, b) => sortImagesByOrder(a.data as CharacterImage, b.data as CharacterImage))
+    return { ...raw, children: topLevel }
+  })
 })
 
 const handleNodeClick = (option: TreeOption) => {
@@ -274,16 +284,25 @@ const imageActionOptions = computed(() => {
   const images = character.value?.images || []
   const options: { label: string; key: string }[] = []
 
-  if (!img.parentId) {
+  const bases = getDisplayBaseImages(images)
+  const primary = bases[0]
+  const looseUnderPrimary =
+    !img.parentId && img.type !== 'base' && primary?.type === 'base' && Boolean(primary.id)
+
+  if (img.type === 'base' && !img.parentId) {
     options.push({ label: img.avatarUrl ? 'AI 重新生成' : 'AI 生成定妆', key: 'ai-generate' })
   } else {
-    const parent = images.find((i) => i.id === img.parentId)
+    const parentId = img.parentId || (looseUnderPrimary ? primary!.id : undefined)
+    const parent = parentId ? images.find((i) => i.id === parentId) : undefined
     if (parent?.avatarUrl) {
       options.push({ label: img.avatarUrl ? 'AI 重新生成' : 'AI 生成', key: 'ai-generate' })
     }
   }
 
   options.push({ label: '添加子形象', key: 'add-child' })
+  if (looseUnderPrimary && primary) {
+    options.push({ label: `关联到「${primary.name}」`, key: 'attach-primary' })
+  }
   if (img.parentId) {
     options.push({ label: '设为独立形象', key: 'detach' })
   }
@@ -292,7 +311,7 @@ const imageActionOptions = computed(() => {
   return options
 })
 
-const handleImageAction = (key: string) => {
+const handleImageAction = async (key: string) => {
   if (!selectedImage.value) return
 
   switch (key) {
@@ -302,6 +321,16 @@ const handleImageAction = (key: string) => {
     case 'add-child':
       openAddModal(selectedImage.value.id)
       break
+    case 'attach-primary': {
+      const imgs = character.value?.images || []
+      const p = getDisplayBaseImages(imgs)[0]
+      if (p) {
+        await characterStore.moveImage(characterId.value, selectedImage.value.id, p.id)
+        message.success('已关联到主形象')
+        await loadCharacter()
+      }
+      break
+    }
     case 'delete':
       handleDeleteImage(selectedImage.value.id)
       break

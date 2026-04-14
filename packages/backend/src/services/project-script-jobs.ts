@@ -11,8 +11,8 @@ import type { ScriptContent, ScriptScene, EpisodePlan } from '@dreamer/shared/ty
 
 export const DEFAULT_TARGET_EPISODES = 36
 
-/** 与大纲页互斥的异步任务类型（批量剧本 / 解析剧本） */
-const OUTLINE_ASYNC_JOB_TYPES = ['script-batch', 'parse-script'] as const
+/** 与大纲页互斥的异步任务类型（含「生成第一集」的 Pipeline 标记，防并发写同一项目） */
+const OUTLINE_ASYNC_JOB_TYPES = ['script-batch', 'parse-script', 'script-first'] as const
 
 /**
  * 是否存在进行中的批量剧本或解析任务，用于避免与另一路并发写同一项目。
@@ -28,14 +28,27 @@ export async function hasConcurrentOutlinePipelineJob(projectId: string): Promis
   return n > 0
 }
 
-/** 当前进行中的大纲页异步任务（批量 / 解析），用于前端刷新后恢复状态 */
+/**
+ * 当前进行中的大纲页异步任务（第一集 / 批量 / 解析），用于前端刷新后恢复状态。
+ * 优先返回 parse-script，再 script-batch，再 script-first，避免误取非解析任务。
+ */
 export async function getActiveOutlinePipelineJob(projectId: string) {
+  const active = {
+    projectId,
+    status: { in: ['pending', 'running'] as string[] }
+  }
+  const parse = await prisma.pipelineJob.findFirst({
+    where: { ...active, jobType: 'parse-script' },
+    orderBy: { createdAt: 'desc' }
+  })
+  if (parse) return parse
+  const batch = await prisma.pipelineJob.findFirst({
+    where: { ...active, jobType: 'script-batch' },
+    orderBy: { createdAt: 'desc' }
+  })
+  if (batch) return batch
   return prisma.pipelineJob.findFirst({
-    where: {
-      projectId,
-      status: { in: ['pending', 'running'] },
-      jobType: { in: [...OUTLINE_ASYNC_JOB_TYPES] }
-    },
+    where: { ...active, jobType: 'script-first' },
     orderBy: { createdAt: 'desc' }
   })
 }
@@ -214,6 +227,30 @@ export async function runGenerateFirstEpisode(projectId: string) {
       rawScript: script as object
     }
   })
+}
+
+/**
+ * 将「生成第一集」绑定到 PipelineJob（互斥与刷新恢复）。
+ * 仅由 `POST .../episodes/generate-first` 调用；`ensureAllEpisodeScripts` 内请直接调 `runGenerateFirstEpisode`。
+ */
+export async function runGenerateFirstEpisodePipelineJob(jobId: string, projectId: string) {
+  await updateJob(jobId, { status: 'running', currentStep: 'script-first', progress: 5 })
+  try {
+    await runGenerateFirstEpisode(projectId)
+    await updateJob(jobId, {
+      status: 'completed',
+      progress: 100,
+      currentStep: 'completed',
+      progressMeta: { message: '第一集已生成' }
+    })
+  } catch (e: any) {
+    await updateJob(jobId, {
+      status: 'failed',
+      error: e?.message || '生成第一集失败',
+      progressMeta: { message: e?.message }
+    })
+    throw e
+  }
 }
 
 export async function runScriptBatchJob(jobId: string, projectId: string, targetEpisodes: number) {

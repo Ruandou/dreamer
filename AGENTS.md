@@ -141,6 +141,8 @@ git commit -m "feat: 添加新功能"
 | `import` | 剧本导入任务 | `/api/import/tasks` |
 | `pipeline` | Pipeline 执行任务 | `/api/pipeline/jobs` |
 
+`pipeline` 在任务中心仅在 **「类型」列** 用中文展示 **`jobType`**（`/api/pipeline/jobs` 须返回 `jobType`，`Jobs.vue` 的 `pipelineSubtypeLabel`）。新增大纲相关 `jobType` 时须同步后端列表字段与该映射。
+
 新增任务类型时，**必须**同步更新：
 1. 后端 API（获取任务列表）
 2. 前端 `Jobs.vue`（添加类型支持）

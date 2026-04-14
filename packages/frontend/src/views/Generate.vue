@@ -123,6 +123,7 @@ const batchButtonDisabled = computed(
     isBatching.value ||
     isParsing.value ||
     isParseOutlineRunning.value ||
+    isGeneratingFirst.value ||
     !episode1HasScript.value ||
     !needsBatchEpisodes.value ||
     batchAllTargetReady.value
@@ -232,6 +233,14 @@ async function loadProject(id: string) {
 async function runGenerateFirstEpisode() {
   const id = projectId.value
   if (!id) return
+  if (isBatching.value) {
+    message.warning('批量生成进行中，请完成后再生成第一集')
+    return
+  }
+  if (isParseOutlineRunning.value) {
+    message.warning('解析任务进行中，请完成后再生成第一集')
+    return
+  }
   const ep = episode1.value as any
   const hasScript = ep?.rawScript && scenesFromRaw(ep.rawScript).length > 0
   if (hasScript) return
@@ -274,6 +283,10 @@ async function afterBatchSuccess(id: string) {
 async function runBatchRemaining() {
   const id = projectId.value
   if (!id) return
+  if (isGeneratingFirst.value) {
+    message.warning('第一集生成进行中，请完成后再批量生成')
+    return
+  }
   if (isParseOutlineRunning.value) {
     message.warning('解析任务进行中，请完成后再批量生成')
     return
@@ -356,6 +369,19 @@ async function resumeOutlineActiveJob(pid: string) {
       isParseOutlineRunning.value = false
       parseOutlineProgress.value = null
     }
+  } else if (job.jobType === 'script-first') {
+    isGeneratingFirst.value = true
+    generatingStatus.value = '正在生成第一集剧本…'
+    try {
+      await pollPipelineJob(job.id, undefined, 600000, 2500)
+      message.success('第一集剧本已生成')
+      await loadProject(pid)
+    } catch (e: any) {
+      message.error(e?.message || '生成第一集失败')
+    } finally {
+      isGeneratingFirst.value = false
+      generatingStatus.value = ''
+    }
   }
 }
 
@@ -364,6 +390,10 @@ async function runParse() {
   if (!id) return
   if (isParseOutlineRunning.value) {
     message.warning('解析任务进行中')
+    return
+  }
+  if (isGeneratingFirst.value) {
+    message.warning('第一集生成进行中，请完成后再解析')
     return
   }
   if (isBatching.value) {
@@ -540,7 +570,7 @@ watch(targetEpisodeCount, (v) => {
             type="primary"
             class="mt-sm"
             :loading="isGeneratingFirst"
-            :disabled="isGeneratingFirst"
+            :disabled="isGeneratingFirst || isBatching || isParseOutlineRunning"
             @click="runGenerateFirstEpisode"
           >
             生成第一集剧本
@@ -632,7 +662,10 @@ watch(targetEpisodeCount, (v) => {
             {{ n }}
           </NButton>
         </div>
-        <p v-if="episode1HasScript && !isBatching && !isParseOutlineRunning" class="ok-line">
+        <p
+          v-if="episode1HasScript && !isBatching && !isParseOutlineRunning && !isGeneratingFirst"
+          class="ok-line"
+        >
           <template v-if="batchAllTargetReady">
             目标 {{ effectiveTarget }} 集剧本已全部生成，可直接解析或微调总集数后再次补全。
           </template>
@@ -683,13 +716,14 @@ watch(targetEpisodeCount, (v) => {
           type="primary"
           size="large"
           :loading="isParsing || isParseOutlineRunning"
-          :disabled="isBatching || isParseOutlineRunning"
+          :disabled="isBatching || isParseOutlineRunning || isGeneratingFirst"
           @click="runParse"
         >
           解析剧本 →
         </NButton>
         <p class="footer-parse-sub">
           <template v-if="isBatching">批量生成进行中，请完成后再解析。</template>
+          <template v-else-if="isGeneratingFirst">第一集生成进行中，请完成后再解析。</template>
           <template v-else-if="isParseOutlineRunning">解析任务进行中，请稍候。</template>
           <template v-else>
             将按当前总集数处理前 {{ effectiveTarget }} 集（含自动补全缺失剧本）；须先选视觉风格。

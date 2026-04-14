@@ -96,10 +96,12 @@ describe('Pipeline Routes', () => {
         {
           id: 'job-1',
           projectId: 'proj-1',
+          jobType: 'full-pipeline',
           status: 'completed',
           currentStep: 'storyboard',
           progress: 100,
           error: null,
+          progressMeta: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           project: { id: 'proj-1', name: 'Test Project' }
@@ -107,10 +109,12 @@ describe('Pipeline Routes', () => {
         {
           id: 'job-2',
           projectId: 'proj-2',
+          jobType: 'parse-script',
           status: 'running',
-          currentStep: 'segment-extract',
+          currentStep: 'parse-script',
           progress: 50,
           error: null,
+          progressMeta: { message: '解析中' },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           project: { id: 'proj-2', name: 'Another Project' }
@@ -129,7 +133,10 @@ describe('Pipeline Routes', () => {
       expect(data.length).toBe(2)
       expect(data[0].id).toBe('job-1')
       expect(data[0].projectName).toBe('Test Project')
+      expect(data[0].jobType).toBe('full-pipeline')
       expect(data[1].status).toBe('running')
+      expect(data[1].jobType).toBe('parse-script')
+      expect(data[1].progressMeta).toEqual({ message: '解析中' })
       expect(data[1].progress).toBe(50)
     })
 
@@ -152,10 +159,12 @@ describe('Pipeline Routes', () => {
         {
           id: 'job-1',
           projectId: 'proj-1',
+          jobType: 'full-pipeline',
           status: 'completed',
           currentStep: 'storyboard',
           progress: 100,
           error: null,
+          progressMeta: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           project: { id: 'proj-1', name: 'Test Project' },

@@ -34,9 +34,30 @@ interface Job {
   result?: any
   errorMsg?: string
   // pipeline task fields
+  jobType?: string
   currentStep?: string
   progress?: number
+  progressMeta?: { message?: string } | null
   stepResults?: any[]
+}
+
+/** PipelineJob.jobType → 任务中心「类型」列（仅中文，避免与步骤英文 id 混排） */
+function pipelineSubtypeLabel(jobType: string | undefined): string {
+  const t = (jobType || '').toLowerCase().trim()
+  if (t === 'script-first') return '生成第一集'
+  if (t === 'script-batch') return '批量剧本'
+  if (t === 'parse-script') return '解析剧本'
+  if (t === 'full-pipeline') return '完整流水线'
+  return 'Pipeline'
+}
+
+function normalizePipelineListStatus(raw: string | undefined): Job['status'] {
+  if (raw === 'running') return 'processing'
+  if (raw === 'completed') return 'completed'
+  if (raw === 'failed') return 'failed'
+  if (raw === 'queued') return 'queued'
+  if (raw === 'pending') return 'pending'
+  return 'pending'
 }
 
 // 计算任务运行时长
@@ -68,12 +89,14 @@ const columns: DataTableColumns<Job> = [
   {
     title: '类型',
     key: 'type',
-    width: 90,
+    width: 118,
     render(row) {
+      if (row.type === 'pipeline') {
+        return h(NTag, { type: 'info' as const, size: 'small' }, () => pipelineSubtypeLabel(row.jobType))
+      }
       const typeMap: Record<string, { type: string; label: string }> = {
         video: { type: 'info', label: '🎬 视频' },
-        import: { type: 'warning', label: '📄 导入' },
-        pipeline: { type: 'error', label: '🔄 Pipeline' }
+        import: { type: 'warning', label: '📄 导入' }
       }
       const config = typeMap[row.type] || typeMap.video
       return h(NTag, { type: config.type as any, size: 'small' }, () => config.label)
@@ -97,7 +120,12 @@ const columns: DataTableColumns<Job> = [
         return `场景 ${row.sceneNum}: ${(row.prompt || '').slice(0, 50)}${(row.prompt || '').length > 50 ? '...' : ''}`
       }
       if (row.type === 'pipeline') {
-        return row.projectName ? `项目: ${row.projectName}` : 'Pipeline 任务'
+        const proj = row.projectName ? `项目：${row.projectName}` : '未关联项目'
+        const hint =
+          row.progressMeta && typeof row.progressMeta === 'object' && row.progressMeta.message
+            ? ` · ${String(row.progressMeta.message)}`
+            : ''
+        return `${proj}${hint}`
       }
       return row.contentPreview || (row.content || '').slice(0, 50) + ((row.content || '').length > 50 ? '...' : '')
     }
@@ -111,7 +139,8 @@ const columns: DataTableColumns<Job> = [
         return row.model?.toUpperCase() || '-'
       }
       if (row.type === 'pipeline') {
-        return row.currentStep ? `${row.progress || 0}%` : '-'
+        // 该列语义是视频模型 / 导入篇幅；Pipeline 不适用，避免「模型/格式」下出现进度造成误解
+        return '-'
       }
       return row.content ? row.content.length + ' 字符' : '-'
     }
@@ -129,10 +158,11 @@ const columns: DataTableColumns<Job> = [
         return `${r.episodesCreated || 0} 集, ${r.charactersCreated || 0} 角色`
       }
       if (row.type === 'pipeline' && row.status === 'completed') {
-        return row.currentStep || '已完成'
+        return '已完成'
       }
-      if (row.type === 'pipeline' && row.status === 'processing') {
-        return `步骤: ${row.currentStep || '-'}`
+      if (row.type === 'pipeline' && (row.status === 'processing' || row.status === 'pending')) {
+        const n = typeof row.progress === 'number' ? row.progress : 0
+        return n > 0 ? `进行中（${n}%）` : '进行中'
       }
       if (row.status === 'failed') {
         const msg = row.errorMsg || '未知错误'
@@ -276,9 +306,11 @@ const fetchJobs = async () => {
         pipelineJobs.push({
           id: p.id,
           type: 'pipeline',
-          status: p.status,
+          status: normalizePipelineListStatus(p.status),
+          jobType: p.jobType,
           currentStep: p.currentStep,
           progress: p.progress,
+          progressMeta: p.progressMeta,
           projectId: p.projectId,
           projectName: p.projectName,
           createdAt: p.createdAt,

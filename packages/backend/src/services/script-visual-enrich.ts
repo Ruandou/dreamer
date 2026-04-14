@@ -23,6 +23,34 @@ interface ParsedCharacter {
   images?: ParsedCharImage[]
 }
 
+/** 衍生 prompt：若模型未写「相对 base」句式，则补锚定并摘要基础定妆，便于与主参考图一致 */
+function buildDerivativePrompt(baseAnchor: string | null | undefined, derivativePrompt: string): string {
+  const d = derivativePrompt.trim()
+  if (!d) return d
+  if (/same\s+(person|identity|character|face)/i.test(d)) return d
+  if (/base\s+reference/i.test(d)) return d
+  if (/unchanged|consistent\s+with/i.test(d)) return d
+  const b = (baseAnchor || '').trim().replace(/\s+/g, ' ')
+  if (b.length >= 12) {
+    return `Same person as the base reference; keep continuity with base traits (${b.slice(0, 220)}); only alter per variant: ${d}`
+  }
+  return `Same person as the base reference portrait for this role; keep facial structure, age, and skin tone consistent; ${d}`
+}
+
+function isDerivedImageType(t: string): t is 'outfit' | 'expression' | 'pose' {
+  return t === 'outfit' || t === 'expression' || t === 'pose'
+}
+
+function slotProcessOrder(type: string | undefined): number {
+  const t = (type || 'base').toLowerCase()
+  if (t === 'base') return 0
+  return 1
+}
+
+function sortCharacterImageSlots(slots: ParsedCharImage[]): ParsedCharImage[] {
+  return [...slots].sort((a, b) => slotProcessOrder(a.type) - slotProcessOrder(b.type))
+}
+
 interface VisualPayload {
   locations?: ParsedLocation[]
   characters?: ParsedCharacter[]
@@ -84,9 +112,11 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
     const character = characters.find((c) => c.name === pc.name)
     if (!character) continue
 
-    const images = Array.isArray(pc.images) ? pc.images : []
+    const images = sortCharacterImageSlots(Array.isArray(pc.images) ? pc.images : [])
     let baseImageId: string | null =
       character.images.find((i) => i.type === 'base' && !i.parentId)?.id || null
+    let lastBasePrompt: string | null =
+      character.images.find((i) => i.type === 'base' && !i.parentId)?.prompt?.trim() || null
 
     for (const slot of images) {
       if (!slot?.name || !slot.prompt?.trim()) continue
@@ -102,6 +132,7 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
             data: { prompt, description: desc ?? existingBase.description, name: slot.name }
           })
           baseImageId = existingBase.id
+          lastBasePrompt = prompt
         } else {
           const created = await prisma.characterImage.create({
             data: {
@@ -115,28 +146,35 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
             }
           })
           baseImageId = created.id
+          lastBasePrompt = prompt
           character.images.push(created)
         }
         continue
       }
 
-      if ((type === 'outfit' || type === 'expression' || type === 'pose') && baseImageId) {
+      if (isDerivedImageType(type)) {
+        const parentId = baseImageId || character.images.find((i) => i.type === 'base' && !i.parentId)?.id || null
+        if (!parentId) continue
+
+        const finalPrompt = buildDerivativePrompt(lastBasePrompt, prompt)
         const maxOrder = await prisma.characterImage.aggregate({
-          where: { characterId: character.id, parentId: baseImageId },
+          where: { characterId: character.id, parentId },
           _max: { order: true }
         })
-        await prisma.characterImage.create({
+        const created = await prisma.characterImage.create({
           data: {
             characterId: character.id,
             name: slot.name,
-            parentId: baseImageId,
+            parentId,
             type,
             description: desc,
-            prompt,
+            prompt: finalPrompt,
             avatarUrl: null,
             order: (maxOrder._max.order || 0) + 1
           }
         })
+        character.images.push(created)
+        if (!baseImageId) baseImageId = parentId
       }
     }
   }

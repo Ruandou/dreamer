@@ -12,7 +12,7 @@ const {
   mockPipelineJobCreate,
   mockRunParseScriptJob,
   mockRunScriptBatchJob,
-  mockRunGenerateFirstEpisode,
+  mockRunGenerateFirstEpisodePipelineJob,
   mockHasConcurrentOutlinePipelineJob,
   mockGetActiveOutlinePipelineJob
 } = vi.hoisted(() => ({
@@ -26,7 +26,7 @@ const {
   mockPipelineJobCreate: vi.fn(),
   mockRunParseScriptJob: vi.fn(),
   mockRunScriptBatchJob: vi.fn(),
-  mockRunGenerateFirstEpisode: vi.fn(),
+  mockRunGenerateFirstEpisodePipelineJob: vi.fn(),
   mockHasConcurrentOutlinePipelineJob: vi.fn(),
   mockGetActiveOutlinePipelineJob: vi.fn()
 }))
@@ -34,7 +34,8 @@ const {
 vi.mock('../src/services/project-script-jobs.js', () => ({
   runParseScriptJob: (...args: unknown[]) => mockRunParseScriptJob(...args) as Promise<void>,
   runScriptBatchJob: (...args: unknown[]) => mockRunScriptBatchJob(...args) as Promise<void>,
-  runGenerateFirstEpisode: (...args: unknown[]) => mockRunGenerateFirstEpisode(...args) as Promise<void>,
+  runGenerateFirstEpisodePipelineJob: (...args: unknown[]) =>
+    mockRunGenerateFirstEpisodePipelineJob(...args) as Promise<void>,
   hasConcurrentOutlinePipelineJob: (...args: unknown[]) =>
     mockHasConcurrentOutlinePipelineJob(...args) as Promise<boolean>,
   getActiveOutlinePipelineJob: (...args: unknown[]) =>
@@ -101,7 +102,7 @@ describe('Project outline & parse routes', () => {
     vi.clearAllMocks()
     mockRunParseScriptJob.mockReturnValue(Promise.resolve())
     mockRunScriptBatchJob.mockReturnValue(Promise.resolve())
-    mockRunGenerateFirstEpisode.mockReturnValue(Promise.resolve())
+    mockRunGenerateFirstEpisodePipelineJob.mockReturnValue(Promise.resolve())
     mockHasConcurrentOutlinePipelineJob.mockResolvedValue(false)
     mockGetActiveOutlinePipelineJob.mockResolvedValue(null)
   })
@@ -332,7 +333,8 @@ describe('Project outline & parse routes', () => {
 
     it('returns episode and synopsis after generate', async () => {
       mockProjectFindFirst.mockResolvedValue({ id: 'p1', userId: 'test-user-id', name: 'N' })
-      mockRunGenerateFirstEpisode.mockResolvedValue(undefined)
+      mockPipelineJobCreate.mockResolvedValue({ id: 'job-first-1' })
+      mockRunGenerateFirstEpisodePipelineJob.mockResolvedValue(undefined)
       mockProjectFindUnique.mockResolvedValue({
         id: 'p1',
         synopsis: '全剧梗概',
@@ -345,7 +347,15 @@ describe('Project outline & parse routes', () => {
         payload: { description: '  新创意  ' }
       })
       expect(res.statusCode).toBe(200)
-      expect(mockRunGenerateFirstEpisode).toHaveBeenCalledWith('p1')
+      expect(mockHasConcurrentOutlinePipelineJob).toHaveBeenCalledWith('p1')
+      expect(mockPipelineJobCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          projectId: 'p1',
+          jobType: 'script-first',
+          currentStep: 'script-first'
+        })
+      })
+      expect(mockRunGenerateFirstEpisodePipelineJob).toHaveBeenCalledWith('job-first-1', 'p1')
       expect(mockProjectUpdate).toHaveBeenCalledWith({
         where: { id: 'p1' },
         data: { description: '新创意' }
@@ -353,6 +363,20 @@ describe('Project outline & parse routes', () => {
       const body = JSON.parse(res.payload)
       expect(body.synopsis).toBe('全剧梗概')
       expect(body.episode.episodeNum).toBe(1)
+    })
+
+    it('returns 409 when another outline job is in progress', async () => {
+      mockProjectFindFirst.mockResolvedValue({ id: 'p1', userId: 'test-user-id', name: 'N' })
+      mockHasConcurrentOutlinePipelineJob.mockResolvedValue(true)
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/projects/p1/episodes/generate-first',
+        payload: {}
+      })
+      expect(res.statusCode).toBe(409)
+      expect(mockPipelineJobCreate).not.toHaveBeenCalled()
+      expect(mockRunGenerateFirstEpisodePipelineJob).not.toHaveBeenCalled()
     })
   })
 })

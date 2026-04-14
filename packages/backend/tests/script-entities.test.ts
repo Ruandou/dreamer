@@ -13,7 +13,7 @@ vi.mock('../src/index.js', () => ({
   }
 }))
 
-import { saveCharacters, saveLocations } from '../src/services/script-entities.js'
+import { saveCharacters, saveLocations, isCrowdExtraCharacterName } from '../src/services/script-entities.js'
 
 const script: ScriptContent = {
   title: 'Test',
@@ -45,6 +45,40 @@ describe('script-entities', () => {
     vi.clearAllMocks()
     mockCharacterUpsert.mockResolvedValue({})
     mockLocationUpsert.mockResolvedValue({})
+  })
+
+  it('isCrowdExtraCharacterName matches placeholders but not named roles', () => {
+    expect(isCrowdExtraCharacterName('群演')).toBe(true)
+    expect(isCrowdExtraCharacterName('群演3')).toBe(true)
+    expect(isCrowdExtraCharacterName('路人甲')).toBe(true)
+    expect(isCrowdExtraCharacterName('群众演员')).toBe(true)
+    expect(isCrowdExtraCharacterName('群演队长')).toBe(false)
+    expect(isCrowdExtraCharacterName('张三')).toBe(false)
+  })
+
+  it('saveCharacters skips crowd placeholder names', async () => {
+    const s: ScriptContent = {
+      title: 'T',
+      summary: 'S',
+      scenes: [
+        {
+          sceneNum: 1,
+          location: '街',
+          timeOfDay: '日',
+          characters: ['女主', '群演', '路人甲', '群演2'],
+          description: 'x',
+          dialogues: [],
+          actions: []
+        }
+      ]
+    }
+    await saveCharacters('proj-1', s)
+    expect(mockCharacterUpsert).toHaveBeenCalledTimes(1)
+    expect(mockCharacterUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { projectId_name: { projectId: 'proj-1', name: '女主' } }
+      })
+    )
   })
 
   it('saveCharacters upserts each unique name', async () => {

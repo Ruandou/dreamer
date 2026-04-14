@@ -12,6 +12,8 @@ import {
 } from "naive-ui";
 import { useProjectStore } from "@/stores/project";
 import type { Project } from "@dreamer/shared/types";
+import { api } from "@/api";
+import type { PipelineJob } from "@/api";
 import EmptyState from "@/components/EmptyState.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 
@@ -94,14 +96,54 @@ const handleQuickCreate = async () => {
   }
 };
 
-/** 已解析（库里有角色）→ 项目详情；否则 → 生成大纲页继续补全 / 解析 */
-const handleProjectClick = (project: Project) => {
-  const hasCharacters = (project.characters?.length ?? 0) > 0;
-  if (hasCharacters) {
-    router.push(`/project/${project.id}`);
-  } else {
-    router.push(`/generate?projectId=${project.id}`);
+function isParseScriptOutlineJob(job: PipelineJob | null | undefined): boolean {
+  if (!job) return false;
+  const jt = (job.jobType ?? "").toString().trim().toLowerCase();
+  const step = (job.currentStep ?? "").toString().trim().toLowerCase();
+  return jt === "parse-script" || step === "parse-script";
+}
+
+function hasAnyCharacter(project: Project | null | undefined): boolean {
+  return ((project?.characters?.length ?? 0) > 0);
+}
+
+/**
+ * 已解析（库里有角色）→ 项目详情；
+ * 解析进行中尚无角色 → 进项目详情并带 parseJobId；
+ * 否则 → 生成大纲页。
+ * 先拉 GET /projects/:id，避免列表里 characters 滞后（解析刚完成仍显示 0）。
+ */
+const handleProjectClick = async (project: Project) => {
+  let fresh: Project | null = null;
+  try {
+    const res = await api.get<Project>(`/projects/${project.id}`);
+    fresh = res.data;
+  } catch {
+    fresh = null;
   }
+
+  if (hasAnyCharacter(fresh) || hasAnyCharacter(project)) {
+    router.push(`/project/${project.id}`);
+    return;
+  }
+
+  try {
+    const res = await api.get<{ job: PipelineJob | null }>(
+      `/projects/${project.id}/outline-active-job`
+    );
+    const job = res.data?.job;
+    if (
+      job &&
+      (job.status === "pending" || job.status === "running") &&
+      isParseScriptOutlineJob(job)
+    ) {
+      router.push(`/project/${project.id}?parseJobId=${job.id}`);
+      return;
+    }
+  } catch {
+    /* ignore */
+  }
+  router.push(`/generate?projectId=${project.id}`);
 };
 
 const handleDelete = (id: string) => {

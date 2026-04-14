@@ -1,6 +1,6 @@
 /**
  * 火山方舟 OpenAI 兼容图片接口（文生图 / 指令编辑）
- * 模型 ID 可通过环境变量覆盖，默认与方舟文档中的 Seedream / SeedEdit 命名一致。
+ * 模型 ID 可通过环境变量覆盖；默认文生图为方舟 Seedream 5.0 Lite（见文档中的模型 ID）。
  */
 import { uploadFile, generateFileKey } from './storage.js'
 
@@ -9,7 +9,7 @@ const ARK_API_URL = process.env.ARK_API_URL || 'https://ark.cn-beijing.volces.co
 
 /** 文生图（无参考图） */
 export const DEFAULT_T2I_MODEL =
-  process.env.ARK_IMAGE_T2I_MODEL || 'doubao-seedream-4-0-250828'
+  process.env.ARK_IMAGE_T2I_MODEL || 'doubao-seedream-5-0-lite-260128'
 /** 图生图 / 指令编辑 */
 export const DEFAULT_EDIT_MODEL =
   process.env.ARK_IMAGE_EDIT_MODEL || 'doubao-seededit-3-0-i2i-250628'

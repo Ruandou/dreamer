@@ -100,6 +100,44 @@ describe('applyScriptVisualEnrichment', () => {
     })
   })
 
+  it('creates outfit slot when AI lists outfit before base (sorted: base first)', async () => {
+    mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
+      jsonText: JSON.stringify({
+        locations: [],
+        characters: [
+          {
+            name: '阿伟',
+            images: [
+              { name: '夜礼服', type: 'outfit', prompt: 'red evening gown' },
+              { name: '默认', type: 'base', prompt: 'young man portrait' }
+            ]
+          }
+        ]
+      })
+    })
+    mockCharacterImageAggregate.mockResolvedValue({ _max: { order: 0 } })
+    mockCharacterImageCreate.mockResolvedValue({ id: 'o1' })
+
+    await applyScriptVisualEnrichment('p1', script)
+
+    expect(mockCharacterImageUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'b1' },
+        data: expect.objectContaining({ prompt: 'young man portrait' })
+      })
+    )
+    expect(mockCharacterImageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          name: '夜礼服',
+          type: 'outfit',
+          parentId: 'b1',
+          prompt: expect.stringMatching(/Same person as the base reference.*red evening gown/s)
+        })
+      })
+    )
+  })
+
   it('creates outfit slot when AI returns outfit after base', async () => {
     mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
       jsonText: JSON.stringify({

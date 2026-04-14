@@ -6,7 +6,6 @@ import {
   NLayoutSider,
   NMenu,
   NButton,
-  NSpace,
   NTag,
   NAlert,
   NProgress,
@@ -167,7 +166,7 @@ const currentMenu = computed(() => {
             v-if="parseJobStatus"
             type="line"
             :percentage="Math.min(100, parseJobStatus.progress || 0)"
-            style="margin-top: 8px"
+            class="parse-banner__progress"
           />
         </NAlert>
       </div>
@@ -181,13 +180,6 @@ const currentMenu = computed(() => {
             {{ projectStore.currentProject.name }}
           </NTag>
         </div>
-        <div class="project-topbar__right">
-          <NSpace>
-            <NButton size="small" quaternary>
-              帮助
-            </NButton>
-          </NSpace>
-        </div>
       </header>
 
       <!-- Page Content -->
@@ -200,7 +192,23 @@ const currentMenu = computed(() => {
 
 <style scoped>
 .parse-banner {
-  padding: var(--spacing-md) var(--spacing-lg) 0;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.parse-banner :deep(.n-alert) {
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  border-radius: 0;
+  box-sizing: border-box;
+}
+
+.parse-banner__progress {
+  padding-top: 8px;
+  margin: 0;
 }
 
 .project-layout {

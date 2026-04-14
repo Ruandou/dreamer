@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyReply } from 'fastify'
 import { prisma } from '../index.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import {
-  runGenerateFirstEpisode,
+  runGenerateFirstEpisodePipelineJob,
   runScriptBatchJob,
   runParseScriptJob,
   DEFAULT_TARGET_EPISODES,
@@ -70,8 +70,24 @@ export async function projectRoutes(fastify: FastifyInstance) {
         })
       }
 
+      if (await hasConcurrentOutlinePipelineJob(projectId)) {
+        return reply.status(409).send({
+          error: '已有剧本生成或解析任务进行中，请稍后再试'
+        })
+      }
+
+      const job = await prisma.pipelineJob.create({
+        data: {
+          projectId,
+          status: 'pending',
+          jobType: 'script-first',
+          currentStep: 'script-first',
+          progress: 0
+        }
+      })
+
       try {
-        await runGenerateFirstEpisode(projectId)
+        await runGenerateFirstEpisodePipelineJob(job.id, projectId)
       } catch (e: any) {
         return reply.status(500).send({ error: e?.message || '生成第一集失败' })
       }
@@ -207,7 +223,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     }
   )
 
-  /** 大纲页：是否有进行中的批量 / 解析任务（刷新页面后用于恢复互斥与轮询） */
+  /** 大纲页：是否有进行中的第一集 / 批量 / 解析任务（刷新后恢复互斥与轮询） */
   fastify.get<{ Params: { id: string } }>(
     '/:id/outline-active-job',
     { preHandler: [fastify.authenticate] },

@@ -6,11 +6,12 @@ import {
   NGrid, NGi, NImage, NImageGroup, NUpload, NPopconfirm, NTag, NTooltip,
   NAvatar, NScrollbar, useMessage, NIcon, NTree, NButtonGroup, NDropdown
 } from 'naive-ui'
-import type { UploadFile, TreeOption } from 'naive-ui'
+import type { UploadFile } from 'naive-ui'
 import { useCharacterStore } from '@/stores/character'
 import EmptyState from '@/components/EmptyState.vue'
 import type { CharacterImage } from '@dreamer/shared/types'
 import { subscribeProjectUpdates } from '@/lib/project-sse-bridge'
+import { getDisplayBaseImages, getDisplayDerivedImages } from '@/lib/character-image-groups'
 
 const route = useRoute()
 const router = useRouter()
@@ -133,45 +134,6 @@ const getAvatarBgColor = (name: string) => {
   return colors[index]
 }
 
-const buildImageTree = (images: CharacterImage[]): TreeOption[] => {
-  const imageMap = new Map<string, TreeOption>()
-  const roots: TreeOption[] = []
-
-  // First pass: create all nodes
-  images.forEach(img => {
-    imageMap.set(img.id, {
-      key: img.id,
-      label: img.name,
-      data: img,
-      children: []
-    })
-  })
-
-  // Second pass: build tree
-  images.forEach(img => {
-    const node = imageMap.get(img.id)!
-    if (img.parentId) {
-      const parent = imageMap.get(img.parentId)
-      if (parent) {
-        parent.children = parent.children || []
-        parent.children.push(node)
-      }
-    } else {
-      roots.push(node)
-    }
-  })
-
-  return roots
-}
-
-const getBaseImages = (images: CharacterImage[]) => {
-  return images.filter(img => !img.parentId)
-}
-
-const getDerivedImages = (images: CharacterImage[], parentId: string) => {
-  return images.filter(img => img.parentId === parentId)
-}
-
 const getTypeLabel = (type: string) => {
   const map: Record<string, string> = {
     base: '基础',
@@ -182,25 +144,25 @@ const getTypeLabel = (type: string) => {
   return map[type] || type
 }
 
-const getTypeTagType = (type: string): 'default' | 'info' | 'success' | 'warning' => {
-  const map: Record<string, 'default' | 'info' | 'success' | 'warning'> = {
-    base: 'success',
-    outfit: 'info',
-    expression: 'warning',
-    pose: 'default'
-  }
-  return map[type] || 'default'
-}
-
 const imageActionOptions = (_characterId: string, imageId: string, images: CharacterImage[]) => {
   const image = images.find((i) => i.id === imageId)
   const options: { label: string; key: string }[] = []
+  const bases = getDisplayBaseImages(images)
+  const primary = bases[0]
+  const looseUnderPrimary = Boolean(
+    image &&
+      !image.parentId &&
+      image.type !== 'base' &&
+      primary?.type === 'base' &&
+      primary.id
+  )
 
   if (image) {
-    if (!image.parentId) {
+    if (image.type === 'base' && !image.parentId) {
       options.push({ label: image.avatarUrl ? 'AI 重新生成' : 'AI 生成定妆', key: 'ai-generate' })
     } else {
-      const parent = images.find((i) => i.id === image.parentId)
+      const parentId = image.parentId || (looseUnderPrimary ? primary!.id : undefined)
+      const parent = parentId ? images.find((i) => i.id === parentId) : undefined
       if (parent?.avatarUrl) {
         options.push({ label: image.avatarUrl ? 'AI 重新生成' : 'AI 生成', key: 'ai-generate' })
       }
@@ -208,6 +170,9 @@ const imageActionOptions = (_characterId: string, imageId: string, images: Chara
   }
 
   options.push({ label: '添加子形象', key: 'add-child' })
+  if (looseUnderPrimary && primary) {
+    options.push({ label: `关联到「${primary.name}」`, key: 'attach-primary' })
+  }
   if (image?.parentId) {
     options.push({ label: '设为独立形象', key: 'detach' })
   }
@@ -237,6 +202,11 @@ const handleImageAction = (key: string, characterId: string, imageId: string, im
     case 'add-child':
       openImageModal(characterId, imageId)
       break
+    case 'attach-primary': {
+      const primary = getDisplayBaseImages(images)[0]
+      if (primary) void handleMoveImage(characterId, imageId, primary.id)
+      break
+    }
     case 'delete':
       handleDeleteImage(characterId, imageId)
       break
@@ -324,7 +294,7 @@ const isCharacterExpanded = (characterId: string) => {
         >
           <!-- Avatar Section - Base Images -->
           <div class="character-card__avatar">
-            <div v-if="getBaseImages(character.images || []).length === 0" class="avatar-placeholder-container">
+            <div v-if="getDisplayBaseImages(character.images || []).length === 0" class="avatar-placeholder-container">
               <div
                 class="character-avatar-placeholder"
                 :style="{ background: getAvatarBgColor(character.name) }"
@@ -343,36 +313,43 @@ const isCharacterExpanded = (characterId: string) => {
             </div>
             <div v-else class="base-images-grid">
               <div
-                v-for="baseImage in getBaseImages(character.images || [])"
+                v-for="baseImage in getDisplayBaseImages(character.images || [])"
                 :key="baseImage.id"
-                class="base-image-item"
-                :class="{
-                  'base-image-item--selected': selectedImageId === baseImage.id,
-                  'base-image-item--generating': generatingByImageId[baseImage.id]
-                }"
-                @click="selectedImageId = baseImage.id"
+                class="base-image-cluster"
               >
-                <NImage
-                  v-if="baseImage.avatarUrl"
-                  :src="baseImage.avatarUrl"
-                  width="100%"
-                  height="140"
-                  object-fit="cover"
-                  preview
-                />
-                <div class="base-image-info">
-                  <span class="base-image-name">{{ baseImage.name }}</span>
-                  <NDropdown
-                    trigger="click"
-                    :options="imageActionOptions(character.id, baseImage.id, character.images || [])"
-                    @select="(key) => handleImageAction(key, character.id, baseImage.id, character.images || [])"
-                  >
-                    <NButton size="tiny" quaternary @click.stop>⋯</NButton>
-                  </NDropdown>
+                <div
+                  class="base-image-item"
+                  :class="{
+                    'base-image-item--selected': selectedImageId === baseImage.id,
+                    'base-image-item--generating': generatingByImageId[baseImage.id]
+                  }"
+                  @click="selectedImageId = baseImage.id"
+                >
+                  <NImage
+                    v-if="baseImage.avatarUrl"
+                    :src="baseImage.avatarUrl"
+                    width="100%"
+                    height="140"
+                    object-fit="cover"
+                    preview
+                  />
+                  <div class="base-image-info">
+                    <span class="base-image-name">{{ baseImage.name }}</span>
+                    <NDropdown
+                      trigger="click"
+                      :options="imageActionOptions(character.id, baseImage.id, character.images || [])"
+                      @select="(key) => handleImageAction(key, character.id, baseImage.id, character.images || [])"
+                    >
+                      <NButton size="tiny" quaternary @click.stop>⋯</NButton>
+                    </NDropdown>
+                  </div>
                 </div>
-                <div class="derived-images" v-if="getDerivedImages(character.images || [], baseImage.id).length > 0">
+                <div
+                  v-if="getDisplayDerivedImages(character.images || [], baseImage.id).length > 0"
+                  class="derived-images"
+                >
                   <NDropdown
-                    v-for="derived in getDerivedImages(character.images || [], baseImage.id)"
+                    v-for="derived in getDisplayDerivedImages(character.images || [], baseImage.id)"
                     :key="derived.id"
                     trigger="click"
                     :options="imageActionOptions(character.id, derived.id, character.images || [])"
@@ -627,6 +604,13 @@ const isCharacterExpanded = (characterId: string) => {
   padding: var(--spacing-sm);
 }
 
+.base-image-cluster {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg-white);
+}
+
 .base-image-item {
   position: relative;
   border-radius: var(--radius-md);
@@ -670,9 +654,10 @@ const isCharacterExpanded = (characterId: string) => {
 
 .derived-images {
   display: flex;
-  gap: 2px;
-  padding: 2px;
-  background: white;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  background: var(--color-bg-gray);
   border-top: 1px solid var(--color-border-light);
 }
 
