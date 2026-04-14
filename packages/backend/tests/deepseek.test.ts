@@ -335,4 +335,92 @@ describe('DeepSeek Service', () => {
       await expect(optimizePrompt('A prompt')).rejects.toThrow(DeepSeekAuthError)
     })
   })
+
+  describe('convertDeepSeekResponse', () => {
+    it('uses nested episodes[0].scenes when top-level scenes missing', () => {
+      const c = convertDeepSeekResponse({
+        episode_title: 'E1',
+        episodes: [
+          {
+            scenes: [
+              {
+                sceneNum: 2,
+                location: '酒吧',
+                timeOfDay: '夜',
+                characters: [],
+                description: '内景',
+                dialogues: [{ character: 'A', content: '喝' }],
+                actions: ['举杯']
+              }
+            ]
+          }
+        ]
+      })
+      expect(c.scenes).toHaveLength(1)
+      expect(c.scenes[0].location).toBe('酒吧')
+    })
+
+    it('maps dialogue record to dialogue lines', () => {
+      const c = convertDeepSeekResponse({
+        title: 'X',
+        scenes: [
+          {
+            dialogue: { 老师: '上课', 学生: '好' }
+          }
+        ]
+      })
+      expect(c.scenes[0].dialogues.map((d) => d.character).sort()).toEqual(['学生', '老师'])
+    })
+
+    it('splits single action string by sentence boundaries', () => {
+      const c = convertDeepSeekResponse({
+        title: 'Y',
+        scenes: [
+          {
+            action: '走出房间。转身!',
+            characters: [],
+            description: '走廊'
+          }
+        ]
+      })
+      expect(c.scenes[0].actions.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  describe('generateCharacterSlotImagePrompt', () => {
+    it('returns trimmed prompt and cost', async () => {
+      const { generateCharacterSlotImagePrompt } = await import('../src/services/deepseek.js')
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: '"正面半身肖像，柔和布光，写实"' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }
+      })
+      const r = await generateCharacterSlotImagePrompt({
+        characterName: '李明',
+        characterDescription: '三十岁业务员',
+        slotName: '正式谈判',
+        slotType: 'outfit',
+        slotDescription: '西装',
+        parentSlotSummary: '与基础定妆一致'
+      })
+      expect(r.prompt.length).toBeGreaterThan(5)
+      expect(r.cost.totalTokens).toBe(30)
+    })
+  })
+
+  describe('fetchScriptVisualEnrichmentJson', () => {
+    it('returns jsonText from model', async () => {
+      const { fetchScriptVisualEnrichmentJson } = await import('../src/services/deepseek.js')
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: '{"locations":[],"characters":[]}' } }],
+        usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 }
+      })
+      const r = await fetchScriptVisualEnrichmentJson({
+        scriptSummary: '都市爱情故事梗概',
+        locationLines: '咖啡馆 | 内景',
+        characterLines: '主角 | 女'
+      })
+      expect(r.jsonText).toContain('locations')
+      expect(r.cost.costCNY).toBeGreaterThanOrEqual(0)
+    })
+  })
 })

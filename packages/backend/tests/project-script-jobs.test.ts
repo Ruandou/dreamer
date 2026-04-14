@@ -21,6 +21,14 @@ const mkScript = (title: string, summary: string, sceneNums: number[]) => ({
 })
 
 describe('project-script-jobs helpers', () => {
+  it('mergeEpisodesToScriptContent produces empty scenes when no episode has valid script JSON', () => {
+    const merged = mergeEpisodesToScriptContent([
+      { episodeNum: 1, title: 'E1', rawScript: { not: 'a script' } }
+    ])
+    expect(merged.scenes).toEqual([])
+    expect(merged.title).toBe('剧本')
+  })
+
   it('mergeEpisodesToScriptContent concatenates scenes with sequential sceneNum', () => {
     const merged = mergeEpisodesToScriptContent([
       { episodeNum: 2, title: 'E2', rawScript: mkScript('T2', 's2', [1, 2]) },

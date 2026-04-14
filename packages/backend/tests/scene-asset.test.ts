@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { analyzeSceneRequirements, matchAssets, getReferenceImageUrls } from '../src/services/scene-asset.js'
+import {
+  analyzeSceneRequirements,
+  matchAssets,
+  getReferenceImageUrls,
+  generateCompositePrompt,
+  suggestAssetGeneration,
+  matchAssetsForScenes,
+  convertCharacterImagesToAssets
+} from '../src/services/scene-asset.js'
 import type { ScriptScene } from '@dreamer/shared/types'
 
 describe('Scene Asset Service', () => {
@@ -111,6 +119,107 @@ describe('Scene Asset Service', () => {
 
       const urls = getReferenceImageUrls(recommendations, 2)
       expect(urls.length).toBe(2)
+    })
+  })
+
+  describe('generateCompositePrompt', () => {
+    it('joins scene label and asset descriptions', () => {
+      const scene: ScriptScene = {
+        sceneNum: 1,
+        location: '海边',
+        timeOfDay: '昏',
+        characters: [],
+        description: '落日',
+        dialogues: [],
+        actions: []
+      }
+      const prompt = generateCompositePrompt(scene, [
+        { id: '1', type: 'character', name: 'a', url: '', description: '男主', tags: [] },
+        {
+          id: '2',
+          type: 'atmosphere',
+          name: 'm',
+          url: '',
+          description: 'x',
+          mood: ['暖色调']
+        }
+      ])
+      expect(prompt).toContain('海边')
+      expect(prompt).toContain('男主')
+      expect(prompt).toContain('暖色调')
+    })
+  })
+
+  describe('suggestAssetGeneration', () => {
+    it('returns sorted suggestions by priority', () => {
+      const scene: ScriptScene = {
+        sceneNum: 1,
+        location: '城',
+        timeOfDay: '夜',
+        characters: ['路人'],
+        description: '现代街道',
+        dialogues: [],
+        actions: []
+      }
+      const s = suggestAssetGeneration(scene)
+      expect(s[0].priority).toBeGreaterThanOrEqual(s[s.length - 1].priority)
+      expect(s.some((x) => x.assetType === 'character')).toBe(true)
+      expect(s.some((x) => x.assetType === 'background')).toBe(true)
+    })
+  })
+
+  describe('matchAssetsForScenes', () => {
+    it('matches each scene with optional actions', () => {
+      const scenes: ScriptScene[] = [
+        {
+          sceneNum: 1,
+          location: 'L1',
+          timeOfDay: '日',
+          characters: ['A'],
+          description: 'd',
+          dialogues: [],
+          actions: []
+        },
+        {
+          sceneNum: 2,
+          location: 'L2',
+          timeOfDay: '夜',
+          characters: [],
+          description: 'd2',
+          dialogues: [],
+          actions: []
+        }
+      ]
+      const assets = [{ id: 'x', type: 'character' as const, name: 'n', url: 'u', description: 'A' }]
+      const recs = matchAssetsForScenes(scenes, assets)
+      expect(recs).toHaveLength(2)
+      expect(recs[0].sceneNum).toBe(1)
+      expect(recs[1].sceneNum).toBe(2)
+    })
+  })
+
+  describe('convertCharacterImagesToAssets', () => {
+    it('maps images to project assets', () => {
+      const out = convertCharacterImagesToAssets([
+        {
+          id: 'img-1',
+          characterId: 'c1',
+          name: '定妆',
+          type: 'base',
+          order: 0,
+          avatarUrl: 'https://x/a.png',
+          description: '正面',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ])
+      expect(out[0]).toMatchObject({
+        id: 'img-1',
+        type: 'character',
+        url: 'https://x/a.png',
+        description: '正面',
+        tags: ['base']
+      })
     })
   })
 })

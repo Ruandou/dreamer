@@ -7,7 +7,9 @@ const {
   mockProjectFindMany,
   mockPipelineJobFindMany,
   mockPipelineJobFindUnique,
+  mockPipelineJobFindFirst,
   mockPipelineJobCreate,
+  mockPipelineJobUpdate,
   mockPipelineStepResultCreateMany
 } = vi.hoisted(() => {
   return {
@@ -15,7 +17,9 @@ const {
     mockProjectFindMany: vi.fn(),
     mockPipelineJobFindMany: vi.fn(),
     mockPipelineJobFindUnique: vi.fn(),
+    mockPipelineJobFindFirst: vi.fn(),
     mockPipelineJobCreate: vi.fn(),
+    mockPipelineJobUpdate: vi.fn(),
     mockPipelineStepResultCreateMany: vi.fn()
   }
 })
@@ -33,7 +37,9 @@ vi.mock('../src/index.js', () => ({
     pipelineJob: {
       findMany: mockPipelineJobFindMany,
       findUnique: mockPipelineJobFindUnique,
-      create: mockPipelineJobCreate
+      findFirst: mockPipelineJobFindFirst,
+      create: mockPipelineJobCreate,
+      update: mockPipelineJobUpdate
     },
     pipelineStepResult: {
       createMany: mockPipelineStepResultCreateMany
@@ -224,6 +230,203 @@ describe('Pipeline Routes', () => {
       })
 
       expect(response.statusCode).toBe(404)
+    })
+
+    it('returns 404 when job belongs to another user project', async () => {
+      mockPipelineJobFindUnique.mockResolvedValue({
+        id: 'job-x',
+        projectId: 'proj-other',
+        status: 'pending',
+        jobType: 'full-pipeline',
+        currentStep: 'script-writing',
+        progress: 0,
+        error: null,
+        progressMeta: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        stepResults: []
+      })
+      mockProjectFindFirst.mockResolvedValue(null)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/pipeline/job/job-x'
+      })
+
+      expect(response.statusCode).toBe(404)
+    })
+  })
+
+  describe('POST /api/pipeline/execute', () => {
+    it('returns 400 when projectId or idea missing', async () => {
+      const r1 = await app.inject({
+        method: 'POST',
+        url: '/api/pipeline/execute',
+        payload: { idea: 'x' }
+      })
+      expect(r1.statusCode).toBe(400)
+
+      const r2 = await app.inject({
+        method: 'POST',
+        url: '/api/pipeline/execute',
+        payload: { projectId: 'p1' }
+      })
+      expect(r2.statusCode).toBe(400)
+    })
+
+    it('returns 404 when project not found', async () => {
+      mockProjectFindFirst.mockResolvedValue(null)
+      const r = await app.inject({
+        method: 'POST',
+        url: '/api/pipeline/execute',
+        payload: { projectId: 'p-missing', idea: 'novel' }
+      })
+      expect(r.statusCode).toBe(404)
+    })
+
+    it('creates job and calls executePipelineJob', async () => {
+      mockProjectFindFirst.mockResolvedValue({
+        id: 'proj-1',
+        userId: 'test-user-id',
+        aspectRatio: '16:9'
+      })
+      mockPipelineJobCreate.mockResolvedValue({
+        id: 'new-job-id',
+        projectId: 'proj-1',
+        status: 'pending',
+        jobType: 'full-pipeline',
+        currentStep: 'script-writing',
+        progress: 0
+      })
+      mockPipelineStepResultCreateMany.mockResolvedValue({ count: 4 })
+      mockExecutePipelineJob.mockResolvedValue(undefined)
+
+      const r = await app.inject({
+        method: 'POST',
+        url: '/api/pipeline/execute',
+        payload: {
+          projectId: 'proj-1',
+          idea: '一个悬疑故事',
+          targetEpisodes: 3,
+          defaultResolution: '480p'
+        }
+      })
+
+      expect(r.statusCode).toBe(200)
+      const body = JSON.parse(r.payload)
+      expect(body.success).toBe(true)
+      expect(body.data.jobId).toBe('new-job-id')
+      expect(mockPipelineJobCreate).toHaveBeenCalled()
+      expect(mockPipelineStepResultCreateMany).toHaveBeenCalled()
+      expect(mockExecutePipelineJob).toHaveBeenCalledWith(
+        'new-job-id',
+        expect.objectContaining({
+          projectId: 'proj-1',
+          idea: '一个悬疑故事',
+          targetEpisodes: 3,
+          defaultAspectRatio: '16:9',
+          defaultResolution: '480p'
+        })
+      )
+    })
+  })
+
+  describe('GET /api/pipeline/status/:projectId', () => {
+    it('returns 404 when project not found', async () => {
+      mockProjectFindFirst.mockResolvedValue(null)
+      const r = await app.inject({
+        method: 'GET',
+        url: '/api/pipeline/status/bad-proj'
+      })
+      expect(r.statusCode).toBe(404)
+    })
+
+    it('returns not_started when no pipeline job', async () => {
+      mockProjectFindFirst.mockResolvedValue({ id: 'p1', userId: 'test-user-id' })
+      mockPipelineJobFindFirst.mockResolvedValue(null)
+
+      const r = await app.inject({
+        method: 'GET',
+        url: '/api/pipeline/status/p1'
+      })
+
+      expect(r.statusCode).toBe(200)
+      const body = JSON.parse(r.payload)
+      expect(body.success).toBe(true)
+      expect(body.data.status).toBe('not_started')
+    })
+
+    it('returns latest job payload', async () => {
+      mockProjectFindFirst.mockResolvedValue({ id: 'p1', userId: 'test-user-id' })
+      mockPipelineJobFindFirst.mockResolvedValue({
+        id: 'j1',
+        status: 'running',
+        currentStep: 'episode-split',
+        progress: 30,
+        error: null,
+        stepResults: [{ step: 'script-writing', status: 'completed' }]
+      })
+
+      const r = await app.inject({
+        method: 'GET',
+        url: '/api/pipeline/status/p1'
+      })
+
+      expect(r.statusCode).toBe(200)
+      const body = JSON.parse(r.payload)
+      expect(body.data.id).toBe('j1')
+      expect(body.data.status).toBe('running')
+      expect(body.data.stepResults).toHaveLength(1)
+    })
+  })
+
+  describe('DELETE /api/pipeline/job/:jobId', () => {
+    it('returns 404 when job not found', async () => {
+      mockPipelineJobFindUnique.mockResolvedValue(null)
+      const r = await app.inject({ method: 'DELETE', url: '/api/pipeline/job/none' })
+      expect(r.statusCode).toBe(404)
+    })
+
+    it('returns 404 when user does not own project', async () => {
+      mockPipelineJobFindUnique.mockResolvedValue({
+        id: 'j1',
+        projectId: 'p1',
+        status: 'pending'
+      })
+      mockProjectFindFirst.mockResolvedValue(null)
+
+      const r = await app.inject({ method: 'DELETE', url: '/api/pipeline/job/j1' })
+      expect(r.statusCode).toBe(404)
+    })
+
+    it('returns 400 when job is running', async () => {
+      mockPipelineJobFindUnique.mockResolvedValue({
+        id: 'j1',
+        projectId: 'p1',
+        status: 'running'
+      })
+      mockProjectFindFirst.mockResolvedValue({ id: 'p1', userId: 'test-user-id' })
+
+      const r = await app.inject({ method: 'DELETE', url: '/api/pipeline/job/j1' })
+      expect(r.statusCode).toBe(400)
+    })
+
+    it('marks job failed and returns success', async () => {
+      mockPipelineJobFindUnique.mockResolvedValue({
+        id: 'j1',
+        projectId: 'p1',
+        status: 'pending'
+      })
+      mockProjectFindFirst.mockResolvedValue({ id: 'p1', userId: 'test-user-id' })
+      mockPipelineJobUpdate.mockResolvedValue({ id: 'j1' })
+
+      const r = await app.inject({ method: 'DELETE', url: '/api/pipeline/job/j1' })
+      expect(r.statusCode).toBe(200)
+      expect(JSON.parse(r.payload).success).toBe(true)
+      expect(mockPipelineJobUpdate).toHaveBeenCalledWith({
+        where: { id: 'j1' },
+        data: { status: 'failed', error: '用户取消' }
+      })
     })
   })
 })

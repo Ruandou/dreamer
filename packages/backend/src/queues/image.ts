@@ -6,8 +6,8 @@ import {
   generateTextToImageAndPersist,
   generateImageEditAndPersist,
   arkImageSizeFromProjectAspectRatio,
-  DEFAULT_T2I_MODEL,
-  DEFAULT_EDIT_MODEL
+  imageJobPrompt,
+  imageJobModel
 } from '../services/image-generation.js'
 import { recordModelApiCall } from '../services/api-logger.js'
 import { sendProjectUpdate } from '../plugins/sse.js'
@@ -26,30 +26,6 @@ export const imageQueue = new Queue<ImageGenerationJobData>('image-generation', 
     }
   }
 })
-
-function imageJobPrompt(d: ImageGenerationJobData): string {
-  switch (d.kind) {
-    case 'character_base_create':
-    case 'character_base_regenerate':
-    case 'location_establishing':
-      return d.prompt
-    case 'character_derived_regenerate':
-    case 'character_derived_create':
-      return d.editPrompt
-    default:
-      return ''
-  }
-}
-
-function imageJobModel(d: ImageGenerationJobData): string {
-  switch (d.kind) {
-    case 'character_derived_regenerate':
-    case 'character_derived_create':
-      return DEFAULT_EDIT_MODEL
-    default:
-      return DEFAULT_T2I_MODEL
-  }
-}
 
 function notify(
   userId: string,

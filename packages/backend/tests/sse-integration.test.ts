@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
 import Fastify, { FastifyInstance } from 'fastify'
+import { sendTaskUpdate, sendProjectUpdate } from '../src/plugins/sse.js'
 
 // Mock jwt verify
 vi.mock('@fastify/jwt', () => ({
@@ -71,6 +72,62 @@ describe('SSE Plugin Integration', () => {
           status: 'completed'
         })
       }).not.toThrow()
+    })
+
+    it('sendTaskUpdate and sendProjectUpdate serialize payload', () => {
+      expect(() => sendTaskUpdate('user-123', 't1', 'running', { pct: 0.5 })).not.toThrow()
+      expect(() =>
+        sendProjectUpdate('user-123', 'proj-1', 'image-generation', { status: 'completed' })
+      ).not.toThrow()
+    })
+  })
+
+  describe('sse.subscribe connection lifecycle', () => {
+    it('opens SSE with token in query and accepts subsequent sendToUser', async () => {
+      vi.useFakeTimers()
+      const writes: string[] = []
+      const reply = {
+        raw: {
+          writeHead: vi.fn(),
+          write: vi.fn((msg: string) => {
+            writes.push(msg)
+          })
+        }
+      }
+      const listeners: Record<string, () => void> = {}
+      const request = {
+        query: { subscribe: 'valid-token' },
+        headers: {} as Record<string, string>,
+        raw: {
+          on: vi.fn((ev: string, fn: () => void) => {
+            if (ev === 'close') listeners.close = fn
+          })
+        }
+      }
+      await app.sse.subscribe(request as any, reply as any)
+      expect(reply.raw.writeHead).toHaveBeenCalledWith(
+        200,
+        expect.objectContaining({ 'Content-Type': 'text/event-stream' })
+      )
+      expect(writes.some((w) => w.includes('connected'))).toBe(true)
+
+      app.sse.sendToUser('user-123', 'custom', { ok: true })
+      expect(writes.some((w) => w.includes('custom'))).toBe(true)
+
+      vi.advanceTimersByTime(30000)
+      listeners.close?.()
+      vi.useRealTimers()
+    })
+
+    it('falls back to anonymous when no token', async () => {
+      const reply = { raw: { writeHead: vi.fn(), write: vi.fn() } }
+      const request = {
+        query: {},
+        headers: {},
+        raw: { on: vi.fn() }
+      }
+      await app.sse.subscribe(request as any, reply as any)
+      expect(reply.raw.write).toHaveBeenCalled()
     })
   })
 })

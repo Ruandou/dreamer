@@ -8,6 +8,7 @@
  */
 import { uploadFile, generateFileKey } from './storage.js'
 import { normalizeProjectDefaultAspectRatio } from '../lib/project-aspect.js'
+import type { ImageGenerationJobData } from '@dreamer/shared/types'
 
 const ARK_API_KEY = process.env.ARK_API_KEY || ''
 const ARK_API_URL = process.env.ARK_API_URL || 'https://ark.cn-beijing.volces.com/api/v3'
@@ -18,6 +19,31 @@ export const DEFAULT_T2I_MODEL =
 /** 图生图 / 指令编辑（与文生图同一 Lite 模型；可用 ARK_IMAGE_EDIT_MODEL 改回 SeedEdit 等） */
 export const DEFAULT_EDIT_MODEL =
   process.env.ARK_IMAGE_EDIT_MODEL || 'doubao-seedream-5-0-lite-260128'
+
+/** Bull 图片任务日志 / Worker 用的 prompt 摘要（纯函数，可单测） */
+export function imageJobPrompt(d: ImageGenerationJobData): string {
+  switch (d.kind) {
+    case 'character_base_create':
+    case 'character_base_regenerate':
+    case 'location_establishing':
+      return d.prompt
+    case 'character_derived_regenerate':
+    case 'character_derived_create':
+      return d.editPrompt
+    default:
+      return ''
+  }
+}
+
+export function imageJobModel(d: ImageGenerationJobData): string {
+  switch (d.kind) {
+    case 'character_derived_regenerate':
+    case 'character_derived_create':
+      return DEFAULT_EDIT_MODEL
+    default:
+      return DEFAULT_T2I_MODEL
+  }
+}
 
 export class ArkImageError extends Error {
   constructor(message: string) {
