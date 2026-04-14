@@ -1,21 +1,11 @@
+import type { Prisma } from '@prisma/client'
 import { FastifyInstance } from 'fastify'
-import { prisma } from '../index.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { verifyLocationOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
-import { imageQueue } from '../queues/image.js'
-import { sanitizeLocationImagePromptForImageApi } from '../services/script-visual-enrich.js'
+import { locationService } from '../services/location-service.js'
 
 const LOCATION_IMAGE_UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
-
-/** 定场图入队：imagePrompt 应在视觉补全中含「风格与画质」与项目 visualStyle，此处不再拼英文 Visual style 前缀以免重复。 */
-function buildLocationEstablishingPrompt(establishingName: string, effective: string): string {
-  return `${establishingName}. ${effective}`
-}
-
-function locationHasEstablishingImage(imageUrl: string | null | undefined): boolean {
-  return !!(imageUrl && String(imageUrl).trim())
-}
 
 export async function locationRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { projectId: string } }>(
@@ -33,10 +23,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      return prisma.location.findMany({
-        where: { projectId, deletedAt: null },
-        orderBy: { name: 'asc' }
-      })
+      return locationService.listByProject(projectId)
     }
   )
 
@@ -62,58 +49,12 @@ export async function locationRoutes(fastify: FastifyInstance) {
       return reply.status(403).send(permissionDeniedBody)
     }
 
-    const rows = await prisma.location.findMany({
-      where: { projectId, deletedAt: null },
-      include: { project: true },
-      orderBy: { name: 'asc' }
-    })
-
-    const jobIds: string[] = []
-    const enqueuedLocationIds: string[] = []
-    const skipped: { id: string; name: string; reason: string }[] = []
-
-    for (const location of rows) {
-      if (locationHasEstablishingImage(location.imageUrl)) {
-        skipped.push({ id: location.id, name: location.name, reason: '已有定场图' })
-        continue
-      }
-      const override = promptOverrides?.[location.id]
-      const effectiveRaw =
-        override !== undefined ? String(override).trim() : (location.imagePrompt || '').trim()
-      const effective = sanitizeLocationImagePromptForImageApi(effectiveRaw)
-      if (effective && effective !== (location.imagePrompt || '').trim()) {
-        await prisma.location.update({
-          where: { id: location.id },
-          data: { imagePrompt: effective }
-        })
-      }
-      if (!effective) {
-        skipped.push({ id: location.id, name: location.name, reason: '缺少定场图提示词' })
-        continue
-      }
-
-      const establishingName = `${location.name} establishing shot, empty scene, no people, cinematic lighting`
-      const finalPrompt = buildLocationEstablishingPrompt(establishingName, effective)
-
-      const job = await imageQueue.add('location-establishing', {
-        kind: 'location_establishing',
-        userId,
-        projectId: location.projectId,
-        locationId: location.id,
-        prompt: finalPrompt
-      })
-      if (job.id) {
-        jobIds.push(String(job.id))
-        enqueuedLocationIds.push(location.id)
-      }
-    }
-
-    return reply.status(202).send({
-      jobIds,
-      enqueuedLocationIds,
-      skipped,
-      enqueued: jobIds.length
-    })
+    const result = await locationService.batchEnqueueEstablishingImages(
+      userId,
+      projectId,
+      promptOverrides
+    )
+    return reply.status(202).send(result)
   })
 
   fastify.put<{
@@ -145,16 +86,11 @@ export async function locationRoutes(fastify: FastifyInstance) {
     }
 
     if (Object.keys(data).length === 0) {
-      const loc = await prisma.location.findFirst({
-        where: { id: locationId, deletedAt: null }
-      })
+      const loc = await locationService.findActiveById(locationId)
       return loc || reply.status(404).send({ error: 'Location not found' })
     }
 
-    return prisma.location.update({
-      where: { id: locationId },
-      data
-    })
+    return locationService.updateFields(locationId, data as Prisma.LocationUpdateInput)
   })
 
   fastify.delete<{ Params: { id: string } }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
@@ -165,22 +101,10 @@ export async function locationRoutes(fastify: FastifyInstance) {
       return reply.status(403).send(permissionDeniedBody)
     }
 
-    const existing = await prisma.location.findFirst({
-      where: { id: locationId, deletedAt: null }
-    })
-    if (!existing) {
+    const deleted = await locationService.deleteLocation(locationId)
+    if (!deleted) {
       return reply.status(404).send({ error: 'Location not found' })
     }
-
-    await prisma.scene.updateMany({
-      where: { locationId },
-      data: { locationId: null }
-    })
-
-    await prisma.location.update({
-      where: { id: locationId },
-      data: { deletedAt: new Date() }
-    })
     return reply.status(204).send()
   })
 
@@ -196,10 +120,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const location = await prisma.location.findFirst({
-        where: { id: locationId, deletedAt: null }
-      })
-      if (!location) {
+      if (!(await locationService.findActiveById(locationId))) {
         return reply.status(404).send({ error: 'Location not found' })
       }
 
@@ -240,10 +161,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
       const key = generateFileKey('assets', `location_${locationId}_${Date.now()}.${ext}`)
       const imageUrl = await uploadFile('assets', key, fileBuffer, fileMimeType)
 
-      const updated = await prisma.location.update({
-        where: { id: locationId },
-        data: { imageUrl, imageCost: null }
-      })
+      const updated = await locationService.setUploadedImageAndClearCost(locationId, imageUrl)
 
       return reply.status(200).send(updated)
     }
@@ -261,46 +179,22 @@ export async function locationRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const location = await prisma.location.findFirst({
-        where: { id: locationId, deletedAt: null },
-        include: { project: true }
-      })
+      const result = await locationService.enqueueEstablishingForLocation(
+        userId,
+        locationId,
+        typeof override === 'string' ? override : undefined
+      )
 
-      if (!location) {
-        return reply.status(404).send({ error: 'Location not found' })
-      }
-
-      const effectiveRaw =
-        typeof override === 'string' && override.trim()
-          ? override.trim()
-          : (location.imagePrompt || '').trim()
-      const effective = sanitizeLocationImagePromptForImageApi(effectiveRaw)
-
-      if (effective && effective !== (location.imagePrompt || '').trim()) {
-        await prisma.location.update({
-          where: { id: locationId },
-          data: { imagePrompt: effective }
-        })
-      }
-
-      if (!effective) {
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          return reply.status(404).send({ error: 'Location not found' })
+        }
         return reply
           .status(400)
           .send({ error: '缺少定场图提示词：请填写 imagePrompt 或传入 prompt' })
       }
 
-      const establishingName = `${location.name} establishing shot, empty scene, no people, cinematic lighting`
-      const finalPrompt = buildLocationEstablishingPrompt(establishingName, effective)
-
-      const job = await imageQueue.add('location-establishing', {
-        kind: 'location_establishing',
-        userId,
-        projectId: location.projectId,
-        locationId: location.id,
-        prompt: finalPrompt
-      })
-
-      return reply.status(202).send({ jobId: job.id, kind: 'location_establishing' })
+      return reply.status(202).send({ jobId: result.jobId, kind: result.kind })
     }
   )
 }
