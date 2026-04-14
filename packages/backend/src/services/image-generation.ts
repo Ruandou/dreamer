@@ -1,6 +1,7 @@
 /**
  * 火山方舟 OpenAI 兼容图片接口（文生图 / 指令编辑）
- * 模型 ID 可通过环境变量覆盖；默认文生图为方舟 Seedream 5.0 Lite（见文档中的模型 ID）。
+ * 模型 ID 可通过环境变量覆盖；默认文生图 / 参考图编辑均为方舟 Seedream 5.0 Lite。
+ * 若 `ARK_IMAGE_EDIT_MODEL` 指向 SeedEdit，会附带 `guidance_scale`（仅 SeedEdit 路径使用）。
  */
 import { uploadFile, generateFileKey } from './storage.js'
 
@@ -10,9 +11,9 @@ const ARK_API_URL = process.env.ARK_API_URL || 'https://ark.cn-beijing.volces.co
 /** 文生图（无参考图） */
 export const DEFAULT_T2I_MODEL =
   process.env.ARK_IMAGE_T2I_MODEL || 'doubao-seedream-5-0-lite-260128'
-/** 图生图 / 指令编辑 */
+/** 图生图 / 指令编辑（与文生图同一 Lite 模型；可用 ARK_IMAGE_EDIT_MODEL 改回 SeedEdit 等） */
 export const DEFAULT_EDIT_MODEL =
-  process.env.ARK_IMAGE_EDIT_MODEL || 'doubao-seededit-3-0-i2i-250628'
+  process.env.ARK_IMAGE_EDIT_MODEL || 'doubao-seedream-5-0-lite-260128'
 
 export class ArkImageError extends Error {
   constructor(message: string) {
@@ -49,6 +50,11 @@ export interface ImageEditOptions {
 export function strengthToGuidanceScale(strength: number): number {
   const s = Math.min(1, Math.max(0, strength))
   return Math.round(4 + s * 5)
+}
+
+/** 仅 SeedEdit 类模型在方舟图片编辑接口中传 guidance_scale */
+export function imageEditModelUsesGuidanceScale(model: string): boolean {
+  return model.toLowerCase().includes('seededit')
 }
 
 async function postImagesGenerations(body: Record<string, unknown>): Promise<{ data: { url: string }[] }> {
@@ -123,14 +129,17 @@ export async function generateImageEdit(
       ? referenceImageUrl
       : await remoteImageUrlToDataUrl(referenceImageUrl)
 
+  const model = options.model || DEFAULT_EDIT_MODEL
   const body: Record<string, unknown> = {
-    model: options.model || DEFAULT_EDIT_MODEL,
+    model,
     prompt,
     image: imagePayload,
     response_format: 'url',
     size: options.size || 'adaptive',
-    guidance_scale: strengthToGuidanceScale(options.strength ?? 0.35),
     watermark: options.watermark ?? false
+  }
+  if (imageEditModelUsesGuidanceScale(model)) {
+    body.guidance_scale = strengthToGuidanceScale(options.strength ?? 0.35)
   }
   const json = await postImagesGenerations(body)
   return firstImageUrl(json)
