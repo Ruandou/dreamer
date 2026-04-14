@@ -37,6 +37,12 @@ import 'dotenv/config'  // 太晚了
 | 生产 `pnpm start` | `package.json` 已用 `node --import ./dist/bootstrap-env.js`，勿删 |
 | 方舟图片成本展示 | 从 `images/generations` 的 `usage` 取 token，按 `ARK_IMAGE_YUAN_PER_MILLION_TOKENS`（默认 `4`，即每百万 token 约 4 元）估算后写入 `CharacterImage.imageCost` / `Location.imageCost`；可按控制台账单改 `.env` |
 
+## 模型调用可观测性
+
+- **规则**：新增或修改任何对外部模型（LLM / 文生图 / 视频等）的调用时，必须**同时**：(1) 落库 `ModelApiCall`（`recordModelApiCall`、`logApiCall`、或 DeepSeek 路径的 `logDeepSeekChat`）；(2) 在业务侧传入 `ModelCallLogContext`（`userId`、`op`、可选 `projectId`），便于审计与排障。
+- **查询**：`GET /api/model-api-calls`（需登录，`limit` / `offset` / `model` 查询参数）返回当前用户的调用记录。
+- **终端**：`recordModelApiCall` 会输出一行 `[model-api] <provider> <model> <status> op=<op>`。
+
 ## 启动命令
 
 后端必须在项目根目录运行：

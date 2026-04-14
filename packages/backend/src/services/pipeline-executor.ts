@@ -296,9 +296,14 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
 
   console.log(`Starting Pipeline Job ${jobId} for project ${projectId}`)
 
-  try {
+    try {
     // 更新状态为运行中
     await updateJobProgress(jobId, { status: 'running', currentStep: 'script-writing', progress: 5 })
+
+    const projectMeta = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { userId: true }
+    })
 
     const te = targetEpisodes && targetEpisodes > 0 ? targetEpisodes : DEFAULT_TARGET_EPISODES
     const existingEpisodes = await prisma.episode.findMany({
@@ -336,7 +341,10 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
       await updateStepResult(jobId, 'script-writing', { status: 'processing', input: { idea } })
 
       const scriptResult = await writeScriptFromIdea(idea, {
-        characters: [] // TODO: 传入已有角色
+        characters: [], // TODO: 传入已有角色
+        modelLog: projectMeta
+          ? { userId: projectMeta.userId, projectId, op: 'pipeline_job_write_script' }
+          : undefined
       })
 
       script = scriptResult.script

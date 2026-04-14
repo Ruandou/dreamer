@@ -1,5 +1,7 @@
 import OpenAI from 'openai'
 import type { ScriptContent, ScriptScene, ScriptDialogueLine } from '@dreamer/shared/types'
+import type { ModelCallLogContext } from './api-logger.js'
+import { logDeepSeekChat } from './model-call-log.js'
 
 // DeepSeek pricing (per 1M tokens) - 人民币定价
 // 来源：https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
@@ -173,7 +175,11 @@ export function convertDeepSeekResponse(data: any): ScriptContent {
   }
 }
 
-export async function expandScript(summary: string, projectContext?: string): Promise<{ script: ScriptContent; cost: DeepSeekCost }> {
+export async function expandScript(
+  summary: string,
+  projectContext?: string,
+  log?: ModelCallLogContext
+): Promise<{ script: ScriptContent; cost: DeepSeekCost }> {
   const deepseek = getDeepSeekClient()
   const userPrompt = projectContext
     ? `项目背景：${projectContext}\n\n故事梗概：${summary}`
@@ -217,12 +223,17 @@ export async function expandScript(summary: string, projectContext?: string): Pr
         throw new Error('剧本格式不正确')
       }
 
+      await logDeepSeekChat(log, userPrompt, { status: 'completed', costCNY: cost.costCNY })
       return { script, cost }
     } catch (error: any) {
       lastError = error
 
       // Handle specific errors
       if (error?.status === 401 || error?.status === 403) {
+        await logDeepSeekChat(log, userPrompt, {
+          status: 'failed',
+          errorMsg: error?.message || 'auth'
+        })
         throw new DeepSeekAuthError()
       }
 
@@ -231,11 +242,16 @@ export async function expandScript(summary: string, projectContext?: string): Pr
           await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
           continue
         }
+        await logDeepSeekChat(log, userPrompt, { status: 'failed', errorMsg: 'rate_limit' })
         throw new DeepSeekRateLimitError()
       }
 
       // For content parsing errors, don't retry
       if (error.message === '剧本格式不正确' || error.message === 'DeepSeek API 返回为空') {
+        await logDeepSeekChat(log, userPrompt, {
+          status: 'failed',
+          errorMsg: error.message
+        })
         throw error
       }
 
@@ -247,10 +263,18 @@ export async function expandScript(summary: string, projectContext?: string): Pr
     }
   }
 
+  await logDeepSeekChat(log, userPrompt, {
+    status: 'failed',
+    errorMsg: lastError?.message || '剧本生成失败'
+  })
   throw lastError || new Error('剧本生成失败')
 }
 
-export async function optimizePrompt(prompt: string, context?: string): Promise<{ optimized: string; cost: DeepSeekCost }> {
+export async function optimizePrompt(
+  prompt: string,
+  context?: string,
+  log?: ModelCallLogContext
+): Promise<{ optimized: string; cost: DeepSeekCost }> {
   const deepseek = getDeepSeekClient()
   const userPrompt = context
     ? `上下文：${context}\n\n原始提示词：${prompt}\n\n请优化这个提示词，使其更适合视频生成模型使用。保持关键视觉元素，移除模糊描述，添加具体细节。`
@@ -273,11 +297,16 @@ export async function optimizePrompt(prompt: string, context?: string): Promise<
       const cost = calculateDeepSeekCost(completion.usage)
       const optimized = completion.choices[0]?.message?.content || prompt
 
+      await logDeepSeekChat(log, userPrompt, { status: 'completed', costCNY: cost.costCNY })
       return { optimized, cost }
     } catch (error: any) {
       lastError = error
 
       if (error?.status === 401 || error?.status === 403) {
+        await logDeepSeekChat(log, userPrompt, {
+          status: 'failed',
+          errorMsg: error?.message || 'auth'
+        })
         throw new DeepSeekAuthError()
       }
 
@@ -286,6 +315,7 @@ export async function optimizePrompt(prompt: string, context?: string): Promise<
           await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
           continue
         }
+        await logDeepSeekChat(log, userPrompt, { status: 'failed', errorMsg: 'rate_limit' })
         throw new DeepSeekRateLimitError()
       }
 
@@ -296,20 +326,26 @@ export async function optimizePrompt(prompt: string, context?: string): Promise<
     }
   }
 
+  await logDeepSeekChat(log, userPrompt, {
+    status: 'failed',
+    errorMsg: lastError?.message || '提示词优化失败'
+  })
   throw lastError || new Error('提示词优化失败')
 }
 
 /** 为角色形象槽位生成中文文生图提示词（单行，无 markdown），便于用户阅读且适配国产绘图模型 */
-export async function generateCharacterSlotImagePrompt(input: {
-  characterName: string
-  characterDescription?: string | null
-  slotName: string
-  slotType: string
-  slotDescription?: string | null
-  parentSlotSummary?: string | null
-}): Promise<{ prompt: string; cost: DeepSeekCost }> {
+export async function generateCharacterSlotImagePrompt(
+  input: {
+    characterName: string
+    characterDescription?: string | null
+    slotName: string
+    slotType: string
+    slotDescription?: string | null
+    parentSlotSummary?: string | null
+  },
+  log?: ModelCallLogContext
+): Promise<{ prompt: string; cost: DeepSeekCost }> {
   const deepseek = getDeepSeekClient()
-  try {
   const user = [
     `角色名：${input.characterName}`,
     input.characterDescription ? `角色设定：${input.characterDescription}` : '',
@@ -323,6 +359,7 @@ export async function generateCharacterSlotImagePrompt(input: {
     .filter(Boolean)
     .join('\n')
 
+  try {
   const completion = await deepseek.chat.completions.create({
     model: 'deepseek-chat',
     messages: [
@@ -343,8 +380,13 @@ export async function generateCharacterSlotImagePrompt(input: {
   if (!prompt) {
     throw new Error('DeepSeek API 返回为空')
   }
+  await logDeepSeekChat(log, user, { status: 'completed', costCNY: cost.costCNY })
   return { prompt, cost }
   } catch (error: any) {
+    await logDeepSeekChat(log, user, {
+      status: 'failed',
+      errorMsg: error?.message || 'character_slot_prompt'
+    })
     if (error?.status === 401 || error?.status === 403) {
       throw new DeepSeekAuthError()
     }
@@ -355,13 +397,15 @@ export async function generateCharacterSlotImagePrompt(input: {
   }
 }
 
-export async function fetchScriptVisualEnrichmentJson(input: {
-  scriptSummary: string
-  locationLines: string
-  characterLines: string
-}): Promise<{ jsonText: string; cost: DeepSeekCost }> {
+export async function fetchScriptVisualEnrichmentJson(
+  input: {
+    scriptSummary: string
+    locationLines: string
+    characterLines: string
+  },
+  log?: ModelCallLogContext
+): Promise<{ jsonText: string; cost: DeepSeekCost }> {
   const deepseek = getDeepSeekClient()
-  try {
   const user = [
     '根据下列剧本梗概与实体列表，输出 **仅一段合法 JSON**（不要 markdown 代码块），结构为：',
     '{"locations":[{"name":"场地名","imagePrompt":"中文定场图提示词"}],',
@@ -382,27 +426,33 @@ export async function fetchScriptVisualEnrichmentJson(input: {
     `角色（每行：名称 | 已有描述）：\n${input.characterLines || '(无)'}`
   ].join('\n')
 
-  const completion = await deepseek.chat.completions.create({
-    model: 'deepseek-chat',
-    messages: [
-      {
-        role: 'system',
-        content:
-          '你只输出紧凑的合法 JSON，供中文短剧生产工具使用；不要 markdown、不要解释。imagePrompt 与 prompt 字段一律使用中文。'
-      },
-      { role: 'user', content: user }
-    ],
-    temperature: 0.4,
-    max_tokens: 4096
-  })
+  try {
+    const completion = await deepseek.chat.completions.create({
+      model: 'deepseek-chat',
+      messages: [
+        {
+          role: 'system',
+          content:
+            '你只输出紧凑的合法 JSON，供中文短剧生产工具使用；不要 markdown、不要解释。imagePrompt 与 prompt 字段一律使用中文。'
+        },
+        { role: 'user', content: user }
+      ],
+      temperature: 0.4,
+      max_tokens: 4096
+    })
 
-  const cost = calculateDeepSeekCost(completion.usage)
-  const jsonText = completion.choices[0]?.message?.content?.trim() || ''
-  if (!jsonText) {
-    throw new Error('DeepSeek API 返回为空')
-  }
-  return { jsonText, cost }
+    const cost = calculateDeepSeekCost(completion.usage)
+    const jsonText = completion.choices[0]?.message?.content?.trim() || ''
+    if (!jsonText) {
+      throw new Error('DeepSeek API 返回为空')
+    }
+    await logDeepSeekChat(log, user, { status: 'completed', costCNY: cost.costCNY })
+    return { jsonText, cost }
   } catch (error: any) {
+    await logDeepSeekChat(log, user, {
+      status: 'failed',
+      errorMsg: error?.message || 'visual_enrichment'
+    })
     if (error?.status === 401 || error?.status === 403) {
       throw new DeepSeekAuthError()
     }

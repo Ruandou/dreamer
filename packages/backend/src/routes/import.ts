@@ -24,7 +24,11 @@ export async function importRoutes(fastify: FastifyInstance) {
       }
 
       try {
-        const { parsed, cost } = await parseScriptDocument(content, type)
+        const userId = (request as { user: { id: string } }).user.id
+        const { parsed, cost } = await parseScriptDocument(content, type, {
+          userId,
+          op: 'import_preview_parse'
+        })
 
         return {
           success: true,

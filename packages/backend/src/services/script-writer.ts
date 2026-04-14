@@ -1,6 +1,8 @@
 import OpenAI from 'openai'
 import type { ScriptContent, ScriptScene, ScriptDialogueLine, Character } from '@dreamer/shared/types'
 import { calculateDeepSeekCost, type DeepSeekCost, DeepSeekAuthError, DeepSeekRateLimitError } from './deepseek.js'
+import type { ModelCallLogContext } from './api-logger.js'
+import { logDeepSeekChat } from './model-call-log.js'
 
 // Script Writer System Prompt
 const SCRIPT_WRITER_PROMPT = `你是一个专业的短视频剧本作家，擅长创作适合AI视频生成的高质量短剧剧本。
@@ -81,6 +83,8 @@ const SCRIPT_WRITER_PROMPT = `你是一个专业的短视频剧本作家，擅�
 export interface ScriptWriterOptions {
   characters?: Character[]
   projectContext?: string
+  /** 模型调用审计（DeepSeek chat） */
+  modelLog?: ModelCallLogContext
 }
 
 export interface ScriptWriterResult {
@@ -123,11 +127,19 @@ export async function writeScriptFromIdea(
 
       validateScript(script)
 
+      await logDeepSeekChat(options?.modelLog, userPrompt, {
+        status: 'completed',
+        costCNY: cost.costCNY
+      })
       return { script, cost }
     } catch (error: any) {
       lastError = error
 
       if (error?.status === 401 || error?.status === 403) {
+        await logDeepSeekChat(options?.modelLog, userPrompt, {
+          status: 'failed',
+          errorMsg: error?.message || 'auth'
+        })
         throw new DeepSeekAuthError()
       }
 
@@ -136,6 +148,10 @@ export async function writeScriptFromIdea(
           await sleep(2000 * attempt)
           continue
         }
+        await logDeepSeekChat(options?.modelLog, userPrompt, {
+          status: 'failed',
+          errorMsg: 'rate_limit'
+        })
         throw new DeepSeekRateLimitError()
       }
 
@@ -146,6 +162,10 @@ export async function writeScriptFromIdea(
     }
   }
 
+  await logDeepSeekChat(options?.modelLog, userPrompt, {
+    status: 'failed',
+    errorMsg: lastError?.message || '剧本生成失败'
+  })
   throw lastError || new Error('剧本生成失败')
 }
 
@@ -175,7 +195,8 @@ export async function writeEpisodeForProject(
   episodeNum: number,
   seriesSynopsis: string,
   rollingContext: string,
-  seriesTitle: string
+  seriesTitle: string,
+  modelLog?: ModelCallLogContext
 ): Promise<ScriptWriterResult> {
   const deepseek = getDeepSeekClient()
   const userPrompt = `剧名：${seriesTitle}
@@ -201,20 +222,32 @@ export async function writeEpisodeForProject(
       const cost = calculateDeepSeekCost(completion.usage)
       const script = parseScriptResponse(content)
       validateScript(script)
+      await logDeepSeekChat(modelLog, userPrompt, { status: 'completed', costCNY: cost.costCNY })
       return { script, cost }
     } catch (error: any) {
       lastError = error
-      if (error?.status === 401 || error?.status === 403) throw new DeepSeekAuthError()
+      if (error?.status === 401 || error?.status === 403) {
+        await logDeepSeekChat(modelLog, userPrompt, {
+          status: 'failed',
+          errorMsg: error?.message || 'auth'
+        })
+        throw new DeepSeekAuthError()
+      }
       if (error?.status === 429 || error?.message?.includes('rate_limit')) {
         if (attempt < 2) {
           await sleep(2000 * attempt)
           continue
         }
+        await logDeepSeekChat(modelLog, userPrompt, { status: 'failed', errorMsg: 'rate_limit' })
         throw new DeepSeekRateLimitError()
       }
       if (attempt < 2) await sleep(1000)
     }
   }
+  await logDeepSeekChat(modelLog, userPrompt, {
+    status: 'failed',
+    errorMsg: lastError?.message || `第 ${episodeNum} 集剧本生成失败`
+  })
   throw lastError || new Error(`第 ${episodeNum} 集剧本生成失败`)
 }
 
@@ -266,11 +299,19 @@ ${JSON.stringify(script, null, 2)}
 
       validateScript(script)
 
+      await logDeepSeekChat(options?.modelLog, userPrompt, {
+        status: 'completed',
+        costCNY: cost.costCNY
+      })
       return { script, cost }
     } catch (error: any) {
       lastError = error
 
       if (error?.status === 401 || error?.status === 403) {
+        await logDeepSeekChat(options?.modelLog, userPrompt, {
+          status: 'failed',
+          errorMsg: error?.message || 'auth'
+        })
         throw new DeepSeekAuthError()
       }
 
@@ -279,6 +320,10 @@ ${JSON.stringify(script, null, 2)}
           await sleep(2000 * attempt)
           continue
         }
+        await logDeepSeekChat(options?.modelLog, userPrompt, {
+          status: 'failed',
+          errorMsg: 'rate_limit'
+        })
         throw new DeepSeekRateLimitError()
       }
 
@@ -289,6 +334,10 @@ ${JSON.stringify(script, null, 2)}
     }
   }
 
+  await logDeepSeekChat(options?.modelLog, userPrompt, {
+    status: 'failed',
+    errorMsg: lastError?.message || '剧本扩展失败'
+  })
   throw lastError || new Error('剧本扩展失败')
 }
 
@@ -338,11 +387,19 @@ ${feedback}
 
       validateScript(improvedScript)
 
+      await logDeepSeekChat(options?.modelLog, userPrompt, {
+        status: 'completed',
+        costCNY: cost.costCNY
+      })
       return { script: improvedScript, cost }
     } catch (error: any) {
       lastError = error
 
       if (error?.status === 401 || error?.status === 403) {
+        await logDeepSeekChat(options?.modelLog, userPrompt, {
+          status: 'failed',
+          errorMsg: error?.message || 'auth'
+        })
         throw new DeepSeekAuthError()
       }
 
@@ -351,6 +408,10 @@ ${feedback}
           await sleep(2000 * attempt)
           continue
         }
+        await logDeepSeekChat(options?.modelLog, userPrompt, {
+          status: 'failed',
+          errorMsg: 'rate_limit'
+        })
         throw new DeepSeekRateLimitError()
       }
 
@@ -361,6 +422,10 @@ ${feedback}
     }
   }
 
+  await logDeepSeekChat(options?.modelLog, userPrompt, {
+    status: 'failed',
+    errorMsg: lastError?.message || '剧本改进失败'
+  })
   throw lastError || new Error('剧本改进失败')
 }
 
@@ -373,7 +438,8 @@ export async function optimizeSceneDescription(
     location?: string
     timeOfDay?: string
     characters?: string[]
-  }
+  },
+  modelLog?: ModelCallLogContext
 ): Promise<string> {
   const deepseek = getDeepSeekClient()
 
@@ -415,11 +481,20 @@ ${contextStr}
         throw new Error('DeepSeek API 返回为空')
       }
 
+      const cost = calculateDeepSeekCost(completion.usage)
+      await logDeepSeekChat(modelLog, userPrompt, {
+        status: 'completed',
+        costCNY: cost.costCNY
+      })
       return content.trim()
     } catch (error: any) {
       lastError = error
 
       if (error?.status === 401 || error?.status === 403) {
+        await logDeepSeekChat(modelLog, userPrompt, {
+          status: 'failed',
+          errorMsg: error?.message || 'auth'
+        })
         throw new DeepSeekAuthError()
       }
 
@@ -428,6 +503,7 @@ ${contextStr}
           await sleep(2000 * attempt)
           continue
         }
+        await logDeepSeekChat(modelLog, userPrompt, { status: 'failed', errorMsg: 'rate_limit' })
         throw new DeepSeekRateLimitError()
       }
 
@@ -438,6 +514,10 @@ ${contextStr}
     }
   }
 
+  await logDeepSeekChat(modelLog, userPrompt, {
+    status: 'failed',
+    errorMsg: lastError?.message || '场景描述优化失败'
+  })
   throw lastError || new Error('场景描述优化失败')
 }
 

@@ -2,6 +2,65 @@
 
 import { prisma } from '../index.js'
 
+/** 业务侧传入：标识「谁在什么操作里」触发了模型调用，写入 requestParams.op */
+export interface ModelCallLogContext {
+  userId: string
+  op: string
+  projectId?: string
+}
+
+/** prompt 单条上限，避免 Prisma 字段过大 */
+export const MODEL_LOG_PROMPT_MAX = 12000
+
+export function truncateForModelLog(s: string, max = MODEL_LOG_PROMPT_MAX): string {
+  if (!s) return ''
+  if (s.length <= max) return s
+  return `${s.slice(0, max)}\n…[truncated]`
+}
+
+export interface RecordModelApiCallInput {
+  userId: string
+  model: string
+  provider: string
+  prompt: string
+  requestParams?: Record<string, unknown>
+  status: 'completed' | 'failed' | 'processing'
+  cost?: number | null
+  responseData?: Record<string, unknown>
+  errorMsg?: string
+  takeId?: string | null
+}
+
+/** 统一落库 + 终端一行摘要（图片 / LLM / 其他模型） */
+export async function recordModelApiCall(input: RecordModelApiCallInput): Promise<void> {
+  try {
+    const op =
+      input.requestParams && typeof input.requestParams.op === 'string'
+        ? input.requestParams.op
+        : ''
+    console.log(
+      `[model-api] ${input.provider} ${input.model} ${input.status}${op ? ` op=${op}` : ''}`
+    )
+    await prisma.modelApiCall.create({
+      data: {
+        userId: input.userId,
+        model: input.model,
+        provider: input.provider,
+        prompt: truncateForModelLog(input.prompt),
+        requestParams: input.requestParams ? JSON.stringify(input.requestParams) : null,
+        externalTaskId: null,
+        status: input.status,
+        responseData: input.responseData ? JSON.stringify(input.responseData) : null,
+        cost: input.cost ?? undefined,
+        errorMsg: input.errorMsg ?? null,
+        takeId: input.takeId ?? null
+      }
+    })
+  } catch (e) {
+    console.warn('[model-api] recordModelApiCall failed', e)
+  }
+}
+
 export interface ApiCallParams {
   userId: string
   model: string
@@ -26,7 +85,7 @@ export async function logApiCall(params: ApiCallParams, result?: ApiCallResult) 
       userId: params.userId,
       model: params.model,
       provider: params.provider,
-      prompt: params.prompt,
+      prompt: truncateForModelLog(params.prompt),
       requestParams: params.requestParams ? JSON.stringify(params.requestParams) : null,
       externalTaskId: result?.externalTaskId,
       status: result?.error ? 'failed' : result?.videoUrl ? 'completed' : 'processing',

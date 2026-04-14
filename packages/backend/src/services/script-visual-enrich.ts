@@ -5,6 +5,7 @@
 import { prisma } from '../index.js'
 import type { ScriptContent } from '@dreamer/shared/types'
 import { fetchScriptVisualEnrichmentJson } from './deepseek.js'
+import type { ModelCallLogContext } from './api-logger.js'
 
 interface ParsedLocation {
   name: string
@@ -68,6 +69,14 @@ function extractJsonObject(text: string): string {
 }
 
 export async function applyScriptVisualEnrichment(projectId: string, script: ScriptContent): Promise<void> {
+  const projectRow = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { userId: true }
+  })
+  const visualLog: ModelCallLogContext | undefined = projectRow
+    ? { userId: projectRow.userId, projectId, op: 'script_visual_enrichment' }
+    : undefined
+
   const locations = await prisma.location.findMany({
     where: { projectId, deletedAt: null },
     orderBy: { name: 'asc' }
@@ -87,11 +96,14 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
 
   let payload: VisualPayload
   try {
-    const { jsonText } = await fetchScriptVisualEnrichmentJson({
-      scriptSummary: `${script.title}\n${script.summary}`,
-      locationLines,
-      characterLines
-    })
+    const { jsonText } = await fetchScriptVisualEnrichmentJson(
+      {
+        scriptSummary: `${script.title}\n${script.summary}`,
+        locationLines,
+        characterLines
+      },
+      visualLog
+    )
     const raw = extractJsonObject(jsonText)
     payload = JSON.parse(raw) as VisualPayload
   } catch (e) {

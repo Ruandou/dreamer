@@ -26,6 +26,7 @@ import { importRoutes } from './routes/import.js'
 import { settingsRoutes } from './routes/settings.js'
 import { pipelineRoutes } from './routes/pipeline.js'
 import { imageGenerationJobRoutes } from './routes/image-generation-jobs.js'
+import { modelApiCallRoutes } from './routes/model-api-calls.js'
 
 // Initialize Prisma with explicit DATABASE_URL
 export const prisma = new PrismaClient()
@@ -94,6 +95,7 @@ async function start() {
     await fastify.register(settingsRoutes, { prefix: '/api/settings' })
     await fastify.register(pipelineRoutes, { prefix: '/api/pipeline' })
     await fastify.register(imageGenerationJobRoutes, { prefix: '/api/image-generation' })
+    await fastify.register(modelApiCallRoutes, { prefix: '/api/model-api-calls' })
 
     // Health check
     fastify.get('/health', async () => ({ status: 'ok' }))

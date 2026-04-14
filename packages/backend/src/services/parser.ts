@@ -1,4 +1,6 @@
 import OpenAI from 'openai'
+import type { ModelCallLogContext } from './api-logger.js'
+import { logDeepSeekChat } from './model-call-log.js'
 
 // DeepSeek pricing (per 1M tokens) - 人民币定价
 // 来源：https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
@@ -121,7 +123,8 @@ const PARSER_SYSTEM_PROMPT = `你是一个专业的短剧剧本结构化解析�
 
 export async function parseScriptDocument(
   content: string,
-  type: 'markdown' | 'json'
+  type: 'markdown' | 'json',
+  log?: ModelCallLogContext
 ): Promise<{ parsed: ParsedScript; cost: ParsedScriptCost | null }> {
   // 如果是 JSON 格式，直接解析
   if (type === 'json') {
@@ -134,6 +137,7 @@ export async function parseScriptDocument(
   }
 
   // Markdown 格式，调用 AI 解析
+  const userMessage = `请解析以下剧本文档：\n\n${content}`
   const deepseek = getDeepSeekClient()
   let lastError: Error | null = null
 
@@ -143,7 +147,7 @@ export async function parseScriptDocument(
         model: 'deepseek-chat',
         messages: [
           { role: 'system', content: PARSER_SYSTEM_PROMPT },
-          { role: 'user', content: `请解析以下剧本文档：\n\n${content}` }
+          { role: 'user', content: userMessage }
         ],
         temperature: 0.3,
         max_tokens: 8000
@@ -163,11 +167,19 @@ export async function parseScriptDocument(
       }
 
       const parsed = JSON.parse(cleanContent)
+      await logDeepSeekChat(log, userMessage, {
+        status: 'completed',
+        costCNY: cost.costCNY
+      })
       return { parsed: normalizeParsedData(parsed), cost }
     } catch (error: any) {
       lastError = error
 
       if (error?.status === 401 || error?.status === 403) {
+        await logDeepSeekChat(log, userMessage, {
+          status: 'failed',
+          errorMsg: error?.message || 'DeepSeek auth error'
+        })
         throw new DeepSeekAuthError()
       }
 
@@ -176,11 +188,19 @@ export async function parseScriptDocument(
           await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
           continue
         }
+        await logDeepSeekChat(log, userMessage, {
+          status: 'failed',
+          errorMsg: 'rate_limit'
+        })
         throw new DeepSeekRateLimitError()
       }
 
       // For parsing errors, don't retry
       if (error.message === '剧本解析失败，请检查文档格式' || error.message === 'AI 解析返回为空') {
+        await logDeepSeekChat(log, userMessage, {
+          status: 'failed',
+          errorMsg: String(error?.message || 'parse')
+        })
         throw error
       }
 
@@ -192,6 +212,10 @@ export async function parseScriptDocument(
   }
 
   console.error('Failed to parse AI response after retries')
+  await logDeepSeekChat(log, userMessage, {
+    status: 'failed',
+    errorMsg: lastError?.message || '剧本解析失败'
+  })
   throw lastError || new Error('剧本解析失败，请检查文档格式')
 }
 

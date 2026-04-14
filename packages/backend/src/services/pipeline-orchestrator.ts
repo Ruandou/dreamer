@@ -91,7 +91,12 @@ export async function executePipeline(
       'script-writing',
       async () => {
         const result = await writeScriptFromIdea(idea, {
-          characters: context.characters
+          characters: context.characters,
+          modelLog: {
+            userId: context.userId,
+            projectId: context.projectId,
+            op: 'pipeline_write_script'
+          }
         })
         return result.script
       }

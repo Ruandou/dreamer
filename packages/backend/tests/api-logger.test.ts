@@ -11,7 +11,14 @@ vi.mock('../src/index.js', () => ({
   }
 }))
 
-import { logApiCall, updateApiCall, getApiCalls } from '../src/services/api-logger.js'
+import {
+  logApiCall,
+  updateApiCall,
+  getApiCalls,
+  recordModelApiCall,
+  truncateForModelLog,
+  MODEL_LOG_PROMPT_MAX
+} from '../src/services/api-logger.js'
 import { prisma } from '../src/index.js'
 
 describe('ApiLogger Service', () => {
@@ -224,6 +231,41 @@ describe('ApiLogger Service', () => {
         take: 10,
         skip: 20
       })
+    })
+  })
+
+  describe('recordModelApiCall', () => {
+    it('persists unified model call log', async () => {
+      prisma.modelApiCall.create.mockResolvedValue({ id: 'm1' })
+      await recordModelApiCall({
+        userId: 'u1',
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+        prompt: 'hello',
+        requestParams: { op: 'test' },
+        status: 'completed',
+        cost: 0.01
+      })
+      expect(prisma.modelApiCall.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'u1',
+            model: 'deepseek-chat',
+            provider: 'deepseek',
+            status: 'completed',
+            cost: 0.01
+          })
+        })
+      )
+    })
+  })
+
+  describe('truncateForModelLog', () => {
+    it('truncates overly long prompts', () => {
+      const long = 'x'.repeat(MODEL_LOG_PROMPT_MAX + 100)
+      const t = truncateForModelLog(long)
+      expect(t.length).toBeLessThan(long.length)
+      expect(t).toContain('truncated')
     })
   })
 })

@@ -25,6 +25,10 @@ const { mockCreate } = vi.hoisted(() => ({
   mockCreate: vi.fn()
 }))
 
+vi.mock('../src/services/model-call-log.js', () => ({
+  logDeepSeekChat: vi.fn().mockResolvedValue(undefined)
+}))
+
 vi.mock('openai', () => ({
   default: vi.fn().mockImplementation(() => ({
     chat: {

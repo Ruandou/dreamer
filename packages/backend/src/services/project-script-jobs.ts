@@ -202,7 +202,9 @@ export async function runGenerateFirstEpisode(projectId: string) {
   if (!project) throw new Error('PROJECT_NOT_FOUND')
 
   const idea = project.description?.trim() || project.name
-  const { script } = await writeScriptFromIdea(idea)
+  const { script } = await writeScriptFromIdea(idea, {
+    modelLog: { userId: project.userId, projectId, op: 'generate_first_episode' }
+  })
 
   const storyContext = [project.synopsis || script.summary, script.summary].filter(Boolean).join('\n').slice(0, 12000)
 
@@ -282,7 +284,11 @@ export async function runScriptBatchJob(jobId: string, projectId: string, target
         continue
       }
 
-      const { script } = await writeEpisodeForProject(n, synopsis, rolling, project.name)
+      const { script } = await writeEpisodeForProject(n, synopsis, rolling, project.name, {
+        userId: project.userId,
+        projectId,
+        op: 'script_batch_write_episode'
+      })
 
       await prisma.episode.upsert({
         where: { projectId_episodeNum: { projectId, episodeNum: n } },

@@ -7,7 +7,8 @@ const {
   mockCharacterImageUpdate,
   mockCharacterImageCreate,
   mockCharacterImageAggregate,
-  mockFetchScriptVisualEnrichmentJson
+  mockFetchScriptVisualEnrichmentJson,
+  mockProjectFindUnique
 } = vi.hoisted(() => ({
   mockLocationFindMany: vi.fn(),
   mockCharacterFindMany: vi.fn(),
@@ -15,7 +16,8 @@ const {
   mockCharacterImageUpdate: vi.fn(),
   mockCharacterImageCreate: vi.fn(),
   mockCharacterImageAggregate: vi.fn(),
-  mockFetchScriptVisualEnrichmentJson: vi.fn()
+  mockFetchScriptVisualEnrichmentJson: vi.fn(),
+  mockProjectFindUnique: vi.fn()
 }))
 
 vi.mock('../src/services/deepseek.js', () => ({
@@ -24,6 +26,9 @@ vi.mock('../src/services/deepseek.js', () => ({
 
 vi.mock('../src/index.js', () => ({
   prisma: {
+    project: {
+      findUnique: mockProjectFindUnique
+    },
     location: {
       findMany: mockLocationFindMany,
       updateMany: mockLocationUpdateMany
@@ -48,6 +53,7 @@ const script = { title: 'T', summary: 'S', scenes: [] as any[] }
 describe('applyScriptVisualEnrichment', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockProjectFindUnique.mockResolvedValue({ userId: 'u1' })
     mockLocationFindMany.mockResolvedValue([{ id: 'L1', projectId: 'p1', name: '咖啡厅', description: '室内' }])
     mockCharacterFindMany.mockResolvedValue([
       {

@@ -165,14 +165,23 @@ export async function characterRoutes(fastify: FastifyInstance) {
         const slotType = type || 'base'
 
         try {
-          const { prompt } = await generateCharacterSlotImagePrompt({
-            characterName: character?.name || '',
-            characterDescription: character?.description,
-            slotName: name.trim(),
-            slotType,
-            slotDescription: description || null,
-            parentSlotSummary: parentSummary
-          })
+          const { prompt } = await generateCharacterSlotImagePrompt(
+            {
+              characterName: character?.name || '',
+              characterDescription: character?.description,
+              slotName: name.trim(),
+              slotType,
+              slotDescription: description || null,
+              parentSlotSummary: parentSummary
+            },
+            character
+              ? {
+                  userId,
+                  projectId: character.projectId,
+                  op: 'character_slot_image_prompt'
+                }
+              : undefined
+          )
 
           const maxOrder = await prisma.characterImage.aggregate({
             where: { characterId, parentId: parentId || null },

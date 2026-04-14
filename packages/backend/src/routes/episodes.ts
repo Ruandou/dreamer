@@ -267,7 +267,11 @@ export async function episodeRoutes(fastify: FastifyInstance) {
           : undefined
 
         // Call DeepSeek API
-        const { script, cost } = await expandScript(summary, projectContext)
+        const { script, cost } = await expandScript(summary, projectContext, {
+          userId,
+          projectId: episode.projectId,
+          op: 'episode_expand_script'
+        })
 
         // Save to episode
         const updatedEpisode = await prisma.episode.update({

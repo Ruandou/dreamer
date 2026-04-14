@@ -350,7 +350,11 @@ export async function sceneRoutes(fastify: FastifyInstance) {
           : undefined
 
       try {
-        const { optimized, cost } = await optimizePrompt(targetPrompt, context)
+        const { optimized, cost } = await optimizePrompt(targetPrompt, context, {
+          userId,
+          projectId: scene.episode.projectId,
+          op: 'scene_optimize_prompt'
+        })
 
         if (!prompt && scene.shots.length > 0) {
           const first = scene.shots[0]

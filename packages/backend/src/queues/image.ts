@@ -5,8 +5,11 @@ import { prisma } from '../index.js'
 import {
   generateTextToImageAndPersist,
   generateImageEditAndPersist,
-  arkImageSizeFromProjectAspectRatio
+  arkImageSizeFromProjectAspectRatio,
+  DEFAULT_T2I_MODEL,
+  DEFAULT_EDIT_MODEL
 } from '../services/image-generation.js'
+import { recordModelApiCall } from '../services/api-logger.js'
 import { sendProjectUpdate } from '../plugins/sse.js'
 
 const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
@@ -23,6 +26,30 @@ export const imageQueue = new Queue<ImageGenerationJobData>('image-generation', 
     }
   }
 })
+
+function imageJobPrompt(d: ImageGenerationJobData): string {
+  switch (d.kind) {
+    case 'character_base_create':
+    case 'character_base_regenerate':
+    case 'location_establishing':
+      return d.prompt
+    case 'character_derived_regenerate':
+    case 'character_derived_create':
+      return d.editPrompt
+    default:
+      return ''
+  }
+}
+
+function imageJobModel(d: ImageGenerationJobData): string {
+  switch (d.kind) {
+    case 'character_derived_regenerate':
+    case 'character_derived_create':
+      return DEFAULT_EDIT_MODEL
+    default:
+      return DEFAULT_T2I_MODEL
+  }
+}
 
 function notify(
   userId: string,
@@ -77,6 +104,20 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             characterId: data.characterId,
             imageCost: imageCost ?? null
           })
+          await recordModelApiCall({
+            userId,
+            model: imageJobModel(data),
+            provider: 'volcengine-ark',
+            prompt: imageJobPrompt(data),
+            requestParams: {
+              op: 'image_generation_job',
+              kind: data.kind,
+              projectId,
+              jobId: job.id
+            },
+            status: 'completed',
+            cost: imageCost ?? null
+          })
           return { characterImageId: image.id, imageCost: imageCost ?? null }
         }
         case 'character_base_regenerate': {
@@ -93,6 +134,20 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             characterImageId: updated.id,
             characterId: updated.characterId,
             imageCost: imageCost ?? null
+          })
+          await recordModelApiCall({
+            userId,
+            model: imageJobModel(data),
+            provider: 'volcengine-ark',
+            prompt: imageJobPrompt(data),
+            requestParams: {
+              op: 'image_generation_job',
+              kind: data.kind,
+              projectId,
+              jobId: job.id
+            },
+            status: 'completed',
+            cost: imageCost ?? null
           })
           return { characterImageId: updated.id, imageCost: imageCost ?? null }
         }
@@ -112,6 +167,20 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             characterImageId: updated.id,
             characterId: updated.characterId,
             imageCost: imageCost ?? null
+          })
+          await recordModelApiCall({
+            userId,
+            model: imageJobModel(data),
+            provider: 'volcengine-ark',
+            prompt: imageJobPrompt(data),
+            requestParams: {
+              op: 'image_generation_job',
+              kind: data.kind,
+              projectId,
+              jobId: job.id
+            },
+            status: 'completed',
+            cost: imageCost ?? null
           })
           return { characterImageId: updated.id, imageCost: imageCost ?? null }
         }
@@ -144,6 +213,20 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             characterId: data.characterId,
             imageCost: imageCost ?? null
           })
+          await recordModelApiCall({
+            userId,
+            model: imageJobModel(data),
+            provider: 'volcengine-ark',
+            prompt: imageJobPrompt(data),
+            requestParams: {
+              op: 'image_generation_job',
+              kind: data.kind,
+              projectId,
+              jobId: job.id
+            },
+            status: 'completed',
+            cost: imageCost ?? null
+          })
           return { characterImageId: image.id, imageCost: imageCost ?? null }
         }
         case 'location_establishing': {
@@ -155,6 +238,21 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             data: { imageUrl, imageCost: imageCost ?? null }
           })
           if (write.count === 0) {
+            await recordModelApiCall({
+              userId,
+              model: imageJobModel(data),
+              provider: 'volcengine-ark',
+              prompt: imageJobPrompt(data),
+              requestParams: {
+                op: 'image_generation_job',
+                kind: data.kind,
+                projectId,
+                jobId: job.id,
+                skippedDbWrite: true
+              },
+              status: 'completed',
+              cost: imageCost ?? null
+            })
             return { locationId: data.locationId, imageCost: null }
           }
           notify(userId, projectId, {
@@ -163,11 +261,39 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             locationId: data.locationId,
             imageCost: imageCost ?? null
           })
+          await recordModelApiCall({
+            userId,
+            model: imageJobModel(data),
+            provider: 'volcengine-ark',
+            prompt: imageJobPrompt(data),
+            requestParams: {
+              op: 'image_generation_job',
+              kind: data.kind,
+              projectId,
+              jobId: job.id
+            },
+            status: 'completed',
+            cost: imageCost ?? null
+          })
           return { locationId: data.locationId, imageCost: imageCost ?? null }
         }
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
+      await recordModelApiCall({
+        userId,
+        model: imageJobModel(data),
+        provider: 'volcengine-ark',
+        prompt: imageJobPrompt(data),
+        requestParams: {
+          op: 'image_generation_job',
+          kind: data.kind,
+          projectId,
+          jobId: job.id
+        },
+        status: 'failed',
+        errorMsg: message
+      })
       const failPayload: Record<string, unknown> = {
         status: 'failed',
         kind: data.kind,

@@ -50,7 +50,11 @@ export const importWorker = new Worker<ImportJobData>(
       })
 
       // Parse the document
-      const { parsed } = await parseScriptDocument(content, type)
+      const { parsed } = await parseScriptDocument(content, type, {
+        userId,
+        projectId,
+        op: 'import_parse_script'
+      })
 
       // If no projectId provided, create a new project
       let targetProjectId = projectId
