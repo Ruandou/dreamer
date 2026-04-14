@@ -8,6 +8,8 @@ export type ProjectSsePayload = {
   characterImageId?: string
   characterId?: string
   locationId?: string
+  /** 方舟图片任务完成时的估算成本（元） */
+  imageCost?: number | null
   error?: string
   [key: string]: unknown
 }

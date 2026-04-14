@@ -91,6 +91,7 @@ model CharacterImage {
   name          String
   prompt        String?
   avatarUrl     String?
+  imageCost     Float? // 方舟图片最近一次成功：估算成本（元），见 image-generation
   parentId      String?
   type          String   @default("base")
   description   String?
@@ -195,6 +196,7 @@ model Location {
   description String?
   imagePrompt String?
   imageUrl    String?
+  imageCost   Float? // 定场图最近一次成功：估算成本（元）
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

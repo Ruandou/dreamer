@@ -113,6 +113,13 @@ async function generate(loc: ProjectLocation) {
               />
               <div v-else class="thumb-placeholder">未定场图</div>
             </div>
+            <p
+              v-if="loc.imageCost != null && loc.imageCost > 0"
+              class="muted loc-cost"
+              style="margin: 6px 0 0; font-size: 12px"
+            >
+              生成成本（估算）¥{{ loc.imageCost.toFixed(4) }}
+            </p>
             <NInput
               v-model:value="loc.imagePrompt"
               type="textarea"

@@ -34,6 +34,8 @@ export interface ProjectLocation {
   description?: string | null
   imagePrompt?: string | null
   imageUrl?: string | null
+  /** 定场图最近一次成功生成的估算成本（元），来自方舟 usage 换算 */
+  imageCost?: number | null
   createdAt: Date
   updatedAt: Date
 }
@@ -104,6 +106,8 @@ export interface CharacterImage {
   name: string
   prompt?: string | null
   avatarUrl?: string
+  /** 方舟文生图 / 图生图最近一次成功生成的估算成本（元） */
+  imageCost?: number | null
   parentId?: string  // 父节点，null 为基础形象
   type: string       // base/outfit/expression/pose
   description?: string

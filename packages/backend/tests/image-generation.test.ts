@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import {
   strengthToGuidanceScale,
   imageEditModelUsesGuidanceScale,
   normalizeArkImageSize,
-  ARK_IMAGE_MIN_TOTAL_PIXELS
+  ARK_IMAGE_MIN_TOTAL_PIXELS,
+  extractImageCostFromArkResponse
 } from '../src/services/image-generation.js'
 
 describe('image-generation', () => {
@@ -24,6 +25,41 @@ describe('image-generation', () => {
     })
     it('returns default for garbage', () => {
       expect(normalizeArkImageSize('large')).toBe('1920x1920')
+    })
+  })
+
+  describe('extractImageCostFromArkResponse', () => {
+    const prev = process.env.ARK_IMAGE_YUAN_PER_MILLION_TOKENS
+    afterEach(() => {
+      if (prev === undefined) delete process.env.ARK_IMAGE_YUAN_PER_MILLION_TOKENS
+      else process.env.ARK_IMAGE_YUAN_PER_MILLION_TOKENS = prev
+    })
+
+    it('returns null when no usage or tokens', () => {
+      expect(extractImageCostFromArkResponse({ data: [] })).toBeNull()
+      expect(extractImageCostFromArkResponse({ usage: {} })).toBeNull()
+    })
+    it('estimates from usage.total_tokens with default ¥/M', () => {
+      delete process.env.ARK_IMAGE_YUAN_PER_MILLION_TOKENS
+      expect(extractImageCostFromArkResponse({ usage: { total_tokens: 1_000_000 } })).toBe(4)
+      expect(extractImageCostFromArkResponse({ usage: { total_tokens: 500_000 } })).toBe(2)
+    })
+    it('respects ARK_IMAGE_YUAN_PER_MILLION_TOKENS', () => {
+      process.env.ARK_IMAGE_YUAN_PER_MILLION_TOKENS = '10'
+      expect(extractImageCostFromArkResponse({ usage: { total_tokens: 1_000_000 } })).toBe(10)
+    })
+    it('falls back to billing_tokens on usage or root', () => {
+      delete process.env.ARK_IMAGE_YUAN_PER_MILLION_TOKENS
+      expect(extractImageCostFromArkResponse({ usage: { billing_tokens: 2_000_000 } })).toBe(8)
+      expect(extractImageCostFromArkResponse({ billing_tokens: 1_000_000 })).toBe(4)
+    })
+    it('sums input_tokens + output_tokens when total missing', () => {
+      delete process.env.ARK_IMAGE_YUAN_PER_MILLION_TOKENS
+      expect(
+        extractImageCostFromArkResponse({
+          usage: { input_tokens: 300_000, output_tokens: 700_000 }
+        })
+      ).toBe(4)
     })
   })
 

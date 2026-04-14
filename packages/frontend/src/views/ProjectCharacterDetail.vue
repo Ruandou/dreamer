@@ -104,6 +104,10 @@ function sortImagesByOrder(a: CharacterImage, b: CharacterImage): number {
   return (a.order ?? 0) - (b.order ?? 0)
 }
 
+function formatImageCostYuan(n: number): string {
+  return n.toFixed(4)
+}
+
 const treeData = computed<TreeOption[]>(() => {
   if (!character.value?.images) return []
 
@@ -477,6 +481,12 @@ const renderSuffix = ({ option }: { option: TreeOption }) => {
               <NTag :type="getTypeTagType(selectedImage.type)" size="small">
                 {{ getTypeLabel(selectedImage.type) }}
               </NTag>
+              <p
+                v-if="selectedImage.imageCost != null && selectedImage.imageCost > 0"
+                class="preview-cost muted"
+              >
+                本图成本（估算）¥{{ formatImageCostYuan(selectedImage.imageCost) }}
+              </p>
               <p v-if="selectedImage.description" class="preview-desc">
                 {{ selectedImage.description }}
               </p>

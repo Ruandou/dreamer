@@ -86,7 +86,52 @@ export function imageEditModelUsesGuidanceScale(model: string): boolean {
   return model.toLowerCase().includes('seededit')
 }
 
-async function postImagesGenerations(body: Record<string, unknown>): Promise<{ data: { url: string }[] }> {
+function readPositiveNumber(v: unknown): number {
+  if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v
+  if (typeof v === 'string' && v.trim()) {
+    const n = Number(v)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return 0
+}
+
+/**
+ * 从方舟 images/generations JSON 根对象解析 token 用量并换算为人民币（估算）。
+ * 未返回 usage 时得到 null；单价由 `ARK_IMAGE_YUAN_PER_MILLION_TOKENS` 配置（默认 4，即每百万 token 约 4 元，可按控制台账单调整）。
+ */
+export function extractImageCostFromArkResponse(parsed: Record<string, unknown>): number | null {
+  const usage = parsed.usage
+  if (!usage || typeof usage !== 'object') {
+    const rootTok = readPositiveNumber(parsed.billing_tokens)
+    if (!rootTok) return null
+    return tokensToEstimatedYuan(rootTok)
+  }
+  const u = usage as Record<string, unknown>
+  let tokens =
+    readPositiveNumber(u.total_tokens) ||
+    readPositiveNumber(u.billing_tokens) ||
+    readPositiveNumber(u.image_tokens)
+  if (!tokens) {
+    const io = readPositiveNumber(u.input_tokens) + readPositiveNumber(u.output_tokens)
+    if (io > 0) tokens = io
+  }
+  if (!tokens) {
+    const pq = readPositiveNumber(u.prompt_tokens) + readPositiveNumber(u.completion_tokens)
+    if (pq > 0) tokens = pq
+  }
+  if (!tokens) return null
+  return tokensToEstimatedYuan(tokens)
+}
+
+function tokensToEstimatedYuan(tokens: number): number {
+  const raw = process.env.ARK_IMAGE_YUAN_PER_MILLION_TOKENS
+  const rate = raw != null && raw !== '' ? Number(raw) : 4
+  const yuanPerM = Number.isFinite(rate) && rate >= 0 ? rate : 4
+  const yuan = (tokens / 1_000_000) * yuanPerM
+  return Math.round(yuan * 1_000_000) / 1_000_000
+}
+
+async function postImagesGenerations(body: Record<string, unknown>): Promise<Record<string, unknown>> {
   const res = await fetch(`${ARK_API_URL}/images/generations`, {
     method: 'POST',
     headers: getAuthHeaders(),
@@ -97,18 +142,28 @@ async function postImagesGenerations(body: Record<string, unknown>): Promise<{ d
     throw new ArkImageError(`方舟图片 API 错误 ${res.status}: ${text}`)
   }
   try {
-    return JSON.parse(text) as { data: { url: string }[] }
+    return JSON.parse(text) as Record<string, unknown>
   } catch {
     throw new ArkImageError(`方舟图片 API 返回非 JSON: ${text.slice(0, 200)}`)
   }
 }
 
-function firstImageUrl(result: { data: { url: string }[] }): string {
-  const url = result.data?.[0]?.url
+function firstImageUrl(result: Record<string, unknown>): string {
+  const data = result.data
+  if (!Array.isArray(data) || !data[0] || typeof data[0] !== 'object') {
+    throw new ArkImageError('方舟图片 API 未返回图片 URL')
+  }
+  const url = (data[0] as { url?: string }).url
   if (!url) {
     throw new ArkImageError('方舟图片 API 未返回图片 URL')
   }
   return url
+}
+
+/** 文生图 / 图生图成功并落库后的 URL 与估算成本（元） */
+export interface GeneratedImagePersisted {
+  url: string
+  imageCost: number | null
 }
 
 /** 下载远程图并转为 data URL，供方舟编辑接口（本地 MinIO 外网不可达时也可用） */
@@ -136,7 +191,10 @@ export async function persistRemoteImageToAssets(remoteUrl: string): Promise<str
   return uploadFile('assets', key, buf, ct)
 }
 
-export async function generateTextToImage(prompt: string, options: TextToImageOptions = {}): Promise<string> {
+export async function generateTextToImage(
+  prompt: string,
+  options: TextToImageOptions = {}
+): Promise<GeneratedImagePersisted> {
   const body: Record<string, unknown> = {
     model: options.model || DEFAULT_T2I_MODEL,
     prompt,
@@ -145,14 +203,17 @@ export async function generateTextToImage(prompt: string, options: TextToImageOp
     response_format: 'url'
   }
   const json = await postImagesGenerations(body)
-  return firstImageUrl(json)
+  return {
+    url: firstImageUrl(json),
+    imageCost: extractImageCostFromArkResponse(json)
+  }
 }
 
 export async function generateImageEdit(
   referenceImageUrl: string,
   prompt: string,
   options: ImageEditOptions = {}
-): Promise<string> {
+): Promise<GeneratedImagePersisted> {
   const imagePayload =
     process.env.ARK_IMAGE_EDIT_USE_BASE64 === '0'
       ? referenceImageUrl
@@ -171,22 +232,27 @@ export async function generateImageEdit(
     body.guidance_scale = strengthToGuidanceScale(options.strength ?? 0.35)
   }
   const json = await postImagesGenerations(body)
-  return firstImageUrl(json)
+  return {
+    url: firstImageUrl(json),
+    imageCost: extractImageCostFromArkResponse(json)
+  }
 }
 
 export async function generateTextToImageAndPersist(
   prompt: string,
   options?: TextToImageOptions
-): Promise<string> {
-  const url = await generateTextToImage(prompt, options)
-  return persistRemoteImageToAssets(url)
+): Promise<GeneratedImagePersisted> {
+  const { url, imageCost } = await generateTextToImage(prompt, options)
+  const persisted = await persistRemoteImageToAssets(url)
+  return { url: persisted, imageCost }
 }
 
 export async function generateImageEditAndPersist(
   referenceImageUrl: string,
   prompt: string,
   options?: ImageEditOptions
-): Promise<string> {
-  const url = await generateImageEdit(referenceImageUrl, prompt, options)
-  return persistRemoteImageToAssets(url)
+): Promise<GeneratedImagePersisted> {
+  const { url, imageCost } = await generateImageEdit(referenceImageUrl, prompt, options)
+  const persisted = await persistRemoteImageToAssets(url)
+  return { url: persisted, imageCost }
 }

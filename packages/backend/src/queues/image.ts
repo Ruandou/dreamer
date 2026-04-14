@@ -45,7 +45,7 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
     try {
       switch (data.kind) {
         case 'character_base_create': {
-          const avatarUrl = await generateTextToImageAndPersist(data.prompt)
+          const { url: avatarUrl, imageCost } = await generateTextToImageAndPersist(data.prompt)
           const maxOrder = await prisma.characterImage.aggregate({
             where: { characterId: data.characterId, parentId: null },
             _max: { order: true }
@@ -57,6 +57,7 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
               parentId: null,
               type: 'base',
               avatarUrl,
+              imageCost: imageCost ?? null,
               order: (maxOrder._max.order || 0) + 1
             }
           })
@@ -64,44 +65,47 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             status: 'completed',
             kind: data.kind,
             characterImageId: image.id,
-            characterId: data.characterId
+            characterId: data.characterId,
+            imageCost: imageCost ?? null
           })
           return { characterImageId: image.id }
         }
         case 'character_base_regenerate': {
-          const avatarUrl = await generateTextToImageAndPersist(data.prompt)
+          const { url: avatarUrl, imageCost } = await generateTextToImageAndPersist(data.prompt)
           const updated = await prisma.characterImage.update({
             where: { id: data.characterImageId },
-            data: { avatarUrl, prompt: data.prompt }
+            data: { avatarUrl, prompt: data.prompt, imageCost: imageCost ?? null }
           })
           notify(userId, projectId, {
             status: 'completed',
             kind: data.kind,
             characterImageId: updated.id,
-            characterId: updated.characterId
+            characterId: updated.characterId,
+            imageCost: imageCost ?? null
           })
           return { characterImageId: updated.id }
         }
         case 'character_derived_regenerate': {
-          const avatarUrl = await generateImageEditAndPersist(
+          const { url: avatarUrl, imageCost } = await generateImageEditAndPersist(
             data.referenceImageUrl,
             data.editPrompt,
             { strength: data.strength ?? 0.35 }
           )
           const updated = await prisma.characterImage.update({
             where: { id: data.characterImageId },
-            data: { avatarUrl, prompt: data.editPrompt }
+            data: { avatarUrl, prompt: data.editPrompt, imageCost: imageCost ?? null }
           })
           notify(userId, projectId, {
             status: 'completed',
             kind: data.kind,
             characterImageId: updated.id,
-            characterId: updated.characterId
+            characterId: updated.characterId,
+            imageCost: imageCost ?? null
           })
           return { characterImageId: updated.id }
         }
         case 'character_derived_create': {
-          const avatarUrl = await generateImageEditAndPersist(
+          const { url: avatarUrl, imageCost } = await generateImageEditAndPersist(
             data.referenceImageUrl,
             data.editPrompt,
             { strength: data.strength ?? 0.35 }
@@ -118,6 +122,7 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
               type: data.type || 'expression',
               description: data.description,
               avatarUrl,
+              imageCost: imageCost ?? null,
               order: (maxOrder._max.order || 0) + 1
             }
           })
@@ -125,20 +130,22 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             status: 'completed',
             kind: data.kind,
             characterImageId: image.id,
-            characterId: data.characterId
+            characterId: data.characterId,
+            imageCost: imageCost ?? null
           })
           return { characterImageId: image.id }
         }
         case 'location_establishing': {
-          const imageUrl = await generateTextToImageAndPersist(data.prompt)
+          const { url: imageUrl, imageCost } = await generateTextToImageAndPersist(data.prompt)
           const updated = await prisma.location.update({
             where: { id: data.locationId },
-            data: { imageUrl }
+            data: { imageUrl, imageCost: imageCost ?? null }
           })
           notify(userId, projectId, {
             status: 'completed',
             kind: data.kind,
-            locationId: updated.id
+            locationId: updated.id,
+            imageCost: imageCost ?? null
           })
           return { locationId: updated.id }
         }

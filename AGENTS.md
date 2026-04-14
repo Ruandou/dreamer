@@ -35,6 +35,7 @@ import 'dotenv/config'  // 太晚了
 | 改 `index.ts` / `worker.ts` | **禁止**在 `import './bootstrap-env.js'` 之上再加任何会加载业务代码的 `import` |
 | 单测只 `import` 某个 service | 已在 `vitest.config.ts` 里 `setupFiles: ['./src/bootstrap-env.ts']`，一般无需再抄 |
 | 生产 `pnpm start` | `package.json` 已用 `node --import ./dist/bootstrap-env.js`，勿删 |
+| 方舟图片成本展示 | 从 `images/generations` 的 `usage` 取 token，按 `ARK_IMAGE_YUAN_PER_MILLION_TOKENS`（默认 `4`，即每百万 token 约 4 元）估算后写入 `CharacterImage.imageCost` / `Location.imageCost`；可按控制台账单改 `.env` |
 
 ## 启动命令
 
