@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
 
 export class LocationRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -60,3 +61,5 @@ export class LocationRepository {
     })
   }
 }
+
+export const locationRepository = new LocationRepository(prisma)

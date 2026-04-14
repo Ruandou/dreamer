@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client'
 import { projectRepository } from '../repositories/project-repository.js'
 import { characterRepository } from '../repositories/character-repository.js'
-import { locationRepository } from './location-service.js'
+import { locationRepository } from '../repositories/location-repository.js'
 
 /**
  * 图片生成 Bull Worker 的数据库写入（与 HTTP 解耦）。
