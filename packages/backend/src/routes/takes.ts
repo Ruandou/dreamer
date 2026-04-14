@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify'
-import { prisma } from '../index.js'
 import { verifyTaskOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
+import { takeService } from '../services/take-service.js'
 
 export async function takeRoutes(fastify: FastifyInstance) {
   fastify.patch<{ Params: { id: string } }>(
@@ -15,24 +15,12 @@ export async function takeRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const existing = await prisma.take.findUnique({ where: { id: takeId } })
-      if (!existing) {
+      const result = await takeService.selectTakeAsCurrent(takeId)
+      if (!result.ok) {
         return reply.status(404).send({ error: 'Take not found' })
       }
 
-      const sceneId = existing.sceneId
-
-      await prisma.take.updateMany({
-        where: { sceneId },
-        data: { isSelected: false }
-      })
-
-      const task = await prisma.take.update({
-        where: { id: takeId },
-        data: { isSelected: true }
-      })
-
-      return task
+      return result.task
     }
   )
 }

@@ -1,30 +1,8 @@
 import { FastifyInstance } from 'fastify'
-import { prisma } from '../index.js'
-import { videoQueue } from '../queues/video.js'
-import { optimizePrompt } from '../services/deepseek.js'
 import { verifySceneOwnership, verifyEpisodeOwnership } from '../plugins/auth.js'
 import type { VideoModel } from '@dreamer/shared/types'
-import { stitchScenePrompt } from '../services/scene-prompt.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
-
-async function resolveSceneGeneratePrompt(sceneId: string): Promise<string> {
-  const scene = await prisma.scene.findUnique({
-    where: { id: sceneId },
-    include: { shots: { orderBy: [{ order: 'asc' }, { shotNum: 'asc' }] } }
-  })
-  if (!scene) return ''
-  const stitched = stitchScenePrompt(
-    scene.shots.map((s) => ({
-      shotNum: s.shotNum,
-      order: s.order,
-      description: s.description,
-      cameraMovement: s.cameraMovement,
-      cameraAngle: s.cameraAngle
-    }))
-  )
-  if (stitched.trim()) return stitched
-  return scene.description.trim() || ' '
-}
+import { sceneService } from '../services/scene-service.js'
 
 export async function sceneRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { episodeId: string } }>(
@@ -38,15 +16,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      return prisma.scene.findMany({
-        where: { episodeId },
-        orderBy: { sceneNum: 'asc' },
-        include: {
-          takes: {
-            orderBy: { createdAt: 'desc' }
-          }
-        }
-      })
+      return sceneService.listByEpisode(episodeId)
     }
   )
 
@@ -61,10 +31,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const scene = await prisma.scene.findUnique({
-        where: { id: sceneId },
-        include: { takes: { orderBy: { createdAt: 'desc' } }, shots: { orderBy: { order: 'asc' } } }
-      })
+      const scene = await sceneService.getByIdWithTakesAndShots(sceneId)
 
       if (!scene) {
         return reply.status(404).send({ error: 'Scene not found' })
@@ -85,37 +52,18 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const episode = await prisma.episode.findUnique({
-        where: { id: episodeId },
-        include: { project: { select: { aspectRatio: true } } }
-      })
-      if (!episode) {
+      const result = await sceneService.createSceneWithFirstShot(
+        episodeId,
+        sceneNum,
+        prompt,
+        description
+      )
+
+      if (!result.ok) {
         return reply.status(404).send({ error: 'Episode not found' })
       }
 
-      const scene = await prisma.scene.create({
-        data: {
-          episodeId,
-          sceneNum,
-          description: description ?? '',
-          duration: 5000,
-          aspectRatio: episode.project.aspectRatio ?? '9:16',
-          visualStyle: [],
-          status: 'pending'
-        }
-      })
-
-      await prisma.shot.create({
-        data: {
-          sceneId: scene.id,
-          shotNum: 1,
-          order: 1,
-          description: prompt,
-          duration: 5000
-        }
-      })
-
-      return reply.status(201).send(scene)
+      return reply.status(201).send(result.scene)
     }
   )
 
@@ -130,30 +78,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const { description, sceneNum, prompt } = request.body
-
-      if (prompt !== undefined) {
-        const firstShot = await prisma.shot.findFirst({
-          where: { sceneId },
-          orderBy: [{ order: 'asc' }, { shotNum: 'asc' }]
-        })
-        if (firstShot) {
-          await prisma.shot.update({
-            where: { id: firstShot.id },
-            data: { description: prompt }
-          })
-        }
-      }
-
-      const scene = await prisma.scene.update({
-        where: { id: sceneId },
-        data: {
-          ...(description !== undefined && { description }),
-          ...(sceneNum !== undefined && { sceneNum })
-        }
-      })
-
-      return scene
+      return sceneService.updateScene(sceneId, request.body)
     }
   )
 
@@ -168,12 +93,10 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const scene = await prisma.scene.findUnique({ where: { id: sceneId } })
-      if (!scene) {
+      const deleted = await sceneService.deleteSceneIfExists(sceneId)
+      if (!deleted) {
         return reply.status(404).send({ error: 'Scene not found' })
       }
-
-      await prisma.scene.delete({ where: { id: sceneId } })
       return reply.status(204).send()
     }
   )
@@ -189,38 +112,13 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const { model, referenceImage, imageUrls, duration } = request.body
+      const result = await sceneService.enqueueVideoGenerate(sceneId, request.body)
 
-      const prompt = await resolveSceneGeneratePrompt(sceneId)
-      if (!prompt.trim()) {
+      if (!result.ok) {
         return reply.status(400).send({ error: 'Scene has no prompt: add Shots or description' })
       }
 
-      const task = await prisma.take.create({
-        data: {
-          sceneId,
-          model,
-          status: 'queued',
-          prompt
-        }
-      })
-
-      await videoQueue.add('generate-video', {
-        sceneId,
-        taskId: task.id,
-        prompt,
-        model,
-        referenceImage,
-        imageUrls,
-        duration
-      })
-
-      await prisma.scene.update({
-        where: { id: sceneId },
-        data: { status: 'generating' }
-      })
-
-      return { taskId: task.id, sceneId }
+      return { taskId: result.taskId, sceneId: result.sceneId }
     }
   )
 
@@ -231,41 +129,14 @@ export async function sceneRoutes(fastify: FastifyInstance) {
       const userId = (request as any).user.id
       const { sceneIds, model, referenceImage, imageUrls } = request.body
 
-      const results: { sceneId: string; taskId: string }[] = []
-
-      for (const sceneId of sceneIds) {
-        if (!(await verifySceneOwnership(userId, sceneId))) {
-          continue
-        }
-
-        const prompt = await resolveSceneGeneratePrompt(sceneId)
-        if (!prompt.trim()) continue
-
-        const task = await prisma.take.create({
-          data: {
-            sceneId,
-            model,
-            status: 'queued',
-            prompt
-          }
-        })
-
-        await videoQueue.add('generate-video', {
-          sceneId,
-          taskId: task.id,
-          prompt,
-          model,
-          referenceImage,
-          imageUrls
-        })
-
-        await prisma.scene.update({
-          where: { id: sceneId },
-          data: { status: 'generating' }
-        })
-
-        results.push({ sceneId, taskId: task.id })
-      }
+      const results = await sceneService.batchEnqueueVideoGenerate(
+        userId,
+        sceneIds,
+        model,
+        referenceImage,
+        imageUrls,
+        verifySceneOwnership
+      )
 
       return results
     }
@@ -282,17 +153,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      await prisma.take.updateMany({
-        where: { sceneId },
-        data: { isSelected: false }
-      })
-
-      const task = await prisma.take.update({
-        where: { id: taskId },
-        data: { isSelected: true }
-      })
-
-      return task
+      return sceneService.selectTaskInScene(sceneId, taskId)
     }
   )
 
@@ -307,10 +168,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      return prisma.take.findMany({
-        where: { sceneId },
-        orderBy: { createdAt: 'desc' }
-      })
+      return sceneService.listTasksForScene(sceneId)
     }
   )
 
@@ -325,59 +183,22 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const { prompt } = request.body
+      const result = await sceneService.optimizeScenePrompt(sceneId, userId, request.body?.prompt)
 
-      const scene = await prisma.scene.findUnique({
-        where: { id: sceneId },
-        include: {
-          episode: { include: { project: { include: { characters: true } } } },
-          shots: { orderBy: { order: 'asc' } }
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          return reply.status(404).send({ error: 'Scene not found' })
         }
-      })
-
-      if (!scene) {
-        return reply.status(404).send({ error: 'Scene not found' })
-      }
-
-      const targetPrompt =
-        prompt ||
-        (await resolveSceneGeneratePrompt(sceneId))
-
-      const characters = scene.episode.project.characters
-      const context =
-        characters.length > 0
-          ? `角色设定：${characters.map((c) => `${c.name}: ${c.description || '未描述'}`).join('; ')}`
-          : undefined
-
-      try {
-        const { optimized, cost } = await optimizePrompt(targetPrompt, context, {
-          userId,
-          projectId: scene.episode.projectId,
-          op: 'scene_optimize_prompt'
-        })
-
-        if (!prompt && scene.shots.length > 0) {
-          const first = scene.shots[0]
-          await prisma.shot.update({
-            where: { id: first.id },
-            data: { description: optimized }
-          })
+        if (result.reason === 'deepseek_auth') {
+          return reply.status(401).send({ error: 'AI 服务认证失败', message: result.message })
         }
-
-        return { optimizedPrompt: optimized, aiCost: cost.costCNY }
-      } catch (error) {
-        console.error('Prompt optimization failed:', error)
-
-        if (error instanceof Error && error.name === 'DeepSeekAuthError') {
-          return reply.status(401).send({ error: 'AI 服务认证失败', message: error.message })
+        if (result.reason === 'deepseek_rate') {
+          return reply.status(429).send({ error: 'AI 服务请求受限', message: result.message })
         }
-
-        if (error instanceof Error && error.name === 'DeepSeekRateLimitError') {
-          return reply.status(429).send({ error: 'AI 服务请求受限', message: error.message })
-        }
-
         return reply.status(500).send({ error: '提示词优化失败' })
       }
+
+      return { optimizedPrompt: result.optimizedPrompt, aiCost: result.aiCost }
     }
   )
 }

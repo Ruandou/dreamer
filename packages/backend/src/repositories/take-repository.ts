@@ -1,0 +1,42 @@
+import type { Prisma, PrismaClient } from '@prisma/client'
+
+export class TakeRepository {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  findById(id: string) {
+    return this.prisma.take.findUnique({ where: { id } })
+  }
+
+  clearSelectionForScene(sceneId: string) {
+    return this.prisma.take.updateMany({
+      where: { sceneId },
+      data: { isSelected: false }
+    })
+  }
+
+  setSelected(takeId: string) {
+    return this.prisma.take.update({
+      where: { id: takeId },
+      data: { isSelected: true }
+    })
+  }
+
+  create(data: Prisma.TakeUncheckedCreateInput) {
+    return this.prisma.take.create({ data })
+  }
+
+  updateManyForScene(sceneId: string, data: Prisma.TakeUpdateManyMutationInput) {
+    return this.prisma.take.updateMany({ where: { sceneId }, data })
+  }
+
+  update(id: string, data: Prisma.TakeUpdateInput) {
+    return this.prisma.take.update({ where: { id }, data })
+  }
+
+  findManyByScene(sceneId: string) {
+    return this.prisma.take.findMany({
+      where: { sceneId },
+      orderBy: { createdAt: 'desc' }
+    })
+  }
+}
