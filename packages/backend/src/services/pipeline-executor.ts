@@ -33,6 +33,7 @@ import {
   DEFAULT_TARGET_EPISODES
 } from './project-script-jobs.js'
 import { saveCharacters, saveLocations } from './script-entities.js'
+import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
 
 import type {
   ScriptContent,
@@ -372,6 +373,9 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
       })
       await updateJobProgress(jobId, { currentStep: 'episode-split', progress: 45 })
     }
+
+    // 与「解析剧本」一致：落库场地/角色后生成定场图与定妆提示词（此前仅 parse-script 会调，流水线缺这一段导致有场地无 imagePrompt）
+    await applyScriptVisualEnrichment(projectId, script)
 
     // ========== 步骤 3: 分镜提取 ==========
     await updateStepResult(jobId, 'segment-extract', { status: 'processing' })

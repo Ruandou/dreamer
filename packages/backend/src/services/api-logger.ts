@@ -1,5 +1,6 @@
 // API 调用日志服务
 
+import type { Prisma } from '@prisma/client'
 import { prisma } from '../index.js'
 
 /** 业务侧传入：标识「谁在什么操作里」触发了模型调用，写入 requestParams.op */
@@ -120,16 +121,40 @@ export async function updateApiCall(externalTaskId: string, update: {
   })
 }
 
+export function parseModelApiRequestParams(
+  raw: string | null
+): { op?: string; projectId?: string } | null {
+  if (!raw?.trim()) return null
+  try {
+    const o = JSON.parse(raw) as { op?: string; projectId?: string }
+    return {
+      op: typeof o.op === 'string' ? o.op : undefined,
+      projectId: typeof o.projectId === 'string' ? o.projectId : undefined
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function getApiCalls(userId: string, options?: {
   model?: string
+  /** 筛选 requestParams.op（JSON 子串匹配） */
+  op?: string
+  /** 筛选 requestParams.projectId */
+  projectId?: string
   limit?: number
   offset?: number
 }) {
+  const ands: Prisma.ModelApiCallWhereInput[] = [{ userId }]
+  if (options?.model) ands.push({ model: options.model })
+  if (options?.op?.trim()) {
+    ands.push({ requestParams: { contains: `"op":"${options.op.trim()}"` } })
+  }
+  if (options?.projectId?.trim()) {
+    ands.push({ requestParams: { contains: `"projectId":"${options.projectId.trim()}"` } })
+  }
   return prisma.modelApiCall.findMany({
-    where: {
-      userId,
-      ...(options?.model && { model: options.model })
-    },
+    where: { AND: ands },
     orderBy: { createdAt: 'desc' },
     take: options?.limit || 50,
     skip: options?.offset || 0

@@ -24,3 +24,4 @@
 ## 相关文档
 
 - 历史说明见 [`docs/data-model.md`](docs/data-model.md)（顶部应指向本文件为真源）。
+- DeepSeek 定场图 / 定妆提示词规范见 [`DREAMER_AI_PROMPT_GUIDE.md`](DREAMER_AI_PROMPT_GUIDE.md)（实现入口见该文档「与实现的对应关系」）。

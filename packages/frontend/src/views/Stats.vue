@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NCard, NButton, NStatistic,
-  NDataTable, NTag, NEmpty, NSpin, NSelect
+  NDataTable, NTag, NEmpty, NSpin, NSelect, NSpace
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { useStatsStore } from '@/stores/stats'
@@ -172,9 +172,12 @@ import { h } from 'vue'
         />
       </div>
       <div class="stats-header__right">
-        <NButton @click="router.push('/projects')">
-          返回项目
-        </NButton>
+        <NSpace>
+          <NButton @click="router.push('/model-calls')">模型调用日志</NButton>
+          <NButton @click="router.push('/projects')">
+            返回项目
+          </NButton>
+        </NSpace>
       </div>
     </header>
 

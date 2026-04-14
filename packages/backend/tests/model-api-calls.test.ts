@@ -40,12 +40,42 @@ describe('Model API calls routes', () => {
 
   it('GET / returns items for current user', async () => {
     mockFindMany.mockResolvedValue([
-      { id: 'c1', model: 'deepseek-chat', provider: 'deepseek', prompt: 'x', status: 'completed' }
+      {
+        id: 'c1',
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+        prompt: 'x',
+        status: 'completed',
+        requestParams: JSON.stringify({ op: 'script_visual_enrichment', projectId: 'proj1' })
+      }
     ])
     const res = await app.inject({ method: 'GET', url: '/api/model-api-calls' })
     expect(res.statusCode).toBe(200)
-    const body = JSON.parse(res.payload) as { items: unknown[]; limit: number }
+    const body = JSON.parse(res.payload) as {
+      items: { meta: { op?: string; projectId?: string } }[]
+      limit: number
+    }
     expect(body.items).toHaveLength(1)
+    expect(body.items[0].meta).toEqual({ op: 'script_visual_enrichment', projectId: 'proj1' })
     expect(mockFindMany).toHaveBeenCalled()
+  })
+
+  it('GET / with op passes AND filter on requestParams', async () => {
+    mockFindMany.mockResolvedValue([])
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/model-api-calls?op=script_visual_enrichment'
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: expect.arrayContaining([
+            { userId: 'user-1' },
+            { requestParams: { contains: '"op":"script_visual_enrichment"' } }
+          ])
+        }
+      })
+    )
   })
 })

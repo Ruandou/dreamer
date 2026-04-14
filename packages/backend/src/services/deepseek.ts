@@ -333,6 +333,37 @@ export async function optimizePrompt(
   throw lastError || new Error('提示词优化失败')
 }
 
+/** 与《DREAMER_AI_PROMPT_GUIDE》3.2 / 3.3 及批量视觉补全对齐的单槽提示词约束 */
+function characterSlotSystemPrompt(slotType: string): string {
+  const t = (slotType || 'base').toLowerCase()
+  if (t === 'base') {
+    return '你是短剧角色基础定妆提示词撰写助手。只输出中文提示词正文；须纯色影棚背景、七分身（膝盖以上）、锚定面部与发型与基础服装，句间用句号；除专有名词外不要使用英文。'
+  }
+  if (t === 'outfit') {
+    return '你是短剧角色换装提示词撰写助手。只输出中文提示词正文；必须强调面部特征、发型与标志性细节完全不变，仅更换服装与配饰；纯色影棚背景；除专有名词外不要使用英文。'
+  }
+  return '你是短剧角色定妆提示词撰写助手。只输出中文提示词正文；相对父级基础形象保持人物身份一致，描述表情或体态等「仅变化」部分；除专有名词外不要使用英文。'
+}
+
+function characterSlotExtraInstructions(slotType: string): string[] {
+  const t = (slotType || 'base').toLowerCase()
+  if (t === 'base') {
+    return [
+      '【基础定妆】站立于纯色影棚背景（如中灰色）；七分身构图（膝盖以上）；四段意合为一段：（1）主体与外貌（2）发型与标志（3）服装与姿态（4）构图与背景须点明七分身与纯色底，并含画质词；整体不超过约120字。',
+      '禁止只写剧情动作，须写「长什么样、穿什么」。'
+    ]
+  }
+  if (t === 'outfit') {
+    return [
+      '【换装】采用：保持该角色面部特征、发型与标志性细节完全不变，仅将服装更换为：……（结合槽位说明）。纯色影棚背景。整体不超过约100字。',
+      '若已提供父级基础形象参考，须与之为同一人，勿写成新角色。'
+    ]
+  }
+  return [
+    '【衍生形象】相对父级基础形象保持身份一致；中文写清仅变化部分（表情或姿态等），背景以纯色或简单棚拍为宜。'
+  ]
+}
+
 /** 为角色形象槽位生成中文文生图提示词（单行，无 markdown），便于用户阅读且适配国产绘图模型 */
 export async function generateCharacterSlotImagePrompt(
   input: {
@@ -346,6 +377,7 @@ export async function generateCharacterSlotImagePrompt(
   log?: ModelCallLogContext
 ): Promise<{ prompt: string; cost: DeepSeekCost }> {
   const deepseek = getDeepSeekClient()
+  const extra = characterSlotExtraInstructions(input.slotType)
   const user = [
     `角色名：${input.characterName}`,
     input.characterDescription ? `角色设定：${input.characterDescription}` : '',
@@ -353,6 +385,8 @@ export async function generateCharacterSlotImagePrompt(
     `槽位类型：${input.slotType}（base 为基础定妆，outfit 为换装需与基础形象一致的人物特征）`,
     input.slotDescription ? `槽位说明：${input.slotDescription}` : '',
     input.parentSlotSummary ? `父级基础形象参考：${input.parentSlotSummary}` : '',
+    '',
+    ...extra,
     '',
     '请输出一条中文的 AI 绘画提示词（写实或半写实风格、短剧角色定妆），只输出提示词正文，不要引号或解释。'
   ]
@@ -365,8 +399,7 @@ export async function generateCharacterSlotImagePrompt(
     messages: [
       {
         role: 'system',
-        content:
-          '你是短剧角色定妆提示词撰写助手。只输出中文提示词正文，可包含景别、光影、服装与材质等关键词；除专有名词外不要使用英文。'
+        content: characterSlotSystemPrompt(input.slotType)
       },
       { role: 'user', content: user }
     ],
@@ -397,34 +430,76 @@ export async function generateCharacterSlotImagePrompt(
   }
 }
 
+/** system 过长时模型容易输出非严格 JSON，长规则放在用户消息中 */
+export const SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT = [
+  '你只输出紧凑的合法 JSON，供中文短剧生产工具使用；不要 markdown、不要前言/后语。',
+  'locations 与 characters 的撰写细则在用户消息中；locations[].imagePrompt 与 characters[].images[].prompt 须为中文。',
+  '必须返回一个 JSON 对象，且包含 locations 与 characters 两个键；字段不得遗漏。若无场地则 locations 为 []。',
+  '若下列用户消息提供了场地列表：locations 须覆盖每个场地名，且每条 name 必须与列表第一列场地名称完全一致（逐字相同，勿改写或缩写）。'
+].join('\n')
+
+/** 写入用户消息，与 buildScriptVisualEnrichmentUserContent 同步 */
+export const SCRIPT_VISUAL_ENRICH_LOCATION_RULES_IN_USER = [
+  '【定场图 imagePrompt】（仅用于 locations 数组；不影响 characters）',
+  '视角：你是顶级电影勘景摄影师，每条 imagePrompt 描述的是空无一人的拍摄场景，作为文生图指令，不是剧本片段。',
+  '铁律：绝对禁止在 imagePrompt 中出现任何人物、动物、影子或任何暗示人类活动的痕迹；若场地描述中含人物动作，你必须过滤掉。',
+  '每条 imagePrompt 须为中文，四段意合为一段连续文字、句间用句号分隔，整体不超过约120字：',
+  '1）空间与环境：核心建筑结构、标志性物体、材质与布局；',
+  '2）光影与氛围：依「时间」写光线方向、硬/柔与色温、情绪氛围；时间未指定时可依描述推断或使用中性光；',
+  '3）构图与视角：推荐景别与角度（如广角全景、平视中景）；',
+  '4）风格与画质：融入下方「项目视觉风格」；并含画质词（如电影质感、8K超高清等）。',
+  'characters 的定妆规则以本消息下文为准；勿用定场图的「无人」约束去改写角色定妆。'
+].join('\n')
+
+export function buildScriptVisualEnrichmentUserContent(input: {
+  scriptSummary: string
+  locationLines: string
+  characterLines: string
+  projectVisualStyleLine: string
+}): string {
+  const style = input.projectVisualStyleLine.trim() || '（未指定）'
+  return [
+    '根据下列剧本梗概与实体列表，输出 **仅一段合法 JSON**（不要 markdown 代码块），结构为：',
+    '{"locations":[{"name":"场地名","imagePrompt":"中文定场图提示词"}],',
+    '"characters":[{"name":"角色名","images":[{"name":"形象名","type":"base|outfit|expression|pose","description":"可选中文说明","prompt":"中文提示词"}]}]}',
+    '',
+    SCRIPT_VISUAL_ENRICH_LOCATION_RULES_IN_USER,
+    '',
+    '【项目视觉风格】用于 locations 每条 imagePrompt 的第4段（风格与画质），须自然融入：',
+    style,
+    '',
+    'locations 中每条 imagePrompt 须符合上文「定场图」四段式；locations 每条 name 与下方场地列表第一列名称必须一致；整段响应仍为唯一 JSON 对象。',
+    '',
+    '规则（角色 images 数组顺序很重要）：',
+    '1. 每个角色的 images 里 **必须先写至少 1 条 type 为 base 的定妆**（可与默认基础形象对应），再写衍生。',
+    '2. **base**：prompt 为完整中文定妆提示词（主参考图）。须：站立于**纯色影棚背景**（如中灰色）；**七分身构图（膝盖以上）**；四段意合为一段、句间用句号分隔，整体不超过约120字：（1）主体与外貌（2）发型与标志（3）服装与姿态（4）构图与背景须显式包含七分身与纯色底，并融入下方「项目视觉风格」与画质词；禁止只写剧情动作，须写「长什么样、穿什么」。',
+    '3. **outfit**（换装）：优先采用「保持该角色面部特征、发型与所有标志性细节完全不变，仅将服装更换为：……。纯色影棚背景。」整体不超过约100字；须写清相对 base 仅变化服装与配饰。',
+    '4. **expression / pose**（表情/姿态）：相对 base 明确保持不变与仅变化；建议先锁身份（与 base 同一人）再写表情或体态的差异，避免写成全新人物。',
+    '5. 衍生推荐句式：与基础定妆为同一人；保持……不变；仅变化：……。若输出缺显式锚定，服务端可能在落库时补前缀，模型仍应优先输出完整句。',
+    '6. 有换装、明显表情或姿态差异时再追加衍生条目；无则不必凑数。',
+    'locations 数组覆盖下列场地名；characters 覆盖下列角色名。',
+    '',
+    `剧本梗概：\n${input.scriptSummary.slice(0, 8000)}`,
+    '',
+    `场地（每行：名称 | 时间：… | 描述：…）：\n${input.locationLines || '(无)'}`,
+    '',
+    `角色（每行：名称 | 已有描述）：\n${input.characterLines || '(无)'}`
+  ].join('\n')
+}
+
 export async function fetchScriptVisualEnrichmentJson(
   input: {
     scriptSummary: string
     locationLines: string
     characterLines: string
+    /** 项目视觉风格（顿号连接），供定场图第4段融入 */
+    projectVisualStyleLine?: string
   },
   log?: ModelCallLogContext
 ): Promise<{ jsonText: string; cost: DeepSeekCost }> {
   const deepseek = getDeepSeekClient()
-  const user = [
-    '根据下列剧本梗概与实体列表，输出 **仅一段合法 JSON**（不要 markdown 代码块），结构为：',
-    '{"locations":[{"name":"场地名","imagePrompt":"中文定场图提示词"}],',
-    '"characters":[{"name":"角色名","images":[{"name":"形象名","type":"base|outfit|expression|pose","description":"可选中文说明","prompt":"中文提示词"}]}]}',
-    '',
-    '规则（角色 images 数组顺序很重要）：',
-    '1. 每个角色的 images 里 **必须先写至少 1 条 type 为 base 的定妆**（可与默认基础形象对应），再写衍生。',
-    '2. **base**：prompt 为完整中文定妆/定装提示词，用作该角色主参考图（用户可直接阅读）。',
-    '3. **outfit / expression / pose**（衍生）：必须相对上述 base 写「关联词」——用中文明确 **与 base 保持一致** 的部分（脸型、年龄感、五官比例、发型底色、体型等）以及 **仅变化** 的部分（服装款式与颜色 / 表情肌肉 / 体态与动作）。',
-    '   推荐句式：与基础定妆为同一人；保持……不变；仅变化：……。禁止写成与 base 无关的全新人物设定。',
-    '4. 有换装、明显表情或姿态差异时再追加衍生条目；无则不必凑数。',
-    'locations 数组覆盖下列场地名；characters 覆盖下列角色名。',
-    '',
-    `剧本梗概：\n${input.scriptSummary.slice(0, 8000)}`,
-    '',
-    `场地（每行：名称 | 已有描述）：\n${input.locationLines || '(无)'}`,
-    '',
-    `角色（每行：名称 | 已有描述）：\n${input.characterLines || '(无)'}`
-  ].join('\n')
+  const projectVisualStyleLine = (input.projectVisualStyleLine || '').trim() || '（未指定）'
+  const user = buildScriptVisualEnrichmentUserContent({ ...input, projectVisualStyleLine })
 
   try {
     const completion = await deepseek.chat.completions.create({
@@ -432,8 +507,7 @@ export async function fetchScriptVisualEnrichmentJson(
       messages: [
         {
           role: 'system',
-          content:
-            '你只输出紧凑的合法 JSON，供中文短剧生产工具使用；不要 markdown、不要解释。imagePrompt 与 prompt 字段一律使用中文。'
+          content: SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT
         },
         { role: 'user', content: user }
       ],
@@ -446,13 +520,20 @@ export async function fetchScriptVisualEnrichmentJson(
     if (!jsonText) {
       throw new Error('DeepSeek API 返回为空')
     }
-    await logDeepSeekChat(log, user, { status: 'completed', costCNY: cost.costCNY })
+    await logDeepSeekChat(log, user, { status: 'completed', costCNY: cost.costCNY }, {
+      systemMessage: SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT
+    })
     return { jsonText, cost }
   } catch (error: any) {
-    await logDeepSeekChat(log, user, {
-      status: 'failed',
-      errorMsg: error?.message || 'visual_enrichment'
-    })
+    await logDeepSeekChat(
+      log,
+      user,
+      {
+        status: 'failed',
+        errorMsg: error?.message || 'visual_enrichment'
+      },
+      { systemMessage: SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT }
+    )
     if (error?.status === 401 || error?.status === 403) {
       throw new DeepSeekAuthError()
     }

@@ -7,10 +7,9 @@ import { imageQueue } from '../queues/image.js'
 
 const LOCATION_IMAGE_UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 
-function buildStyledPrompt(visualStyle: string[] | undefined, core: string): string {
-  const vs = (visualStyle || []).filter(Boolean).join(', ')
-  if (!vs) return core
-  return `Visual style: ${vs}. ${core}`
+/** 定场图入队：imagePrompt 应在视觉补全中含「风格与画质」与项目 visualStyle，此处不再拼英文 Visual style 前缀以免重复。 */
+function buildLocationEstablishingPrompt(establishingName: string, effective: string): string {
+  return `${establishingName}. ${effective}`
 }
 
 function locationHasEstablishingImage(imageUrl: string | null | undefined): boolean {
@@ -92,11 +91,8 @@ export async function locationRoutes(fastify: FastifyInstance) {
         continue
       }
 
-      const establishingName = `${location.name} establishing shot, cinematic lighting`
-      const finalPrompt = buildStyledPrompt(
-        location.project.visualStyle,
-        `${establishingName}. ${effective}`
-      )
+      const establishingName = `${location.name} establishing shot, empty scene, no people, cinematic lighting`
+      const finalPrompt = buildLocationEstablishingPrompt(establishingName, effective)
 
       const job = await imageQueue.add('location-establishing', {
         kind: 'location_establishing',
@@ -292,11 +288,8 @@ export async function locationRoutes(fastify: FastifyInstance) {
           .send({ error: '缺少定场图提示词：请填写 imagePrompt 或传入 prompt' })
       }
 
-      const establishingName = `${location.name} establishing shot, cinematic lighting`
-      const finalPrompt = buildStyledPrompt(
-        location.project.visualStyle,
-        `${establishingName}. ${effective}`
-      )
+      const establishingName = `${location.name} establishing shot, empty scene, no people, cinematic lighting`
+      const finalPrompt = buildLocationEstablishingPrompt(establishingName, effective)
 
       const job = await imageQueue.add('location-establishing', {
         kind: 'location_establishing',

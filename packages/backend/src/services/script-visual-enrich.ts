@@ -68,10 +68,24 @@ function extractJsonObject(text: string): string {
   return t
 }
 
+/** 模型返回的场地名与库内名称对齐（去首尾空白、压缩连续空格） */
+function resolveDbLocationName(dbNames: readonly string[], aiName: string | undefined): string | null {
+  if (!aiName) return null
+  const t = aiName.trim()
+  if (!t) return null
+  if (dbNames.includes(t)) return t
+  const collapsed = (s: string) => s.replace(/\s+/g, ' ').trim()
+  const ct = collapsed(t)
+  for (const n of dbNames) {
+    if (collapsed(n) === ct) return n
+  }
+  return null
+}
+
 export async function applyScriptVisualEnrichment(projectId: string, script: ScriptContent): Promise<void> {
   const projectRow = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { userId: true }
+    select: { userId: true, visualStyle: true }
   })
   const visualLog: ModelCallLogContext | undefined = projectRow
     ? { userId: projectRow.userId, projectId, op: 'script_visual_enrichment' }
@@ -87,38 +101,74 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
     include: { images: { orderBy: { order: 'asc' } } }
   })
 
+  const projectVisualStyleLine =
+    (projectRow?.visualStyle || []).filter(Boolean).join('、') || '（未指定，定场图第4段可写通用电影级画质词）'
+
   const locationLines = locations
-    .map((l) => `${l.name} | ${(l.description || '').slice(0, 200)}`)
+    .map((l) => {
+      const time = (l.timeOfDay || '').trim() || '未指定'
+      const desc = (l.description || '').slice(0, 300)
+      return `${l.name} | 时间：${time} | 描述：${desc}`
+    })
     .join('\n')
   const characterLines = characters
     .map((c) => `${c.name} | ${(c.description || '').slice(0, 200)}`)
     .join('\n')
 
+  const { jsonText } = await fetchScriptVisualEnrichmentJson(
+    {
+      scriptSummary: `${script.title}\n${script.summary}`,
+      locationLines,
+      characterLines,
+      projectVisualStyleLine
+    },
+    visualLog
+  )
+
   let payload: VisualPayload
   try {
-    const { jsonText } = await fetchScriptVisualEnrichmentJson(
-      {
-        scriptSummary: `${script.title}\n${script.summary}`,
-        locationLines,
-        characterLines
-      },
-      visualLog
-    )
     const raw = extractJsonObject(jsonText)
     payload = JSON.parse(raw) as VisualPayload
   } catch (e) {
-    console.warn('[applyScriptVisualEnrichment] AI 解析跳过:', e)
-    return
+    const err = e as Error
+    console.warn('[applyScriptVisualEnrichment] 模型返回内容无法解析为 JSON:', err?.message || err)
+    throw new Error(`视觉补全失败：DeepSeek 返回不是合法 JSON（${err?.message || String(err)}）`)
   }
 
+  const dbLocationNames = locations.map((l) => l.name)
+  if (locations.length > 0 && (!Array.isArray(payload.locations) || payload.locations.length === 0)) {
+    console.warn('[applyScriptVisualEnrichment] 项目场地库有场地但未收到模型返回的 locations 条目', {
+      projectId,
+      dbLocationNames
+    })
+  }
+
+  let locationPromptWrites = 0
   if (Array.isArray(payload.locations)) {
     for (const loc of payload.locations) {
-      if (!loc?.name || !loc.imagePrompt?.trim()) continue
-      await prisma.location.updateMany({
-        where: { projectId, name: loc.name, deletedAt: null },
-        data: { imagePrompt: loc.imagePrompt.trim() }
+      const prompt = loc?.imagePrompt?.trim()
+      if (!prompt) continue
+      const resolvedName = resolveDbLocationName(dbLocationNames, loc?.name)
+      if (!resolvedName) continue
+      const r = await prisma.location.updateMany({
+        where: { projectId, name: resolvedName, deletedAt: null },
+        data: { imagePrompt: prompt }
       })
+      locationPromptWrites += r.count
     }
+  }
+
+  if (
+    locations.length > 0 &&
+    locationPromptWrites === 0 &&
+    Array.isArray(payload.locations) &&
+    payload.locations.length > 0
+  ) {
+    const returnedNames = payload.locations.map((l) => l?.name).filter(Boolean)
+    console.warn(
+      '[applyScriptVisualEnrichment] 未能写入任何定场图 imagePrompt：请核对模型返回的 locations[].name 是否与场地库名称完全一致',
+      { projectId, dbLocationNames, returnedNames }
+    )
   }
 
   if (!Array.isArray(payload.characters)) return

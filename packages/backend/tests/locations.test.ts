@@ -156,6 +156,9 @@ describe('Location routes', () => {
     expect(data.enqueued).toBe(1)
     expect(data.enqueuedLocationIds).toEqual(['l1'])
     expect(mockImageQueueAdd).toHaveBeenCalledTimes(1)
+    expect(mockImageQueueAdd.mock.calls[0][1]).toMatchObject({
+      prompt: 'A establishing shot, empty scene, no people, cinematic lighting. prompt a'
+    })
     expect(data.skipped.length).toBe(2)
   })
 
@@ -180,6 +183,8 @@ describe('Location routes', () => {
     const data = JSON.parse(res.payload) as { enqueued: number }
     expect(data.enqueued).toBe(1)
     expect(mockImageQueueAdd).toHaveBeenCalled()
+    expect(mockImageQueueAdd.mock.calls[0][1].prompt).toContain('empty scene, no people')
+    expect(mockImageQueueAdd.mock.calls[0][1].prompt).not.toMatch(/^Visual style:/)
     expect(mockLocationUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'l1' },
@@ -194,7 +199,7 @@ describe('Location routes', () => {
       name: '街景',
       imagePrompt: 'night city',
       projectId: 'p1',
-      project: { visualStyle: [] }
+      project: { visualStyle: ['赛博朋克'] }
     })
     const res = await app.inject({
       method: 'POST',
@@ -203,6 +208,11 @@ describe('Location routes', () => {
     })
     expect(res.statusCode).toBe(202)
     expect(mockImageQueueAdd).toHaveBeenCalled()
+    expect(mockImageQueueAdd.mock.calls[0][1]).toMatchObject({
+      prompt:
+        '街景 establishing shot, empty scene, no people, cinematic lighting. night city'
+    })
+    expect(mockImageQueueAdd.mock.calls[0][1].prompt).not.toMatch(/^Visual style:/)
   })
 
   it('GET 403 without project ownership', async () => {

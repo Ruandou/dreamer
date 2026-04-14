@@ -329,4 +329,39 @@ async function getPipelineJobStatus(jobId: string): Promise<{ data?: PipelineJob
   return res.data
 }
 
+/** 与 GET /api/model-api-calls 返回的单条结构一致（含 meta） */
+export interface ModelApiCallRow {
+  id: string
+  userId: string
+  model: string
+  provider: string
+  prompt: string
+  requestParams: string | null
+  status: string
+  cost: number | null
+  errorMsg: string | null
+  createdAt: string
+  updatedAt?: string
+  meta: { op?: string; projectId?: string } | null
+}
+
+export async function getModelApiCalls(q?: {
+  limit?: number
+  offset?: number
+  model?: string
+  op?: string
+  projectId?: string
+}) {
+  const params = new URLSearchParams()
+  if (q?.limit != null) params.set('limit', String(q.limit))
+  if (q?.offset != null) params.set('offset', String(q.offset))
+  if (q?.model?.trim()) params.set('model', q.model.trim())
+  if (q?.op?.trim()) params.set('op', q.op.trim())
+  if (q?.projectId?.trim()) params.set('projectId', q.projectId.trim())
+  const res = await api.get<{ items: ModelApiCallRow[]; limit: number; offset: number }>(
+    `/model-api-calls?${params.toString()}`
+  )
+  return res.data
+}
+
 export { api }

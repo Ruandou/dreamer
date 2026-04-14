@@ -53,8 +53,10 @@ const script = { title: 'T', summary: 'S', scenes: [] as any[] }
 describe('applyScriptVisualEnrichment', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockProjectFindUnique.mockResolvedValue({ userId: 'u1' })
-    mockLocationFindMany.mockResolvedValue([{ id: 'L1', projectId: 'p1', name: '咖啡厅', description: '室内' }])
+    mockProjectFindUnique.mockResolvedValue({ userId: 'u1', visualStyle: ['电影感'] })
+    mockLocationFindMany.mockResolvedValue([
+      { id: 'L1', projectId: 'p1', name: '咖啡厅', description: '室内', timeOfDay: '日' }
+    ])
     mockCharacterFindMany.mockResolvedValue([
       {
         id: 'ch1',
@@ -76,13 +78,39 @@ describe('applyScriptVisualEnrichment', () => {
 
     await applyScriptVisualEnrichment('p1', script)
 
+    expect(mockFetchScriptVisualEnrichmentJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectVisualStyleLine: '电影感',
+        locationLines: expect.stringContaining('时间：日')
+      }),
+      expect.anything()
+    )
+
     expect(mockLocationUpdateMany).toHaveBeenCalledWith({
       where: { projectId: 'p1', name: '咖啡厅', deletedAt: null },
       data: { imagePrompt: '温馨咖啡厅内景，暖光，木质桌椅' }
     })
   })
 
+  it('matches location name when model adds surrounding whitespace', async () => {
+    mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
+      jsonText: JSON.stringify({
+        locations: [{ name: '  咖啡厅  ', imagePrompt: '内景' }],
+        characters: []
+      })
+    })
+    mockLocationUpdateMany.mockResolvedValue({ count: 1 })
+
+    await applyScriptVisualEnrichment('p1', script)
+
+    expect(mockLocationUpdateMany).toHaveBeenCalledWith({
+      where: { projectId: 'p1', name: '咖啡厅', deletedAt: null },
+      data: { imagePrompt: '内景' }
+    })
+  })
+
   it('updates base character image prompt when AI returns base slot', async () => {
+    mockLocationFindMany.mockResolvedValue([]) // 本测仅角色，库中无场地，避免「未返回 locations」告警
     mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
       jsonText: JSON.stringify({
         locations: [],
@@ -107,6 +135,7 @@ describe('applyScriptVisualEnrichment', () => {
   })
 
   it('creates outfit slot when AI lists outfit before base (sorted: base first)', async () => {
+    mockLocationFindMany.mockResolvedValue([])
     mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
       jsonText: JSON.stringify({
         locations: [],
@@ -145,6 +174,7 @@ describe('applyScriptVisualEnrichment', () => {
   })
 
   it('creates outfit slot when AI returns outfit after base', async () => {
+    mockLocationFindMany.mockResolvedValue([])
     mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
       jsonText: JSON.stringify({
         locations: [],
@@ -176,9 +206,17 @@ describe('applyScriptVisualEnrichment', () => {
     )
   })
 
-  it('swallows AI JSON errors without throwing', async () => {
+  it('rethrows when DeepSeek 请求失败（避免解析任务仍显示成功）', async () => {
     mockFetchScriptVisualEnrichmentJson.mockRejectedValue(new Error('network'))
-    await expect(applyScriptVisualEnrichment('p1', script)).resolves.toBeUndefined()
+    await expect(applyScriptVisualEnrichment('p1', script)).rejects.toThrow('network')
     expect(mockLocationUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it('throws when model returns non-JSON', async () => {
+    mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
+      jsonText: 'not json at all',
+      cost: { costCNY: 0, totalTokens: 1, inputTokens: 0, outputTokens: 1 }
+    })
+    await expect(applyScriptVisualEnrichment('p1', script)).rejects.toThrow(/视觉补全失败/)
   })
 })

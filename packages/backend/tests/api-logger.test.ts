@@ -194,7 +194,7 @@ describe('ApiLogger Service', () => {
       const result = await getApiCalls(userId)
 
       expect(prisma.modelApiCall.findMany).toHaveBeenCalledWith({
-        where: { userId },
+        where: { AND: [{ userId }] },
         orderBy: { createdAt: 'desc' },
         take: 50,
         skip: 0
@@ -211,7 +211,7 @@ describe('ApiLogger Service', () => {
       await getApiCalls(userId, { model })
 
       expect(prisma.modelApiCall.findMany).toHaveBeenCalledWith({
-        where: { userId, model: 'seedance2.0' },
+        where: { AND: [{ userId }, { model: 'seedance2.0' }] },
         orderBy: { createdAt: 'desc' },
         take: 50,
         skip: 0
@@ -226,7 +226,7 @@ describe('ApiLogger Service', () => {
       await getApiCalls(userId, { limit: 10, offset: 20 })
 
       expect(prisma.modelApiCall.findMany).toHaveBeenCalledWith({
-        where: { userId },
+        where: { AND: [{ userId }] },
         orderBy: { createdAt: 'desc' },
         take: 10,
         skip: 20

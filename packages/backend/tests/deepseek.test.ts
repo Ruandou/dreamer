@@ -404,6 +404,28 @@ describe('DeepSeek Service', () => {
       })
       expect(r.prompt.length).toBeGreaterThan(5)
       expect(r.cost.totalTokens).toBe(30)
+      const call = mockCreate.mock.calls[mockCreate.mock.calls.length - 1][0]
+      expect(call.messages[0].content).toMatch(/换装/)
+      expect(call.messages[1].content as string).toMatch(/保持该角色面部特征/)
+    })
+
+    it('uses base slot system prompt with 七分身 for base type', async () => {
+      const { generateCharacterSlotImagePrompt } = await import('../src/services/deepseek.js')
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: '七分身，中灰背景，写实' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 }
+      })
+      await generateCharacterSlotImagePrompt({
+        characterName: '王芳',
+        characterDescription: '记者',
+        slotName: '基础形象',
+        slotType: 'base',
+        slotDescription: '',
+        parentSlotSummary: null
+      })
+      const call = mockCreate.mock.calls[mockCreate.mock.calls.length - 1][0]
+      expect(call.messages[0].content as string).toMatch(/七分身/)
+      expect(call.messages[1].content as string).toMatch(/纯色影棚/)
     })
   })
 
@@ -416,11 +438,51 @@ describe('DeepSeek Service', () => {
       })
       const r = await fetchScriptVisualEnrichmentJson({
         scriptSummary: '都市爱情故事梗概',
-        locationLines: '咖啡馆 | 内景',
-        characterLines: '主角 | 女'
+        locationLines: '咖啡馆 | 时间：日 | 描述：内景',
+        characterLines: '主角 | 女',
+        projectVisualStyleLine: '真人写实、暖色'
       })
       expect(r.jsonText).toContain('locations')
       expect(r.cost.costCNY).toBeGreaterThanOrEqual(0)
+    })
+
+    it('sends short system prompt and user content with location rules and visual style', async () => {
+      const {
+        fetchScriptVisualEnrichmentJson,
+        buildScriptVisualEnrichmentUserContent,
+        SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT,
+        SCRIPT_VISUAL_ENRICH_LOCATION_RULES_IN_USER
+      } = await import('../src/services/deepseek.js')
+      mockCreate.mockResolvedValueOnce({
+        choices: [{ message: { content: '{}' } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+      })
+      await fetchScriptVisualEnrichmentJson({
+        scriptSummary: '梗概',
+        locationLines: '书店 | 时间：晨 | 描述：杂乱',
+        characterLines: '无',
+        projectVisualStyleLine: '复古胶片'
+      })
+      const call = mockCreate.mock.calls[mockCreate.mock.calls.length - 1][0]
+      expect(call.messages[0].content).toBe(SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT)
+      expect(call.messages[0].content).not.toMatch(/绝对禁止/)
+      const user = call.messages[1].content as string
+      expect(user).toContain(SCRIPT_VISUAL_ENRICH_LOCATION_RULES_IN_USER)
+      expect(user).toMatch(/绝对禁止在 imagePrompt 中出现任何人物/)
+      expect(user).toContain('复古胶片')
+      expect(user).toContain('场地（每行：名称 | 时间：… | 描述：…）')
+      const built = buildScriptVisualEnrichmentUserContent({
+        scriptSummary: 'S',
+        locationLines: 'L',
+        characterLines: 'C',
+        projectVisualStyleLine: '水墨'
+      })
+      expect(built).toContain('水墨')
+      expect(built).toContain('【项目视觉风格】')
+      expect(built).toContain('【定场图 imagePrompt】')
+      expect(built).toMatch(/七分身/)
+      expect(built).toMatch(/纯色影棚/)
+      expect(built).toMatch(/保持该角色面部特征/)
     })
   })
 })

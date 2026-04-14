@@ -2,9 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const recordMock = vi.fn().mockResolvedValue(undefined)
 
-vi.mock('../src/services/api-logger.js', () => ({
-  recordModelApiCall: (...args: unknown[]) => recordMock(...args)
-}))
+vi.mock('../src/services/api-logger.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/services/api-logger.js')>()
+  return {
+    ...actual,
+    recordModelApiCall: (...args: unknown[]) => recordMock(...args)
+  }
+})
 
 import { logDeepSeekChat } from '../src/services/model-call-log.js'
 
@@ -44,5 +48,15 @@ describe('model-call-log', () => {
       status: 'failed',
       errorMsg: 'boom'
     })
+  })
+
+  it('logDeepSeekChat merges systemMessage into prompt for audit', async () => {
+    await logDeepSeekChat({ userId: 'u1', op: 'op' }, 'user only', { status: 'completed' }, {
+      systemMessage: 'SYS'
+    })
+    expect(recordMock.mock.calls[0][0].prompt).toContain('【system】')
+    expect(recordMock.mock.calls[0][0].prompt).toContain('SYS')
+    expect(recordMock.mock.calls[0][0].prompt).toContain('【user】')
+    expect(recordMock.mock.calls[0][0].prompt).toContain('user only')
   })
 })
