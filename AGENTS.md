@@ -372,9 +372,11 @@ docs/plans/<计划名称>_<YYYYMMDD>.md
 2. **完成后**：将计划文档移到 `docs/plans/` 并归档
 3. **实时更新**：计划中的任务状态变更时，同步更新文档中的任务状态
 
-### 禁止在 `.cursor/plans/` 创建计划
+### 禁止以 `~/.cursor/plans/` 为事实来源
 
-`.cursor/plans/` 是 Cursor 内部使用的计划存储，**不要使用**。所有计划文档必须放在 `docs/plans/`。
+- Cursor 可能在用户目录下生成 `~/.cursor/plans/*.plan.md`，**那只是本机草稿**。
+- **仓库内唯一事实来源**仍是 `docs/plans/<计划名称>_<YYYYMMDD>.md`：若在 Cursor 里先写出了计划，**必须复制或迁到 `docs/plans/` 并纳入 Git**，不要只在 `~/.cursor/plans/` 留一份。
+- Agent/协作者**不得**把「计划」只写进 `~/.cursor/plans/` 而不落到 `docs/plans/`。
 
 ---
 
