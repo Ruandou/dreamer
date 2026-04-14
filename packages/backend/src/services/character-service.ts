@@ -21,6 +21,10 @@ export type MoveCharacterImageResult =
   | { ok: true; image: CharacterImage }
   | { ok: false; reason: 'circular' }
 
+export type UploadCharacterImageAvatarResult =
+  | { ok: true; image: CharacterImage }
+  | { ok: false; error: 'not_found' | 'invalid_type' }
+
 export class CharacterService {
   constructor(private readonly repository: CharacterRepository) {}
 
@@ -143,6 +147,30 @@ export class CharacterService {
     })
 
     return toJsonSafe(image)
+  }
+
+  /** 为已有形象槽位上传/替换定妆图（本地文件 → 对象存储） */
+  async uploadAvatarForCharacterImage(
+    characterId: string,
+    imageId: string,
+    fileBuffer: Buffer,
+    fileMimeType: string
+  ): Promise<UploadCharacterImageAvatarResult> {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(fileMimeType)) {
+      return { ok: false, error: 'invalid_type' }
+    }
+
+    const existing = await this.repository.findCharacterImageById(imageId)
+    if (!existing || existing.characterId !== characterId) {
+      return { ok: false, error: 'not_found' }
+    }
+
+    const key = generateFileKey('assets', `avatar_${Date.now()}.png`)
+    const avatarUrl = await uploadFile('assets', key, fileBuffer, fileMimeType)
+
+    const updated = await this.repository.updateCharacterImage(imageId, { avatarUrl })
+    return { ok: true, image: toJsonSafe(updated) }
   }
 
   updateCharacterImage(

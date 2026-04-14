@@ -68,6 +68,20 @@ export const useCharacterStore = defineStore('character', () => {
     return res.data
   }
 
+  /** 为已有槽位上传/替换本地定妆图 */
+  async function uploadCharacterImageAvatar(characterId: string, imageId: string, file: File) {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await api.post<CharacterImage>(
+      `/characters/${characterId}/images/${imageId}/avatar`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    )
+    const pid = characters.value.find((c) => c.id === characterId)?.projectId || ''
+    if (pid) await fetchCharacters(pid)
+    return res.data
+  }
+
   async function deleteImage(characterId: string, imageId: string) {
     await api.delete(`/characters/${characterId}/images/${imageId}`)
     await fetchCharacters(characters.value.find(c => c.id === characterId)?.projectId || '')
@@ -109,6 +123,7 @@ export const useCharacterStore = defineStore('character', () => {
     deleteCharacter,
     addImage,
     updateImage,
+    uploadCharacterImageAvatar,
     deleteImage,
     moveImage,
     queueCharacterImageGenerate,

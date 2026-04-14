@@ -225,6 +225,58 @@ export async function characterRoutes(fastify: FastifyInstance) {
     }
   )
 
+  // 为已有形象槽位上传/替换定妆图（multipart，字段名 file）
+  fastify.post<{ Params: { id: string; imageId: string } }>(
+    '/:id/images/:imageId/avatar',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request as any).user.id
+      const { id: characterId, imageId } = request.params
+
+      if (!(await verifyCharacterOwnership(userId, characterId))) {
+        return reply.status(403).send(permissionDeniedBody)
+      }
+
+      let fileBuffer: Buffer | null = null
+      let fileMimeType = ''
+
+      const parts = request.parts()
+      for await (const part of parts) {
+        if (part.type === 'file') {
+          const buffers: Buffer[] = []
+          for await (const chunk of part.file) {
+            buffers.push(chunk)
+          }
+          fileBuffer = Buffer.concat(buffers)
+          fileMimeType = part.mimetype
+          break
+        }
+      }
+
+      if (!fileBuffer) {
+        return reply.status(400).send({ error: 'No file uploaded' })
+      }
+
+      const result = await characterService.uploadAvatarForCharacterImage(
+        characterId,
+        imageId,
+        fileBuffer,
+        fileMimeType
+      )
+
+      if (!result.ok) {
+        if (result.error === 'not_found') {
+          return reply.status(404).send({ error: 'Image not found' })
+        }
+        return reply.status(400).send({
+          error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.'
+        })
+      }
+
+      return reply.send(result.image)
+    }
+  )
+
   // Delete image (and its children)
   fastify.delete<{ Params: { id: string; imageId: string } }>(
     '/:id/images/:imageId',

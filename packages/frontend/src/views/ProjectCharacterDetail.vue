@@ -14,8 +14,6 @@ import {
   useMessage,
   NTree,
   NDropdown,
-  NDrawer,
-  NDrawerContent,
   NSpin,
   NBackTop
 } from 'naive-ui'
@@ -39,7 +37,6 @@ const character = ref<Character | null>(null)
 const isLoading = ref(true)
 const selectedImageId = ref<string | null>(null)
 const selectedImage = ref<CharacterImage | null>(null)
-const showImageDrawer = ref(false)
 const showAddModal = ref(false)
 const addForm = ref({
   name: '',
@@ -51,6 +48,7 @@ const isUploading = ref(false)
 const selectedFile = ref<File | null>(null)
 const promptDraft = ref('')
 const generatingByImageId = ref<Record<string, boolean>>({})
+const uploadingAvatar = ref(false)
 let unsubProjectSse: (() => void) | null = null
 
 type CharacterTreeOption = TreeOption & { data?: CharacterImage }
@@ -109,6 +107,27 @@ async function hydrateGeneratingFromQueue() {
     generatingByImageId.value = next
   } catch {
     // 忽略拉取失败
+  }
+}
+
+async function handleAvatarUpload(options: { file: UploadFileInfo }) {
+  if (options.file.status === 'error' || options.file.status === 'removed') return
+  const f = options.file.file
+  if (!f || !selectedImage.value) return
+  uploadingAvatar.value = true
+  try {
+    await characterStore.uploadCharacterImageAvatar(
+      characterId.value,
+      selectedImage.value.id,
+      f
+    )
+    message.success('图片已上传')
+    await loadCharacter()
+  } catch (e: any) {
+    const err = e?.response?.data?.error
+    message.error(typeof err === 'string' ? err : e?.message || '上传失败')
+  } finally {
+    uploadingAvatar.value = false
   }
 }
 
@@ -180,7 +199,6 @@ const treeData = computed<CharacterTreeOption[]>(() => {
 const handleNodeClick = (option: CharacterTreeOption) => {
   selectedImageId.value = option.key as string
   selectedImage.value = option.data as CharacterImage
-  showImageDrawer.value = true
 }
 
 const handleBack = () => {
@@ -414,7 +432,6 @@ const handleImageAction = async (key: string) => {
       handleMoveToRoot(selectedImage.value.id)
       break
   }
-  showImageDrawer.value = false
 }
 
 const getTypeLabel = (type: string) => {
@@ -546,13 +563,48 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
         </div>
         <div class="preview-panel__body">
           <template v-if="selectedImage">
-            <NImage
-              :src="selectedImage.avatarUrl || ''"
-              width="100%"
-              height="400"
-              object-fit="contain"
-              style="background: #f5f5f5; border-radius: 8px;"
-            />
+            <div class="preview-image-wrap">
+              <NImage
+                v-if="selectedImage.avatarUrl"
+                :src="selectedImage.avatarUrl"
+                width="100%"
+                height="400"
+                object-fit="contain"
+                preview
+                class="preview-image"
+              />
+              <div v-else class="preview-image-placeholder">
+                <span class="preview-image-placeholder__icon" aria-hidden="true">🖼</span>
+                <p class="preview-image-placeholder__title">暂无定妆图</p>
+                <p class="preview-image-placeholder__hint">
+                  可填写下方提示词后「提交 AI 生成」，或上传本地参考图
+                </p>
+                <NUpload
+                  accept="image/jpeg,image/png,image/webp"
+                  :max="1"
+                  :show-file-list="false"
+                  :disabled="uploadingAvatar"
+                  @change="handleAvatarUpload"
+                >
+                  <NButton size="small" type="primary" :loading="uploadingAvatar">
+                    上传本地图片
+                  </NButton>
+                </NUpload>
+              </div>
+              <div v-if="selectedImage.avatarUrl" class="preview-image-replace">
+                <NUpload
+                  accept="image/jpeg,image/png,image/webp"
+                  :max="1"
+                  :show-file-list="false"
+                  :disabled="uploadingAvatar"
+                  @change="handleAvatarUpload"
+                >
+                  <NButton size="tiny" quaternary :loading="uploadingAvatar">
+                    替换为本地图片
+                  </NButton>
+                </NUpload>
+              </div>
+            </div>
             <div class="preview-info">
               <h4>{{ selectedImage.name }}</h4>
               <NTag :type="getTypeTagType(selectedImage.type)" size="small">
@@ -602,56 +654,6 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
         </div>
       </div>
     </div>
-
-    <!-- Image Drawer -->
-    <NDrawer v-model:show="showImageDrawer" :width="400" placement="right">
-      <NDrawerContent title="形象详情" closable>
-        <template #header>
-          <div class="drawer-header">
-            <span>形象详情</span>
-            <NDropdown
-              v-if="selectedImage"
-              trigger="click"
-              :options="imageActionOptions"
-              @select="handleImageAction"
-            >
-              <NButton size="small">操作</NButton>
-            </NDropdown>
-          </div>
-        </template>
-        <div v-if="selectedImage" class="drawer-content">
-          <NImage
-            :src="selectedImage.avatarUrl || ''"
-            width="100%"
-            preview
-          />
-          <div class="drawer-info">
-            <h4>{{ selectedImage.name }}</h4>
-            <NTag :type="getTypeTagType(selectedImage.type)" size="small">
-              {{ getTypeLabel(selectedImage.type) }}
-            </NTag>
-            <p v-if="selectedImage.description" class="drawer-desc">
-              {{ selectedImage.description }}
-            </p>
-            <div class="prompt-block" style="margin-top: 12px">
-              <h5 class="prompt-block__title">文生图提示词</h5>
-              <NInput v-model:value="promptDraft" type="textarea" :rows="3" />
-              <NSpace style="margin-top: 8px">
-                <NButton size="tiny" @click="savePromptDraft">保存</NButton>
-                <NButton
-                  size="tiny"
-                  type="primary"
-                  :loading="generatingByImageId[selectedImage.id]"
-                  @click="queueSelectedGenerate"
-                >
-                  生成
-                </NButton>
-              </NSpace>
-            </div>
-          </div>
-        </div>
-      </NDrawerContent>
-    </NDrawer>
 
     <!-- Add Image Modal -->
     <NModal
@@ -823,7 +825,61 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.preview-image-wrap {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.preview-image {
+  display: block;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-gray);
+}
+
+.preview-image-placeholder {
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--spacing-lg);
+  text-align: center;
+  background: var(--color-bg-gray);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.preview-image-placeholder__icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: var(--spacing-sm);
+  opacity: 0.85;
+}
+
+.preview-image-placeholder__title {
+  margin: 0 0 var(--spacing-xs);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.preview-image-placeholder__hint {
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  max-width: 280px;
+}
+
+.preview-image-replace {
+  margin-top: var(--spacing-sm);
+  text-align: center;
 }
 
 .preview-info {
@@ -849,35 +905,6 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
   margin-top: var(--spacing-xs);
-}
-
-.drawer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.drawer-content {
-  padding: var(--spacing-md) 0;
-}
-
-.drawer-info {
-  padding: var(--spacing-md) 0;
-}
-
-.drawer-info h4 {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin: 0 0 var(--spacing-sm);
-}
-
-.drawer-desc {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-top: var(--spacing-md);
-  line-height: var(--line-height-relaxed);
 }
 
 .selected-file-info {
