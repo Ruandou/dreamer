@@ -13,6 +13,8 @@ export interface Project {
   name: string
   description?: string
   synopsis?: string
+  /** 项目画幅（如 9:16）；未设置时应用层按 9:16 处理 */
+  aspectRatio?: string | null
   visualStyle?: string[]
   storyContext?: string | null
   episodes?: Episode[]

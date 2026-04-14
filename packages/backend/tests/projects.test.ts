@@ -246,6 +246,31 @@ describe('Project Routes', () => {
         data: { synopsis: '梗概', visualStyle: ['cinematic'] }
       })
     })
+
+    it('should persist aspectRatio', async () => {
+      mockProjectFindFirst.mockResolvedValue({
+        id: 'proj-1',
+        name: 'P',
+        userId: 'test-user-id'
+      })
+      mockProjectUpdate.mockResolvedValue({
+        id: 'proj-1',
+        aspectRatio: '16:9',
+        userId: 'test-user-id'
+      })
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/projects/proj-1',
+        payload: { aspectRatio: '16:9' }
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(mockProjectUpdate).toHaveBeenCalledWith({
+        where: { id: 'proj-1' },
+        data: { aspectRatio: '16:9' }
+      })
+    })
   })
 
   describe('PATCH /api/projects/:id', () => {

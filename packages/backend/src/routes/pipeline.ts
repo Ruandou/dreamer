@@ -7,6 +7,7 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../index.js'
 import { executePipelineJob } from '../services/pipeline-executor.js'
 import type { PipelineStep } from '@dreamer/shared/types'
+import { pipelineAspectRatioFromProjectDefault } from '../lib/project-aspect.js'
 
 export async function pipelineRoutes(fastify: FastifyInstance) {
 
@@ -61,13 +62,17 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
         ]
       })
 
-      // 异步执行 Pipeline（不阻塞 HTTP 响应）
+      // 异步执行 Pipeline（不阻塞 HTTP 响应）；请求体覆盖项目默认画幅
+      const resolvedAspect = pipelineAspectRatioFromProjectDefault(
+        defaultAspectRatio ?? project.aspectRatio
+      )
+
       executePipelineJob(job.id, {
         projectId,
         idea,
         targetEpisodes,
         targetDuration,
-        defaultAspectRatio: defaultAspectRatio || '9:16',
+        defaultAspectRatio: resolvedAspect,
         defaultResolution: defaultResolution || '720p'
       }).catch(error => {
         console.error(`Pipeline Job ${job.id} failed:`, error)

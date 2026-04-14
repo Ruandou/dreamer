@@ -31,6 +31,9 @@ model Project {
   description  String?
   synopsis     String?
   storyContext String?  @db.Text
+  /// 项目画幅（文生图尺寸、新建场次、导入等；如 9:16、16:9、1:1、4:3、3:4、21:9）
+  /// DB 列沿用 `defaultAspectRatio`，避免已有库改列名丢数据；新库亦同。
+  aspectRatio String? @map("defaultAspectRatio")
   userId       String
   user         User     @relation(fields: [userId], references: [id])
   visualStyle  String[] @default([])

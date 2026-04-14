@@ -4,10 +4,24 @@ import {
   imageEditModelUsesGuidanceScale,
   normalizeArkImageSize,
   ARK_IMAGE_MIN_TOTAL_PIXELS,
-  extractImageCostFromArkResponse
+  extractImageCostFromArkResponse,
+  arkImageSizeFromProjectAspectRatio
 } from '../src/services/image-generation.js'
 
 describe('image-generation', () => {
+  describe('arkImageSizeFromProjectAspectRatio', () => {
+    it('maps 9:16 to portrait size meeting Ark min pixels', () => {
+      expect(arkImageSizeFromProjectAspectRatio('9:16')).toBe('1440x2560')
+    })
+    it('maps 16:9 and 1:1', () => {
+      expect(arkImageSizeFromProjectAspectRatio('16:9')).toBe('2560x1440')
+      expect(arkImageSizeFromProjectAspectRatio('1:1')).toBe('1920x1920')
+    })
+    it('falls back for garbage', () => {
+      expect(arkImageSizeFromProjectAspectRatio('bad')).toBe('1440x2560')
+    })
+  })
+
   describe('normalizeArkImageSize', () => {
     it('bumps 1024x1024 to 1920x1920 (below Ark min total pixels)', () => {
       expect(normalizeArkImageSize('1024x1024')).toBe('1920x1920')

@@ -9,7 +9,8 @@ const {
   mockSceneDeleteMany,
   mockSceneCreate,
   mockShotCreate,
-  mockProjectFindFirst
+  mockProjectFindFirst,
+  mockProjectFindUnique
 } = vi.hoisted(() => {
   return {
     mockCharacterCreate: vi.fn(),
@@ -19,7 +20,8 @@ const {
     mockSceneDeleteMany: vi.fn(),
     mockSceneCreate: vi.fn(),
     mockShotCreate: vi.fn(),
-    mockProjectFindFirst: vi.fn()
+    mockProjectFindFirst: vi.fn(),
+    mockProjectFindUnique: vi.fn()
   }
 })
 
@@ -42,7 +44,8 @@ vi.mock('../src/index.js', () => ({
       create: mockShotCreate
     },
     project: {
-      findFirst: mockProjectFindFirst
+      findFirst: mockProjectFindFirst,
+      findUnique: mockProjectFindUnique
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()
@@ -55,6 +58,7 @@ import { importParsedData, type ParsedScript } from '../src/services/importer.js
 describe('Importer Service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockProjectFindUnique.mockResolvedValue({ aspectRatio: '9:16' })
   })
 
   describe('importParsedData', () => {

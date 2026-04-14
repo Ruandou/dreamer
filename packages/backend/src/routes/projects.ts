@@ -9,6 +9,7 @@ import {
   hasConcurrentOutlinePipelineJob,
   getActiveOutlinePipelineJob
 } from '../services/project-script-jobs.js'
+import { normalizeProjectDefaultAspectRatio } from '../lib/project-aspect.js'
 
 export async function projectRoutes(fastify: FastifyInstance) {
   // List projects
@@ -29,15 +30,24 @@ export async function projectRoutes(fastify: FastifyInstance) {
   )
 
   // Create project
-  fastify.post<{ Body: { name: string; description?: string } }>(
+  fastify.post<{
+    Body: { name: string; description?: string; aspectRatio?: string }
+  }>(
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const user = (request as any).user
-      const { name, description } = request.body
+      const { name, description, aspectRatio } = request.body
 
       const project = await prisma.project.create({
-        data: { name, description, userId: user.id }
+        data: {
+          name,
+          description,
+          userId: user.id,
+          ...(aspectRatio !== undefined && {
+            aspectRatio: normalizeProjectDefaultAspectRatio(aspectRatio)
+          })
+        }
       })
 
       return reply.status(201).send(project)
@@ -291,11 +301,12 @@ export async function projectRoutes(fastify: FastifyInstance) {
     reply: FastifyReply
   ) {
     const user = (request as any).user as { id: string }
-    const { name, description, synopsis, visualStyle } = request.body as {
+    const { name, description, synopsis, visualStyle, aspectRatio } = request.body as {
       name?: string
       description?: string
       synopsis?: string | null
       visualStyle?: string[]
+      aspectRatio?: string
     }
 
     const project = await prisma.project.findFirst({
@@ -316,6 +327,12 @@ export async function projectRoutes(fastify: FastifyInstance) {
       }
       data.visualStyle = visualStyle
     }
+    if (aspectRatio !== undefined) {
+      if (typeof aspectRatio !== 'string') {
+        return reply.status(400).send({ error: 'aspectRatio 须为字符串' })
+      }
+      data.aspectRatio = normalizeProjectDefaultAspectRatio(aspectRatio)
+    }
 
     if (Object.keys(data).length === 0) {
       return project
@@ -335,6 +352,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
       description?: string
       synopsis?: string | null
       visualStyle?: string[]
+      aspectRatio?: string
     }
   }>(
     '/:id',
@@ -349,6 +367,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
       description?: string
       synopsis?: string | null
       visualStyle?: string[]
+      aspectRatio?: string
     }
   }>(
     '/:id',

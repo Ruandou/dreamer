@@ -23,7 +23,8 @@ export function useSSE() {
     const token = localStorage.getItem('token')
     if (!token) return
 
-    eventSource = new EventSource(`/api/sse`)
+    // EventSource 无法设置 Authorization；后端 sse 插件从 query.subscribe 解析 JWT（见 packages/backend/src/plugins/sse.ts）
+    eventSource = new EventSource(`/api/sse?subscribe=${encodeURIComponent(token)}`)
 
     eventSource.addEventListener('connected', () => {
       connected.value = true

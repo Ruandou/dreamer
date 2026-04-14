@@ -15,6 +15,7 @@ const {
   mockTakeUpdate,
   mockTakeFindMany,
   mockEpisodeFindFirst,
+  mockEpisodeFindUnique,
   mockVerifySceneOwnership,
   mockVerifyEpisodeOwnership
 } = vi.hoisted(() => {
@@ -32,6 +33,7 @@ const {
     mockTakeUpdate: vi.fn(),
     mockTakeFindMany: vi.fn(),
     mockEpisodeFindFirst: vi.fn(),
+    mockEpisodeFindUnique: vi.fn(),
     mockVerifySceneOwnership: vi.fn().mockResolvedValue(true),
     mockVerifyEpisodeOwnership: vi.fn().mockResolvedValue(true)
   }
@@ -76,7 +78,8 @@ vi.mock('../src/index.js', () => ({
       findMany: mockTakeFindMany
     },
     episode: {
-      findFirst: mockEpisodeFindFirst
+      findFirst: mockEpisodeFindFirst,
+      findUnique: mockEpisodeFindUnique
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()
@@ -187,6 +190,11 @@ describe('Scene Routes', () => {
         sceneNum: 2,
         description: 'New scene'
       }
+      mockEpisodeFindUnique.mockResolvedValue({
+        id: 'ep-1',
+        projectId: 'p1',
+        project: { aspectRatio: '9:16' }
+      })
       mockSceneCreate.mockResolvedValue(newScene)
       mockShotCreate.mockResolvedValue({ id: 'shot-1' })
 

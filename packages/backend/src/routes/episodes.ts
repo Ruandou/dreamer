@@ -298,7 +298,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
                 timeOfDay: sc.timeOfDay,
                 description: sc.description || `${sc.location} - ${sc.timeOfDay}`,
                 duration: 5000,
-                aspectRatio: '9:16',
+                aspectRatio: project?.aspectRatio ?? '9:16',
                 visualStyle: [],
                 status: 'pending'
               }

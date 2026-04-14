@@ -1,7 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { NCard, NForm, NFormItem, NInput, NButton, NSpace, useMessage, NCheckboxGroup, NCheckbox } from 'naive-ui'
+import {
+  NCard,
+  NForm,
+  NFormItem,
+  NInput,
+  NButton,
+  NSpace,
+  useMessage,
+  NCheckboxGroup,
+  NCheckbox,
+  NSelect
+} from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
 import { useEpisodeStore } from '@/stores/episode'
 
@@ -16,6 +27,16 @@ const name = ref('')
 const description = ref('')
 const synopsis = ref('')
 const visualStyle = ref<string[]>([])
+const aspectRatio = ref<string>('9:16')
+
+const aspectRatioOptions = [
+  { label: '9:16 竖屏（短剧常用）', value: '9:16' },
+  { label: '16:9 横屏', value: '16:9' },
+  { label: '1:1 方形', value: '1:1' },
+  { label: '4:3', value: '4:3' },
+  { label: '3:4', value: '3:4' },
+  { label: '21:9 超宽', value: '21:9' }
+]
 
 const styleOptions = [
   { label: '真人写实', value: 'realistic' },
@@ -33,6 +54,7 @@ function hydrate() {
   description.value = p.description || ''
   synopsis.value = p.synopsis || ''
   visualStyle.value = [...(p.visualStyle || [])]
+  aspectRatio.value = p.aspectRatio || '9:16'
   const drafts: Record<string, string> = {}
   for (const ep of p.episodes || []) {
     drafts[ep.id] = ep.synopsis || ''
@@ -61,7 +83,8 @@ async function saveProject() {
       name: name.value,
       description: description.value || undefined,
       synopsis: synopsis.value || undefined,
-      visualStyle: visualStyle.value
+      visualStyle: visualStyle.value,
+      aspectRatio: aspectRatio.value
     })
     message.success('项目信息已保存')
     await projectStore.getProject(projectId.value)
@@ -97,6 +120,14 @@ async function saveEpisodeSynopsis(episodeId: string) {
         </NFormItem>
         <NFormItem label="故事梗概">
           <NInput v-model:value="synopsis" type="textarea" placeholder="全剧梗概" :rows="4" />
+        </NFormItem>
+        <NFormItem label="画幅（文生图、新建场次、剧本导入等统一使用）">
+          <NSelect
+            v-model:value="aspectRatio"
+            :options="aspectRatioOptions"
+            placeholder="选择画幅"
+            style="max-width: 360px"
+          />
         </NFormItem>
         <NFormItem label="视觉风格（解析剧本前须至少选一项）">
           <NCheckboxGroup v-model:value="visualStyle">

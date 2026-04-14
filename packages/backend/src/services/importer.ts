@@ -1,4 +1,5 @@
 import { prisma } from '../index.js'
+import { normalizeProjectDefaultAspectRatio } from '../lib/project-aspect.js'
 
 export interface ParsedCharacter {
   name: string
@@ -35,6 +36,12 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
     charactersCreated: 0,
     scenesCreated: 0
   }
+
+  const projectRow = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { aspectRatio: true }
+  })
+  const sceneAspectRatio = normalizeProjectDefaultAspectRatio(projectRow?.aspectRatio)
 
   for (const char of parsed.characters) {
     await prisma.character.create({
@@ -74,7 +81,7 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
             sceneNum: sc.sceneNum,
             description: sc.description,
             duration: 5000,
-            aspectRatio: '9:16',
+            aspectRatio: sceneAspectRatio,
             visualStyle: [],
             status: 'pending'
           }
@@ -109,7 +116,7 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
             sceneNum: sc.sceneNum,
             description: sc.description,
             duration: 5000,
-            aspectRatio: '9:16',
+            aspectRatio: sceneAspectRatio,
             visualStyle: [],
             status: 'pending'
           }

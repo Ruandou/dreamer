@@ -7,6 +7,7 @@
  * 故默认与过小尺寸会规范化为 `1920x1920`；`adaptive` 在部分模型上可能低于下限，一并提升。
  */
 import { uploadFile, generateFileKey } from './storage.js'
+import { normalizeProjectDefaultAspectRatio } from '../lib/project-aspect.js'
 
 const ARK_API_KEY = process.env.ARK_API_KEY || ''
 const ARK_API_URL = process.env.ARK_API_URL || 'https://ark.cn-beijing.volces.com/api/v3'
@@ -51,6 +52,21 @@ export function normalizeArkImageSize(size: string | undefined): string {
   return DEFAULT_ARK_IMAGE_SIZE
 }
 
+/** 按项目默认画幅得到方舟 `size`（WxH），满足总像素下限 */
+export function arkImageSizeFromProjectAspectRatio(aspectRatio: string | undefined | null): string {
+  const r = normalizeProjectDefaultAspectRatio(aspectRatio)
+  const map: Record<string, string> = {
+    '9:16': '1440x2560',
+    '16:9': '2560x1440',
+    '1:1': '1920x1920',
+    '4:3': '2220x1665',
+    '3:4': '1665x2220',
+    '21:9': '4410x1890'
+  }
+  const raw = map[r]
+  return raw ? normalizeArkImageSize(raw) : normalizeArkImageSize(DEFAULT_ARK_IMAGE_SIZE)
+}
+
 function getAuthHeaders(): Record<string, string> {
   if (!ARK_API_KEY) {
     throw new ArkImageError('未配置 ARK_API_KEY，无法调用方舟图片接口')
@@ -65,6 +81,8 @@ export interface TextToImageOptions {
   size?: string
   n?: number
   model?: string
+  /** 默认 false，与编辑接口一致，避免方舟返回带平台水印的图 */
+  watermark?: boolean
 }
 
 export interface ImageEditOptions {
@@ -200,7 +218,8 @@ export async function generateTextToImage(
     prompt,
     size: normalizeArkImageSize(options.size),
     n: options.n ?? 1,
-    response_format: 'url'
+    response_format: 'url',
+    watermark: options.watermark ?? false
   }
   const json = await postImagesGenerations(body)
   return {

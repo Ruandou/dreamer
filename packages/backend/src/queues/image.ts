@@ -4,7 +4,8 @@ import type { ImageGenerationJobData } from '@dreamer/shared/types'
 import { prisma } from '../index.js'
 import {
   generateTextToImageAndPersist,
-  generateImageEditAndPersist
+  generateImageEditAndPersist,
+  arkImageSizeFromProjectAspectRatio
 } from '../services/image-generation.js'
 import { sendProjectUpdate } from '../plugins/sse.js'
 
@@ -42,10 +43,18 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
     const { userId, projectId } = data
     console.log(`[image-generation] job ${job.id} kind=${data.kind}`)
 
+    const projectRow = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { aspectRatio: true }
+    })
+    const imageSize = arkImageSizeFromProjectAspectRatio(projectRow?.aspectRatio)
+
     try {
       switch (data.kind) {
         case 'character_base_create': {
-          const { url: avatarUrl, imageCost } = await generateTextToImageAndPersist(data.prompt)
+          const { url: avatarUrl, imageCost } = await generateTextToImageAndPersist(data.prompt, {
+            size: imageSize
+          })
           const maxOrder = await prisma.characterImage.aggregate({
             where: { characterId: data.characterId, parentId: null },
             _max: { order: true }
@@ -71,7 +80,9 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
           return { characterImageId: image.id, imageCost: imageCost ?? null }
         }
         case 'character_base_regenerate': {
-          const { url: avatarUrl, imageCost } = await generateTextToImageAndPersist(data.prompt)
+          const { url: avatarUrl, imageCost } = await generateTextToImageAndPersist(data.prompt, {
+            size: imageSize
+          })
           const updated = await prisma.characterImage.update({
             where: { id: data.characterImageId },
             data: { avatarUrl, prompt: data.prompt, imageCost: imageCost ?? null }
@@ -89,7 +100,7 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
           const { url: avatarUrl, imageCost } = await generateImageEditAndPersist(
             data.referenceImageUrl,
             data.editPrompt,
-            { strength: data.strength ?? 0.35 }
+            { strength: data.strength ?? 0.35, size: imageSize }
           )
           const updated = await prisma.characterImage.update({
             where: { id: data.characterImageId },
@@ -108,7 +119,7 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
           const { url: avatarUrl, imageCost } = await generateImageEditAndPersist(
             data.referenceImageUrl,
             data.editPrompt,
-            { strength: data.strength ?? 0.35 }
+            { strength: data.strength ?? 0.35, size: imageSize }
           )
           const maxOrder = await prisma.characterImage.aggregate({
             where: { characterId: data.characterId, parentId: data.parentImageId },
@@ -136,7 +147,9 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
           return { characterImageId: image.id, imageCost: imageCost ?? null }
         }
         case 'location_establishing': {
-          const { url: imageUrl, imageCost } = await generateTextToImageAndPersist(data.prompt)
+          const { url: imageUrl, imageCost } = await generateTextToImageAndPersist(data.prompt, {
+            size: imageSize
+          })
           const updated = await prisma.location.update({
             where: { id: data.locationId },
             data: { imageUrl, imageCost: imageCost ?? null }

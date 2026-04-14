@@ -85,13 +85,21 @@ export async function sceneRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
+      const episode = await prisma.episode.findUnique({
+        where: { id: episodeId },
+        include: { project: { select: { aspectRatio: true } } }
+      })
+      if (!episode) {
+        return reply.status(404).send({ error: 'Episode not found' })
+      }
+
       const scene = await prisma.scene.create({
         data: {
           episodeId,
           sceneNum,
           description: description ?? '',
           duration: 5000,
-          aspectRatio: '9:16',
+          aspectRatio: episode.project.aspectRatio ?? '9:16',
           visualStyle: [],
           status: 'pending'
         }
