@@ -129,7 +129,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="import-page">
+  <div class="import-page page-shell page-shell--narrow">
     <div class="import-container">
       <!-- Header -->
       <header class="import-header">
@@ -311,14 +311,8 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.import-page {
-  min-height: 100vh;
-  padding: var(--spacing-2xl);
-  background: var(--color-bg-base);
-}
-
 .import-container {
-  max-width: 700px;
+  width: 100%;
   margin: 0 auto;
 }
 

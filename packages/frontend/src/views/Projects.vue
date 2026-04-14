@@ -177,7 +177,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
 </script>
 
 <template>
-  <div class="projects-page">
+  <div class="projects-page page-shell">
     <!-- Header -->
     <header class="projects-header">
       <div class="projects-header__info">
@@ -307,12 +307,6 @@ const handleDropdownSelect = (key: string, projectId: string) => {
 </template>
 
 <style scoped>
-.projects-page {
-  min-height: 100vh;
-  padding: var(--spacing-lg);
-  background: var(--color-bg-base);
-}
-
 .projects-header {
   display: flex;
   justify-content: space-between;

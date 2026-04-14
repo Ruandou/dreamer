@@ -68,18 +68,67 @@ function extractJsonObject(text: string): string {
   return t
 }
 
-/** 模型返回的场地名与库内名称对齐（去首尾空白、压缩连续空格） */
+/** 去掉模型爱加的场景前缀，便于与库内场地名对齐 */
+function stripLocationNameNoise(s: string): string {
+  return s
+    .replace(/^第[一二三四五六七八九十百千\d]+场[：:\s]*/u, '')
+    .replace(/^(场景|内景|外景|场地|地点)[：:\s]*/u, '')
+    .trim()
+}
+
+/**
+ * 文生图 API（如火山方舟）常对「审讯室」「刑讯」等字面触发审核；落库前做中性化替换，不改变布景意图。
+ * 较长词优先替换，避免子串残留。
+ */
+export function sanitizeLocationImagePromptForImageApi(text: string): string {
+  let s = text
+  const pairs: [string, string][] = [
+    ['刑讯室', '会谈室'],
+    ['审讯室', '会谈室'],
+    ['看守所', '院落建筑'],
+    ['禁闭室', '小房间'],
+    ['关押室', '封闭房间'],
+    ['羁押室', '等候室'],
+    ['留置室', '等候室'],
+    ['监狱', '封闭建筑内部'],
+    ['刑讯', '问话'],
+    ['审讯', '会谈']
+  ]
+  for (const [from, to] of pairs) {
+    if (s.includes(from)) s = s.split(from).join(to)
+  }
+  return s
+}
+
+/** 模型返回的场地名与库内名称对齐（空白、句末标点、常见前缀） */
 function resolveDbLocationName(dbNames: readonly string[], aiName: string | undefined): string | null {
   if (!aiName) return null
-  const t = aiName.trim()
-  if (!t) return null
-  if (dbNames.includes(t)) return t
   const collapsed = (s: string) => s.replace(/\s+/g, ' ').trim()
-  const ct = collapsed(t)
-  for (const n of dbNames) {
-    if (collapsed(n) === ct) return n
+  const stripTrailingPeriod = (s: string) => collapsed(s).replace(/[.。．]+$/u, '')
+
+  const tryOne = (raw: string): string | null => {
+    const t = collapsed(raw)
+    if (!t) return null
+    if (dbNames.includes(t)) return t
+    const ct = collapsed(t)
+    for (const n of dbNames) {
+      if (collapsed(n) === ct) return n
+    }
+    const nt = stripTrailingPeriod(t)
+    for (const n of dbNames) {
+      if (stripTrailingPeriod(n) === nt) return n
+    }
+    const stripped = stripLocationNameNoise(t)
+    if (stripped !== t) {
+      const st = stripTrailingPeriod(stripped)
+      for (const n of dbNames) {
+        if (stripTrailingPeriod(n) === st || collapsed(n) === collapsed(stripped)) return n
+      }
+    }
+    return null
   }
-  return null
+
+  return tryOne(aiName)
 }
 
 export async function applyScriptVisualEnrichment(projectId: string, script: ScriptContent): Promise<void> {
@@ -87,9 +136,14 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
     where: { id: projectId },
     select: { userId: true, visualStyle: true }
   })
-  const visualLog: ModelCallLogContext | undefined = projectRow
-    ? { userId: projectRow.userId, projectId, op: 'script_visual_enrichment' }
-    : undefined
+  if (!projectRow) {
+    throw new Error('视觉补全失败：项目不存在，无法写入模型审计日志与定场/定妆提示词')
+  }
+  const visualLog: ModelCallLogContext = {
+    userId: projectRow.userId,
+    projectId,
+    op: 'script_visual_enrichment'
+  }
 
   const locations = await prisma.location.findMany({
     where: { projectId, deletedAt: null },
@@ -102,7 +156,7 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
   })
 
   const projectVisualStyleLine =
-    (projectRow?.visualStyle || []).filter(Boolean).join('、') || '（未指定，定场图第4段可写通用电影级画质词）'
+    (projectRow.visualStyle || []).filter(Boolean).join('、') || '（未指定，定场图第4段可写通用电影级画质词）'
 
   const locationLines = locations
     .map((l) => {
@@ -115,12 +169,16 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
     .map((c) => `${c.name} | ${(c.description || '').slice(0, 200)}`)
     .join('\n')
 
+  console.log(
+    `[script_visual_enrichment] 即将请求 DeepSeek（落库 op=script_visual_enrichment） projectId=${projectId}`
+  )
   const { jsonText } = await fetchScriptVisualEnrichmentJson(
     {
       scriptSummary: `${script.title}\n${script.summary}`,
       locationLines,
       characterLines,
-      projectVisualStyleLine
+      projectVisualStyleLine,
+      exactLocationNames: locations.map((l) => l.name)
     },
     visualLog
   )
@@ -146,8 +204,9 @@ export async function applyScriptVisualEnrichment(projectId: string, script: Scr
   let locationPromptWrites = 0
   if (Array.isArray(payload.locations)) {
     for (const loc of payload.locations) {
-      const prompt = loc?.imagePrompt?.trim()
-      if (!prompt) continue
+      const raw = loc?.imagePrompt?.trim()
+      if (!raw) continue
+      const prompt = sanitizeLocationImagePromptForImageApi(raw)
       const resolvedName = resolveDbLocationName(dbLocationNames, loc?.name)
       if (!resolvedName) continue
       const r = await prisma.location.updateMany({

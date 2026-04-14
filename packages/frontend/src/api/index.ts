@@ -351,6 +351,8 @@ export async function getModelApiCalls(q?: {
   model?: string
   op?: string
   projectId?: string
+  /** completed | failed | processing */
+  status?: string
 }) {
   const params = new URLSearchParams()
   if (q?.limit != null) params.set('limit', String(q.limit))
@@ -358,6 +360,7 @@ export async function getModelApiCalls(q?: {
   if (q?.model?.trim()) params.set('model', q.model.trim())
   if (q?.op?.trim()) params.set('op', q.op.trim())
   if (q?.projectId?.trim()) params.set('projectId', q.projectId.trim())
+  if (q?.status?.trim()) params.set('status', q.status.trim())
   const res = await api.get<{ items: ModelApiCallRow[]; limit: number; offset: number }>(
     `/model-api-calls?${params.toString()}`
   )

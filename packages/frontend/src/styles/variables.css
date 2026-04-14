@@ -82,6 +82,12 @@
   --transition-normal: 250ms ease;
   --transition-slow: 350ms ease;
 
+  /* Page layout（与 App.vue app-main 配合，列表/表单页共用） */
+  --page-max-width: 1400px;
+  --page-max-width-narrow: 800px;
+  --page-padding-x: var(--spacing-xl);
+  --page-padding-y: var(--spacing-lg);
+
   /* Z-index */
   --z-dropdown: 1000;
   --z-sticky: 1020;

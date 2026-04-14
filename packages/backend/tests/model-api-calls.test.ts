@@ -72,8 +72,24 @@ describe('Model API calls routes', () => {
         where: {
           AND: expect.arrayContaining([
             { userId: 'user-1' },
-            { requestParams: { contains: '"op":"script_visual_enrichment"' } }
+            { requestParams: { contains: 'script_visual_enrichment' } }
           ])
+        }
+      })
+    )
+  })
+
+  it('GET / with status=failed adds status filter', async () => {
+    mockFindMany.mockResolvedValue([])
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/model-api-calls?status=failed'
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: expect.arrayContaining([{ userId: 'user-1' }, { status: 'failed' }])
         }
       })
     )

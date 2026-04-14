@@ -54,10 +54,29 @@ a:hover {
   color: var(--color-primary-hover);
 }
 
-/* Page Container */
+/* Page Container（旧名保留，与 page-shell 对齐） */
 .page-container {
-  min-height: 100vh;
-  padding: var(--spacing-lg);
+  min-height: 100%;
+  padding: var(--page-padding-y) var(--page-padding-x);
+  box-sizing: border-box;
+}
+
+/**
+ * 统一页面壳：居中 max-width、水平内边距、背景。
+ * 登录后子路由挂在 app-main 内，请用 min-height:100% + 本类，避免再写 100vh 造成双滚动条。
+ */
+.page-shell {
+  width: 100%;
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: var(--page-padding-y) var(--page-padding-x);
+  background: var(--color-bg-base);
+}
+
+.page-shell--narrow {
+  max-width: var(--page-max-width-narrow);
 }
 
 .page-header {

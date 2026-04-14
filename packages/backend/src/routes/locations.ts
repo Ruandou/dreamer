@@ -4,6 +4,7 @@ import { uploadFile, generateFileKey } from '../services/storage.js'
 import { verifyLocationOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { imageQueue } from '../queues/image.js'
+import { sanitizeLocationImagePromptForImageApi } from '../services/script-visual-enrich.js'
 
 const LOCATION_IMAGE_UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 
@@ -79,13 +80,13 @@ export async function locationRoutes(fastify: FastifyInstance) {
       const override = promptOverrides?.[location.id]
       const effectiveRaw =
         override !== undefined ? String(override).trim() : (location.imagePrompt || '').trim()
-      if (override !== undefined && effectiveRaw !== (location.imagePrompt || '').trim()) {
+      const effective = sanitizeLocationImagePromptForImageApi(effectiveRaw)
+      if (effective && effective !== (location.imagePrompt || '').trim()) {
         await prisma.location.update({
           where: { id: location.id },
-          data: { imagePrompt: effectiveRaw || null }
+          data: { imagePrompt: effective }
         })
       }
-      const effective = effectiveRaw
       if (!effective) {
         skipped.push({ id: location.id, name: location.name, reason: '缺少定场图提示词' })
         continue
@@ -269,17 +270,17 @@ export async function locationRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Location not found' })
       }
 
-      let effective =
+      const effectiveRaw =
         typeof override === 'string' && override.trim()
           ? override.trim()
           : (location.imagePrompt || '').trim()
+      const effective = sanitizeLocationImagePromptForImageApi(effectiveRaw)
 
-      if (typeof override === 'string' && override.trim()) {
+      if (effective && effective !== (location.imagePrompt || '').trim()) {
         await prisma.location.update({
           where: { id: locationId },
-          data: { imagePrompt: override.trim() }
+          data: { imagePrompt: effective }
         })
-        effective = override.trim()
       }
 
       if (!effective) {

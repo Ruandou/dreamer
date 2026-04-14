@@ -448,6 +448,7 @@ export const SCRIPT_VISUAL_ENRICH_LOCATION_RULES_IN_USER = [
   '2）光影与氛围：依「时间」写光线方向、硬/柔与色温、情绪氛围；时间未指定时可依描述推断或使用中性光；',
   '3）构图与视角：推荐景别与角度（如广角全景、平视中景）；',
   '4）风格与画质：融入下方「项目视觉风格」；并含画质词（如电影质感、8K超高清等）。',
+  '【文生图合规】商业化文生图 API 常对「审讯室」「刑讯」「看守所」「监狱」「羁押」等执法/刑事监禁类字面触发审核或拒图。若剧本为警务、刑侦场景，定场图只写建筑与光影：双面玻璃隔间、会谈室、办公问询区、玻璃对侧空房间、冷色涂料墙面、监控室外观等中性置景词；避免刑讯、关押、暴力执法暗示；不写人物与剧情动作。',
   'characters 的定妆规则以本消息下文为准；勿用定场图的「无人」约束去改写角色定妆。'
 ].join('\n')
 
@@ -456,8 +457,19 @@ export function buildScriptVisualEnrichmentUserContent(input: {
   locationLines: string
   characterLines: string
   projectVisualStyleLine: string
+  /** 与库内 Location.name 完全一致的可复制列表，减少模型改写场地名导致无法落库 */
+  exactLocationNames?: string[]
 }): string {
   const style = input.projectVisualStyleLine.trim() || '（未指定）'
+  const names = input.exactLocationNames?.filter(Boolean) ?? []
+  const locationNameBlock =
+    names.length > 0
+      ? [
+          '【场地名白名单】locations[].name 必须逐字等于下列某一行（整行复制到 JSON 的 name 字段；勿改写、勿缩写、勿加「场景」「内景」等前缀；括号与标点须保留）：',
+          ...names.map((n) => `- ${n.replace(/\s+/g, ' ').trim()}`),
+          ''
+        ]
+      : []
   return [
     '根据下列剧本梗概与实体列表，输出 **仅一段合法 JSON**（不要 markdown 代码块），结构为：',
     '{"locations":[{"name":"场地名","imagePrompt":"中文定场图提示词"}],',
@@ -465,10 +477,11 @@ export function buildScriptVisualEnrichmentUserContent(input: {
     '',
     SCRIPT_VISUAL_ENRICH_LOCATION_RULES_IN_USER,
     '',
+    ...locationNameBlock,
     '【项目视觉风格】用于 locations 每条 imagePrompt 的第4段（风格与画质），须自然融入：',
     style,
     '',
-    'locations 中每条 imagePrompt 须符合上文「定场图」四段式；locations 每条 name 与下方场地列表第一列名称必须一致；整段响应仍为唯一 JSON 对象。',
+    'locations 中每条 imagePrompt 须符合上文「定场图」四段式；locations 每条 name 必须使用上文白名单（若有）或下文场地列表第一列名称；整段响应仍为唯一 JSON 对象。',
     '',
     '规则（角色 images 数组顺序很重要）：',
     '1. 每个角色的 images 里 **必须先写至少 1 条 type 为 base 的定妆**（可与默认基础形象对应），再写衍生。',
@@ -494,14 +507,17 @@ export async function fetchScriptVisualEnrichmentJson(
     characterLines: string
     /** 项目视觉风格（顿号连接），供定场图第4段融入 */
     projectVisualStyleLine?: string
+    /** 当前项目场地库名称，供白名单约束，降低模型改写名导致 imagePrompt 不落库 */
+    exactLocationNames?: string[]
   },
   log?: ModelCallLogContext
 ): Promise<{ jsonText: string; cost: DeepSeekCost }> {
-  const deepseek = getDeepSeekClient()
   const projectVisualStyleLine = (input.projectVisualStyleLine || '').trim() || '（未指定）'
-  const user = buildScriptVisualEnrichmentUserContent({ ...input, projectVisualStyleLine })
-
+  /** 构建 user、client、请求、落库 全在同一段 try，避免中途抛错时未写入 ModelApiCall */
+  let user = ''
   try {
+    user = buildScriptVisualEnrichmentUserContent({ ...input, projectVisualStyleLine })
+    const deepseek = getDeepSeekClient()
     const completion = await deepseek.chat.completions.create({
       model: 'deepseek-chat',
       messages: [
@@ -527,7 +543,7 @@ export async function fetchScriptVisualEnrichmentJson(
   } catch (error: any) {
     await logDeepSeekChat(
       log,
-      user,
+      user || '（未能生成 user 提示词，可能在 buildScriptVisualEnrichmentUserContent 阶段失败）',
       {
         status: 'failed',
         errorMsg: error?.message || 'visual_enrichment'

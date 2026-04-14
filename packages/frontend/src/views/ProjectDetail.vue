@@ -156,35 +156,38 @@ const currentMenu = computed(() => {
       </div>
     </NLayoutSider>
 
-    <!-- Main Content -->
-    <NLayout content-style="padding: 0; background: var(--color-bg-base);">
-      <div v-if="parsePolling || parseJobStatus" class="parse-banner">
-        <NAlert type="info" :show-icon="false">
-          <template #header>正在解析剧本</template>
-          {{ parseJobStatus?.progressMeta?.message || '提取角色和场景，请稍候…' }}
-          <NProgress
-            v-if="parseJobStatus"
-            type="line"
-            :percentage="Math.min(100, parseJobStatus.progress || 0)"
-            class="parse-banner__progress"
-          />
-        </NAlert>
-      </div>
-      <!-- Top Bar -->
-      <header class="project-topbar">
-        <div class="project-topbar__left">
-          <h2 class="project-topbar__title">
-            {{ menuOptions.find(m => m.key === currentMenu)?.label }}
-          </h2>
-          <NTag v-if="projectStore.currentProject" size="small" round>
-            {{ projectStore.currentProject.name }}
-          </NTag>
+    <!-- Main Content：单列 flex，仅内容区滚动，避免与窗口双滚动条 -->
+    <NLayout
+      class="project-main"
+      content-style="padding: 0; background: var(--color-bg-base); display: flex; flex-direction: column; min-height: 0; flex: 1; height: 100%; overflow: hidden;"
+    >
+      <div class="project-main-column">
+        <div v-if="parsePolling || parseJobStatus" class="parse-banner">
+          <NAlert type="info" :show-icon="false">
+            <template #header>正在解析剧本</template>
+            {{ parseJobStatus?.progressMeta?.message || '提取角色和场景，请稍候…' }}
+            <NProgress
+              v-if="parseJobStatus"
+              type="line"
+              :percentage="Math.min(100, parseJobStatus.progress || 0)"
+              class="parse-banner__progress"
+            />
+          </NAlert>
         </div>
-      </header>
+        <header class="project-topbar">
+          <div class="project-topbar__left">
+            <h2 class="project-topbar__title">
+              {{ menuOptions.find(m => m.key === currentMenu)?.label }}
+            </h2>
+            <NTag v-if="projectStore.currentProject" size="small" round>
+              {{ projectStore.currentProject.name }}
+            </NTag>
+          </div>
+        </header>
 
-      <!-- Page Content -->
-      <div class="project-content">
-        <RouterView />
+        <div class="project-content">
+          <RouterView />
+        </div>
       </div>
     </NLayout>
   </NLayout>
@@ -196,6 +199,7 @@ const currentMenu = computed(() => {
   padding: 0;
   width: 100%;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .parse-banner :deep(.n-alert) {
@@ -212,7 +216,23 @@ const currentMenu = computed(() => {
 }
 
 .project-layout {
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.project-main {
+  min-height: 0;
+}
+
+.project-main-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
 }
 
 .project-sider {
@@ -307,6 +327,7 @@ const currentMenu = computed(() => {
   padding: var(--spacing-md) var(--spacing-lg);
   background: var(--color-bg-white);
   border-bottom: 1px solid var(--color-border-light);
+  flex-shrink: 0;
 }
 
 .project-topbar__left {
@@ -323,6 +344,9 @@ const currentMenu = computed(() => {
 
 .project-content {
   padding: var(--spacing-lg);
-  min-height: calc(100vh - 60px);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 </style>

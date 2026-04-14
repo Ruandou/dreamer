@@ -165,7 +165,7 @@ const formatBalance = (amount: number) => {
 </script>
 
 <template>
-  <div class="settings-page">
+  <div class="settings-page page-shell page-shell--narrow">
     <header class="settings-header">
       <div class="settings-header__left">
         <h1 class="settings-header__title">设置</h1>
@@ -303,12 +303,6 @@ const formatBalance = (amount: number) => {
 </template>
 
 <style scoped>
-.settings-page {
-  padding: var(--spacing-lg);
-  max-width: 800px;
-  margin: 0 auto;
-}
-
 .settings-header {
   display: flex;
   justify-content: space-between;
@@ -317,8 +311,8 @@ const formatBalance = (amount: number) => {
 }
 
 .settings-header__title {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
 }
 

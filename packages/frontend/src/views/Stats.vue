@@ -155,7 +155,7 @@ import { h } from 'vue'
 </script>
 
 <template>
-  <div class="stats-page">
+  <div class="stats-page page-shell">
     <!-- Header -->
     <header class="stats-header">
       <div class="stats-header__left">
@@ -352,12 +352,6 @@ import { h } from 'vue'
 </template>
 
 <style scoped>
-.stats-page {
-  min-height: 100vh;
-  padding: var(--spacing-lg);
-  background: var(--color-bg-base);
-}
-
 .stats-header {
   display: flex;
   justify-content: space-between;

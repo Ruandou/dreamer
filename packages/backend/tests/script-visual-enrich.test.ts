@@ -46,9 +46,19 @@ vi.mock('../src/index.js', () => ({
   }
 }))
 
-import { applyScriptVisualEnrichment } from '../src/services/script-visual-enrich.js'
+import {
+  applyScriptVisualEnrichment,
+  sanitizeLocationImagePromptForImageApi
+} from '../src/services/script-visual-enrich.js'
 
 const script = { title: 'T', summary: 'S', scenes: [] as any[] }
+
+describe('sanitizeLocationImagePromptForImageApi', () => {
+  it('replaces terms that often trigger image API moderation', () => {
+    expect(sanitizeLocationImagePromptForImageApi('对面是审讯室，旁有刑讯室')).toBe('对面是会谈室，旁有会谈室')
+    expect(sanitizeLocationImagePromptForImageApi('看守所外墙')).toBe('院落建筑外墙')
+  })
+})
 
 describe('applyScriptVisualEnrichment', () => {
   beforeEach(() => {
@@ -67,6 +77,27 @@ describe('applyScriptVisualEnrichment', () => {
     ])
   })
 
+  it('sanitizes image API–sensitive terms in location imagePrompt before save', async () => {
+    const longPrompt =
+      '空旷的单向玻璃观察室，映出对面空无一人的审讯室轮廓，室内有控制台。'
+    mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
+      jsonText: JSON.stringify({
+        locations: [{ name: '咖啡厅', imagePrompt: longPrompt }],
+        characters: []
+      })
+    })
+    mockLocationUpdateMany.mockResolvedValue({ count: 1 })
+
+    await applyScriptVisualEnrichment('p1', script)
+
+    expect(mockLocationUpdateMany).toHaveBeenCalledWith({
+      where: { projectId: 'p1', name: '咖啡厅', deletedAt: null },
+      data: {
+        imagePrompt: longPrompt.replace('审讯室', '会谈室')
+      }
+    })
+  })
+
   it('updates location imagePrompt from AI JSON', async () => {
     mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
       jsonText: JSON.stringify({
@@ -81,7 +112,8 @@ describe('applyScriptVisualEnrichment', () => {
     expect(mockFetchScriptVisualEnrichmentJson).toHaveBeenCalledWith(
       expect.objectContaining({
         projectVisualStyleLine: '电影感',
-        locationLines: expect.stringContaining('时间：日')
+        locationLines: expect.stringContaining('时间：日'),
+        exactLocationNames: ['咖啡厅']
       }),
       expect.anything()
     )
@@ -89,6 +121,23 @@ describe('applyScriptVisualEnrichment', () => {
     expect(mockLocationUpdateMany).toHaveBeenCalledWith({
       where: { projectId: 'p1', name: '咖啡厅', deletedAt: null },
       data: { imagePrompt: '温馨咖啡厅内景，暖光，木质桌椅' }
+    })
+  })
+
+  it('matches location name when model adds trailing period or scene prefix', async () => {
+    mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
+      jsonText: JSON.stringify({
+        locations: [{ name: '场景：咖啡厅。', imagePrompt: '内景' }],
+        characters: []
+      })
+    })
+    mockLocationUpdateMany.mockResolvedValue({ count: 1 })
+
+    await applyScriptVisualEnrichment('p1', script)
+
+    expect(mockLocationUpdateMany).toHaveBeenCalledWith({
+      where: { projectId: 'p1', name: '咖啡厅', deletedAt: null },
+      data: { imagePrompt: '内景' }
     })
   })
 

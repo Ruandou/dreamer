@@ -18,7 +18,12 @@ export async function logDeepSeekChat(
   result: { status: 'completed' | 'failed'; costCNY?: number; errorMsg?: string },
   options?: LogDeepSeekChatOptions
 ): Promise<void> {
-  if (!log) return
+  if (!log) {
+    console.warn(
+      '[model-api] DeepSeek 调用未写入 ModelApiCall：缺少 ModelCallLogContext（成功/失败均不落库）。请检查调用方是否传入 userId + op。'
+    )
+    return
+  }
   const sys = options?.systemMessage?.trim()
   const promptForLog = sys
     ? truncateForModelLog(`【system】\n${sys}\n\n【user】\n${userMessage}`)
@@ -32,5 +37,7 @@ export async function logDeepSeekChat(
     status: result.status,
     cost: result.costCNY ?? null,
     errorMsg: result.errorMsg
+      ? truncateForModelLog(String(result.errorMsg), 4000)
+      : undefined
   })
 }

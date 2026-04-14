@@ -58,7 +58,7 @@ export async function recordModelApiCall(input: RecordModelApiCallInput): Promis
       }
     })
   } catch (e) {
-    console.warn('[model-api] recordModelApiCall failed', e)
+    console.error('[model-api] recordModelApiCall failed（本条不会出现在模型日志页）', e)
   }
 }
 
@@ -142,16 +142,24 @@ export async function getApiCalls(userId: string, options?: {
   op?: string
   /** 筛选 requestParams.projectId */
   projectId?: string
+  /** 按状态：completed / failed / processing */
+  status?: string
   limit?: number
   offset?: number
 }) {
   const ands: Prisma.ModelApiCallWhereInput[] = [{ userId }]
   if (options?.model) ands.push({ model: options.model })
   if (options?.op?.trim()) {
-    ands.push({ requestParams: { contains: `"op":"${options.op.trim()}"` } })
+    // 子串匹配；连字符统一成下划线，避免搜 script-visual-enrichment 时与库内 op 不一致
+    const needle = options.op.trim().replace(/-/g, '_')
+    ands.push({ requestParams: { contains: needle } })
   }
   if (options?.projectId?.trim()) {
     ands.push({ requestParams: { contains: `"projectId":"${options.projectId.trim()}"` } })
+  }
+  const st = options?.status?.trim()
+  if (st && ['completed', 'failed', 'processing'].includes(st)) {
+    ands.push({ status: st })
   }
   return prisma.modelApiCall.findMany({
     where: { AND: ands },

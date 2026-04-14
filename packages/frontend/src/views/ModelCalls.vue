@@ -6,6 +6,7 @@ import {
   NButton,
   NSpace,
   NInput,
+  NSelect,
   NDataTable,
   NTag,
   NModal,
@@ -24,20 +25,29 @@ const items = ref<ModelApiCallRow[]>([])
 const filterOp = ref('')
 const filterProjectId = ref('')
 const filterModel = ref('')
+/** null 表示不筛状态 */
+const filterStatus = ref<'completed' | 'failed' | null>(null)
 
 const promptVisible = ref(false)
 const promptTitle = ref('')
 const promptBody = ref('')
 
+/** 与后端存库的 op 一致（下划线）；把连字符写成横杠时也能筛到 */
+function normalizeOpQuery(raw: string): string {
+  return raw.trim().replace(/-/g, '_')
+}
+
 async function load() {
   loading.value = true
   try {
+    const opRaw = filterOp.value.trim()
     const r = await getModelApiCalls({
-      limit: 100,
+      limit: 200,
       offset: 0,
-      op: filterOp.value.trim() || undefined,
+      op: opRaw ? normalizeOpQuery(opRaw) : undefined,
       projectId: filterProjectId.value.trim() || undefined,
-      model: filterModel.value.trim() || undefined
+      model: filterModel.value.trim() || undefined,
+      status: filterStatus.value ?? undefined
     })
     items.value = r.items
   } catch (e: unknown) {
@@ -137,13 +147,14 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="model-calls-page">
+  <div class="model-calls-page page-shell">
     <header class="model-calls-header">
-      <h1 class="model-calls-title">模型调用日志</h1>
+      <h1 class="page-title model-calls-title">模型调用日志</h1>
       <p class="model-calls-desc">
-        与终端 <code>[model-api]</code> 同源落库，可筛操作 <code>op</code>（如
-        <code>script_visual_enrichment</code>）、项目 ID、模型名。点击「提示词」查看完整内容（视觉补全含
-        <code>【system】</code> 与 <code>【user】</code>；新产生的记录才含完整 system）。
+        与终端 <code>[model-api]</code> 同源落库；失败记录也会写入（状态为
+        <code>failed</code>）。若页面上看不到任何失败，请看后端是否出现
+        <code>未写入 ModelApiCall：缺少 ModelCallLogContext</code>（表示调用未带审计上下文）。定场/定妆对应
+        <code>op=script_visual_enrichment</code>。
       </p>
     </header>
 
@@ -171,11 +182,41 @@ onMounted(load)
             style="width: 200px"
             @keyup.enter="load"
           />
+          <NSelect
+            v-model:value="filterStatus"
+            placeholder="状态"
+            clearable
+            style="width: 120px"
+            :options="[
+              { label: '成功', value: 'completed' },
+              { label: '失败', value: 'failed' }
+            ]"
+            @update:value="load"
+          />
           <NButton type="primary" :loading="loading" @click="load">查询</NButton>
+          <NButton
+            secondary
+            @click="
+              filterOp = 'script_visual_enrichment';
+              load()
+            "
+          >
+            定场/定妆
+          </NButton>
+          <NButton
+            secondary
+            @click="
+              filterOp = 'import_parse_script';
+              load()
+            "
+          >
+            导入解析
+          </NButton>
           <NButton @click="
             filterOp = '';
             filterProjectId = '';
             filterModel = '';
+            filterStatus = null;
             load()
           ">
             清空条件
@@ -213,17 +254,13 @@ onMounted(load)
 
 <style scoped>
 .model-calls-page {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 24px 20px 48px;
+  padding-bottom: var(--spacing-2xl);
 }
 .model-calls-header {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-lg);
 }
 .model-calls-title {
-  margin: 0 0 8px;
-  font-size: 1.35rem;
-  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
 }
 .model-calls-desc {
   margin: 0;

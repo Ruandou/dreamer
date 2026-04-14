@@ -480,7 +480,7 @@ watch(targetEpisodeCount, (v) => {
 </script>
 
 <template>
-  <div class="generate-page">
+  <div class="generate-page page-shell">
     <template v-if="projectId && !error">
       <div class="generate-toolbar">
         <NButton quaternary @click="handleBack">← 返回项目列表</NButton>
@@ -750,14 +750,6 @@ watch(targetEpisodeCount, (v) => {
 </template>
 
 <style scoped>
-.generate-page {
-  min-height: 100vh;
-  padding: var(--spacing-xl);
-  background: var(--color-bg-base);
-  max-width: 960px;
-  margin: 0 auto;
-}
-
 .generate-toolbar {
   display: flex;
   align-items: center;

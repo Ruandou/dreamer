@@ -441,7 +441,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="jobs-page">
+  <div class="jobs-page page-shell">
     <header class="jobs-header">
       <div>
         <h1>任务中心</h1>
@@ -535,12 +535,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.jobs-page {
-  min-height: 100vh;
-  padding: var(--spacing-lg);
-  background: var(--color-bg-base);
-}
-
 .jobs-header {
   display: flex;
   justify-content: space-between;

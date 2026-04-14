@@ -154,24 +154,28 @@ const themeOverrides = {
     <NMessageProvider>
       <NDialogProvider>
         <NNotificationProvider>
-          <!-- 顶部导航栏 -->
-          <header v-if="isLoggedIn" class="app-header">
-            <div class="app-header-left">
-              <h2 @click="router.push('/projects')" class="app-logo">🎭 AI短剧工作台</h2>
-            </div>
-            <div class="app-header-right">
-              <NDropdown :options="userMenuOptions" @select="handleUserMenuSelect">
-                <NButton quaternary size="large" style="display: flex; align-items: center; gap: 8px;">
-                  <NAvatar round size="small" :style="{ backgroundColor: '#6366f1', flexShrink: 0 }">
-                    {{ userName ? userName.charAt(0).toUpperCase() : '?' }}
-                  </NAvatar>
-                  {{ userName || '用户' }}
-                  <span style="opacity: 0.5; font-size: 12px;">▾</span>
-                </NButton>
-              </NDropdown>
-            </div>
-          </header>
-          <RouterView />
+          <div class="app-shell">
+            <!-- 顶部导航栏：高度参与 flex，避免子页再写 100vh 造成双滚动条 -->
+            <header v-if="isLoggedIn" class="app-header">
+              <div class="app-header-left">
+                <h2 @click="router.push('/projects')" class="app-logo">🎭 AI短剧工作台</h2>
+              </div>
+              <div class="app-header-right">
+                <NDropdown :options="userMenuOptions" @select="handleUserMenuSelect">
+                  <NButton quaternary size="large" style="display: flex; align-items: center; gap: 8px;">
+                    <NAvatar round size="small" :style="{ backgroundColor: '#6366f1', flexShrink: 0 }">
+                      {{ userName ? userName.charAt(0).toUpperCase() : '?' }}
+                    </NAvatar>
+                    {{ userName || '用户' }}
+                    <span style="opacity: 0.5; font-size: 12px;">▾</span>
+                  </NButton>
+                </NDropdown>
+              </div>
+            </header>
+            <main class="app-main">
+              <RouterView />
+            </main>
+          </div>
         </NNotificationProvider>
       </NDialogProvider>
     </NMessageProvider>
@@ -179,6 +183,19 @@ const themeOverrides = {
 </template>
 
 <style>
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .app-header {
   display: flex;
   justify-content: space-between;
@@ -186,8 +203,7 @@ const themeOverrides = {
   padding: 12px 24px;
   background: white;
   border-bottom: 1px solid #e5e7eb;
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
   z-index: 100;
 }
 

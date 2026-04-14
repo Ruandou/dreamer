@@ -475,11 +475,15 @@ describe('DeepSeek Service', () => {
         scriptSummary: 'S',
         locationLines: 'L',
         characterLines: 'C',
-        projectVisualStyleLine: '水墨'
+        projectVisualStyleLine: '水墨',
+        exactLocationNames: ['咖啡馆A', '天台']
       })
       expect(built).toContain('水墨')
       expect(built).toContain('【项目视觉风格】')
       expect(built).toContain('【定场图 imagePrompt】')
+      expect(built).toContain('【场地名白名单】')
+      expect(built).toContain('- 咖啡馆A')
+      expect(built).toContain('- 天台')
       expect(built).toMatch(/七分身/)
       expect(built).toMatch(/纯色影棚/)
       expect(built).toMatch(/保持该角色面部特征/)
