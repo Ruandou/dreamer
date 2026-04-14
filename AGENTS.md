@@ -1,5 +1,7 @@
 # AI短剧工作台 - 开发规则
 
+**编码风格与分层约定**（命名、模块化、错误处理、日志等）见 [docs/CODING_STANDARDS.md](docs/CODING_STANDARDS.md)。
+
 ## 环境变量加载
 
 **关键规则**：在 ESM 里，**所有** `import` 会先完成依赖解析；若写成「先 `config()` 再 `import` 业务路由」，路由链里的模块仍可能在 `dotenv` 之前执行，导致 `process.env.ARK_*` 等读为空。
