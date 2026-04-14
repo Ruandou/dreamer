@@ -12,7 +12,7 @@ const message = useMessage()
 // 统一任务类型
 interface Job {
   id: string
-  type: 'video' | 'import' | 'pipeline'
+  type: 'video' | 'import' | 'pipeline' | 'image'
   status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed'
   createdAt: string
   updatedAt: string
@@ -39,6 +39,22 @@ interface Job {
   progress?: number
   progressMeta?: { message?: string } | null
   stepResults?: any[]
+  // image-generation (BullMQ) fields
+  kind?: string
+  characterId?: string
+  characterImageId?: string
+  locationId?: string
+  returnvalue?: unknown
+}
+
+function imageKindLabel(kind: string | undefined): string {
+  const k = kind || ''
+  if (k === 'character_base_create') return '角色·新建定妆'
+  if (k === 'character_base_regenerate') return '角色·重生成'
+  if (k === 'character_derived_create') return '角色·衍生形象'
+  if (k === 'character_derived_regenerate') return '角色·衍生重生成'
+  if (k === 'location_establishing') return '场地·定场图'
+  return k || '图片'
 }
 
 /** PipelineJob.jobType → 任务中心「类型」列（仅中文，避免与步骤英文 id 混排） */
@@ -96,7 +112,8 @@ const columns: DataTableColumns<Job> = [
       }
       const typeMap: Record<string, { type: string; label: string }> = {
         video: { type: 'info', label: '🎬 视频' },
-        import: { type: 'warning', label: '📄 导入' }
+        import: { type: 'warning', label: '📄 导入' },
+        image: { type: 'success', label: '🖼️ 图片' }
       }
       const config = typeMap[row.type] || typeMap.video
       return h(NTag, { type: config.type as any, size: 'small' }, () => config.label)
@@ -119,6 +136,10 @@ const columns: DataTableColumns<Job> = [
       if (row.type === 'video') {
         return `场景 ${row.sceneNum}: ${(row.prompt || '').slice(0, 50)}${(row.prompt || '').length > 50 ? '...' : ''}`
       }
+      if (row.type === 'image') {
+        const proj = row.projectName ? `${row.projectName} · ` : ''
+        return `${proj}${imageKindLabel(row.kind)}`
+      }
       if (row.type === 'pipeline') {
         const proj = row.projectName ? `项目：${row.projectName}` : '未关联项目'
         const hint =
@@ -138,6 +159,9 @@ const columns: DataTableColumns<Job> = [
       if (row.type === 'video') {
         return row.model?.toUpperCase() || '-'
       }
+      if (row.type === 'image') {
+        return imageKindLabel(row.kind)
+      }
       if (row.type === 'pipeline') {
         // 该列语义是视频模型 / 导入篇幅；Pipeline 不适用，避免「模型/格式」下出现进度造成误解
         return '-'
@@ -152,6 +176,14 @@ const columns: DataTableColumns<Job> = [
     render(row) {
       if (row.type === 'video' && row.status === 'completed') {
         return row.cost ? `¥${row.cost.toFixed(4)}` : '-'
+      }
+      if (row.type === 'image' && row.status === 'completed') {
+        const rv = row.returnvalue as { imageCost?: number } | undefined
+        const c = rv && typeof rv.imageCost === 'number' ? rv.imageCost : null
+        return c != null ? `¥${c.toFixed(4)}` : '已完成'
+      }
+      if (row.type === 'image' && (row.status === 'processing' || row.status === 'queued')) {
+        return '生成中'
       }
       if (row.type === 'import' && row.status === 'completed') {
         const r = row.result || {}
@@ -221,6 +253,13 @@ const columns: DataTableColumns<Job> = [
           }, () => '查看')
         }
       }
+      if (row.type === 'image' && row.projectId) {
+        return h(NButton, {
+          size: 'small',
+          type: 'primary',
+          onClick: () => router.push(`/project/${row.projectId}/characters`)
+        }, () => '查看项目')
+      }
       if (row.type === 'import') {
         if (row.status === 'completed' && row.result?.projectId) {
           return h(NButton, {
@@ -243,6 +282,7 @@ const filteredJobs = computed(() => {
   if (activeTab.value === 'video') return jobs.value.filter(j => j.type === 'video')
   if (activeTab.value === 'import') return jobs.value.filter(j => j.type === 'import')
   if (activeTab.value === 'pipeline') return jobs.value.filter(j => j.type === 'pipeline')
+  if (activeTab.value === 'image') return jobs.value.filter(j => j.type === 'image')
   return jobs.value
 })
 
@@ -267,6 +307,9 @@ const fetchJobs = async () => {
     // 获取视频任务（需要项目ID列表）
     const projectRes = await api.get('/projects')
     const projects = projectRes.data.projects || projectRes.data || []
+    const projectNameById = new Map<string, string>(
+      projects.map((p: { id: string; name: string }) => [p.id, p.name])
+    )
     const videoJobs: Job[] = []
 
     for (const proj of projects) {
@@ -322,12 +365,33 @@ const fetchJobs = async () => {
       // 忽略 Pipeline 任务获取错误
     }
 
+    let imageJobs: Job[] = []
+    try {
+      const imageRes = await api.get('/image-generation/jobs')
+      const list = imageRes.data || []
+      imageJobs = list.map((j: Record<string, unknown>) => ({
+        id: String(j.id),
+        type: 'image' as const,
+        status: j.status as Job['status'],
+        kind: j.kind as string,
+        projectId: j.projectId as string,
+        projectName: projectNameById.get(j.projectId as string),
+        characterId: j.characterId as string | undefined,
+        characterImageId: j.characterImageId as string | undefined,
+        locationId: j.locationId as string | undefined,
+        createdAt: j.createdAt as string,
+        updatedAt: j.updatedAt as string,
+        errorMsg: j.errorMsg as string | undefined,
+        returnvalue: j.returnvalue
+      }))
+    } catch {
+      imageJobs = []
+    }
+
     // 合并并按时间排序
-    console.log('Import:', importJobs.length, 'Video:', videoJobs.length, 'Pipeline:', pipelineJobs.length)
-    jobs.value = [...importJobs, ...videoJobs, ...pipelineJobs].sort((a, b) =>
+    jobs.value = [...importJobs, ...videoJobs, ...pipelineJobs, ...imageJobs].sort((a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
-    console.log('Total jobs:', jobs.value.length)
   } catch (error) {
     console.error('Failed to fetch jobs:', error)
   } finally {
@@ -426,6 +490,16 @@ onUnmounted(() => {
               <span>🔄 Pipeline</span>
               <NTag v-if="jobs.filter(j => j.type === 'pipeline').length" size="small" round type="error">
                 {{ jobs.filter(j => j.type === 'pipeline').length }}
+              </NTag>
+            </NSpace>
+          </template>
+        </NTabPane>
+        <NTabPane name="image" tab="图片生成">
+          <template #tab>
+            <NSpace :size="8">
+              <span>🖼️ 图片</span>
+              <NTag v-if="jobs.filter(j => j.type === 'image').length" size="small" round type="success">
+                {{ jobs.filter(j => j.type === 'image').length }}
               </NTag>
             </NSpace>
           </template>

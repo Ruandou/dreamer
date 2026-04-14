@@ -68,7 +68,7 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             characterId: data.characterId,
             imageCost: imageCost ?? null
           })
-          return { characterImageId: image.id }
+          return { characterImageId: image.id, imageCost: imageCost ?? null }
         }
         case 'character_base_regenerate': {
           const { url: avatarUrl, imageCost } = await generateTextToImageAndPersist(data.prompt)
@@ -83,7 +83,7 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             characterId: updated.characterId,
             imageCost: imageCost ?? null
           })
-          return { characterImageId: updated.id }
+          return { characterImageId: updated.id, imageCost: imageCost ?? null }
         }
         case 'character_derived_regenerate': {
           const { url: avatarUrl, imageCost } = await generateImageEditAndPersist(
@@ -102,7 +102,7 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             characterId: updated.characterId,
             imageCost: imageCost ?? null
           })
-          return { characterImageId: updated.id }
+          return { characterImageId: updated.id, imageCost: imageCost ?? null }
         }
         case 'character_derived_create': {
           const { url: avatarUrl, imageCost } = await generateImageEditAndPersist(
@@ -133,7 +133,7 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             characterId: data.characterId,
             imageCost: imageCost ?? null
           })
-          return { characterImageId: image.id }
+          return { characterImageId: image.id, imageCost: imageCost ?? null }
         }
         case 'location_establishing': {
           const { url: imageUrl, imageCost } = await generateTextToImageAndPersist(data.prompt)
@@ -147,7 +147,7 @@ export const imageWorker = new Worker<ImageGenerationJobData>(
             locationId: updated.id,
             imageCost: imageCost ?? null
           })
-          return { locationId: updated.id }
+          return { locationId: updated.id, imageCost: imageCost ?? null }
         }
       }
     } catch (error: unknown) {

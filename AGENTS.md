@@ -152,6 +152,7 @@ git commit -m "feat: 添加新功能"
 | `video` | 视频生成任务 | `/api/tasks` |
 | `import` | 剧本导入任务 | `/api/import/tasks` |
 | `pipeline` | Pipeline 执行任务 | `/api/pipeline/jobs` |
+| `image` | 图片生成任务（定妆 / 定场图，BullMQ） | `/api/image-generation/jobs` |
 
 `pipeline` 在任务中心仅在 **「类型」列** 用中文展示 **`jobType`**（`/api/pipeline/jobs` 须返回 `jobType`，`Jobs.vue` 的 `pipelineSubtypeLabel`）。新增大纲相关 `jobType` 时须同步后端列表字段与该映射。
 

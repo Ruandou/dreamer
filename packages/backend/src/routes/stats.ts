@@ -8,6 +8,8 @@ export interface ProjectCostStats {
   totalCost: number
   aiCost: number
   videoCost: number
+  /** 角色定妆 + 场地定场图，方舟 imageCost 汇总（各资产最近一次成功估算） */
+  imageCost: number
   totalTasks: number
   completedTasks: number
   failedTasks: number
@@ -29,9 +31,24 @@ export interface UserCostStats {
   totalCost: number
   aiCost: number
   videoCost: number
+  imageCost: number
   totalProjects: number
   totalTasks: number
   projects: ProjectCostStats[]
+}
+
+async function sumImageCostForProject(projectId: string): Promise<number> {
+  const [charSum, locSum] = await Promise.all([
+    prisma.characterImage.aggregate({
+      where: { character: { projectId } },
+      _sum: { imageCost: true }
+    }),
+    prisma.location.aggregate({
+      where: { projectId },
+      _sum: { imageCost: true }
+    })
+  ])
+  return (charSum._sum.imageCost ?? 0) + (locSum._sum.imageCost ?? 0)
 }
 
 export async function statsRoutes(fastify: FastifyInstance) {
@@ -76,13 +93,15 @@ export async function statsRoutes(fastify: FastifyInstance) {
         const result = t.result as any
         return sum + (result?.aiCost || 0)
       }, 0)
+      const imageCost = await sumImageCostForProject(project.id)
 
       const stats: ProjectCostStats = {
         projectId: project.id,
         projectName: project.name,
-        totalCost: videoCost + aiCost,
+        totalCost: videoCost + aiCost + imageCost,
         aiCost,
         videoCost,
+        imageCost,
         totalTasks: tasks.length,
         completedTasks: completedTasks.length,
         failedTasks: failedTasks.length,
@@ -142,50 +161,54 @@ export async function statsRoutes(fastify: FastifyInstance) {
       )
       const completedTasks = allTasks.filter(t => t.status === 'completed')
 
-      const projectStats: ProjectCostStats[] = projects.map(project => {
-        const tasks = project.episodes.flatMap(e => e.scenes.flatMap(s => s.takes))
-        const completed = tasks.filter(t => t.status === 'completed')
-        const failed = tasks.filter(t => t.status === 'failed')
-        const wanTasks = completed.filter(t => t.model === 'wan2.6')
-        const seedanceTasks = completed.filter(t => t.model === 'seedance2.0')
+      const projectStats: ProjectCostStats[] = await Promise.all(
+        projects.map(async (project) => {
+          const tasks = project.episodes.flatMap(e => e.scenes.flatMap(s => s.takes))
+          const completed = tasks.filter(t => t.status === 'completed')
+          const failed = tasks.filter(t => t.status === 'failed')
+          const wanTasks = completed.filter(t => t.model === 'wan2.6')
+          const seedanceTasks = completed.filter(t => t.model === 'seedance2.0')
 
-        const videoCost = completed.reduce((sum, t) => sum + (t.cost || 0), 0)
-        const aiCost = project.importTasks.reduce((sum, t) => {
-          const result = t.result as any
-          return sum + (result?.aiCost || 0)
-        }, 0)
+          const videoCost = completed.reduce((sum, t) => sum + (t.cost || 0), 0)
+          const aiCost = project.importTasks.reduce((sum, t) => {
+            const result = t.result as any
+            return sum + (result?.aiCost || 0)
+          }, 0)
+          const imageCost = await sumImageCostForProject(project.id)
 
-        return {
-          projectId: project.id,
-          projectName: project.name,
-          totalCost: videoCost + aiCost,
-          aiCost,
-          videoCost,
-          totalTasks: tasks.length,
-          completedTasks: completed.length,
-          failedTasks: failed.length,
-          tasksByModel: {
-            wan2dot6: {
-              count: wanTasks.length,
-              cost: wanTasks.reduce((sum, t) => sum + (t.cost || 0), 0)
+          return {
+            projectId: project.id,
+            projectName: project.name,
+            totalCost: videoCost + aiCost + imageCost,
+            aiCost,
+            videoCost,
+            imageCost,
+            totalTasks: tasks.length,
+            completedTasks: completed.length,
+            failedTasks: failed.length,
+            tasksByModel: {
+              wan2dot6: {
+                count: wanTasks.length,
+                cost: wanTasks.reduce((sum, t) => sum + (t.cost || 0), 0)
+              },
+              seedance2dot0: {
+                count: seedanceTasks.length,
+                cost: seedanceTasks.reduce((sum, t) => sum + (t.cost || 0), 0)
+              }
             },
-            seedance2dot0: {
-              count: seedanceTasks.length,
-              cost: seedanceTasks.reduce((sum, t) => sum + (t.cost || 0), 0)
-            }
-          },
-          recentTasks: tasks
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .slice(0, 5)
-            .map(t => ({
-              id: t.id,
-              model: t.model,
-              cost: t.cost || 0,
-              status: t.status,
-              createdAt: t.createdAt
-            }))
-        }
-      })
+            recentTasks: tasks
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              .slice(0, 5)
+              .map(t => ({
+                id: t.id,
+                model: t.model,
+                cost: t.cost || 0,
+                status: t.status,
+                createdAt: t.createdAt
+              }))
+          }
+        })
+      )
 
       const totalVideoCost = completedTasks.reduce((sum, t) => sum + (t.cost || 0), 0)
       const totalAiCost = projects.reduce((sum, p) => {
@@ -194,12 +217,14 @@ export async function statsRoutes(fastify: FastifyInstance) {
           return s + (result?.aiCost || 0)
         }, 0)
       }, 0)
+      const totalImageCost = projectStats.reduce((sum, p) => sum + p.imageCost, 0)
 
       const stats: UserCostStats = {
         userId: user.id,
-        totalCost: totalVideoCost + totalAiCost,
+        totalCost: totalVideoCost + totalAiCost + totalImageCost,
         aiCost: totalAiCost,
         videoCost: totalVideoCost,
+        imageCost: totalImageCost,
         totalProjects: projects.length,
         totalTasks: allTasks.length,
         projects: projectStats.sort((a, b) => b.totalCost - a.totalCost)
@@ -252,15 +277,46 @@ export async function statsRoutes(fastify: FastifyInstance) {
         orderBy: { createdAt: 'asc' }
       })
 
-      // Group by day
-      const dailyCosts = new Map<string, { date: string; wanCost: number; seedanceCost: number; total: number }>()
+      const imageWhereChar = {
+        imageCost: { not: null } as const,
+        updatedAt: { gte: startDate },
+        character: projectId
+          ? { projectId }
+          : { project: { userId: user.id } }
+      }
+      const imageWhereLoc = {
+        imageCost: { not: null } as const,
+        updatedAt: { gte: startDate },
+        ...(projectId ? { projectId } : { project: { userId: user.id } })
+      }
+
+      const [charImageRows, locationRows] = await Promise.all([
+        prisma.characterImage.findMany({
+          where: imageWhereChar,
+          select: { imageCost: true, updatedAt: true }
+        }),
+        prisma.location.findMany({
+          where: imageWhereLoc,
+          select: { imageCost: true, updatedAt: true }
+        })
+      ])
+
+      // Group by day（视频按 take.createdAt；图片按资产 updatedAt 近似计入当日）
+      const dailyCosts = new Map<
+        string,
+        { date: string; wanCost: number; seedanceCost: number; imageCost: number; total: number }
+      >()
+
+      const ensureDay = (date: string) => {
+        if (!dailyCosts.has(date)) {
+          dailyCosts.set(date, { date, wanCost: 0, seedanceCost: 0, imageCost: 0, total: 0 })
+        }
+        return dailyCosts.get(date)!
+      }
 
       tasks.forEach(task => {
         const date = task.createdAt.toISOString().split('T')[0]
-        if (!dailyCosts.has(date)) {
-          dailyCosts.set(date, { date, wanCost: 0, seedanceCost: 0, total: 0 })
-        }
-        const day = dailyCosts.get(date)!
+        const day = ensureDay(date)
         if (task.cost) {
           if (task.model === 'wan2.6') {
             day.wanCost += task.cost
@@ -271,7 +327,22 @@ export async function statsRoutes(fastify: FastifyInstance) {
         }
       })
 
-      return Array.from(dailyCosts.values())
+      for (const row of charImageRows) {
+        if (row.imageCost == null) continue
+        const date = row.updatedAt.toISOString().split('T')[0]
+        const day = ensureDay(date)
+        day.imageCost += row.imageCost
+        day.total += row.imageCost
+      }
+      for (const row of locationRows) {
+        if (row.imageCost == null) continue
+        const date = row.updatedAt.toISOString().split('T')[0]
+        const day = ensureDay(date)
+        day.imageCost += row.imageCost
+        day.total += row.imageCost
+      }
+
+      return Array.from(dailyCosts.values()).sort((a, b) => a.date.localeCompare(b.date))
     }
   )
 

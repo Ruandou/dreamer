@@ -5,12 +5,20 @@ import Fastify, { FastifyInstance } from 'fastify'
 const {
   mockProjectFindUnique,
   mockProjectFindMany,
-  mockTakeFindMany
+  mockTakeFindMany,
+  mockCharacterImageAggregate,
+  mockLocationAggregate,
+  mockCharacterImageFindMany,
+  mockLocationFindMany
 } = vi.hoisted(() => {
   return {
     mockProjectFindUnique: vi.fn(),
     mockProjectFindMany: vi.fn(),
-    mockTakeFindMany: vi.fn()
+    mockTakeFindMany: vi.fn(),
+    mockCharacterImageAggregate: vi.fn().mockResolvedValue({ _sum: { imageCost: null } }),
+    mockLocationAggregate: vi.fn().mockResolvedValue({ _sum: { imageCost: null } }),
+    mockCharacterImageFindMany: vi.fn().mockResolvedValue([]),
+    mockLocationFindMany: vi.fn().mockResolvedValue([])
   }
 })
 
@@ -31,6 +39,14 @@ vi.mock('../src/index.js', () => ({
     },
     take: {
       findMany: mockTakeFindMany
+    },
+    characterImage: {
+      aggregate: mockCharacterImageAggregate,
+      findMany: mockCharacterImageFindMany
+    },
+    location: {
+      aggregate: mockLocationAggregate,
+      findMany: mockLocationFindMany
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()

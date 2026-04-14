@@ -2,25 +2,19 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NCard, NButton, NSpace, NStatistic, NGrid, NGi, NProgress,
-  NDataTable, NTag, NEmpty, NSpin, NSelect, useMessage
+  NCard, NButton, NStatistic,
+  NDataTable, NTag, NEmpty, NSpin, NSelect
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { useStatsStore } from '@/stores/stats'
 import { getAiBalance } from '@/api'
-import type { ProjectCostStats, DailyCost, AiBalance } from '@/api'
+import type { ProjectCostStats, AiBalance } from '@/api'
 
 const router = useRouter()
-const message = useMessage()
 const statsStore = useStatsStore()
 
 const selectedDays = ref(30)
-const selectedCard = ref<string>('total')
 const aiBalance = ref<AiBalance | null>(null)
-
-const toggleCard = (cardId: string) => {
-  selectedCard.value = selectedCard.value === cardId ? null : cardId
-}
 
 onMounted(async () => {
   await Promise.all([
@@ -69,6 +63,13 @@ const projectColumns: DataTableColumns<ProjectCostStats> = [
     key: 'totalCost',
     render(row) {
       return formatCurrency(row.totalCost)
+    }
+  },
+  {
+    title: '图片成本',
+    key: 'imageCost',
+    render(row) {
+      return formatCurrency(row.imageCost ?? 0)
     }
   },
   {
@@ -180,11 +181,7 @@ import { h } from 'vue'
     <NSpin :show="statsStore.isLoading">
       <!-- Overview Stats -->
       <div class="stats-overview">
-        <NCard
-          class="stat-card"
-          :class="{ 'stat-card--selected': selectedCard === 'total' }"
-          @click="toggleCard('total')"
-        >
+        <NCard class="stat-card">
           <NStatistic label="总成本" :value="formatCurrency(statsStore.userStats?.totalCost || 0)">
             <template #suffix>
               <span class="stat-suffix">元</span>
@@ -192,11 +189,7 @@ import { h } from 'vue'
           </NStatistic>
         </NCard>
 
-        <NCard
-          class="stat-card"
-          :class="{ 'stat-card--selected': selectedCard === 'ai' }"
-          @click="toggleCard('ai')"
-        >
+        <NCard class="stat-card">
           <NStatistic label="AI 成本" :value="formatCurrency(statsStore.userStats?.aiCost || 0)">
             <template #suffix>
               <span class="stat-suffix">元</span>
@@ -204,11 +197,7 @@ import { h } from 'vue'
           </NStatistic>
         </NCard>
 
-        <NCard
-          class="stat-card"
-          :class="{ 'stat-card--selected': selectedCard === 'video' }"
-          @click="toggleCard('video')"
-        >
+        <NCard class="stat-card">
           <NStatistic label="视频成本" :value="formatCurrency(statsStore.userStats?.videoCost || 0)">
             <template #suffix>
               <span class="stat-suffix">元</span>
@@ -216,11 +205,15 @@ import { h } from 'vue'
           </NStatistic>
         </NCard>
 
-        <NCard
-          class="stat-card"
-          :class="{ 'stat-card--selected': selectedCard === 'balance' }"
-          @click="toggleCard('balance')"
-        >
+        <NCard class="stat-card">
+          <NStatistic label="图片成本" :value="formatCurrency(statsStore.userStats?.imageCost || 0)">
+            <template #suffix>
+              <span class="stat-suffix">元</span>
+            </template>
+          </NStatistic>
+        </NCard>
+
+        <NCard class="stat-card">
           <NStatistic label="DeepSeek 余额">
             <template #default>
               {{ aiBalance?.balanceInfos.find(b => b.currency === 'CNY')?.totalBalance.toFixed(2) || '--' }}
@@ -231,11 +224,7 @@ import { h } from 'vue'
           </NStatistic>
         </NCard>
 
-        <NCard
-          class="stat-card"
-          :class="{ 'stat-card--selected': selectedCard === 'rate' }"
-          @click="toggleCard('rate')"
-        >
+        <NCard class="stat-card">
           <NStatistic label="完成率">
             <template #default>
               {{
@@ -281,6 +270,17 @@ import { h } from 'vue'
                 ¥{{ (statsStore.userStats?.projects.reduce((sum, p) => sum + p.tasksByModel.seedance2dot0.cost, 0) || 0).toFixed(2) }}
               </div>
             </div>
+
+            <div class="model-stat">
+              <div class="model-stat__header">
+                <span class="model-stat__name">图片生成</span>
+                <span class="model-stat__label">定妆 / 定场</span>
+              </div>
+              <div class="model-stat__value">方舟估算</div>
+              <div class="model-stat__cost">
+                ¥{{ (statsStore.userStats?.imageCost || 0).toFixed(2) }}
+              </div>
+            </div>
           </div>
         </NCard>
       </div>
@@ -305,6 +305,9 @@ import { h } from 'vue'
                   <div class="bar-chart__tooltip">
                     <div class="bar-chart__tooltip-date">{{ day.date }}</div>
                     <div class="bar-chart__tooltip-value">¥{{ day.total.toFixed(2) }}</div>
+                    <div v-if="(day.imageCost || 0) > 0" class="bar-chart__tooltip-sub">
+                      含图片 ¥{{ (day.imageCost || 0).toFixed(2) }}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -371,32 +374,18 @@ import { h } from 'vue'
   color: var(--color-text-primary);
 }
 
-/* Overview Stats */
+/* Overview Stats：等分铺满整行 */
 .stats-overview {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  width: 100%;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-lg);
 }
 
 .stat-card {
   text-align: center;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.stat-card--selected {
-  border: 2px solid var(--color-primary);
-  background: var(--color-primary-light);
-}
-
-.stat-card--selected :deep(.n-statistic__value) {
-  color: var(--color-primary) !important;
+  min-width: 0;
 }
 
 .stat-card :deep(.n-statistic__value) {
@@ -531,6 +520,12 @@ import { h } from 'vue'
   opacity: 0.7;
 }
 
+.bar-chart__tooltip-sub {
+  opacity: 0.85;
+  font-size: 10px;
+  margin-top: 2px;
+}
+
 .bar-chart__label {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
@@ -541,13 +536,13 @@ import { h } from 'vue'
 /* Responsive */
 @media (max-width: 1200px) {
   .stats-overview {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 1024px) {
   .stats-overview {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .model-stats {
@@ -557,7 +552,7 @@ import { h } from 'vue'
 
 @media (max-width: 640px) {
   .stats-overview {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

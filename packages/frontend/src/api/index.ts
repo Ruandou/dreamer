@@ -126,6 +126,8 @@ export interface ProjectCostStats {
   totalCost: number
   aiCost: number
   videoCost: number
+  /** 定妆 / 定场图方舟估算成本汇总 */
+  imageCost: number
   totalTasks: number
   completedTasks: number
   failedTasks: number
@@ -147,6 +149,7 @@ export interface UserCostStats {
   totalCost: number
   aiCost: number
   videoCost: number
+  imageCost: number
   totalProjects: number
   totalTasks: number
   projects: ProjectCostStats[]
@@ -156,6 +159,7 @@ export interface DailyCost {
   date: string
   wanCost: number
   seedanceCost: number
+  imageCost: number
   total: number
 }
 
