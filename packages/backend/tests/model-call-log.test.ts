@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const recordMock = vi.fn().mockResolvedValue(undefined)
 
-vi.mock('../src/services/api-logger.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/services/api-logger.js')>()
+vi.mock('../src/services/ai/api-logger.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/services/ai/api-logger.js')>()
   return {
     ...actual,
     recordModelApiCall: (...args: unknown[]) => recordMock(...args)

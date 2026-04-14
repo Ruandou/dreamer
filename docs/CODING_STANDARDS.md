@@ -52,11 +52,17 @@ packages/backend/src/
 ├── routes/               # 路径、method、preHandler，薄
 ├── handlers/             # 可选：解析请求、调用 service、映射 reply
 ├── services/             # 业务编排、外部 API、事务边界
-│   ├── ai/               # AI 相关服务（DeepSeek、Seedream、提示词生成、日志落库）
-│   │   ├── deepseek-client.ts
-│   │   ├── seedream-client.ts
-│   │   ├── prompt-generator.ts
-│   │   └── model-api-call-logger.ts
+│   ├── ai/               # 对外模型 HTTP 与 ModelApiCall（新代码优先从此 import）
+│   │   ├── deepseek-client.ts   # DeepSeek OpenAI 兼容 client + 计价
+│   │   ├── deepseek.ts          # 剧本/优化/定妆/视觉补全等业务封装
+│   │   ├── api-logger.ts        # recordModelApiCall、getApiCalls 等
+│   │   ├── model-call-log.ts    # DeepSeek 专用 logDeepSeekChat
+│   │   ├── image-generation.ts  # 方舟文生图 / 编辑
+│   │   ├── seedance.ts          # 方舟 Seedance 视频
+│   │   ├── wan26.ts             # Atlas Wan 2.6
+│   │   ├── parser.ts            # 剧本文档解析（DeepSeek）
+│   │   ├── model-api-call-service.ts  # 模型调用列表查询
+│   │   └── index.ts              # 聚合导出
 ├── repositories/         # 仅 Prisma 封装，不含跨聚合业务规则
 ├── lib/                  # 纯函数、无副作用
 ├── plugins/
@@ -69,7 +75,7 @@ packages/backend/src/
 - **routes**：注册路由与鉴权；不写复杂业务。
 - **handlers（可选）**：解析参数、调用 Service、统一错误响应形状。
 - **services**：核心业务；可调用 `repositories` + 外部服务。
-- **services/ai/**：集中管理 AI 模型调用、提示词生成、`ModelApiCall` 落库逻辑。
+- **services/ai/**：集中管理 AI 模型调用、提示词生成、`ModelApiCall` 落库逻辑。`services/*.ts` 根层对部分模块保留 **薄 re-export**（指向 `ai/`），旧 import 仍可用；**新代码请优先** `import … from './ai/xxx.js'` 或经 `services/ai/index.ts`。
 - **repositories**：`findById`、`update` 等数据访问；不写业务规则。
 - **lib**：工具与纯函数。
 

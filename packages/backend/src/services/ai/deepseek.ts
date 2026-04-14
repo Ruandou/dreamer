@@ -1,35 +1,16 @@
-import OpenAI from 'openai'
 import type { ScriptContent, ScriptScene, ScriptDialogueLine } from '@dreamer/shared/types'
-import type { ModelCallLogContext } from '../api-logger.js'
-import { logDeepSeekChat } from '../model-call-log.js'
+import type { ModelCallLogContext } from './api-logger.js'
+import { logDeepSeekChat } from './model-call-log.js'
+import {
+  calculateDeepSeekCost,
+  getDeepSeekClient,
+  DeepSeekAuthError,
+  DeepSeekRateLimitError,
+  type DeepSeekCost
+} from './deepseek-client.js'
 
-// DeepSeek pricing (per 1M tokens) - 人民币定价
-// 来源：https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
-const DEEPSEEK_INPUT_COST_PER_1M_CACHE_HIT = 0.2     // 元/百万tokens（缓存命中）
-const DEEPSEEK_INPUT_COST_PER_1M_CACHE_MISS = 2.0    // 元/百万tokens（缓存未命中）
-const DEEPSEEK_OUTPUT_COST_PER_1M = 3.0              // 元/百万tokens
-
-export interface DeepSeekCost {
-  inputTokens: number
-  outputTokens: number
-  totalTokens: number
-  costCNY: number  // 人民币成本
-  cacheHit?: boolean  // 是否缓存命中
-}
-
-export class DeepSeekAuthError extends Error {
-  constructor(message: string = 'DeepSeek API 认证失败，请检查 API Key') {
-    super(message)
-    this.name = 'DeepSeekAuthError'
-  }
-}
-
-export class DeepSeekRateLimitError extends Error {
-  constructor(message: string = 'DeepSeek API 请求过于频繁，请稍后重试') {
-    super(message)
-    this.name = 'DeepSeekRateLimitError'
-  }
-}
+export type { DeepSeekCost }
+export { calculateDeepSeekCost, DeepSeekAuthError, DeepSeekRateLimitError }
 
 export interface DeepSeekBalance {
   isAvailable: boolean
@@ -39,36 +20,6 @@ export interface DeepSeekBalance {
     grantedBalance: number
     toppedUpBalance: number
   }>
-}
-
-export function calculateDeepSeekCost(usage: any, cacheHit: boolean = false): DeepSeekCost {
-  const inputTokens = usage?.prompt_tokens || 0
-  const outputTokens = usage?.completion_tokens || 0
-  const totalTokens = usage?.total_tokens || 0
-
-  // 根据缓存状态选择输入成本
-  const inputCostPerMillion = cacheHit 
-    ? DEEPSEEK_INPUT_COST_PER_1M_CACHE_HIT 
-    : DEEPSEEK_INPUT_COST_PER_1M_CACHE_MISS
-
-  // 计算人民币成本（直接使用人民币定价）
-  const costCNY = (inputTokens / 1_000_000) * inputCostPerMillion +
-                  (outputTokens / 1_000_000) * DEEPSEEK_OUTPUT_COST_PER_1M
-
-  return {
-    inputTokens,
-    outputTokens,
-    totalTokens,
-    costCNY,
-    cacheHit
-  }
-}
-
-function getDeepSeekClient(): OpenAI {
-  return new OpenAI({
-    apiKey: process.env.DEEPSEEK_API_KEY,
-    baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1'
-  })
 }
 
 export async function getDeepSeekBalance(): Promise<DeepSeekBalance> {
