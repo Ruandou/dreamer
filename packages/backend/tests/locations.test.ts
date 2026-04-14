@@ -95,6 +95,50 @@ describe('Location routes', () => {
     expect(res.statusCode).toBe(200)
   })
 
+  it('POST /batch-generate-images enqueues missing only', async () => {
+    mockLocationFindMany.mockResolvedValue([
+      {
+        id: 'l1',
+        name: 'A',
+        imageUrl: null,
+        imagePrompt: 'prompt a',
+        projectId: 'p1',
+        project: { visualStyle: [] }
+      },
+      {
+        id: 'l2',
+        name: 'B',
+        imageUrl: 'https://x',
+        imagePrompt: 'prompt b',
+        projectId: 'p1',
+        project: { visualStyle: [] }
+      },
+      {
+        id: 'l3',
+        name: 'C',
+        imageUrl: null,
+        imagePrompt: '',
+        projectId: 'p1',
+        project: { visualStyle: [] }
+      }
+    ])
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/locations/batch-generate-images',
+      payload: { projectId: 'p1' }
+    })
+    expect(res.statusCode).toBe(202)
+    const data = JSON.parse(res.payload) as {
+      enqueued: number
+      jobIds: string[]
+      skipped: { reason: string }[]
+    }
+    expect(data.enqueued).toBe(1)
+    expect(data.enqueuedLocationIds).toEqual(['l1'])
+    expect(mockImageQueueAdd).toHaveBeenCalledTimes(1)
+    expect(data.skipped.length).toBe(2)
+  })
+
   it('POST generate-image enqueues', async () => {
     mockLocationFindUnique.mockResolvedValue({
       id: 'l1',

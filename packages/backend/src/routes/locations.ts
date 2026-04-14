@@ -10,6 +10,10 @@ function buildStyledPrompt(visualStyle: string[] | undefined, core: string): str
   return `Visual style: ${vs}. ${core}`
 }
 
+function locationHasEstablishingImage(imageUrl: string | null | undefined): boolean {
+  return !!(imageUrl && String(imageUrl).trim())
+}
+
 export async function locationRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { projectId: string } }>(
     '/',
@@ -32,6 +36,70 @@ export async function locationRoutes(fastify: FastifyInstance) {
       })
     }
   )
+
+  /** 须在 /:id 之前注册，否则会被当成 id。仅对尚未有定场图（无 imageUrl）的场地入队。 */
+  fastify.post<{
+    Body: { projectId: string }
+  }>('/batch-generate-images', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const body = request.body || {}
+    const projectId = body.projectId
+
+    if (!projectId || typeof projectId !== 'string') {
+      return reply.status(400).send({ error: '缺少 projectId' })
+    }
+
+    if (!(await verifyProjectOwnership(userId, projectId))) {
+      return reply.status(403).send(permissionDeniedBody)
+    }
+
+    const rows = await prisma.location.findMany({
+      where: { projectId },
+      include: { project: true },
+      orderBy: { name: 'asc' }
+    })
+
+    const jobIds: string[] = []
+    const enqueuedLocationIds: string[] = []
+    const skipped: { id: string; name: string; reason: string }[] = []
+
+    for (const location of rows) {
+      if (locationHasEstablishingImage(location.imageUrl)) {
+        skipped.push({ id: location.id, name: location.name, reason: '已有定场图' })
+        continue
+      }
+      const effective = (location.imagePrompt || '').trim()
+      if (!effective) {
+        skipped.push({ id: location.id, name: location.name, reason: '缺少定场图提示词' })
+        continue
+      }
+
+      const establishingName = `${location.name} establishing shot, cinematic lighting`
+      const finalPrompt = buildStyledPrompt(
+        location.project.visualStyle,
+        `${establishingName}. ${effective}`
+      )
+
+      const job = await imageQueue.add('location-establishing', {
+        kind: 'location_establishing',
+        userId,
+        projectId: location.projectId,
+        locationId: location.id,
+        prompt: finalPrompt
+      })
+      if (job.id) {
+        jobIds.push(String(job.id))
+        enqueuedLocationIds.push(location.id)
+      }
+    }
+
+    return reply.status(202).send({
+      jobIds,
+      enqueuedLocationIds,
+      skipped,
+      enqueued: jobIds.length
+    })
+  })
 
   fastify.put<{
     Params: { id: string }
