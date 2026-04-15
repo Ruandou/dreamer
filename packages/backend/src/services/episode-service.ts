@@ -8,6 +8,7 @@ import {
 } from './ai/deepseek.js'
 import { runCompositionExport } from './composition-export.js'
 import { episodeRepository, type EpisodeRepository } from '../repositories/episode-repository.js'
+import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import { sceneRepository } from '../repositories/scene-repository.js'
 
 const DEFAULT_VOICE_CONFIG: Prisma.InputJsonValue = {
@@ -16,6 +17,28 @@ const DEFAULT_VOICE_CONFIG: Prisma.InputJsonValue = {
   tone: 'mid',
   timbre: 'warm_solid',
   speed: 'medium'
+}
+
+function scriptSceneCharacterCounts(script: unknown): {
+  scriptSceneCount: number
+  scriptCharacterCount: number
+} {
+  if (script == null || typeof script !== 'object') {
+    return { scriptSceneCount: 0, scriptCharacterCount: 0 }
+  }
+  const scenes = (script as ScriptContent).scenes
+  if (!Array.isArray(scenes)) {
+    return { scriptSceneCount: 0, scriptCharacterCount: 0 }
+  }
+  const names = new Set<string>()
+  for (const sc of scenes) {
+    if (sc && typeof sc === 'object' && Array.isArray(sc.characters)) {
+      for (const n of sc.characters) {
+        if (typeof n === 'string' && n.trim()) names.add(n.trim())
+      }
+    }
+  }
+  return { scriptSceneCount: scenes.length, scriptCharacterCount: names.size }
 }
 
 function buildScenePrompt(scene: {
@@ -190,12 +213,80 @@ export class EpisodeService {
     return { updatedEpisode, scenesCreated: script.scenes.length }
   }
 
-  listByProject(projectId: string) {
-    return this.repo.findManyByProject(projectId)
+  async listByProject(projectId: string) {
+    const episodes = await this.repo.findManyByProject(projectId)
+    return this.attachEpisodeListStats(episodes)
   }
 
-  getById(episodeId: string) {
-    return this.repo.findUnique(episodeId)
+  private async attachEpisodeListStats(episodes: PrismaEpisode[]) {
+    if (episodes.length === 0) return []
+    const ids = episodes.map((e) => e.id)
+    const projectId = episodes[0].projectId
+    const [sceneGroups, dialogueRows, shotRows, storyboardCompletedIds] = await Promise.all([
+      prisma.scene.groupBy({
+        by: ['episodeId'],
+        where: { episodeId: { in: ids } },
+        _count: { _all: true }
+      }),
+      prisma.sceneDialogue.findMany({
+        where: { scene: { episodeId: { in: ids } } },
+        select: {
+          characterId: true,
+          scene: { select: { episodeId: true } }
+        }
+      }),
+      prisma.characterShot.findMany({
+        where: { shot: { scene: { episodeId: { in: ids } } } },
+        select: {
+          characterImage: { select: { characterId: true } },
+          shot: { select: { scene: { select: { episodeId: true } } } }
+        }
+      }),
+      pipelineRepository.findEpisodeIdsWithCompletedStoryboardScript(projectId)
+    ])
+
+    const storyboardSceneCountByEpisode = new Map<string, number>()
+    for (const row of sceneGroups) {
+      storyboardSceneCountByEpisode.set(row.episodeId, row._count._all)
+    }
+
+    const charIdsByEpisode = new Map<string, Set<string>>()
+    const addChar = (episodeId: string, characterId: string) => {
+      if (!charIdsByEpisode.has(episodeId)) charIdsByEpisode.set(episodeId, new Set())
+      charIdsByEpisode.get(episodeId)!.add(characterId)
+    }
+    for (const r of dialogueRows) {
+      addChar(r.scene.episodeId, r.characterId)
+    }
+    for (const r of shotRows) {
+      addChar(r.shot.scene.episodeId, r.characterImage.characterId)
+    }
+
+    return episodes.map((ep) => {
+      const sc = scriptSceneCharacterCounts(ep.script)
+      const storyboardSceneCount = storyboardSceneCountByEpisode.get(ep.id) ?? 0
+      const storyboardCharacterCount = charIdsByEpisode.get(ep.id)?.size ?? 0
+      const hasStoryboardScenes = storyboardSceneCount > 0
+      const storyboardScriptJobCompleted = storyboardCompletedIds.has(ep.id)
+      return {
+        ...ep,
+        listStats: {
+          scriptSceneCount: sc.scriptSceneCount,
+          scriptCharacterCount: sc.scriptCharacterCount,
+          storyboardSceneCount,
+          storyboardCharacterCount,
+          hasStoryboardScenes,
+          storyboardScriptJobCompleted
+        }
+      }
+    })
+  }
+
+  async getById(episodeId: string) {
+    const episode = await this.repo.findUnique(episodeId)
+    if (!episode) return null
+    const [enriched] = await this.attachEpisodeListStats([episode])
+    return enriched
   }
 
   /** 分集管理 Tab：场次 + 定场 + 多镜 + CharacterShot + 台词 + takes */

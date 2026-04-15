@@ -46,6 +46,22 @@ export interface ProjectLocation {
 
 // ============ Script / Episode Types ============
 
+/** GET /episodes 列表聚合：剧本场/角色与入库场次/出镜角色，供分集卡片展示 */
+export interface EpisodeListStats {
+  /** 剧本 JSON 中的场数 */
+  scriptSceneCount: number
+  /** 剧本各场 `characters` 名字去重数量 */
+  scriptCharacterCount: number
+  /** 已入库场次（Scene 行数），含导入剧本与 AI 分镜脚本写入 */
+  storyboardSceneCount: number
+  /** 本集场次中出场角色去重（台词 SceneDialogue + 分镜 CharacterShot） */
+  storyboardCharacterCount: number
+  /** 是否已有入库场次（有则优先展示分镜场数） */
+  hasStoryboardScenes: boolean
+  /** 是否已有成功完成的「AI 生成分镜脚本」任务（每集仅允许成功一次） */
+  storyboardScriptJobCompleted: boolean
+}
+
 export interface Episode {
   id: string
   projectId: string
@@ -56,6 +72,8 @@ export interface Episode {
   script?: ScriptContent
   createdAt: Date
   updatedAt: Date
+  /** 仅列表接口附带，见 EpisodeListStats */
+  listStats?: EpisodeListStats
 }
 
 export interface ScriptContent {

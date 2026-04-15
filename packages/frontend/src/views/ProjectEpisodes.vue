@@ -1,293 +1,425 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NCard, NButton, NSpace, useMessage, NTag, useDialog, NCollapse, NCollapseItem } from 'naive-ui'
+import {
+  NCard,
+  NButton,
+  NSpace,
+  NGrid,
+  NGi,
+  NInput,
+  NEmpty,
+  NSpin,
+  NTooltip,
+  useMessage,
+  useDialog
+} from 'naive-ui'
 import { useEpisodeStore } from '@/stores/episode'
-import { useSceneStore } from '@/stores/scene'
-import { api } from '@/api'
+import { useEpisodeStoryboardPipelineJob } from '@/composables/useEpisodeStoryboardPipelineJob'
+import type { Episode } from '@dreamer/shared/types'
 
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
 const episodeStore = useEpisodeStore()
-const sceneStore = useSceneStore()
 
 const projectId = computed(() => route.params.id as string)
-const selectedEpisodeId = ref<string | null>(null)
-const composingId = ref<string | null>(null)
+const searchQuery = ref('')
+/** 二次确认弹窗打开中：禁止操作其他集；与 PipelineJob 无关，不显示卡片 loading */
+const storyboardDialogEpisodeId = ref<string | null>(null)
 
-onMounted(async () => {
-  await episodeStore.fetchEpisodes(projectId.value)
-  if (episodeStore.episodes.length > 0) {
-    selectedEpisodeId.value = episodeStore.episodes[0].id
-    await sceneStore.fetchEpisodeScenesDetail(selectedEpisodeId.value)
-  }
+const { runningByEpisodeId: storyboardJobRunningByEpisode, refresh: refreshStoryboardPipelineJobs } =
+  useEpisodeStoryboardPipelineJob(projectId)
+
+const filteredEpisodes = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  const list = episodeStore.episodes
+  if (!q) return list
+  return list.filter((ep) => {
+    const title = (ep.title || '').toLowerCase()
+    const syn = (ep.synopsis || '').toLowerCase()
+    const numStr = String(ep.episodeNum)
+    return title.includes(q) || syn.includes(q) || numStr.includes(q)
+  })
 })
 
-async function selectEpisode(id: string) {
-  selectedEpisodeId.value = id
-  await sceneStore.fetchEpisodeScenesDetail(id)
+const episodeBannerColors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6']
+
+function episodeBannerStyle(ep: Episode) {
+  const c = episodeBannerColors[ep.episodeNum % episodeBannerColors.length]
+  return { background: `linear-gradient(135deg, ${c}22 0%, var(--color-bg-gray) 100%)`, borderBottom: `3px solid ${c}44` }
 }
 
-function openStoryboard() {
-  if (!selectedEpisodeId.value) {
-    message.warning('请先选择一集')
-    return
+function episodeCardTitle(ep: Episode): string {
+  return ep.title?.trim() || `第 ${ep.episodeNum} 集`
+}
+
+/** 有入库场次时展示分镜场数；否则展示剧本场数/角色数 */
+function episodeStatsLine(ep: Episode): string {
+  const s = ep.listStats
+  if (!s) return ''
+  if (s.hasStoryboardScenes) {
+    return `分镜 ${s.storyboardSceneCount} 场 · ${s.storyboardCharacterCount} 个角色`
   }
-  router.push({
-    path: `/project/${projectId.value}/storyboard`,
-    query: { episodeId: selectedEpisodeId.value }
+  if (s.scriptSceneCount > 0 || s.scriptCharacterCount > 0) {
+    return `剧本 ${s.scriptSceneCount} 场 · ${s.scriptCharacterCount} 个角色`
+  }
+  return ''
+}
+
+function goEpisodeDetail(episodeId: string) {
+  void router.push({
+    name: 'ProjectEpisodeDetail',
+    params: { id: projectId.value, episodeId }
   })
 }
 
-function openGenerateStoryboardDialog() {
-  if (!selectedEpisodeId.value) {
-    message.warning('请先选择一集')
+function onEpisodeCardClick(ep: Episode) {
+  if (storyboardDialogEpisodeId.value !== null) return
+  goEpisodeDetail(ep.id)
+}
+
+function onEpisodeCardEnter(ep: Episode) {
+  if (storyboardDialogEpisodeId.value !== null) return
+  goEpisodeDetail(ep.id)
+}
+
+function isStoryboardJobRunning(ep: Episode): boolean {
+  return storyboardJobRunningByEpisode.value[ep.id] === true
+}
+
+/** 本集「AI 生成分镜」是否应禁用（他集弹窗、本集弹窗、Pipeline 任务运行中、已用过一次） */
+function isStoryboardAiDisabled(ep: Episode): boolean {
+  if (ep.listStats?.storyboardScriptJobCompleted) return true
+  if (isStoryboardJobRunning(ep)) return true
+  const dlg = storyboardDialogEpisodeId.value
+  if (dlg !== null && dlg !== ep.id) return true
+  if (dlg === ep.id) return true
+  return false
+}
+
+function openGenerateStoryboardDialog(ep: Episode) {
+  if (ep.listStats?.storyboardScriptJobCompleted) {
+    message.warning('本集已使用 AI 生成分镜脚本，仅支持操作一次')
     return
   }
+  if (storyboardDialogEpisodeId.value !== null) {
+    message.warning('已有分集正在操作，请稍候')
+    return
+  }
+  const episodeId = ep.id
+  storyboardDialogEpisodeId.value = episodeId
   dialog.warning({
     title: 'AI 生成分镜脚本',
     content:
       '将使用本集梗概与（若存在）已有剧本中的场次/梗概；生成后会替换当前集场次，并写入多镜 Shot、CharacterShot 与台词（若模型输出包含 shots）。',
     positiveText: '开始生成',
     negativeText: '取消',
+    onNegativeClick: () => {
+      storyboardDialogEpisodeId.value = null
+    },
     onPositiveClick: async () => {
-      const id = selectedEpisodeId.value
-      if (!id) return
       try {
-        const data = await episodeStore.generateStoryboardScript(id)
+        const data = await episodeStore.generateStoryboardScript(episodeId)
         message.success(
           data.message ||
-            `任务已提交（${data.jobId}），请稍后在任务中心查看进度，完成后刷新本分集或分镜控制台`
+            `任务已提交（${data.jobId}），请稍后在任务中心查看进度，完成后刷新分集或分镜控制台`
         )
+        await refreshStoryboardPipelineJobs()
+        await episodeStore.fetchEpisodes(projectId.value)
       } catch (e: unknown) {
         const err = e as { response?: { data?: { error?: string; message?: string } } }
         const d = err?.response?.data
         message.error(d?.error || d?.message || '生成失败')
         throw e
+      } finally {
+        storyboardDialogEpisodeId.value = null
       }
     }
   })
 }
 
-async function composeEpisode(episodeId: string) {
-  composingId.value = episodeId
-  try {
-    const res = await api.post<{ outputUrl?: string; compositionId?: string }>(
-      `/episodes/${episodeId}/compose`,
-      {}
-    )
-    message.success(res.data.outputUrl ? '本集成片已导出' : '合成完成')
-    if (res.data.outputUrl) {
-      window.open(res.data.outputUrl, '_blank', 'noopener')
-    }
-  } catch (e: any) {
-    const d = e?.response?.data
-    message.error(d?.error || d?.details?.join?.('; ') || '合成失败')
-  } finally {
-    composingId.value = null
-  }
-}
+onMounted(async () => {
+  await episodeStore.fetchEpisodes(projectId.value)
+})
 
+/** 分镜 PipelineJob 从运行变为结束：刷新列表上的 listStats 等 */
+watch(
+  storyboardJobRunningByEpisode,
+  (next, prev) => {
+    if (!prev || Object.keys(prev).length === 0) return
+    for (const id of Object.keys(prev)) {
+      if (prev[id] && !next[id]) {
+        void episodeStore.fetchEpisodes(projectId.value)
+        break
+      }
+    }
+  },
+  { deep: true }
+)
 </script>
 
 <template>
-  <NSpace vertical size="large" style="width: 100%">
-    <NCard title="分集管理">
-      <template #header-extra>
-        <NButton size="small" type="primary" @click="openStoryboard">打开分镜控制台</NButton>
-      </template>
-      <div class="layout">
-        <NCard size="small" title="分集列表" class="side">
-          <div
-            v-for="ep in episodeStore.episodes"
-            :key="ep.id"
-            class="ep-item"
-            :class="{ active: selectedEpisodeId === ep.id }"
-            @click="selectEpisode(ep.id)"
-          >
-            <div class="ep-item__title">
-              第 {{ ep.episodeNum }} 集
-              <NTag v-if="selectedEpisodeId === ep.id" size="small" type="info">当前</NTag>
-            </div>
-            <div class="ep-item__desc">{{ ep.title || ep.synopsis?.slice(0, 80) || '—' }}</div>
+  <div class="episodes-page">
+    <NCard>
+      <template #header>
+        <div class="ep-lib-header">
+          <div class="ep-lib-header-left">
+            <span class="ep-lib-title">分集管理</span>
+            <span class="ep-lib-stat muted">共 {{ episodeStore.episodes.length }} 集</span>
           </div>
-        </NCard>
-        <NCard size="small" title="当前集场次" class="main">
-          <p v-if="!selectedEpisodeId" class="muted">请选择一集</p>
-          <template v-else>
-            <p class="muted">
-              共 {{ sceneStore.editorScenes.length }} 场。视频生成、选 Take、批量操作请在「分镜控制台」中完成（先选分集）；每场一条 Seedance，多镜与台词由后端拼进同一次任务。
-            </p>
-            <NSpace>
-              <NButton @click="openStoryboard">去分镜控制台</NButton>
-              <NButton
-                type="info"
-                :loading="episodeStore.isGeneratingStoryboard"
-                @click="openGenerateStoryboardDialog"
+          <NInput
+            v-model:value="searchQuery"
+            clearable
+            round
+            size="small"
+            placeholder="搜索集数、标题、梗概…"
+            class="ep-lib-search"
+          >
+            <template #prefix>
+              <span class="ep-lib-search-icon" aria-hidden="true">⌕</span>
+            </template>
+          </NInput>
+        </div>
+      </template>
+
+      <p class="ep-lib-hint">
+        点击卡片进入分集详情；提交「AI 生成分镜」后任务在后台运行，对应集卡片会显示加载直至任务结束。视频生成、选 Take 请在「分镜控制台」中操作。
+      </p>
+
+      <NSpin
+        :show="episodeStore.isLoading && episodeStore.episodes.length === 0"
+        class="ep-lib-loading"
+        description="加载分集…"
+      >
+        <div class="ep-lib-body">
+          <NEmpty
+            v-if="!episodeStore.isLoading && episodeStore.episodes.length === 0"
+            description="暂无分集，请先在剧本侧新建或导入"
+          />
+
+          <NEmpty
+            v-else-if="episodeStore.episodes.length > 0 && filteredEpisodes.length === 0"
+            description="没有匹配的分集"
+            class="ep-lib-search-empty"
+          >
+            <template #extra>
+              <NButton size="small" @click="searchQuery = ''">清空搜索</NButton>
+            </template>
+          </NEmpty>
+
+          <NGrid
+            v-else-if="episodeStore.episodes.length > 0"
+            cols="1 s:2 m:3"
+            responsive="screen"
+            x-gap="16"
+            y-gap="16"
+            class="ep-lib-grid"
+          >
+            <NGi v-for="ep in filteredEpisodes" :key="ep.id">
+              <NSpin
+                :class="{ 'episode-card-spin--busy': isStoryboardJobRunning(ep) }"
+                :show="isStoryboardJobRunning(ep)"
+                size="small"
+                description="分镜剧本生成中…"
+                class="episode-card-spin"
               >
-                AI 生成分镜脚本
-              </NButton>
-              <NButton
-                type="primary"
-                :loading="composingId === selectedEpisodeId"
-                @click="composeEpisode(selectedEpisodeId!)"
-              >
-                一键合成成片（按已选 Take）
-              </NButton>
-            </NSpace>
-            <NCollapse v-if="sceneStore.editorScenes.length" style="margin-top: 12px">
-              <NCollapseItem
-                v-for="sc in sceneStore.editorScenes"
-                :key="sc.id"
-                :title="`第 ${sc.sceneNum} 场 · ${sc.location?.name || '未定场'} · ${sc.shots?.length || 0} 镜`"
-              >
-                <p class="scene-hint">本场所有镜头与台词在分镜控制台中会合并为一条 Seedance 提示词，产出一条视频。</p>
-                <div v-if="sc.location?.imageUrl" class="thumb-row">
-                  <span class="lbl">定场</span>
-                  <img :src="sc.location.imageUrl" alt="" class="thumb" />
-                </div>
-                <div v-for="sh in sc.shots" :key="sh.id" class="shot-block">
-                  <div class="shot-title">镜 {{ sh.shotNum }}</div>
-                  <p class="shot-desc">{{ sh.description?.slice(0, 200) }}{{ (sh.description?.length || 0) > 200 ? '…' : '' }}</p>
-                  <div class="thumb-row">
-                    <div
-                      v-for="cs in sh.characterShots"
-                      :key="cs.id"
-                      class="char-chip"
-                    >
-                      <img
-                        v-if="cs.characterImage.avatarUrl"
-                        :src="cs.characterImage.avatarUrl"
-                        alt=""
-                        class="thumb sm"
-                      />
-                      <span>{{ cs.characterImage.character.name }} · {{ cs.characterImage.name }}</span>
+                <NCard
+                  size="small"
+                  class="episode-card"
+                  hoverable
+                  :segmented="{ footer: 'soft' }"
+                  role="link"
+                  tabindex="0"
+                  @click="onEpisodeCardClick(ep)"
+                  @keydown.enter.prevent="onEpisodeCardEnter(ep)"
+                >
+                  <div class="episode-card__inner">
+                    <div class="episode-card__banner" :style="episodeBannerStyle(ep)">
+                      <span class="episode-card__num">第 {{ ep.episodeNum }} 集</span>
                     </div>
+                    <div class="episode-card__info">
+                      <h3 class="episode-card__name">{{ episodeCardTitle(ep) }}</h3>
+                      <p
+                        v-if="ep.synopsis?.trim()"
+                        class="episode-card__desc"
+                      >{{ ep.synopsis }}</p>
+                    <p v-else class="episode-card__desc episode-card__desc--placeholder">暂无梗概</p>
+                    <p v-if="episodeStatsLine(ep)" class="episode-card__stats">{{ episodeStatsLine(ep) }}</p>
                   </div>
                 </div>
-                <div v-if="sc.dialogues?.length" class="dialogues">
-                  <div class="lbl">台词</div>
-                  <ul>
-                    <li v-for="d in sc.dialogues" :key="d.id">
-                      {{ (d.startTimeMs / 1000).toFixed(1) }}s {{ d.character.name }}：{{ d.text }}
-                    </li>
-                  </ul>
-                </div>
-              </NCollapseItem>
-            </NCollapse>
-            <p class="muted hint-below">
-              「AI 生成分镜脚本」会提交后台任务（任务中心可见），完成后覆盖本集场次；请先在剧本侧写好梗概或导入剧本。
-            </p>
-          </template>
-        </NCard>
-      </div>
+                  <template #footer>
+                    <div class="episode-card__footer" @click.stop>
+                      <NSpace justify="end">
+                        <NTooltip
+                          :disabled="!ep.listStats?.storyboardScriptJobCompleted"
+                          placement="top"
+                        >
+                          <template #trigger>
+                            <NButton
+                              size="small"
+                              type="info"
+                              :loading="isStoryboardJobRunning(ep)"
+                              :disabled="isStoryboardAiDisabled(ep)"
+                              @click="openGenerateStoryboardDialog(ep)"
+                            >
+                              AI 生成分镜
+                            </NButton>
+                          </template>
+                          本集已使用 AI 生成分镜脚本，仅支持操作一次
+                        </NTooltip>
+                      </NSpace>
+                    </div>
+                  </template>
+                </NCard>
+              </NSpin>
+            </NGi>
+          </NGrid>
+        </div>
+      </NSpin>
     </NCard>
-  </NSpace>
+  </div>
 </template>
 
 <style scoped>
-.layout {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 16px;
+.episodes-page {
+  width: 100%;
 }
-@media (max-width: 768px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-}
-.ep-item {
-  padding: 10px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  margin-bottom: 8px;
-  border: 1px solid transparent;
-}
-.ep-item:hover {
-  background: var(--color-bg-soft);
-}
-.ep-item.active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-light-1, rgba(99, 102, 241, 0.08));
-}
-.ep-item__title {
-  font-weight: 600;
+.ep-lib-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
 }
-.ep-item__desc {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  margin-top: 4px;
+.ep-lib-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
-.muted {
+.ep-lib-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.ep-lib-stat {
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+.ep-lib-stat.muted {
+  color: var(--color-text-tertiary);
+}
+.ep-lib-search {
+  width: 200px;
+  max-width: 100%;
+  min-width: 0;
+}
+.ep-lib-search-icon {
   color: var(--color-text-tertiary);
   font-size: var(--font-size-sm);
-  margin-bottom: 12px;
 }
-.hint-below {
-  margin-top: 12px;
+.ep-lib-hint {
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-normal);
+}
+.ep-lib-loading {
+  min-height: 120px;
+}
+.ep-lib-body {
+  min-height: 80px;
+}
+.ep-lib-search-empty {
+  padding: var(--spacing-xl) 0;
+}
+.ep-lib-grid {
   margin-bottom: 0;
 }
-.thumb-row {
+:deep(.n-card-header__main) {
+  min-width: 0;
+  overflow: hidden;
+}
+.episode-card {
+  overflow: hidden;
+  cursor: pointer;
+  outline: none;
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+  border: 1px solid var(--color-border-light);
+}
+.episode-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+.episode-card:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-primary-light-1, rgba(99, 102, 241, 0.35));
+}
+.episode-card__inner {
+  margin: calc(var(--spacing-md) * -1);
+  padding: var(--spacing-md);
+}
+.episode-card__banner {
+  margin: calc(var(--spacing-md) * -1) calc(var(--spacing-md) * -1) var(--spacing-md);
+  height: 100px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
+  justify-content: center;
+  background: var(--color-bg-gray);
 }
-.thumb {
-  width: 96px;
-  height: 96px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
-}
-.thumb.sm {
-  width: 40px;
-  height: 40px;
-}
-.lbl {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  min-width: 36px;
-}
-.shot-block {
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-border);
-}
-.shot-title {
+.episode-card__num {
+  font-size: var(--font-size-lg);
   font-weight: 600;
-  margin-bottom: 6px;
+  color: var(--color-text-primary);
+  letter-spacing: 0.02em;
 }
-.shot-desc {
-  font-size: 13px;
+.episode-card__info {
+  margin-bottom: 0;
+}
+.episode-card__name {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-xs);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.episode-card__desc {
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  margin: 0 0 8px;
+  line-height: var(--line-height-normal);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 40px;
+  margin: 0;
 }
-.char-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  margin-right: 12px;
+.episode-card__desc--placeholder {
+  color: var(--color-text-tertiary);
 }
-.dialogues {
-  margin-top: 8px;
-  font-size: 13px;
+.episode-card__stats {
+  margin: var(--spacing-sm) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  line-height: var(--line-height-normal);
 }
-.dialogues ul {
-  margin: 4px 0 0 1.2em;
+.episode-card__footer {
   padding: 0;
 }
-.scene-hint {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
+.episode-card-spin {
   display: block;
-  line-height: 1.4;
+  width: 100%;
+}
+.episode-card-spin :deep(.n-spin-content) {
+  min-height: 0;
+}
+.episode-card-spin--busy :deep(.n-spin-content) {
+  min-height: 200px;
 }
 </style>

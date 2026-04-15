@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockFindUnique = vi.fn()
 const mockCountActive = vi.fn()
+const mockHasCompleted = vi.fn()
 const mockCreateJob = vi.fn()
 const mockUpdateJob = vi.fn()
 const mockGenerate = vi.fn()
@@ -15,6 +16,7 @@ vi.mock('../src/repositories/episode-repository.js', () => ({
 vi.mock('../src/repositories/pipeline-repository.js', () => ({
   pipelineRepository: {
     countActiveEpisodeStoryboardScriptJobs: (...args: unknown[]) => mockCountActive(...args),
+    hasCompletedEpisodeStoryboardScriptJob: (...args: unknown[]) => mockHasCompleted(...args),
     createPipelineJob: (...args: unknown[]) => mockCreateJob(...args),
     updateJob: (...args: unknown[]) => mockUpdateJob(...args)
   }
@@ -34,6 +36,7 @@ import {
 describe('episode-storyboard-job', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockHasCompleted.mockResolvedValue(false)
     mockGenerate.mockResolvedValue({
       ok: true,
       episode: {},
@@ -62,6 +65,23 @@ describe('episode-storyboard-job', () => {
         status: 'pending'
       })
     )
+  })
+
+  it('enqueueEpisodeStoryboardScriptJob returns 409 when already completed once', async () => {
+    mockFindUnique.mockResolvedValue({
+      id: 'ep-1',
+      episodeNum: 1,
+      projectId: 'p1',
+      synopsis: 'x'
+    })
+    mockHasCompleted.mockResolvedValue(true)
+
+    const r = await enqueueEpisodeStoryboardScriptJob('user-1', 'ep-1')
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.status).toBe(409)
+    if (!r.ok) expect(r.error).toContain('仅支持操作一次')
+    expect(mockCountActive).not.toHaveBeenCalled()
+    expect(mockCreateJob).not.toHaveBeenCalled()
   })
 
   it('enqueueEpisodeStoryboardScriptJob returns 409 when concurrent job', async () => {

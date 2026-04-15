@@ -39,6 +39,14 @@ export async function enqueueEpisodeStoryboardScriptJob(
     }
   }
 
+  if (await pipelineRepository.hasCompletedEpisodeStoryboardScriptJob(episode.projectId, episodeId)) {
+    return {
+      ok: false,
+      status: 409,
+      error: '本集已使用 AI 生成分镜脚本，仅支持操作一次'
+    }
+  }
+
   const n = await pipelineRepository.countActiveEpisodeStoryboardScriptJobs(
     episode.projectId,
     episodeId

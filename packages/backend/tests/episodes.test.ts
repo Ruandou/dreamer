@@ -22,7 +22,11 @@ const {
   mockCompositionSceneDeleteMany,
   mockCompositionSceneCreateMany,
   mockRunCompositionExport,
-  mockEnqueueEpisodeStoryboardScriptJob
+  mockEnqueueEpisodeStoryboardScriptJob,
+  mockSceneGroupBy,
+  mockSceneDialogueFindMany,
+  mockCharacterShotFindMany,
+  mockPipelineJobFindMany
 } = vi.hoisted(() => {
   return {
     mockEpisodeFindMany: vi.fn(),
@@ -48,7 +52,11 @@ const {
       outputUrl: 'https://storage.example.com/out.mp4',
       duration: 9
     }),
-    mockEnqueueEpisodeStoryboardScriptJob: vi.fn()
+    mockEnqueueEpisodeStoryboardScriptJob: vi.fn(),
+    mockSceneGroupBy: vi.fn().mockResolvedValue([]),
+    mockSceneDialogueFindMany: vi.fn().mockResolvedValue([]),
+    mockCharacterShotFindMany: vi.fn().mockResolvedValue([]),
+    mockPipelineJobFindMany: vi.fn().mockResolvedValue([])
   }
 })
 
@@ -118,7 +126,14 @@ vi.mock('../src/lib/prisma.js', () => ({
     scene: {
       deleteMany: mockSceneDeleteMany,
       create: mockSceneCreate,
-      findMany: mockSceneFindMany
+      findMany: mockSceneFindMany,
+      groupBy: mockSceneGroupBy
+    },
+    sceneDialogue: {
+      findMany: mockSceneDialogueFindMany
+    },
+    characterShot: {
+      findMany: mockCharacterShotFindMany
     },
     shot: {
       create: mockShotCreate
@@ -133,6 +148,9 @@ vi.mock('../src/lib/prisma.js', () => ({
     compositionScene: {
       deleteMany: mockCompositionSceneDeleteMany,
       createMany: mockCompositionSceneCreateMany
+    },
+    pipelineJob: {
+      findMany: mockPipelineJobFindMany
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()
@@ -194,6 +212,38 @@ describe('Episode Routes', () => {
       const data = JSON.parse(response.payload)
       expect(Array.isArray(data)).toBe(true)
       expect(data.length).toBe(2)
+      expect(data[0].listStats).toMatchObject({
+        scriptSceneCount: 0,
+        scriptCharacterCount: 0,
+        storyboardSceneCount: 0,
+        storyboardCharacterCount: 0,
+        hasStoryboardScenes: false,
+        storyboardScriptJobCompleted: false
+      })
+    })
+
+    it('should attach listStats from scene aggregates', async () => {
+      mockEpisodeFindMany.mockResolvedValue([{ id: 'ep-1', episodeNum: 1, title: 'E1', script: null }])
+      mockSceneGroupBy.mockResolvedValueOnce([{ episodeId: 'ep-1', _count: { _all: 3 } }])
+      mockSceneDialogueFindMany.mockResolvedValueOnce([
+        { characterId: 'c1', scene: { episodeId: 'ep-1' } },
+        { characterId: 'c2', scene: { episodeId: 'ep-1' } }
+      ])
+      mockCharacterShotFindMany.mockResolvedValueOnce([])
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/episodes?projectId=proj-1'
+      })
+
+      expect(response.statusCode).toBe(200)
+      const data = JSON.parse(response.payload)
+      expect(data[0].listStats).toMatchObject({
+        storyboardSceneCount: 3,
+        storyboardCharacterCount: 2,
+        hasStoryboardScenes: true,
+        storyboardScriptJobCompleted: false
+      })
     })
   })
 
@@ -201,6 +251,7 @@ describe('Episode Routes', () => {
     it('should return episode details', async () => {
       mockEpisodeFindUnique.mockResolvedValue({
         id: 'ep-1',
+        projectId: 'proj-1',
         episodeNum: 1,
         title: 'Episode 1',
         scenes: []
@@ -579,6 +630,24 @@ describe('Episode Routes', () => {
       })
 
       expect(response.statusCode).toBe(409)
+    })
+
+    it('should return 409 when storyboard script already completed once', async () => {
+      mockEnqueueEpisodeStoryboardScriptJob.mockResolvedValue({
+        ok: false,
+        status: 409,
+        error: '本集已使用 AI 生成分镜脚本，仅支持操作一次'
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/episodes/ep-1/generate-storyboard-script',
+        payload: {}
+      })
+
+      expect(response.statusCode).toBe(409)
+      const data = JSON.parse(response.payload)
+      expect(data.error).toContain('仅支持操作一次')
     })
   })
 })

@@ -88,6 +88,35 @@ export class PipelineRepository {
     }).length
   }
 
+  /**
+   * 项目中已成功完成的「AI 分镜剧本」任务对应的分集 id（用于列表展示与入队前校验）
+   */
+  async findEpisodeIdsWithCompletedStoryboardScript(projectId: string): Promise<Set<string>> {
+    const rows = await this.prisma.pipelineJob.findMany({
+      where: {
+        projectId,
+        jobType: 'episode-storyboard-script',
+        status: 'completed'
+      },
+      select: { progressMeta: true }
+    })
+    const out = new Set<string>()
+    for (const r of rows) {
+      const m = r.progressMeta as { episodeId?: string } | null
+      if (m?.episodeId) out.add(m.episodeId)
+    }
+    return out
+  }
+
+  /** 该分集是否已有成功完成的「AI 分镜剧本」任务（同集仅允许成功一次） */
+  async hasCompletedEpisodeStoryboardScriptJob(
+    projectId: string,
+    episodeId: string
+  ): Promise<boolean> {
+    const ids = await this.findEpisodeIdsWithCompletedStoryboardScript(projectId)
+    return ids.has(episodeId)
+  }
+
   private static readonly OUTLINE_ASYNC_JOB_TYPES = ['script-batch', 'parse-script', 'script-first'] as const
 
   countOutlineAsyncJobs(projectId: string) {
