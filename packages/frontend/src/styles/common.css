@@ -7,8 +7,9 @@
   box-sizing: border-box;
 }
 
-html, body, #app {
+html, body {
   height: 100%;
+  overflow: hidden;
   font-family: var(--font-family);
   font-size: var(--font-size-base);
   line-height: var(--line-height-normal);
@@ -16,6 +17,19 @@ html, body, #app {
   background: var(--color-bg-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  /* min-height 让 #app 随内容撑开（Projects 等页面需要） */
+  min-height: 100%;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* body 成为 Projects 等页面的滚动容器 */
+body {
+  overflow-y: auto;
 }
 
 /* Scrollbar */

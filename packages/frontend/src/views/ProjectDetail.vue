@@ -156,11 +156,8 @@ const currentMenu = computed(() => {
       </div>
     </NLayoutSider>
 
-    <!-- Main Content：单列 flex，仅内容区滚动，避免与窗口双滚动条 -->
-    <NLayout
-      class="project-main"
-      content-style="padding: 0; background: var(--color-bg-base); display: flex; flex-direction: column; min-height: 0; flex: 1; height: 100%; overflow: hidden;"
-    >
+    <!-- Main Content -->
+    <div class="project-main">
       <div class="project-main-column">
         <div v-if="parsePolling || parseJobStatus" class="parse-banner">
           <NAlert type="info" :show-icon="false">
@@ -189,7 +186,7 @@ const currentMenu = computed(() => {
           <RouterView />
         </div>
       </div>
-    </NLayout>
+    </div>
   </NLayout>
 </template>
 
@@ -218,12 +215,24 @@ const currentMenu = computed(() => {
 .project-layout {
   flex: 1;
   min-height: 0;
-  height: 100%;
+  max-height: calc(100vh - 49px);
   overflow: hidden;
+  display: flex;
+  flex-direction: row;
 }
 
 .project-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   min-height: 0;
+  overflow: hidden;
+  max-height: calc(100vh - 49px);
+}
+
+.project-main :deep(.n-layout-scroll-container) {
+  height: 100% !important;
+  max-height: 100% !important;
 }
 
 .project-main-column {
@@ -232,7 +241,7 @@ const currentMenu = computed(() => {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  height: 100%;
+  max-height: calc(100vh - 49px);
 }
 
 .project-sider {
@@ -346,7 +355,17 @@ const currentMenu = computed(() => {
   padding: var(--spacing-lg);
   flex: 1;
   min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+</style>
+
+<!-- episode-detail 占满 project-content，禁用 project-content 的滚动，内部自行处理 -->
+<style>
+.project-content > .episode-detail {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 </style>

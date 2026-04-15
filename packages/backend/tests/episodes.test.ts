@@ -290,6 +290,62 @@ describe('Episode Routes', () => {
     })
   })
 
+  describe('GET /api/episodes/:id/detail', () => {
+    it('should return episode, scenes and project.visualStyle', async () => {
+      mockEpisodeFindUnique.mockResolvedValue({
+        id: 'ep-1',
+        projectId: 'proj-1',
+        episodeNum: 1,
+        title: 'Episode 1',
+        script: null
+      })
+      mockSceneGroupBy.mockResolvedValueOnce([])
+      mockSceneDialogueFindMany.mockResolvedValueOnce([])
+      mockCharacterShotFindMany.mockResolvedValueOnce([])
+      mockPipelineJobFindMany.mockResolvedValueOnce([])
+      mockProjectFindUnique.mockResolvedValueOnce({ visualStyle: ['realistic', 'cinematic'] })
+      mockSceneFindMany.mockResolvedValueOnce([
+        {
+          id: 'sc1',
+          episodeId: 'ep-1',
+          sceneNum: 1,
+          description: 'd',
+          duration: 5000,
+          aspectRatio: '9:16',
+          visualStyle: [],
+          status: 'pending',
+          location: null,
+          shots: [],
+          dialogues: [],
+          takes: []
+        }
+      ])
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/episodes/ep-1/detail'
+      })
+
+      expect(response.statusCode).toBe(200)
+      const data = JSON.parse(response.payload)
+      expect(data.episode.id).toBe('ep-1')
+      expect(data.project.visualStyle).toEqual(['realistic', 'cinematic'])
+      expect(data.scenes).toHaveLength(1)
+      expect(data.scenes[0].id).toBe('sc1')
+    })
+
+    it('should return 404 when episode not found', async () => {
+      mockEpisodeFindUnique.mockResolvedValue(null)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/episodes/missing/detail'
+      })
+
+      expect(response.statusCode).toBe(404)
+    })
+  })
+
   describe('GET /api/episodes/:id/scenes', () => {
     it('should return aggregated scenes for editor', async () => {
       mockSceneFindMany.mockResolvedValueOnce([

@@ -81,6 +81,8 @@ export interface ScriptContent {
   summary: string // 梗概
   metadata?: ScriptMetadata  // 剧本元数据
   scenes: ScriptScene[]
+  /** 分镜脚本富文本（TipTap JSON 等），可选，与 scenes 并存 */
+  editorDoc?: Record<string, unknown> | null
 }
 
 export interface ScriptMetadata {

@@ -184,7 +184,10 @@ const themeOverrides = {
 
 <style>
 .app-shell {
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }

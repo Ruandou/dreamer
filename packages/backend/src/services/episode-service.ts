@@ -289,6 +289,22 @@ export class EpisodeService {
     return enriched
   }
 
+  /** 集详情页：单请求拉取集元数据 + 全量场景树 + 项目画风 */
+  async getEpisodeDetail(episodeId: string) {
+    const episode = await this.getById(episodeId)
+    if (!episode) return null
+    const project = await prisma.project.findUnique({
+      where: { id: episode.projectId },
+      select: { visualStyle: true }
+    })
+    const scenes = await this.listScenesForEpisode(episodeId)
+    return {
+      episode,
+      scenes,
+      project: { visualStyle: project?.visualStyle ?? [] }
+    }
+  }
+
   /** 分集管理 Tab：场次 + 定场 + 多镜 + CharacterShot + 台词 + takes */
   listScenesForEpisode(episodeId: string) {
     return sceneRepository.findManyByEpisodeForEditor(episodeId)

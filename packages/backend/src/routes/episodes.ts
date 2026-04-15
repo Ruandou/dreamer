@@ -43,6 +43,29 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     }
   )
 
+
+  /** 集详情工作台：episode + scenes 全量树 + project.visualStyle */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/detail',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request as any).user.id
+      const episodeId = request.params.id
+
+      if (!(await verifyEpisodeOwnership(userId, episodeId))) {
+        return reply.status(403).send(permissionDeniedBody)
+      }
+
+      const detail = await episodeService.getEpisodeDetail(episodeId)
+
+      if (!detail) {
+        return reply.status(404).send({ error: 'Episode not found' })
+      }
+
+      return detail
+    }
+  )
+
   /** 分集管理：场次 + 定场 + 多镜 + CharacterShot + 台词 + takes */
   fastify.get<{ Params: { id: string } }>(
     '/:id/scenes',

@@ -25,6 +25,7 @@ export interface ScriptContent {
     title: string;
     summary: string;
     scenes: ScriptScene[];
+    editorDoc?: Record<string, unknown> | null;
 }
 export interface ScriptStoryboardShotCharacter {
     characterName: string;

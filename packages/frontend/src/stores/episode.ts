@@ -3,6 +3,12 @@ import { ref } from 'vue'
 import type { Episode, ScriptContent } from '@dreamer/shared/types'
 import { api } from '@/api'
 
+export type EpisodeDetailPayload = {
+  episode: Episode
+  scenes: unknown[]
+  project: { visualStyle: string[] }
+}
+
 export const useEpisodeStore = defineStore('episode', () => {
   const episodes = ref<Episode[]>([])
   const currentEpisode = ref<Episode | null>(null)
@@ -29,6 +35,11 @@ export const useEpisodeStore = defineStore('episode', () => {
     } finally {
       isLoading.value = false
     }
+  }
+
+  async function fetchEpisodeDetail(id: string) {
+    const res = await api.get<EpisodeDetailPayload>(`/episodes/${id}/detail`)
+    return res.data
   }
 
   async function createEpisode(data: { projectId: string; episodeNum: number; title?: string }) {
@@ -103,6 +114,7 @@ export const useEpisodeStore = defineStore('episode', () => {
     isGeneratingStoryboard,
     fetchEpisodes,
     getEpisode,
+    fetchEpisodeDetail,
     createEpisode,
     updateEpisode,
     deleteEpisode,
