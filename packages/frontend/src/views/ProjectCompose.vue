@@ -385,7 +385,6 @@ const formatTime = (seconds: number) => {
 
 <style scoped>
 .compose-page {
-  height: 100%;
   display: flex;
   flex-direction: column;
 }

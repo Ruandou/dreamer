@@ -471,7 +471,6 @@ function previewAvatarImages(character: Character): { id: string; url: string }[
 
 <style scoped>
 .characters-page {
-  height: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;

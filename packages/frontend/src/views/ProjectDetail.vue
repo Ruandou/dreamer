@@ -213,21 +213,22 @@ const currentMenu = computed(() => {
 }
 
 .project-layout {
-  flex: 1;
-  min-height: 0;
-  max-height: calc(100vh - 49px);
-  overflow: hidden;
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: row;
+  overflow: hidden;
 }
 
 .project-main {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0;
+  min-width: 0;
   overflow: hidden;
-  max-height: calc(100vh - 49px);
 }
 
 .project-main :deep(.n-layout-scroll-container) {
@@ -241,7 +242,6 @@ const currentMenu = computed(() => {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  max-height: calc(100vh - 49px);
 }
 
 .project-sider {
