@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   NButton, NSpace, NModal, NForm, NFormItem, NInput, NInputNumber,
   NSelect, NImage, NTag, NProgress, NAlert, NSwitch, NCheckbox,
@@ -13,6 +13,7 @@ import VideoPlayer from '@/components/VideoPlayer.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 const route = useRoute()
+const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
 const sceneStore = useSceneStore()
@@ -32,6 +33,9 @@ function characterPreviewUrl(char: { images?: { avatarUrl?: string }[] }): strin
 
 const projectId = computed(() => route.params.id as string)
 
+/** 当前分集（与 URL ?episodeId= 同步，避免多集项目始终误绑第一集） */
+const currentEpisodeId = ref<string | null>(null)
+
 const showCreateModal = ref(false)
 const showEditorModal = ref(false)
 type SceneEditor = SceneWithTakes & { editPrompt: string }
@@ -50,13 +54,53 @@ const previewThumbnailUrl = ref<string | undefined>()
 // Polling state
 const pollingTasks = ref<Map<string, number>>(new Map())
 
+const episodeSelectOptions = computed(() =>
+  episodeStore.episodes.map((e) => ({
+    label: `第 ${e.episodeNum} 集${e.title ? ` · ${e.title}` : ''}`,
+    value: e.id
+  }))
+)
+
+async function loadScenesForEpisode(episodeId: string) {
+  await sceneStore.fetchEpisodeScenesDetail(episodeId)
+}
+
 onMounted(async () => {
   await episodeStore.fetchEpisodes(projectId.value)
-  if (episodeStore.episodes.length > 0) {
-    await sceneStore.fetchScenes(episodeStore.episodes[0].id)
+  if (!episodeStore.episodes.length) {
+    currentEpisodeId.value = null
+    await characterStore.fetchCharacters(projectId.value)
+    return
   }
+  const fromQuery = route.query.episodeId as string | undefined
+  const valid = fromQuery && episodeStore.episodes.some((e) => e.id === fromQuery)
+  const id = valid ? fromQuery! : episodeStore.episodes[0].id
+  currentEpisodeId.value = id
+  if (!valid) {
+    await router.replace({ query: { ...route.query, episodeId: id } })
+  }
+  pollingTasks.value.clear()
+  await loadScenesForEpisode(id)
   await characterStore.fetchCharacters(projectId.value)
 })
+
+watch(
+  () => route.query.episodeId,
+  async (q) => {
+    const qid = typeof q === 'string' ? q : undefined
+    if (!qid || !episodeStore.episodes.some((e) => e.id === qid)) return
+    if (qid === currentEpisodeId.value) return
+    currentEpisodeId.value = qid
+    pollingTasks.value.clear()
+    selectedScenes.value.clear()
+    selectedScenes.value = new Set()
+    await loadScenesForEpisode(qid)
+  }
+)
+
+function onEpisodeSelect(episodeId: string) {
+  router.push({ query: { ...route.query, episodeId } })
+}
 
 watch(() => sceneStore.scenes, (scenes) => {
   scenes.forEach(scene => {
@@ -86,9 +130,9 @@ const startPolling = (sceneId: string) => {
 }
 
 const handleCreateScene = async () => {
-  if (!episodeStore.episodes.length) return
+  if (!currentEpisodeId.value) return
   await sceneStore.createScene({
-    episodeId: episodeStore.episodes[0].id,
+    episodeId: currentEpisodeId.value,
     sceneNum: sceneStore.scenes.length + 1,
     description: newScene.value.description,
     prompt: newScene.value.prompt || newScene.value.description
@@ -230,7 +274,7 @@ const handleDrop = async (e: DragEvent, targetIndex: number) => {
   const [removed] = scenes.splice(sourceIndex, 1)
   scenes.splice(targetIndex, 0, removed)
 
-  const episodeId = episodeStore.episodes[0]?.id
+  const episodeId = currentEpisodeId.value
   if (episodeId) {
     await sceneStore.reorderScenes(episodeId, scenes.map(s => s.id))
     message.success('分镜顺序已更新')
@@ -250,7 +294,19 @@ const getSceneTakes = (scene: SceneWithTakes) => scene.takes ?? []
     <!-- Header -->
     <header class="storyboard-header">
       <div class="storyboard-header__left">
+        <NButton quaternary size="small" class="storyboard-back" @click="router.push(`/project/${projectId}/episodes`)">
+          ← 返回分集管理
+        </NButton>
         <h2 class="storyboard-header__title">分镜控制台</h2>
+        <NSelect
+          v-if="episodeSelectOptions.length"
+          :value="currentEpisodeId ?? undefined"
+          :options="episodeSelectOptions"
+          placeholder="选择分集"
+          filterable
+          style="min-width: 200px; max-width: 280px"
+          @update:value="(v: string) => onEpisodeSelect(v)"
+        />
         <div class="mode-toggle">
           <NSwitch v-model:value="isTrialMode" size="small" />
           <span class="mode-label">{{ isTrialMode ? '试错模式' : '高光模式' }}</span>
@@ -568,6 +624,10 @@ const getSceneTakes = (scene: SceneWithTakes) => scene.takes ?? []
   margin-bottom: var(--spacing-lg);
 }
 
+.storyboard-header__left .storyboard-back {
+  margin-right: 8px;
+  flex-shrink: 0;
+}
 .storyboard-header__left {
   display: flex;
   align-items: center;

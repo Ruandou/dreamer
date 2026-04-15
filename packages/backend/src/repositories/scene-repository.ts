@@ -16,6 +16,69 @@ export class SceneRepository {
     })
   }
 
+  /** 分集管理：场次 + 定场 + 多镜 + CharacterShot + 台词 + takes */
+  findManyByEpisodeForEditor(episodeId: string) {
+    return this.prisma.scene.findMany({
+      where: { episodeId },
+      orderBy: { sceneNum: 'asc' },
+      include: {
+        location: true,
+        shots: {
+          orderBy: [{ order: 'asc' }, { shotNum: 'asc' }],
+          include: {
+            characterShots: {
+              include: {
+                characterImage: {
+                  include: {
+                    character: { select: { id: true, name: true } }
+                  }
+                }
+              }
+            }
+          }
+        },
+        dialogues: {
+          orderBy: [{ startTimeMs: 'asc' }, { order: 'asc' }],
+          include: {
+            character: { select: { id: true, name: true } }
+          }
+        },
+        takes: { orderBy: { createdAt: 'desc' } }
+      }
+    })
+  }
+
+  /** Seedance：场次 + 项目画风，用于自动 prompt / 参考图 */
+  findUniqueWithSeedanceContext(sceneId: string) {
+    return this.prisma.scene.findUnique({
+      where: { id: sceneId },
+      include: {
+        location: true,
+        episode: {
+          include: {
+            project: { select: { visualStyle: true, aspectRatio: true } }
+          }
+        },
+        shots: {
+          orderBy: [{ order: 'asc' }, { shotNum: 'asc' }],
+          include: {
+            characterShots: {
+              include: {
+                characterImage: {
+                  include: { character: { select: { id: true, name: true } } }
+                }
+              }
+            }
+          }
+        },
+        dialogues: {
+          orderBy: [{ startTimeMs: 'asc' }, { order: 'asc' }],
+          include: { character: { select: { id: true, name: true } } }
+        }
+      }
+    })
+  }
+
   findUniqueWithTakesAndShots(sceneId: string) {
     return this.prisma.scene.findUnique({
       where: { id: sceneId },

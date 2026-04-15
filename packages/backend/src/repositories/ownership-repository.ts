@@ -79,6 +79,39 @@ export class OwnershipRepository {
       include: { character: { include: { project: { select: { userId: true } } } } }
     })
   }
+
+  findShotWithProjectUser(shotId: string) {
+    return this.prisma.shot.findUnique({
+      where: { id: shotId },
+      include: {
+        scene: {
+          include: {
+            episode: { include: { project: { select: { userId: true } } } }
+          }
+        }
+      }
+    })
+  }
+
+  findCharacterShotWithProjectUser(characterShotId: string) {
+    return this.prisma.characterShot.findUnique({
+      where: { id: characterShotId },
+      include: {
+        shot: {
+          include: {
+            scene: {
+              include: {
+                episode: { include: { project: { select: { userId: true } } } }
+              }
+            }
+          }
+        },
+        characterImage: {
+          include: { character: { select: { id: true, projectId: true } } }
+        }
+      }
+    })
+  }
 }
 
 export const ownershipRepository = new OwnershipRepository(prisma)

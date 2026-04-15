@@ -63,7 +63,8 @@ function buildArkRequest(request: SeedanceGenerateRequest): any {
     request.imageUrls.forEach(url => {
       content.push({
         type: 'image_url',
-        image_url: { url }
+        image_url: { url },
+        role: 'reference_image'
       })
     })
   }

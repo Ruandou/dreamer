@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NCard, NButton, NSpace, useMessage, NTag, useDialog } from 'naive-ui'
+import { NCard, NButton, NSpace, useMessage, NTag, useDialog, NCollapse, NCollapseItem } from 'naive-ui'
 import { useEpisodeStore } from '@/stores/episode'
 import { useSceneStore } from '@/stores/scene'
 import { api } from '@/api'
@@ -21,17 +21,24 @@ onMounted(async () => {
   await episodeStore.fetchEpisodes(projectId.value)
   if (episodeStore.episodes.length > 0) {
     selectedEpisodeId.value = episodeStore.episodes[0].id
-    await sceneStore.fetchScenes(selectedEpisodeId.value)
+    await sceneStore.fetchEpisodeScenesDetail(selectedEpisodeId.value)
   }
 })
 
 async function selectEpisode(id: string) {
   selectedEpisodeId.value = id
-  await sceneStore.fetchScenes(id)
+  await sceneStore.fetchEpisodeScenesDetail(id)
 }
 
 function openStoryboard() {
-  router.push(`/project/${projectId.value}/storyboard`)
+  if (!selectedEpisodeId.value) {
+    message.warning('请先选择一集')
+    return
+  }
+  router.push({
+    path: `/project/${projectId.value}/storyboard`,
+    query: { episodeId: selectedEpisodeId.value }
+  })
 }
 
 function openGenerateStoryboardDialog() {
@@ -42,7 +49,7 @@ function openGenerateStoryboardDialog() {
   dialog.warning({
     title: 'AI 生成分镜脚本',
     content:
-      '将使用本集梗概与（若存在）已有剧本中的场次/梗概；生成后会替换当前集下的场次与首镜描述。',
+      '将使用本集梗概与（若存在）已有剧本中的场次/梗概；生成后会替换当前集场次，并写入多镜 Shot、CharacterShot 与台词（若模型输出包含 shots）。',
     positiveText: '开始生成',
     negativeText: '取消',
     onPositiveClick: async () => {
@@ -82,6 +89,7 @@ async function composeEpisode(episodeId: string) {
     composingId.value = null
   }
 }
+
 </script>
 
 <template>
@@ -110,7 +118,7 @@ async function composeEpisode(episodeId: string) {
           <p v-if="!selectedEpisodeId" class="muted">请选择一集</p>
           <template v-else>
             <p class="muted">
-              共 {{ sceneStore.scenes.length }} 场 · 在分镜控制台中可批量生成视频、选择 Take。
+              共 {{ sceneStore.editorScenes.length }} 场。视频生成、选 Take、批量操作请在「分镜控制台」中完成（先选分集）；每场一条 Seedance，多镜与台词由后端拼进同一次任务。
             </p>
             <NSpace>
               <NButton @click="openStoryboard">去分镜控制台</NButton>
@@ -129,8 +137,48 @@ async function composeEpisode(episodeId: string) {
                 一键合成成片（按已选 Take）
               </NButton>
             </NSpace>
+            <NCollapse v-if="sceneStore.editorScenes.length" style="margin-top: 12px">
+              <NCollapseItem
+                v-for="sc in sceneStore.editorScenes"
+                :key="sc.id"
+                :title="`第 ${sc.sceneNum} 场 · ${sc.location?.name || '未定场'} · ${sc.shots?.length || 0} 镜`"
+              >
+                <p class="scene-hint">本场所有镜头与台词在分镜控制台中会合并为一条 Seedance 提示词，产出一条视频。</p>
+                <div v-if="sc.location?.imageUrl" class="thumb-row">
+                  <span class="lbl">定场</span>
+                  <img :src="sc.location.imageUrl" alt="" class="thumb" />
+                </div>
+                <div v-for="sh in sc.shots" :key="sh.id" class="shot-block">
+                  <div class="shot-title">镜 {{ sh.shotNum }}</div>
+                  <p class="shot-desc">{{ sh.description?.slice(0, 200) }}{{ (sh.description?.length || 0) > 200 ? '…' : '' }}</p>
+                  <div class="thumb-row">
+                    <div
+                      v-for="cs in sh.characterShots"
+                      :key="cs.id"
+                      class="char-chip"
+                    >
+                      <img
+                        v-if="cs.characterImage.avatarUrl"
+                        :src="cs.characterImage.avatarUrl"
+                        alt=""
+                        class="thumb sm"
+                      />
+                      <span>{{ cs.characterImage.character.name }} · {{ cs.characterImage.name }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="sc.dialogues?.length" class="dialogues">
+                  <div class="lbl">台词</div>
+                  <ul>
+                    <li v-for="d in sc.dialogues" :key="d.id">
+                      {{ (d.startTimeMs / 1000).toFixed(1) }}s {{ d.character.name }}：{{ d.text }}
+                    </li>
+                  </ul>
+                </div>
+              </NCollapseItem>
+            </NCollapse>
             <p class="muted hint-below">
-              「AI 生成分镜脚本」会提交后台任务（任务中心可见），完成后覆盖本集场次与首镜；请先在剧本侧写好梗概或导入剧本。
+              「AI 生成分镜脚本」会提交后台任务（任务中心可见），完成后覆盖本集场次；请先在剧本侧写好梗概或导入剧本。
             </p>
           </template>
         </NCard>
@@ -183,5 +231,63 @@ async function composeEpisode(episodeId: string) {
 .hint-below {
   margin-top: 12px;
   margin-bottom: 0;
+}
+.thumb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+.thumb.sm {
+  width: 40px;
+  height: 40px;
+}
+.lbl {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  min-width: 36px;
+}
+.shot-block {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+.shot-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.shot-desc {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 0 0 8px;
+}
+.char-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-right: 12px;
+}
+.dialogues {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.dialogues ul {
+  margin: 4px 0 0 1.2em;
+  padding: 0;
+}
+.scene-hint {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  display: block;
+  line-height: 1.4;
 }
 </style>

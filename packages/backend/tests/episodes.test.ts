@@ -12,6 +12,7 @@ const {
   mockProjectFindUnique,
   mockSceneDeleteMany,
   mockSceneCreate,
+  mockSceneFindMany,
   mockShotCreate,
   mockLocationFindFirst,
   mockVerifyEpisodeOwnership,
@@ -33,6 +34,7 @@ const {
     mockProjectFindUnique: vi.fn(),
     mockSceneDeleteMany: vi.fn(),
     mockSceneCreate: vi.fn(),
+    mockSceneFindMany: vi.fn(),
     mockShotCreate: vi.fn(),
     mockLocationFindFirst: vi.fn(),
     mockVerifyEpisodeOwnership: vi.fn().mockResolvedValue(true),
@@ -115,7 +117,8 @@ vi.mock('../src/lib/prisma.js', () => ({
     },
     scene: {
       deleteMany: mockSceneDeleteMany,
-      create: mockSceneCreate
+      create: mockSceneCreate,
+      findMany: mockSceneFindMany
     },
     shot: {
       create: mockShotCreate
@@ -230,6 +233,48 @@ describe('Episode Routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/episodes/ep-1'
+      })
+
+      expectPermissionDeniedPayload(response)
+    })
+  })
+
+  describe('GET /api/episodes/:id/scenes', () => {
+    it('should return aggregated scenes for editor', async () => {
+      mockSceneFindMany.mockResolvedValueOnce([
+        {
+          id: 'sc1',
+          episodeId: 'ep-1',
+          sceneNum: 1,
+          description: 'd',
+          duration: 5000,
+          aspectRatio: '9:16',
+          visualStyle: [],
+          status: 'pending',
+          location: null,
+          shots: [],
+          dialogues: [],
+          takes: []
+        }
+      ])
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/episodes/ep-1/scenes'
+      })
+
+      expect(response.statusCode).toBe(200)
+      const data = JSON.parse(response.payload)
+      expect(data.scenes).toHaveLength(1)
+      expect(data.scenes[0].id).toBe('sc1')
+    })
+
+    it('should return 403 when user does not own episode', async () => {
+      mockVerifyEpisodeOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/episodes/ep-1/scenes'
       })
 
       expectPermissionDeniedPayload(response)

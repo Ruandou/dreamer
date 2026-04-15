@@ -16,11 +16,71 @@ export type SceneRow = {
 
 export type SceneWithTakes = SceneRow
 
+/** GET /episodes/:id/scenes 聚合结构 */
+export type EpisodeEditorScene = {
+  id: string
+  episodeId: string
+  sceneNum: number
+  description: string
+  duration: number
+  status: SceneStatus
+  location: { id: string; name: string; imageUrl?: string | null } | null
+  shots: Array<{
+    id: string
+    shotNum: number
+    order: number
+    description: string
+    cameraAngle?: string | null
+    cameraMovement?: string | null
+    duration: number
+    characterShots: Array<{
+      id: string
+      action?: string | null
+      characterImage: {
+        id: string
+        name: string
+        avatarUrl?: string | null
+        character: { id: string; name: string }
+      }
+    }>
+  }>
+  dialogues: Array<{
+    id: string
+    order: number
+    startTimeMs: number
+    durationMs: number
+    text: string
+    voiceConfig: unknown
+    character: { id: string; name: string }
+  }>
+  takes: Take[]
+}
+
 export const useSceneStore = defineStore('scene', () => {
   const scenes = ref<SceneRow[]>([])
+  /** 分集管理页专用（含 shots / dialogues） */
+  const editorScenes = ref<EpisodeEditorScene[]>([])
   const currentScene = ref<SceneWithTakes | null>(null)
   const isLoading = ref(false)
   const isGenerating = ref(false)
+
+  async function fetchEpisodeScenesDetail(episodeId: string) {
+    isLoading.value = true
+    try {
+      const res = await api.get<{ scenes: EpisodeEditorScene[] }>(`/episodes/${episodeId}/scenes`)
+      editorScenes.value = res.data.scenes
+      scenes.value = res.data.scenes.map((s) => ({
+        id: s.id,
+        episodeId: s.episodeId,
+        sceneNum: s.sceneNum,
+        description: s.description,
+        status: s.status,
+        takes: s.takes
+      }))
+    } finally {
+      isLoading.value = false
+    }
+  }
 
   async function fetchScenes(episodeId: string) {
     isLoading.value = true
@@ -132,9 +192,11 @@ export const useSceneStore = defineStore('scene', () => {
 
   return {
     scenes,
+    editorScenes,
     currentScene,
     isLoading,
     isGenerating,
+    fetchEpisodeScenesDetail,
     fetchScenes,
     getScene,
     createScene,

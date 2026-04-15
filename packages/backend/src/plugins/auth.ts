@@ -82,3 +82,16 @@ export async function verifyCharacterImageOwnership(
   const image = await ownershipRepository.findCharacterImageWithProjectUser(characterImageId)
   return image?.character.project.userId === userId
 }
+
+export async function verifyShotOwnership(userId: string, shotId: string): Promise<boolean> {
+  const shot = await ownershipRepository.findShotWithProjectUser(shotId)
+  return shot?.scene.episode.project.userId === userId
+}
+
+export async function verifyCharacterShotOwnership(
+  userId: string,
+  characterShotId: string
+): Promise<boolean> {
+  const row = await ownershipRepository.findCharacterShotWithProjectUser(characterShotId)
+  return row?.shot.scene.episode.project.userId === userId
+}

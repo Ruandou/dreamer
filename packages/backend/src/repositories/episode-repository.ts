@@ -86,7 +86,7 @@ export class EpisodeRepository {
     return this.prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        characters: { select: { name: true, description: true } },
+        characters: { select: { name: true, description: true, voiceConfig: true } },
         episodes: { select: { title: true, episodeNum: true } }
       }
     })

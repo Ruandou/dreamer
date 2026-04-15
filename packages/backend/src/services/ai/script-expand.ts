@@ -1,4 +1,9 @@
-import type { ScriptContent, ScriptScene, ScriptDialogueLine } from '@dreamer/shared/types'
+import type {
+  ScriptContent,
+  ScriptScene,
+  ScriptDialogueLine,
+  ScriptStoryboardShot
+} from '@dreamer/shared/types'
 import type { ModelCallLogContext } from './api-logger.js'
 import { logDeepSeekChat } from './model-call-log.js'
 import {
@@ -71,6 +76,25 @@ export function convertDeepSeekResponse(data: any): ScriptContent {
       actions = s.action.split(/(?<=[。！？；.!?;])/).filter(Boolean)
     }
 
+    let shots: ScriptStoryboardShot[] | undefined
+    if (Array.isArray(s.shots) && s.shots.length > 0) {
+      shots = s.shots.map((sh: any) => ({
+        shotNum: sh.shotNum ?? sh.order ?? 1,
+        order: sh.order ?? sh.shotNum ?? 1,
+        description: sh.description || '',
+        cameraAngle: sh.cameraAngle,
+        cameraMovement: sh.cameraMovement,
+        duration: typeof sh.duration === 'number' ? sh.duration : undefined,
+        characters: Array.isArray(sh.characters)
+          ? sh.characters.map((c: any) => ({
+              characterName: c.characterName || c.name || '',
+              imageName: c.imageName || '基础形象',
+              action: c.action
+            }))
+          : undefined
+      }))
+    }
+
     return {
       sceneNum: s.sceneNum || s.scene_number || 1,
       location: s.location || '',
@@ -78,7 +102,8 @@ export function convertDeepSeekResponse(data: any): ScriptContent {
       characters: Array.isArray(s.characters) ? s.characters : [],
       description: s.description || '',
       dialogues,
-      actions
+      actions,
+      ...(shots && shots.length > 0 ? { shots } : {})
     }
   })
 

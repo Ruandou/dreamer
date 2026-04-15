@@ -26,6 +26,20 @@ export interface ScriptContent {
     summary: string;
     scenes: ScriptScene[];
 }
+export interface ScriptStoryboardShotCharacter {
+    characterName: string;
+    imageName: string;
+    action?: string;
+}
+export interface ScriptStoryboardShot {
+    shotNum?: number;
+    order?: number;
+    description: string;
+    cameraAngle?: string;
+    cameraMovement?: string;
+    duration?: number;
+    characters?: ScriptStoryboardShotCharacter[];
+}
 export interface ScriptScene {
     sceneNum: number;
     location: string;
@@ -34,6 +48,7 @@ export interface ScriptScene {
     description: string;
     dialogues: Dialogue[];
     actions: string[];
+    shots?: ScriptStoryboardShot[];
 }
 export interface Dialogue {
     character: string;
@@ -184,6 +199,8 @@ export interface VideoJobData {
     prompt: string;
     model: VideoModel;
     referenceImage?: string;
+    imageUrls?: string[];
     duration?: number;
+    aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive';
 }
 //# sourceMappingURL=index.d.ts.map

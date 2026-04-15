@@ -59,6 +59,26 @@ describe('Seedance Service', () => {
       expect(response.status).toBe('queued')
     })
 
+    it('includes reference_image role on image_url items', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'task-456', status: 'pending' })
+      })
+
+      await submitSeedanceTask({
+        prompt: '图片1为主体',
+        imageUrls: ['https://a/1.png', 'https://a/2.png'],
+        duration: 6
+      })
+
+      const call = mockFetch.mock.calls[0]
+      const body = JSON.parse(call[1].body as string)
+      const imgs = body.content.filter((x: { type: string }) => x.type === 'image_url')
+      expect(imgs).toHaveLength(2)
+      expect(imgs[0].role).toBe('reference_image')
+      expect(imgs[1].role).toBe('reference_image')
+    })
+
     it('should throw error when API fails', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,

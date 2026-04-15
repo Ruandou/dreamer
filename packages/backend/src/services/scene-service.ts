@@ -3,6 +3,7 @@ import { videoQueue } from '../queues/video.js'
 import { optimizePrompt } from './ai/deepseek.js'
 import { stitchScenePrompt } from './scene-prompt.js'
 import { sceneRepository, type SceneRepository } from '../repositories/scene-repository.js'
+import { buildSeedanceScenePayload } from './seedance-scene-request.js'
 
 export interface VideoQueueLike {
   add(name: string, data: VideoJobData): Promise<unknown>
@@ -108,12 +109,39 @@ export class SceneService {
     | { ok: true; taskId: string; sceneId: string }
     | { ok: false; reason: 'no_prompt' }
   > {
-    const prompt = await this.resolveSceneGeneratePrompt(sceneId)
+    const { model, referenceImage, duration: bodyDuration } = body
+    let imageUrls = body.imageUrls
+    let prompt = await this.resolveSceneGeneratePrompt(sceneId)
+    let duration = bodyDuration
+
+    const useAuto =
+      model === 'seedance2.0' &&
+      (!imageUrls || imageUrls.length === 0) &&
+      !referenceImage
+
+    let aspectRatio:
+      | '16:9'
+      | '9:16'
+      | '1:1'
+      | '4:3'
+      | '3:4'
+      | '21:9'
+      | 'adaptive'
+      | undefined
+
+    if (useAuto) {
+      const built = await buildSeedanceScenePayload(sceneId)
+      if (built && built.prompt.trim()) {
+        prompt = built.prompt
+        imageUrls = built.imageUrls
+        aspectRatio = built.aspectRatio
+        if (duration === undefined) duration = built.durationSeconds
+      }
+    }
+
     if (!prompt.trim()) {
       return { ok: false, reason: 'no_prompt' }
     }
-
-    const { model, referenceImage, imageUrls, duration } = body
 
     const task = await this.repository.createTake({
       sceneId,
@@ -129,7 +157,8 @@ export class SceneService {
       model,
       referenceImage,
       imageUrls,
-      duration
+      duration,
+      aspectRatio
     })
 
     await this.repository.updateScene(sceneId, { status: 'generating' })
@@ -152,7 +181,33 @@ export class SceneService {
         continue
       }
 
-      const prompt = await this.resolveSceneGeneratePrompt(sceneId)
+      let prompt = await this.resolveSceneGeneratePrompt(sceneId)
+      let effectiveImageUrls = imageUrls
+      let effectiveDuration: number | undefined = undefined
+      let aspectRatio:
+        | '16:9'
+        | '9:16'
+        | '1:1'
+        | '4:3'
+        | '3:4'
+        | '21:9'
+        | 'adaptive'
+        | undefined
+
+      if (
+        model === 'seedance2.0' &&
+        (!effectiveImageUrls || effectiveImageUrls.length === 0) &&
+        !referenceImage
+      ) {
+        const built = await buildSeedanceScenePayload(sceneId)
+        if (built?.prompt.trim()) {
+          prompt = built.prompt
+          effectiveImageUrls = built.imageUrls
+          effectiveDuration = built.durationSeconds
+          aspectRatio = built.aspectRatio
+        }
+      }
+
       if (!prompt.trim()) continue
 
       const task = await this.repository.createTake({
@@ -168,7 +223,9 @@ export class SceneService {
         prompt,
         model,
         referenceImage,
-        imageUrls
+        imageUrls: effectiveImageUrls,
+        duration: effectiveDuration,
+        aspectRatio
       })
 
       await this.repository.updateScene(sceneId, { status: 'generating' })

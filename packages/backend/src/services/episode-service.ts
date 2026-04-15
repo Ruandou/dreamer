@@ -1,5 +1,6 @@
 import type { Episode as PrismaEpisode, Prisma } from '@prisma/client'
 import type { ScriptContent } from '@dreamer/shared/types'
+import { prisma } from '../lib/prisma.js'
 import {
   expandScript,
   generateStoryboardScriptFromEpisode,
@@ -7,6 +8,15 @@ import {
 } from './ai/deepseek.js'
 import { runCompositionExport } from './composition-export.js'
 import { episodeRepository, type EpisodeRepository } from '../repositories/episode-repository.js'
+import { sceneRepository } from '../repositories/scene-repository.js'
+
+const DEFAULT_VOICE_CONFIG: Prisma.InputJsonValue = {
+  gender: 'male',
+  age: 'young',
+  tone: 'mid',
+  timbre: 'warm_solid',
+  speed: 'medium'
+}
 
 function buildScenePrompt(scene: {
   location?: string
@@ -70,11 +80,19 @@ export class EpisodeService {
 
     await this.repo.deleteScenesByEpisode(episodeId)
 
+    const projectVisual = project?.visualStyle?.length ? [...project.visualStyle] : []
+
     for (const sc of script.scenes) {
       let locationId: string | undefined
       if (sc.location) {
         const loc = await this.repo.findLocationByProjectAndName(projectId, sc.location)
         locationId = loc?.id
+      }
+
+      const hasShots = sc.shots && sc.shots.length > 0
+      let sceneDurationMs = 5000
+      if (hasShots) {
+        sceneDurationMs = sc.shots!.reduce((sum, sh) => sum + (sh.duration ?? 5000), 0)
       }
 
       const scene = await this.repo.createScene({
@@ -83,19 +101,90 @@ export class EpisodeService {
         locationId,
         timeOfDay: sc.timeOfDay,
         description: sc.description || `${sc.location} - ${sc.timeOfDay}`,
-        duration: 5000,
+        duration: sceneDurationMs,
         aspectRatio: project?.aspectRatio ?? '9:16',
-        visualStyle: [],
+        visualStyle: projectVisual,
         status: 'pending'
       })
 
-      await this.repo.createShot({
-        sceneId: scene.id,
-        shotNum: 1,
-        order: 1,
-        description: buildScenePrompt(sc, script.title || ''),
-        duration: 5000
-      })
+      if (hasShots) {
+        const sorted = [...sc.shots!].sort(
+          (a, b) => (a.order ?? a.shotNum ?? 0) - (b.order ?? b.shotNum ?? 0)
+        )
+        let idx = 0
+        for (const sh of sorted) {
+          idx += 1
+          const shot = await this.repo.createShot({
+            sceneId: scene.id,
+            shotNum: sh.shotNum ?? idx,
+            order: sh.order ?? idx,
+            description: sh.description || '',
+            duration: sh.duration ?? 5000,
+            cameraAngle: sh.cameraAngle || null,
+            cameraMovement: sh.cameraMovement || null
+          })
+          for (const c of sh.characters || []) {
+            const ch = await prisma.character.findFirst({
+              where: { projectId, name: c.characterName }
+            })
+            if (!ch) continue
+            let img = await prisma.characterImage.findFirst({
+              where: { characterId: ch.id, name: c.imageName }
+            })
+            if (!img) {
+              img = await prisma.characterImage.findFirst({
+                where: { characterId: ch.id, type: 'base' }
+              })
+            }
+            if (!img) continue
+            await prisma.characterShot.create({
+              data: {
+                shotId: shot.id,
+                characterImageId: img.id,
+                action: c.action ?? null
+              }
+            })
+          }
+        }
+      } else {
+        await this.repo.createShot({
+          sceneId: scene.id,
+          shotNum: 1,
+          order: 1,
+          description: buildScenePrompt(sc, script.title || ''),
+          duration: 5000
+        })
+      }
+
+      if (sc.dialogues?.length) {
+        const n = sc.dialogues.length
+        const slot = Math.max(1000, Math.floor(sceneDurationMs / n))
+        let t = 0
+        for (let i = 0; i < sc.dialogues.length; i++) {
+          const d = sc.dialogues[i]
+          const character = await prisma.character.findFirst({
+            where: { projectId, name: d.character }
+          })
+          if (!character) continue
+          const vc = character.voiceConfig
+          const voiceConfig =
+            vc && typeof vc === 'object' && !Array.isArray(vc)
+              ? (vc as Prisma.InputJsonValue)
+              : DEFAULT_VOICE_CONFIG
+          await prisma.sceneDialogue.create({
+            data: {
+              sceneId: scene.id,
+              characterId: character.id,
+              order: i + 1,
+              startTimeMs: t,
+              durationMs: slot,
+              text: d.content,
+              voiceConfig
+            }
+          })
+          t += slot
+        }
+      }
     }
 
     return { updatedEpisode, scenesCreated: script.scenes.length }
@@ -107,6 +196,11 @@ export class EpisodeService {
 
   getById(episodeId: string) {
     return this.repo.findUnique(episodeId)
+  }
+
+  /** 分集管理 Tab：场次 + 定场 + 多镜 + CharacterShot + 台词 + takes */
+  listScenesForEpisode(episodeId: string) {
+    return sceneRepository.findManyByEpisodeForEditor(episodeId)
   }
 
   createEpisode(projectId: string, episodeNum: number, title?: string) {

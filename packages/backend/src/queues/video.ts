@@ -27,7 +27,7 @@ export const videoQueue = new Queue<VideoJobData>('video-generation', {
 export const videoWorker = new Worker<VideoJobData>(
   'video-generation',
   async (job) => {
-    const { sceneId, taskId, prompt, model, referenceImage, imageUrls, duration } = job.data
+    const { sceneId, taskId, prompt, model, referenceImage, imageUrls, duration, aspectRatio } = job.data
 
     console.log(`Processing video job ${job.id} for scene ${sceneId}, model: ${model}`)
 
@@ -129,7 +129,8 @@ export const videoWorker = new Worker<VideoJobData>(
         const response = await submitSeedanceTask({
           prompt,
           imageUrls: imageUrls,
-          duration: effectiveDuration
+          duration: effectiveDuration,
+          aspectRatio: aspectRatio ?? '9:16'
         })
 
         externalTaskId = response.taskId

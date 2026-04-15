@@ -17,6 +17,8 @@ import { characterImageRoutes } from './routes/character-images.js'
 import { locationRoutes } from './routes/locations.js'
 import { takeRoutes } from './routes/takes.js'
 import { sceneRoutes } from './routes/scenes.js'
+import { shotRoutes } from './routes/shots.js'
+import { characterShotsRoutes } from './routes/character-shots.js'
 import { taskRoutes } from './routes/tasks.js'
 import { compositionRoutes } from './routes/compositions.js'
 import { authRoutes } from './routes/auth.js'
@@ -86,6 +88,8 @@ async function start() {
     await fastify.register(locationRoutes, { prefix: '/api/locations' })
     await fastify.register(takeRoutes, { prefix: '/api/takes' })
     await fastify.register(sceneRoutes, { prefix: '/api/scenes' })
+    await fastify.register(shotRoutes, { prefix: '/api/shots' })
+    await fastify.register(characterShotsRoutes, { prefix: '/api/character-shots' })
     await fastify.register(taskRoutes, { prefix: '/api/tasks' })
     await fastify.register(compositionRoutes, { prefix: '/api/compositions' })
     await fastify.register(statsRoutes, { prefix: '/api/stats' })

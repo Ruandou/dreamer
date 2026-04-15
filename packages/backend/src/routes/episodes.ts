@@ -43,6 +43,23 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     }
   )
 
+  /** 分集管理：场次 + 定场 + 多镜 + CharacterShot + 台词 + takes */
+  fastify.get<{ Params: { id: string } }>(
+    '/:id/scenes',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request as any).user.id
+      const episodeId = request.params.id
+
+      if (!(await verifyEpisodeOwnership(userId, episodeId))) {
+        return reply.status(403).send(permissionDeniedBody)
+      }
+
+      const scenes = await episodeService.listScenesForEpisode(episodeId)
+      return { scenes }
+    }
+  )
+
   // Create episode
   fastify.post<{ Body: { projectId: string; episodeNum: number; title?: string } }>(
     '/',

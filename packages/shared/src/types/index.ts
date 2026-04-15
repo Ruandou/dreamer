@@ -77,6 +77,24 @@ export interface ScriptMetadata {
   characters?: string[]            // 角色列表
 }
 
+/** 分镜脚本中每镜出场角色（关联 CharacterImage.name） */
+export interface ScriptStoryboardShotCharacter {
+  characterName: string
+  imageName: string
+  action?: string
+}
+
+/** 分镜脚本中的镜头行（AI 生成分镜剧本时可多镜） */
+export interface ScriptStoryboardShot {
+  shotNum?: number
+  order?: number
+  description: string
+  cameraAngle?: string
+  cameraMovement?: string
+  duration?: number
+  characters?: ScriptStoryboardShotCharacter[]
+}
+
 export interface ScriptScene {
   sceneNum: number
   location: string // 场景地点
@@ -85,6 +103,8 @@ export interface ScriptScene {
   description: string // 场景描述
   dialogues: ScriptDialogueLine[]
   actions: string[] // 动作描述列表
+  /** 若存在且非空，则按多镜写入 Shot + CharacterShot；否则沿用单场首镜 */
+  shots?: ScriptStoryboardShot[]
 }
 
 /** 剧本 JSON 中的单行台词（非 DB SceneDialogue） */
@@ -280,6 +300,8 @@ export interface VideoJobData {
   referenceImage?: string
   imageUrls?: string[]
   duration?: number
+  /** Seedance 2.0 宽高比（与 Scene / Project 一致时由服务端自动填充） */
+  aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive'
 }
 
 /** BullMQ 图片生成任务（Worker 消费，HTTP 仅入队） */
