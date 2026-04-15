@@ -6,13 +6,15 @@ import {
 import { CharacterImageRepository } from '../src/repositories/character-image-repository.js'
 
 const mockFind = vi.fn()
+const mockFindSlots = vi.fn()
 const mockUpdatePrompt = vi.fn()
 const mockAdd = vi.fn()
 
 function makeMockRepository(): CharacterImageRepository {
   return {
     findByIdWithCharacterAndParent: mockFind,
-    updatePrompt: mockUpdatePrompt
+    updatePrompt: mockUpdatePrompt,
+    findSlotsWithoutAvatarByProject: mockFindSlots
   } as unknown as CharacterImageRepository
 }
 
@@ -25,6 +27,7 @@ describe('CharacterImageService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockFindSlots.mockResolvedValue([])
     mockAdd.mockResolvedValue({ id: 'job-1' })
     service = new CharacterImageService(makeMockRepository(), mockQueue)
   })
@@ -73,6 +76,69 @@ describe('CharacterImageService', () => {
       ok: false,
       reason: 'parent_no_avatar'
     })
+    expect(mockAdd).not.toHaveBeenCalled()
+  })
+
+  it('batchEnqueueMissingAvatars enqueues base slots with prompt', async () => {
+    mockFindSlots.mockResolvedValue([
+      {
+        id: 'i1',
+        name: '主',
+        prompt: 'p',
+        avatarUrl: null,
+        parentId: null,
+        character: { name: '角色A', project: { id: 'p1', visualStyle: [] } },
+        parent: null
+      }
+    ])
+    mockFind.mockResolvedValue({
+      id: 'i1',
+      prompt: 'p',
+      parentId: null,
+      character: { project: { id: 'p1', visualStyle: [] } },
+      parent: null
+    })
+    const r = await service.batchEnqueueMissingAvatars('u1', 'p1')
+    expect(r.enqueued).toBe(1)
+    expect(r.enqueuedCharacterImageIds).toEqual(['i1'])
+    expect(r.jobIds).toEqual(['job-1'])
+    expect(r.skipped).toEqual([])
+    expect(mockAdd).toHaveBeenCalledTimes(1)
+  })
+
+  it('batchEnqueueMissingAvatars skips rows without prompt', async () => {
+    mockFindSlots.mockResolvedValue([
+      {
+        id: 'i2',
+        name: 'x',
+        prompt: '',
+        avatarUrl: null,
+        parentId: null,
+        character: { name: 'R', project: { id: 'p1', visualStyle: [] } },
+        parent: null
+      }
+    ])
+    const r = await service.batchEnqueueMissingAvatars('u1', 'p1')
+    expect(r.enqueued).toBe(0)
+    expect(r.skipped[0]?.reason).toBe('缺少提示词')
+    expect(mockAdd).not.toHaveBeenCalled()
+  })
+
+  it('batchEnqueueMissingAvatars skips derived when parent has no avatar', async () => {
+    mockFindSlots.mockResolvedValue([
+      {
+        id: 'i3',
+        name: '衍',
+        prompt: 'edit',
+        avatarUrl: null,
+        parentId: 'p0',
+        character: { name: 'R', project: { id: 'p1', visualStyle: [] } },
+        parent: { avatarUrl: null }
+      }
+    ])
+    const r = await service.batchEnqueueMissingAvatars('u1', 'p1')
+    expect(r.enqueued).toBe(0)
+    expect(r.skipped[0]?.reason).toBe('父级基础形象尚未生成')
     expect(mockAdd).not.toHaveBeenCalled()
   })
 })

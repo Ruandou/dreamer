@@ -8,6 +8,7 @@ const {
   mockLocationFindMany,
   mockLocationFindUnique,
   mockLocationUpdate,
+  mockLocationCreate,
   mockSceneUpdateMany,
   mockImageQueueAdd,
   mockUploadFile,
@@ -18,6 +19,7 @@ const {
   mockLocationFindMany: vi.fn(),
   mockLocationFindUnique: vi.fn(),
   mockLocationUpdate: vi.fn(),
+  mockLocationCreate: vi.fn(),
   mockSceneUpdateMany: vi.fn(),
   mockImageQueueAdd: vi.fn(),
   mockUploadFile: vi.fn(),
@@ -35,7 +37,8 @@ vi.mock('../src/lib/prisma.js', () => ({
       findMany: mockLocationFindMany,
       findUnique: mockLocationFindUnique,
       findFirst: mockLocationFindUnique,
-      update: mockLocationUpdate
+      update: mockLocationUpdate,
+      create: mockLocationCreate
     },
     scene: {
       updateMany: mockSceneUpdateMany
@@ -94,6 +97,51 @@ describe('Location routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/locations?projectId=p1' })
     expect(res.statusCode).toBe(200)
     expect(JSON.parse(res.payload)).toHaveLength(1)
+  })
+
+  it('POST / returns 400 without projectId', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/locations',
+      payload: { name: 'x' }
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('POST / returns 201 and creates location', async () => {
+    mockLocationCreate.mockResolvedValue({
+      id: 'l-new',
+      projectId: 'p1',
+      name: '新场地',
+      timeOfDay: '日',
+      characters: [],
+      description: null,
+      imagePrompt: null,
+      imageUrl: null,
+      imageCost: null,
+      deletedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/locations',
+      payload: { projectId: 'p1', name: '新场地' }
+    })
+    expect(res.statusCode).toBe(201)
+    const data = JSON.parse(res.payload)
+    expect(data.id).toBe('l-new')
+    expect(mockLocationCreate).toHaveBeenCalled()
+  })
+
+  it('POST / returns 409 when name duplicates', async () => {
+    mockLocationCreate.mockRejectedValue(Object.assign(new Error('dup'), { code: 'P2002' }))
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/locations',
+      payload: { projectId: 'p1', name: '重复' }
+    })
+    expect(res.statusCode).toBe(409)
   })
 
   it('PUT /:id returns 400 when characters is not an array', async () => {

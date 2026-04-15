@@ -13,6 +13,9 @@ import {
   NSpin,
   NPopconfirm,
   NTooltip,
+  NModal,
+  NForm,
+  NFormItem,
   useMessage
 } from 'naive-ui'
 import type { ProjectLocation } from '@dreamer/shared/types'
@@ -27,6 +30,7 @@ const projectStore = useProjectStore()
 
 const projectId = computed(() => route.params.id as string)
 const locations = ref<ProjectLocation[]>([])
+const searchQuery = ref('')
 const loading = ref(false)
 const savingId = ref<string | null>(null)
 const batchGenerating = ref(false)
@@ -50,12 +54,71 @@ function isPending(id: string) {
   return pendingLocationIds.value.includes(id)
 }
 
+const showCreateModal = ref(false)
+const newLocation = ref({ name: '', timeOfDay: '', description: '' })
+
+async function handleCreateLocation() {
+  if (!newLocation.value.name.trim()) {
+    message.warning('请输入场地名称')
+    return
+  }
+  try {
+    const body: {
+      projectId: string
+      name: string
+      timeOfDay?: string
+      description?: string
+    } = {
+      projectId: projectId.value,
+      name: newLocation.value.name.trim()
+    }
+    const t = newLocation.value.timeOfDay.trim()
+    if (t) body.timeOfDay = t
+    const d = newLocation.value.description.trim()
+    if (d) body.description = d
+
+    await api.post<ProjectLocation>('/locations', body)
+    showCreateModal.value = false
+    newLocation.value = { name: '', timeOfDay: '', description: '' }
+    message.success('场地已添加')
+    await load({ silent: true })
+    await projectStore.getProject(projectId.value)
+  } catch (e: any) {
+    const status = e?.response?.status
+    if (status === 409) {
+      message.error(e?.response?.data?.error || '已存在同名称场地')
+      return
+    }
+    message.error(e?.response?.data?.error || '添加失败')
+  }
+}
+
 /** 已有定场图数 / 场地总数 */
 const locationImageStats = computed(() => {
   const list = locations.value
   const total = list.length
   const withImage = list.filter((l) => !!(l.imageUrl && String(l.imageUrl).trim())).length
   return { withImage, total }
+})
+
+const filteredLocations = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  const list = locations.value
+  if (!q) return list
+  return list.filter((l) => {
+    const name = (l.name || '').toLowerCase()
+    const desc = (l.description || '').toLowerCase()
+    const prompt = (l.imagePrompt || '').toLowerCase()
+    const tod = (l.timeOfDay || '').toLowerCase()
+    const chars = (l.characters || []).join(' ').toLowerCase()
+    return (
+      name.includes(q) ||
+      desc.includes(q) ||
+      prompt.includes(q) ||
+      tod.includes(q) ||
+      chars.includes(q)
+    )
+  })
 })
 
 let unsubProjectSse: (() => void) | null = null
@@ -139,6 +202,7 @@ watch(
   () => route.params.id as string,
   async (newId, oldId) => {
     if (newId === oldId) return
+    searchQuery.value = ''
     pendingLocationIds.value = []
     clearPendingPoll()
     unsubProjectSse?.()
@@ -320,6 +384,18 @@ async function generateAllMissing() {
             </span>
           </div>
           <NSpace align="center" :size="8" wrap>
+            <NInput
+              v-model:value="searchQuery"
+              clearable
+              round
+              size="small"
+              placeholder="搜索名称、描述、提示词…"
+              class="loc-lib-search"
+            >
+              <template #prefix>
+                <span class="loc-lib-search-icon" aria-hidden="true">⌕</span>
+              </template>
+            </NInput>
             <NButton
               size="small"
               type="primary"
@@ -330,13 +406,25 @@ async function generateAllMissing() {
             >
               一键生成定场图
             </NButton>
-            <NButton quaternary size="small" :loading="loading" @click="() => load()">刷新</NButton>
+            <NButton type="primary" size="small" @click="showCreateModal = true">添加场地</NButton>
           </NSpace>
         </div>
       </template>
+      <p class="loc-lib-hint">
+        每个场地对应一张定场图；填写中文提示词后保存，再点「生成定场图」或使用一键批量；也可本地上传替换。
+      </p>
       <NEmpty v-if="!loading && locations.length === 0" description="暂无场地，请先解析剧本" />
+      <NEmpty
+        v-else-if="locations.length > 0 && filteredLocations.length === 0"
+        description="没有匹配的场地"
+        class="loc-lib-search-empty"
+      >
+        <template #extra>
+          <NButton size="small" @click="searchQuery = ''">清空搜索</NButton>
+        </template>
+      </NEmpty>
       <NGrid v-else cols="1 s:2 m:3" responsive="screen" x-gap="16" y-gap="16">
-        <NGi v-for="loc in locations" :key="loc.id">
+        <NGi v-for="loc in filteredLocations" :key="loc.id">
           <NCard size="small">
             <template #header>
               <div class="loc-card-title-wrap">
@@ -415,6 +503,39 @@ async function generateAllMissing() {
         </NGi>
       </NGrid>
     </NCard>
+
+    <NModal
+      v-model:show="showCreateModal"
+      preset="card"
+      title="添加场地"
+      style="width: 480px"
+    >
+      <NForm :model="newLocation" label-placement="top">
+        <NFormItem label="场地名称" path="name">
+          <NInput v-model:value="newLocation.name" placeholder="如：咖啡厅、天台" />
+        </NFormItem>
+        <NFormItem label="时段" path="timeOfDay">
+          <NInput
+            v-model:value="newLocation.timeOfDay"
+            placeholder="留空默认为「日」"
+          />
+        </NFormItem>
+        <NFormItem label="描述" path="description">
+          <NInput
+            v-model:value="newLocation.description"
+            type="textarea"
+            placeholder="可选：环境、氛围等"
+            :rows="3"
+          />
+        </NFormItem>
+      </NForm>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="showCreateModal = false">取消</NButton>
+          <NButton type="primary" @click="handleCreateLocation">创建</NButton>
+        </NSpace>
+      </template>
+    </NModal>
   </div>
 </template>
 
@@ -449,6 +570,27 @@ async function generateAllMissing() {
 .loc-lib-stat {
   font-size: var(--font-size-sm);
   white-space: nowrap;
+}
+.loc-lib-stat.muted {
+  color: var(--color-text-tertiary);
+}
+.loc-lib-hint {
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-normal);
+}
+.loc-lib-search {
+  width: 200px;
+  max-width: 100%;
+  min-width: 0;
+}
+.loc-lib-search-icon {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
+.loc-lib-search-empty {
+  padding: var(--spacing-xl) 0;
 }
 .loc-card-spin :deep(.n-spin-content) {
   min-height: 0;

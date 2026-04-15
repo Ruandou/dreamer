@@ -102,6 +102,17 @@ export const useCharacterStore = defineStore('character', () => {
     return res.data
   }
 
+  /** 批量入队：无定妆图、有提示词、衍生父级已出图的槽位（与单槽生成规则一致） */
+  async function batchGenerateMissingCharacterAvatars(projectId: string) {
+    const res = await api.post<{
+      enqueued: number
+      jobIds: string[]
+      enqueuedCharacterImageIds: string[]
+      skipped: { id: string; name: string; reason: string }[]
+    }>('/character-images/batch-generate-missing-avatars', { projectId })
+    return res.data
+  }
+
   /** JSON：仅建槽位并由 DeepSeek 写 prompt（无上传文件） */
   async function addImageSlotByAi(
     characterId: string,
@@ -127,6 +138,7 @@ export const useCharacterStore = defineStore('character', () => {
     deleteImage,
     moveImage,
     queueCharacterImageGenerate,
+    batchGenerateMissingCharacterAvatars,
     addImageSlotByAi
   }
 })

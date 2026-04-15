@@ -3,6 +3,8 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NCard,
+  NGrid,
+  NGi,
   NButton,
   NSpace,
   NModal,
@@ -30,6 +32,11 @@ const characterStore = useCharacterStore()
 const projectId = computed(() => route.params.id as string)
 
 const searchQuery = ref('')
+const batchGenerating = ref(false)
+/** 队列中「已有槽位」文生图任务对应的形象 id（与 GET /image-generation/jobs 一致） */
+const inFlightCharacterImageIds = ref<Set<string>>(new Set())
+/** 尚无形象行、仅「新建定妆/衍生」队列任务可绑定的角色级状态 */
+const generatingCharacterPendingCreate = ref<Record<string, boolean>>({})
 
 const filteredCharacters = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
@@ -40,6 +47,19 @@ const filteredCharacters = computed(() => {
       c.name.toLowerCase().includes(q) ||
       (c.description || '').toLowerCase().includes(q)
   )
+})
+
+const slotAvatarStats = computed(() => {
+  let total = 0
+  let withAvatar = 0
+  for (const c of characterStore.characters) {
+    const imgs = c.images || []
+    total += imgs.length
+    for (const im of imgs) {
+      if (im.avatarUrl?.trim()) withAvatar += 1
+    }
+  }
+  return { withAvatar, total }
 })
 
 function imageStats(character: Character) {
@@ -58,30 +78,87 @@ function formatImageStatsLine(character: Character): string {
   return s.derived > 0 ? `${s.base} 定妆 · ${s.derived} 衍生` : `${s.base} 定妆`
 }
 
+function isCharacterCardSpinning(character: Character): boolean {
+  if (generatingCharacterPendingCreate.value[character.id]) return true
+  for (const im of character.images || []) {
+    if (inFlightCharacterImageIds.value.has(im.id)) return true
+  }
+  return false
+}
+
+const pollTracked = computed(
+  () =>
+    inFlightCharacterImageIds.value.size > 0 ||
+    Object.keys(generatingCharacterPendingCreate.value).length > 0
+)
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+function clearPoll() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+watch(
+  pollTracked,
+  (on) => {
+    clearPoll()
+    if (!on) return
+    pollTimer = setInterval(() => {
+      void characterStore.fetchCharacters(projectId.value)
+      void hydrateGeneratingFromQueue()
+    }, 4000)
+  },
+  { deep: true }
+)
+
 watch(projectId, async (id) => {
   if (!id) return
   searchQuery.value = ''
+  clearPoll()
   await characterStore.fetchCharacters(id)
   await hydrateGeneratingFromQueue()
 })
 
 const showCreateModal = ref(false)
 const newCharacter = ref({ name: '', description: '' })
-/** 尚无形象行、仅「新建定妆/衍生」队列任务可绑定的角色级 loading（与 Bull 任务 binding 一一对应） */
-const generatingCharacterPendingCreate = ref<Record<string, boolean>>({})
 
 let unsubProjectSse: (() => void) | null = null
 
 async function hydrateGeneratingFromQueue() {
   try {
-    const { characterIdsWithPendingNewImage } = await fetchInFlightImageJobsForProject(projectId.value)
+    const state = await fetchInFlightImageJobsForProject(projectId.value)
+    inFlightCharacterImageIds.value = new Set(state.characterImageIds)
     const nextCh: Record<string, boolean> = {}
-    for (const cid of characterIdsWithPendingNewImage) {
+    for (const cid of state.characterIdsWithPendingNewImage) {
       nextCh[cid] = true
     }
     generatingCharacterPendingCreate.value = nextCh
   } catch {
     // 忽略拉取失败
+  }
+}
+
+async function generateAllMissing() {
+  batchGenerating.value = true
+  try {
+    const data = await characterStore.batchGenerateMissingCharacterAvatars(projectId.value)
+    const { enqueued, skipped } = data
+    if (enqueued > 0) {
+      message.success(`已入队 ${enqueued} 个定妆生成任务`)
+      await hydrateGeneratingFromQueue()
+    } else {
+      message.warning('没有可生成的槽位（需提示词且无定妆图，衍生需父级已出图）')
+    }
+    if (skipped.length > 0) {
+      const reasons = [...new Set(skipped.map((s) => s.reason))]
+      message.info(`已跳过 ${skipped.length} 个：${reasons.join('；')}`)
+    }
+  } catch (e: any) {
+    message.error(e?.response?.data?.error || '批量入队失败')
+  } finally {
+    batchGenerating.value = false
   }
 }
 
@@ -102,15 +179,18 @@ onMounted(async () => {
     }
     if (p.status === 'completed' && p.characterImageId) {
       void characterStore.fetchCharacters(projectId.value)
+      void hydrateGeneratingFromQueue()
       message.success('形象图已更新')
     }
     if (p.status === 'failed' && p.kind?.startsWith('character')) {
+      void hydrateGeneratingFromQueue()
       message.error((p.error as string) || '形象生成失败')
     }
   })
 })
 
 onUnmounted(() => {
+  clearPoll()
   unsubProjectSse?.()
   unsubProjectSse = null
 })
@@ -149,7 +229,6 @@ const getAvatarBgColor = (name: string) => {
   return colors[index]
 }
 
-/** 卡片顶部叠放：已有定妆图 URL 的槽位（基础优先，再衍生），最多 6 张 */
 function previewAvatarImages(character: Character): { id: string; url: string }[] {
   const images = character.images || []
   const out: { id: string; url: string }[] = []
@@ -170,52 +249,57 @@ function previewAvatarImages(character: Character): { id: string; url: string }[
   }
   return out.slice(0, 6)
 }
-
 </script>
 
 <template>
   <div class="characters-page">
-    <div class="characters-toolbar">
-      <p class="characters-toolbar__hint">
+    <NCard>
+      <template #header>
+        <div class="char-lib-header">
+          <div class="char-lib-header-left">
+            <span class="char-lib-title">角色库</span>
+            <span class="char-lib-stat muted">
+              已生成定妆 {{ slotAvatarStats.withAvatar }}/{{ slotAvatarStats.total }}
+            </span>
+          </div>
+          <NSpace align="center" :size="8" wrap>
+            <NInput
+              v-model:value="searchQuery"
+              clearable
+              round
+              size="small"
+              placeholder="搜索名称或描述…"
+              class="char-lib-search"
+            >
+              <template #prefix>
+                <span class="char-lib-search-icon" aria-hidden="true">⌕</span>
+              </template>
+            </NInput>
+            <NButton
+              size="small"
+              type="primary"
+              secondary
+              :loading="batchGenerating"
+              :disabled="characterStore.isLoading || characterStore.characters.length === 0"
+              @click="generateAllMissing"
+            >
+              一键生成缺失定妆
+            </NButton>
+            <NButton type="primary" size="small" @click="showCreateModal = true">添加角色</NButton>
+          </NSpace>
+        </div>
+      </template>
+
+      <p class="char-lib-hint">
         每角色仅一个基础定妆，衍生形象挂在该定妆下；点「详情与形象树」可管理提示词与图片。
       </p>
-      <div class="characters-toolbar__row">
-        <NInput
-          v-model:value="searchQuery"
-          clearable
-          round
-          placeholder="搜索角色名称或描述…"
-          class="characters-toolbar__search"
-        >
-          <template #prefix>
-            <span class="characters-toolbar__search-icon" aria-hidden="true">⌕</span>
-          </template>
-        </NInput>
-        <div class="characters-toolbar__actions">
-          <span
-            v-if="characterStore.characters.length"
-            class="characters-toolbar__meta"
-          >
-            共 {{ characterStore.characters.length }} 个角色
-            <template v-if="searchQuery.trim() && filteredCharacters.length !== characterStore.characters.length">
-              · 显示 {{ filteredCharacters.length }} 个
-            </template>
-          </span>
-          <NButton type="primary" @click="showCreateModal = true">
-            <template #icon>+</template>
-            添加角色
-          </NButton>
-        </div>
-      </div>
-    </div>
 
-    <div class="characters-content">
       <NSpin
         :show="characterStore.isLoading && characterStore.characters.length === 0"
-        class="characters-loading"
+        class="char-lib-loading"
         description="加载角色列表…"
       >
-        <div class="characters-body">
+        <div class="char-lib-body">
           <EmptyState
             v-if="!characterStore.isLoading && characterStore.characters.length === 0"
             title="暂无角色"
@@ -234,109 +318,110 @@ function previewAvatarImages(character: Character): { id: string; url: string }[
               characterStore.characters.length > 0 && filteredCharacters.length === 0
             "
             description="没有匹配的角色"
-            class="characters-search-empty"
+            class="char-lib-search-empty"
           >
             <template #extra>
               <NButton size="small" @click="searchQuery = ''">清空搜索</NButton>
             </template>
           </NEmpty>
 
-          <div
-            v-else-if="characterStore.characters.length > 0"
-            class="characters-grid"
-          >
-        <NCard
-          v-for="character in filteredCharacters"
-          :key="character.id"
-          class="character-card"
-          :class="{ 'character-card--pending-new-image': generatingCharacterPendingCreate[character.id] }"
-          hoverable
-          :segmented="{ content: true, footer: 'soft' }"
-        >
-          <div
-            class="character-card__body"
-            role="link"
-            tabindex="0"
-            @click="goCharacterDetail(character.id)"
-            @keydown.enter.prevent="goCharacterDetail(character.id)"
-          >
-            <!-- 顶部：仅展示已生成图，高度撑满；点击整块进形象树 -->
-            <div class="character-card__avatar">
-              <template v-if="previewAvatarImages(character).length === 0">
-                <div class="card-avatar-placeholder">
-                  <span
-                    class="card-avatar-placeholder__initial"
-                    :style="{ color: getAvatarBgColor(character.name) }"
-                  >{{ getCharacterInitials(character.name) }}</span>
-                </div>
-              </template>
-              <div
-                v-else
-                class="card-avatar-row"
-                role="presentation"
-                :aria-label="`${character.name} 的定妆图`"
-              >
-                <div
-                  v-for="item in previewAvatarImages(character)"
-                  :key="item.id"
-                  class="card-avatar-row__cell"
-                >
-                  <img :src="item.url" :alt="`${character.name} 定妆图`" />
-                </div>
-              </div>
-            </div>
-
-            <!-- Info Section -->
-            <div class="character-card__info">
-              <div class="character-card__title-row">
-                <h3 class="character-card__name">{{ character.name }}</h3>
-                <NTag
-                  v-if="imageStats(character).total > 0"
+          <NGrid v-else cols="1 s:2 m:3" responsive="screen" x-gap="16" y-gap="16">
+            <NGi v-for="character in filteredCharacters" :key="character.id">
+              <NCard size="small" class="character-card" hoverable :segmented="{ content: true, footer: 'soft' }">
+                <NSpin
+                  :show="isCharacterCardSpinning(character)"
                   size="small"
-                  round
-                  :bordered="false"
+                  description="生成中…"
+                  class="char-card-spin"
                 >
-                  {{ formatImageStatsLine(character) }}
-                </NTag>
-                <NTag v-else size="small" round :bordered="false" type="warning">
-                  待添加形象
-                </NTag>
-              </div>
-              <p class="character-card__desc">
-                {{ character.description || '暂无描述' }}
-              </p>
-            </div>
-          </div>
+                  <div
+                    class="character-card__body"
+                    role="link"
+                    tabindex="0"
+                    @click="goCharacterDetail(character.id)"
+                    @keydown.enter.prevent="goCharacterDetail(character.id)"
+                  >
+                    <div class="character-card__avatar">
+                      <template v-if="previewAvatarImages(character).length === 0">
+                        <div class="card-avatar-placeholder">
+                          <span
+                            class="card-avatar-placeholder__initial"
+                            :style="{ color: getAvatarBgColor(character.name) }"
+                          >{{ getCharacterInitials(character.name) }}</span>
+                        </div>
+                      </template>
+                      <div
+                        v-else
+                        class="card-avatar-row"
+                        role="presentation"
+                        :aria-label="`${character.name} 的定妆图`"
+                      >
+                        <div
+                          v-for="item in previewAvatarImages(character)"
+                          :key="item.id"
+                          class="card-avatar-row__cell"
+                        >
+                          <img :src="item.url" :alt="`${character.name} 定妆图`" />
+                        </div>
+                      </div>
+                    </div>
 
-          <template #footer>
-            <div class="character-card__actions" @click.stop>
-              <NSpace justify="space-between" class="character-card__actions-inner">
-                <NButton
-                  type="primary"
-                  size="small"
-                  secondary
-                  @click="goCharacterDetail(character.id)"
-                >
-                  详情与形象树
-                </NButton>
-                <NPopconfirm @positive-click="handleDeleteCharacter(character.id)">
-                  <template #trigger>
-                    <NButton size="small" type="error" quaternary>
-                      删除
-                    </NButton>
-                  </template>
-                  确认删除角色「{{ character.name }}」？
-                </NPopconfirm>
-              </NSpace>
-            </div>
-          </template>
-        </NCard>
-          </div>
+                    <div class="character-card__info">
+                      <div class="character-card__title-row">
+                        <h3 class="character-card__name">{{ character.name }}</h3>
+                        <NTag
+                          v-if="imageStats(character).total > 0"
+                          size="small"
+                          round
+                          :bordered="false"
+                        >
+                          {{ formatImageStatsLine(character) }}
+                        </NTag>
+                        <NTag v-else size="small" round :bordered="false" type="warning">
+                          待添加形象
+                        </NTag>
+                      </div>
+                      <p class="character-card__desc">
+                        {{ character.description || '暂无描述' }}
+                      </p>
+                    </div>
+                  </div>
+                </NSpin>
+
+                <template #footer>
+                  <div class="character-card__actions" @click.stop>
+                    <NSpace justify="space-between" class="character-card__actions-inner">
+                      <NButton
+                        type="primary"
+                        size="small"
+                        secondary
+                        @click="goCharacterDetail(character.id)"
+                      >
+                        详情与形象树
+                      </NButton>
+                      <NPopconfirm @positive-click="handleDeleteCharacter(character.id)">
+                        <template #trigger>
+                          <NButton
+                            size="small"
+                            type="error"
+                            quaternary
+                            :disabled="isCharacterCardSpinning(character)"
+                          >
+                            删除
+                          </NButton>
+                        </template>
+                        确认删除角色「{{ character.name }}」？
+                      </NPopconfirm>
+                    </NSpace>
+                  </div>
+                </template>
+              </NCard>
+            </NGi>
+          </NGrid>
         </div>
       </NSpin>
-    </div>
+    </NCard>
 
-    <!-- Create Character Modal -->
     <NModal
       v-model:show="showCreateModal"
       preset="card"
@@ -366,7 +451,6 @@ function previewAvatarImages(character: Character): { id: string; url: string }[
         </NSpace>
       </template>
     </NModal>
-
   </div>
 </template>
 
@@ -378,84 +462,67 @@ function previewAvatarImages(character: Character): { id: string; url: string }[
   min-height: 0;
 }
 
-.characters-toolbar {
-  margin-bottom: var(--spacing-md);
-  flex-shrink: 0;
+.char-lib-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
 }
-
-.characters-toolbar__hint {
-  margin: 0 0 var(--spacing-sm);
+.char-lib-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.char-lib-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.char-lib-stat {
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+.char-lib-stat.muted {
+  color: var(--color-text-tertiary);
+}
+.char-lib-search {
+  width: 200px;
+  max-width: 100%;
+  min-width: 0;
+}
+.char-lib-search-icon {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
+.char-lib-hint {
+  margin: 0 0 var(--spacing-md);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   line-height: var(--line-height-normal);
 }
-
-.characters-toolbar__row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.characters-toolbar__search {
-  flex: 1 1 200px;
-  min-width: 0;
-  max-width: 420px;
-}
-
-.characters-toolbar__search-icon {
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-sm);
-}
-
-.characters-toolbar__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacing-md);
-  margin-left: auto;
-}
-
-.characters-toolbar__meta {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-tertiary);
-  white-space: nowrap;
-}
-
-.characters-content {
-  flex: 1;
-  min-height: 0;
-  background: var(--color-bg-white);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  border: 1px solid var(--color-border-light);
-}
-
-.characters-loading {
-  min-height: 280px;
-}
-
-.characters-loading :deep(.n-spin-body) {
-  min-height: 240px;
-}
-
-.characters-body {
+.char-lib-loading {
   min-height: 200px;
 }
-
-.characters-search-empty {
+.char-lib-loading :deep(.n-spin-body) {
+  min-height: 160px;
+}
+.char-lib-body {
+  min-height: 120px;
+}
+.char-lib-search-empty {
   padding: var(--spacing-xl) 0;
 }
-
-.character-card--pending-new-image {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 0;
+.char-card-spin :deep(.n-spin-content) {
+  min-height: 0;
 }
 
-.characters-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: var(--spacing-md);
+:deep(.n-card-header__main) {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .character-card {

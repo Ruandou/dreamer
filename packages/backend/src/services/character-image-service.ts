@@ -21,6 +21,13 @@ export type EnqueueCharacterImageGenerateResult =
     }
   | { ok: false; reason: 'not_found' | 'missing_prompt' | 'parent_no_avatar' }
 
+export type BatchEnqueueCharacterMissingAvatarResult = {
+  enqueued: number
+  jobIds: string[]
+  enqueuedCharacterImageIds: string[]
+  skipped: { id: string; name: string; reason: string }[]
+}
+
 export class CharacterImageService {
   constructor(
     private readonly repository: CharacterImageRepository,
@@ -79,6 +86,60 @@ export class CharacterImageService {
       editPrompt: finalPrompt
     })
     return { ok: true, jobId: job.id, kind: 'character_derived_regenerate' }
+  }
+
+  /** 对项目内「无定妆图、有提示词、衍生父级已出图」的槽位逐个入队（与单槽 POST generate 规则一致） */
+  async batchEnqueueMissingAvatars(
+    userId: string,
+    projectId: string
+  ): Promise<BatchEnqueueCharacterMissingAvatarResult> {
+    const rows = await this.repository.findSlotsWithoutAvatarByProject(projectId)
+    const jobIds: string[] = []
+    const enqueuedCharacterImageIds: string[] = []
+    const skipped: { id: string; name: string; reason: string }[] = []
+
+    const slotLabel = (row: (typeof rows)[0]) =>
+      `${row.character.name} · ${row.name || '未命名槽位'}`
+
+    for (const row of rows) {
+      if (row.avatarUrl?.trim()) {
+        skipped.push({ id: row.id, name: slotLabel(row), reason: '已有定妆图' })
+        continue
+      }
+      if (!(row.prompt || '').trim()) {
+        skipped.push({ id: row.id, name: slotLabel(row), reason: '缺少提示词' })
+        continue
+      }
+      if (row.parentId && !row.parent?.avatarUrl?.trim()) {
+        skipped.push({ id: row.id, name: slotLabel(row), reason: '父级基础形象尚未生成' })
+        continue
+      }
+
+      const result = await this.enqueueGenerate(userId, row.id)
+      if (!result.ok) {
+        const reason =
+          result.reason === 'missing_prompt'
+            ? '缺少提示词'
+            : result.reason === 'parent_no_avatar'
+              ? '父级基础形象尚未生成'
+              : result.reason === 'not_found'
+                ? '槽位不存在'
+                : '无法入队'
+        skipped.push({ id: row.id, name: slotLabel(row), reason })
+        continue
+      }
+      enqueuedCharacterImageIds.push(row.id)
+      if (result.jobId != null && result.jobId !== '') {
+        jobIds.push(String(result.jobId))
+      }
+    }
+
+    return {
+      enqueued: enqueuedCharacterImageIds.length,
+      jobIds,
+      enqueuedCharacterImageIds,
+      skipped
+    }
   }
 }
 

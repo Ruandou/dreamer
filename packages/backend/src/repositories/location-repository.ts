@@ -11,6 +11,24 @@ export class LocationRepository {
     })
   }
 
+  /** 手动新建场地（名称在项目内唯一） */
+  createActive(data: {
+    projectId: string
+    name: string
+    timeOfDay: string
+    description: string | null
+  }) {
+    return this.prisma.location.create({
+      data: {
+        projectId: data.projectId,
+        name: data.name,
+        timeOfDay: data.timeOfDay,
+        description: data.description,
+        characters: []
+      }
+    })
+  }
+
   findManyWithProjectForBatch(projectId: string) {
     return this.prisma.location.findMany({
       where: { projectId, deletedAt: null },

@@ -7,6 +7,7 @@ const mockFindManyWithProject = vi.fn()
 const mockFindFirstActiveById = vi.fn()
 const mockUpdate = vi.fn()
 const mockAdd = vi.fn()
+const mockCreateActive = vi.fn()
 
 function makeMockRepository(): LocationRepository {
   return {
@@ -15,6 +16,7 @@ function makeMockRepository(): LocationRepository {
     findFirstActiveById: mockFindFirstActiveById,
     findFirstActiveWithProjectById: vi.fn(),
     update: mockUpdate,
+    createActive: mockCreateActive,
     unlinkScenesFromLocation: vi.fn(),
     softDelete: vi.fn()
   } as unknown as LocationRepository
@@ -30,6 +32,7 @@ describe('LocationService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAdd.mockResolvedValue({ id: 'job-1' })
+    mockCreateActive.mockReset()
     service = new LocationService(makeMockRepository(), mockQueue)
   })
 
@@ -81,5 +84,31 @@ describe('LocationService', () => {
     mockFindFirstActiveById.mockResolvedValue(null)
     service = new LocationService(makeMockRepository(), mockQueue)
     await expect(service.deleteLocation('missing')).resolves.toBe(false)
+  })
+
+  it('createManual returns empty_name when name is blank', async () => {
+    await expect(service.createManual('p1', { name: '   ' })).resolves.toEqual({
+      ok: false,
+      reason: 'empty_name'
+    })
+    expect(mockCreateActive).not.toHaveBeenCalled()
+  })
+
+  it('createManual creates with default timeOfDay 日', async () => {
+    mockCreateActive.mockResolvedValue({ id: 'l-new', name: '天台', projectId: 'p1' })
+    const r = await service.createManual('p1', { name: ' 天台 ', description: null })
+    expect(r.ok).toBe(true)
+    expect(mockCreateActive).toHaveBeenCalledWith({
+      projectId: 'p1',
+      name: '天台',
+      timeOfDay: '日',
+      description: null
+    })
+  })
+
+  it('createManual returns duplicate_name on Prisma P2002', async () => {
+    mockCreateActive.mockRejectedValue(Object.assign(new Error('dup'), { code: 'P2002' }))
+    const r = await service.createManual('p1', { name: '重复' })
+    expect(r).toEqual({ ok: false, reason: 'duplicate_name' })
   })
 })

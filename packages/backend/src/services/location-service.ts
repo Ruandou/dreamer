@@ -32,6 +32,40 @@ export class LocationService {
     return this.repository.findManyByProjectOrdered(projectId)
   }
 
+  /**
+   * 手动添加场地；名称 trim 后须非空，且与项目内未删除场地不重名（否则 duplicate_name）。
+   */
+  async createManual(
+    projectId: string,
+    body: { name: string; timeOfDay?: string | null; description?: string | null }
+  ): Promise<
+    | { ok: true; location: Awaited<ReturnType<LocationRepository['createActive']>> }
+    | { ok: false; reason: 'empty_name' | 'duplicate_name' }
+  > {
+    const name = (body.name || '').trim()
+    if (!name) {
+      return { ok: false, reason: 'empty_name' }
+    }
+    const timeRaw = body.timeOfDay != null ? String(body.timeOfDay).trim() : ''
+    const timeOfDay = timeRaw || '日'
+    const descRaw = body.description != null ? String(body.description).trim() : ''
+    const description = descRaw || null
+    try {
+      const location = await this.repository.createActive({
+        projectId,
+        name,
+        timeOfDay,
+        description
+      })
+      return { ok: true, location }
+    } catch (e: unknown) {
+      if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
+        return { ok: false, reason: 'duplicate_name' }
+      }
+      throw e
+    }
+  }
+
   findActiveById(locationId: string) {
     return this.repository.findFirstActiveById(locationId)
   }

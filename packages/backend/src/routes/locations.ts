@@ -27,6 +27,39 @@ export async function locationRoutes(fastify: FastifyInstance) {
     }
   )
 
+  fastify.post<{
+    Body: { projectId?: string; name?: string; timeOfDay?: string | null; description?: string | null }
+  }>('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const projectId = request.body?.projectId
+    const name = request.body?.name
+
+    if (!projectId || typeof projectId !== 'string') {
+      return reply.status(400).send({ error: '缺少 projectId' })
+    }
+    if (!(await verifyProjectOwnership(userId, projectId))) {
+      return reply.status(403).send(permissionDeniedBody)
+    }
+    if (!name || typeof name !== 'string') {
+      return reply.status(400).send({ error: '缺少场地名称' })
+    }
+
+    const result = await locationService.createManual(projectId, {
+      name,
+      timeOfDay: request.body?.timeOfDay,
+      description: request.body?.description
+    })
+
+    if (!result.ok) {
+      if (result.reason === 'empty_name') {
+        return reply.status(400).send({ error: '场地名称不能为空' })
+      }
+      return reply.status(409).send({ error: '已存在同名称场地' })
+    }
+
+    return reply.status(201).send(result.location)
+  })
+
   /** 须在 /:id 之前注册，否则会被当成 id。仅对尚未有定场图（无 imageUrl）的场地入队。 */
   fastify.post<{
     Body: { projectId: string; promptOverrides?: Record<string, string> }
