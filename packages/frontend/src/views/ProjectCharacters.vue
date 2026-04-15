@@ -283,7 +283,7 @@ function previewAvatarImages(character: Character): { id: string; url: string }[
               :disabled="characterStore.isLoading || characterStore.characters.length === 0"
               @click="generateAllMissing"
             >
-              一键生成缺失定妆
+              AI一键生成
             </NButton>
             <NButton type="primary" size="small" @click="showCreateModal = true">添加角色</NButton>
           </NSpace>

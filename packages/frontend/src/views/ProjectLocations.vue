@@ -380,7 +380,7 @@ async function generateAllMissing() {
           <div class="loc-lib-header-left">
             <span class="loc-lib-title">场地库</span>
             <span class="loc-lib-stat muted">
-              已生成 {{ locationImageStats.withImage }}/{{ locationImageStats.total }}
+              已生成定场图 {{ locationImageStats.withImage }}/{{ locationImageStats.total }}
             </span>
           </div>
           <NSpace align="center" :size="8" wrap>
@@ -404,14 +404,14 @@ async function generateAllMissing() {
               :disabled="loading || locations.length === 0"
               @click="generateAllMissing"
             >
-              一键生成定场图
+              AI一键生成
             </NButton>
             <NButton type="primary" size="small" @click="showCreateModal = true">添加场地</NButton>
           </NSpace>
         </div>
       </template>
       <p class="loc-lib-hint">
-        每个场地对应一张定场图；填写中文提示词后保存，再点「生成定场图」或使用一键批量；也可本地上传替换。
+        每个场地对应一张定场图；填写中文提示词后保存，再点「AI生成」或使用右上角「AI一键生成」；也可本地上传替换。
       </p>
       <NEmpty v-if="!loading && locations.length === 0" description="暂无场地，请先解析剧本" />
       <NEmpty
@@ -495,7 +495,7 @@ async function generateAllMissing() {
                   :disabled="isPending(loc.id)"
                   @click="generate(loc)"
                 >
-                  生成定场图
+                  AI生成
                 </NButton>
               </NSpace>
             </NSpin>

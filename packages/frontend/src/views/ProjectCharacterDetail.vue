@@ -291,7 +291,7 @@ const confirmAddImageByAi = async () => {
     })
     showAddModal.value = false
     selectedFile.value = null
-    message.success('已创建槽位，可编辑提示词后点「提交生成」')
+    message.success('已创建槽位，可编辑提示词后点「AI生成」')
     await loadCharacter()
   } catch (e: any) {
     message.error(e?.response?.data?.error || '创建失败')
@@ -398,12 +398,12 @@ const imageActionOptions = computed(() => {
     !img.parentId && img.type !== 'base' && primary?.type === 'base' && Boolean(primary.id)
 
   if (img.type === 'base' && !img.parentId) {
-    options.push({ label: img.avatarUrl ? 'AI 重新生成' : 'AI 生成定妆', key: 'ai-generate' })
+    options.push({ label: img.avatarUrl ? 'AI重新生成' : 'AI生成', key: 'ai-generate' })
   } else {
     const parentId = img.parentId || (looseUnderPrimary ? primary!.id : undefined)
     const parent = parentId ? images.find((i) => i.id === parentId) : undefined
     if (parent?.avatarUrl) {
-      options.push({ label: img.avatarUrl ? 'AI 重新生成' : 'AI 生成', key: 'ai-generate' })
+      options.push({ label: img.avatarUrl ? 'AI重新生成' : 'AI生成', key: 'ai-generate' })
     }
   }
 
@@ -599,7 +599,7 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
                 <span class="preview-image-placeholder__icon" aria-hidden="true">🖼</span>
                 <p class="preview-image-placeholder__title">暂无定妆图</p>
                 <p class="preview-image-placeholder__hint">
-                  可填写下方提示词后「提交 AI 生成」，或上传本地参考图
+                  可填写下方提示词后点「AI生成」，或上传本地参考图
                 </p>
                 <NUpload
                   accept="image/jpeg,image/png,image/webp"
@@ -661,7 +661,7 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
                     :disabled="selectedImageGenerateDisabled"
                     @click="queueSelectedGenerate"
                   >
-                    提交 AI 生成
+                    AI生成
                   </NButton>
                 </NSpace>
               </div>
