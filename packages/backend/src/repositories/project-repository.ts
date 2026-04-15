@@ -112,13 +112,13 @@ export class ProjectRepository {
       where: { projectId_episodeNum: { projectId, episodeNum: 1 } },
       update: {
         title: script.title,
-        rawScript: script as object
+        script: script as object
       },
       create: {
         projectId,
         episodeNum: 1,
         title: script.title,
-        rawScript: script as object
+        script: script as object
       }
     })
   }
@@ -129,14 +129,14 @@ export class ProjectRepository {
       update: {
         title: script.title,
         synopsis: script.summary,
-        rawScript: script as object
+        script: script as object
       },
       create: {
         projectId,
         episodeNum,
         title: script.title,
         synopsis: script.summary,
-        rawScript: script as object
+        script: script as object
       }
     })
   }

@@ -98,11 +98,11 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
     let episodes: EpisodePlan[]
 
     if (skipEarlySteps) {
-      // ========== 已具备全部分集 rawScript：跳过 AI 写剧与智能分集 ==========
+      // ========== 已具备全部分集剧本 JSON：跳过 AI 写剧与智能分集 ==========
       await updateStepResult(jobId, 'script-writing', {
         status: 'completed',
         input: { idea },
-        output: { skipped: true, reason: 'episodes_already_have_rawScript' }
+        output: { skipped: true, reason: 'episodes_already_have_script' }
       })
       await updateJobProgress(jobId, { progress: 25 })
 

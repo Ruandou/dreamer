@@ -94,7 +94,7 @@ const allEpisodesReady = computed(() => {
   const eps = project.value?.episodes || []
   for (let n = 1; n <= te; n++) {
     const e = eps.find((x: any) => epNum(x) === n)
-    if (!e || !scenesFromRaw(e.rawScript).length) return false
+    if (!e || !scenesFromRaw(e.script).length) return false
   }
   return true
 })
@@ -104,7 +104,7 @@ const needsBatchEpisodes = computed(() => effectiveTarget.value >= 2)
 
 /** 第一集已有可预览剧本（批量入口的前置条件） */
 const episode1HasScript = computed(
-  () => !!episode1.value && scenesFromRaw(episode1.value.rawScript).length > 0
+  () => !!episode1.value && scenesFromRaw(episode1.value.script).length > 0
 )
 
 /** 目标 2..N 集是否已全部就绪（批量按钮应显示完成态，不再强调「去生成」） */
@@ -145,7 +145,7 @@ function highestEpisodeNumWithScript(): number {
   const eps = project.value?.episodes || []
   let max = 0
   for (const e of eps) {
-    if (scenesFromRaw((e as any).rawScript).length > 0) {
+    if (scenesFromRaw((e as any).script).length > 0) {
       const n = epNum(e)
       if (n > max) max = n
     }
@@ -182,7 +182,7 @@ function onTargetEpisodeUpdate(v: number | null) {
 const episodesWithScript = computed(() => {
   const eps = project.value?.episodes || []
   return [...eps]
-    .filter((e: any) => scenesFromRaw(e.rawScript).length > 0)
+    .filter((e: any) => scenesFromRaw(e.script).length > 0)
     .sort((a: any, b: any) => epNum(a) - epNum(b))
 })
 
@@ -195,7 +195,7 @@ const activePreviewEpisode = computed(() => {
 })
 
 const previewScenes = computed(() => {
-  const scenes = scenesFromRaw(activePreviewEpisode.value?.rawScript)
+  const scenes = scenesFromRaw(activePreviewEpisode.value?.script)
   return showFullEpisode1.value ? scenes : scenes.slice(0, 2)
 })
 
@@ -218,7 +218,7 @@ async function loadProject(id: string) {
   const p = projectStore.currentProject as any
   if (p?.visualStyle?.length) selectedStyles.value = [...p.visualStyle]
   else selectedStyles.value = []
-  // 项目详情接口偶发只带部分 episodes；列表接口保证拉全部分集与 rawScript
+  // 项目详情接口偶发只带部分 episodes；列表接口保证拉全部分集与 script
   try {
     const { data } = await api.get<any[]>(`/episodes?projectId=${id}`)
     if (p && Array.isArray(data) && data.length > 0) {
@@ -242,7 +242,7 @@ async function runGenerateFirstEpisode() {
     return
   }
   const ep = episode1.value as any
-  const hasScript = ep?.rawScript && scenesFromRaw(ep.rawScript).length > 0
+  const hasScript = ep?.script && scenesFromRaw(ep.script).length > 0
   if (hasScript) return
   isGeneratingFirst.value = true
   generatingStatus.value = '正在生成第一集剧本…'
@@ -405,7 +405,7 @@ async function runParse() {
     return
   }
   const ep = episode1.value as any
-  if (!ep?.rawScript || scenesFromRaw(ep.rawScript).length === 0) {
+  if (!ep?.script || scenesFromRaw(ep.script).length === 0) {
     message.warning('请先生成第一集剧本')
     return
   }
@@ -544,7 +544,7 @@ watch(targetEpisodeCount, (v) => {
       <NCard class="mt preview-script-card" title="剧本预览">
         <template #header-extra>
           <NButton
-            v-if="activePreviewEpisode && scenesFromRaw(activePreviewEpisode.rawScript).length"
+            v-if="activePreviewEpisode && scenesFromRaw(activePreviewEpisode.script).length"
             size="tiny"
             quaternary
             @click="showFullEpisode1 = !showFullEpisode1"
@@ -564,7 +564,7 @@ watch(targetEpisodeCount, (v) => {
         >
           当前已生成 {{ episodesWithScript.length }} 集有场次；凑满目标 {{ effectiveTarget }} 集后再解析更稳妥。
         </p>
-        <div v-if="!activePreviewEpisode || !scenesFromRaw(activePreviewEpisode.rawScript).length" class="muted">
+        <div v-if="!activePreviewEpisode || !scenesFromRaw(activePreviewEpisode.script).length" class="muted">
           <p>暂无第一集剧本。从列表进入不会自动生成，请确认创意与梗概后点击下方按钮。</p>
           <NButton
             type="primary"
@@ -613,10 +613,10 @@ watch(targetEpisodeCount, (v) => {
                     <p class="scene-desc">{{ sc.description }}</p>
                   </div>
                   <p
-                    v-if="!showFullEpisode1 && scenesFromRaw(activePreviewEpisode.rawScript).length > 2"
+                    v-if="!showFullEpisode1 && scenesFromRaw(activePreviewEpisode.script).length > 2"
                     class="expand-hint muted"
                   >
-                    共 {{ scenesFromRaw(activePreviewEpisode.rawScript).length }} 场，
+                    共 {{ scenesFromRaw(activePreviewEpisode.script).length }} 场，
                     <NButton text type="primary" size="tiny" @click="showFullEpisode1 = true">
                       展开查看全部
                     </NButton>

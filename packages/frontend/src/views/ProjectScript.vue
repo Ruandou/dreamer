@@ -49,7 +49,7 @@ watch(
       try {
         await episodeStore.updateEpisode(selectedEpisodeId.value, {
           title: episode.title,
-          rawScript: episode.rawScript as any
+          script: episode.script as any
         })
         lastSaved.value = new Date()
       } catch (error) {
@@ -104,7 +104,7 @@ const handleSaveScript = async () => {
   if (!selectedEpisodeId.value || !episodeStore.currentEpisode) return
   await episodeStore.updateEpisode(selectedEpisodeId.value, {
     title: episodeStore.currentEpisode.title || undefined,
-    rawScript: episodeStore.currentEpisode.rawScript as any
+    script: episodeStore.currentEpisode.script as any
   })
   message.success('保存成功')
 }
@@ -143,7 +143,7 @@ const handleFileChange = (file: File) => {
   reader.readAsText(file)
 }
 
-const script = computed(() => episodeStore.currentEpisode?.rawScript as any)
+const script = computed(() => episodeStore.currentEpisode?.script as any)
 const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
 </script>
 
@@ -203,7 +203,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
             </div>
             <div class="episode-item__status">
               <StatusBadge
-                :status="episode.rawScript ? 'completed' : 'draft'"
+                :status="episode.script ? 'completed' : 'draft'"
                 size="small"
               />
             </div>

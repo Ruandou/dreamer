@@ -69,6 +69,25 @@ export class PipelineRepository {
     })
   }
 
+  /** 分集「AI 分镜剧本」异步任务：同集仅允许一条进行中 */
+  async countActiveEpisodeStoryboardScriptJobs(
+    projectId: string,
+    episodeId: string
+  ): Promise<number> {
+    const rows = await this.prisma.pipelineJob.findMany({
+      where: {
+        projectId,
+        jobType: 'episode-storyboard-script',
+        status: { in: ['pending', 'running'] }
+      },
+      select: { progressMeta: true }
+    })
+    return rows.filter(r => {
+      const m = r.progressMeta as { episodeId?: string } | null
+      return m?.episodeId === episodeId
+    }).length
+  }
+
   private static readonly OUTLINE_ASYNC_JOB_TYPES = ['script-batch', 'parse-script', 'script-first'] as const
 
   countOutlineAsyncJobs(projectId: string) {
@@ -148,7 +167,7 @@ export class PipelineRepository {
     })
   }
 
-  async saveEpisodes(projectId: string, episodes: EpisodePlan[], rawScript: ScriptContent) {
+  async saveEpisodes(projectId: string, episodes: EpisodePlan[], scriptContent: ScriptContent) {
     for (const episode of episodes) {
       await this.prisma.episode.upsert({
         where: {
@@ -157,14 +176,14 @@ export class PipelineRepository {
         update: {
           title: episode.title,
           synopsis: episode.synopsis,
-          rawScript: rawScript as object
+          script: scriptContent as object
         },
         create: {
           projectId,
           episodeNum: episode.episodeNum,
           title: episode.title,
           synopsis: episode.synopsis,
-          rawScript: rawScript as object
+          script: scriptContent as object
         }
       })
     }

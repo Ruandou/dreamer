@@ -182,7 +182,7 @@ git commit -m "feat: 添加新功能"
 | `pipeline` | Pipeline 执行任务 | `/api/pipeline/jobs` |
 | `image` | 图片生成任务（定妆 / 定场图，BullMQ） | `/api/image-generation/jobs` |
 
-`pipeline` 在任务中心仅在 **「类型」列** 用中文展示 **`jobType`**（`/api/pipeline/jobs` 须返回 `jobType`，`Jobs.vue` 的 `pipelineSubtypeLabel`）。新增大纲相关 `jobType` 时须同步后端列表字段与该映射。
+`pipeline` 在任务中心仅在 **「类型」列** 用中文展示 **`jobType`**（`/api/pipeline/jobs` 须返回 `jobType`，`Jobs.vue` 的 `pipelineSubtypeLabel`）。新增大纲相关 `jobType` 时须同步后端列表字段与该映射。分集「AI 生成分镜脚本」使用 `jobType`=`episode-storyboard-script`（`PipelineJob`，由 `POST /api/episodes/:id/generate-storyboard-script` 创建，与完整流水线共用 `/api/pipeline/jobs` 列表）。
 
 新增任务类型时，**必须**同步更新：
 1. 后端 API（获取任务列表）

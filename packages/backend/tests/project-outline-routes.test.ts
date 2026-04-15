@@ -163,7 +163,7 @@ describe('Project outline & parse routes', () => {
         id: 'p1',
         userId: 'test-user-id',
         visualStyle: [],
-        episodes: [{ episodeNum: 1, rawScript: rawEp1 }]
+        episodes: [{ episodeNum: 1, script: rawEp1 }]
       })
 
       const res = await app.inject({
@@ -176,12 +176,12 @@ describe('Project outline & parse routes', () => {
       expect(body.error).toMatch(/视觉风格/)
     })
 
-    it('returns 400 when episode 1 rawScript has no scenes array', async () => {
+    it('returns 400 when episode 1 script has no scenes array', async () => {
       mockProjectFindFirst.mockResolvedValue({
         id: 'p1',
         userId: 'test-user-id',
         visualStyle: ['cinematic'],
-        episodes: [{ episodeNum: 1, rawScript: { title: 'x', summary: 'y' } }]
+        episodes: [{ episodeNum: 1, script: { title: 'x', summary: 'y' } }]
       })
 
       const res = await app.inject({
@@ -197,7 +197,7 @@ describe('Project outline & parse routes', () => {
         id: 'p1',
         userId: 'test-user-id',
         visualStyle: ['cinematic'],
-        episodes: [{ episodeNum: 1, rawScript: { title: 'x', summary: 'y', scenes: [] } }]
+        episodes: [{ episodeNum: 1, script: { title: 'x', summary: 'y', scenes: [] } }]
       })
 
       const res = await app.inject({
@@ -213,7 +213,7 @@ describe('Project outline & parse routes', () => {
         id: 'p1',
         userId: 'test-user-id',
         visualStyle: ['cinematic'],
-        episodes: [{ episodeNum: 1, rawScript: rawEp1 }]
+        episodes: [{ episodeNum: 1, script: rawEp1 }]
       })
       mockPipelineJobCreate.mockResolvedValue({ id: 'job-parse-1' })
 
@@ -243,7 +243,7 @@ describe('Project outline & parse routes', () => {
         id: 'p1',
         userId: 'test-user-id',
         visualStyle: ['cinematic'],
-        episodes: [{ episodeNum: 1, rawScript: rawEp1 }]
+        episodes: [{ episodeNum: 1, script: rawEp1 }]
       })
 
       const res = await app.inject({
@@ -276,7 +276,7 @@ describe('Project outline & parse routes', () => {
 
     it('returns 200 and creates script-batch job', async () => {
       mockProjectFindFirst.mockResolvedValue({ id: 'p1', userId: 'test-user-id' })
-      mockEpisodeFindUnique.mockResolvedValue({ id: 'e1', rawScript: rawEp1 })
+      mockEpisodeFindUnique.mockResolvedValue({ id: 'e1', script: rawEp1 })
       mockPipelineJobCreate.mockResolvedValue({ id: 'job-batch-1' })
 
       const res = await app.inject({
@@ -293,7 +293,7 @@ describe('Project outline & parse routes', () => {
     it('returns 409 when another outline job is in progress', async () => {
       mockHasConcurrentOutlinePipelineJob.mockResolvedValue(true)
       mockProjectFindFirst.mockResolvedValue({ id: 'p1', userId: 'test-user-id' })
-      mockEpisodeFindUnique.mockResolvedValue({ id: 'e1', rawScript: rawEp1 })
+      mockEpisodeFindUnique.mockResolvedValue({ id: 'e1', script: rawEp1 })
 
       const res = await app.inject({
         method: 'POST',
@@ -338,7 +338,7 @@ describe('Project outline & parse routes', () => {
       mockProjectFindUnique.mockResolvedValue({
         id: 'p1',
         synopsis: '全剧梗概',
-        episodes: [{ id: 'ep1', episodeNum: 1, rawScript: rawEp1 }]
+        episodes: [{ id: 'ep1', episodeNum: 1, script: rawEp1 }]
       })
 
       const res = await app.inject({

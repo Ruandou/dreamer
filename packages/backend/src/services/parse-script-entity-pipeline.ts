@@ -1,5 +1,5 @@
 /**
- * 大纲「解析剧本」与 Pipeline 跳过前期步骤时共用：身份合并、rawScript 写回、场地/角色落库、形象槽位。
+ * 大纲「解析剧本」与 Pipeline 跳过前期步骤时共用：身份合并、分集 `script` 写回、场地/角色落库、形象槽位。
  */
 
 import type { ScriptContent } from '@dreamer/shared/types'
@@ -127,7 +127,7 @@ async function ensureEveryCharacterHasBaseImageSlot(projectId: string) {
 }
 
 /**
- * 身份合并、分集 rawScript 写回、场地与角色、形象槽位与默认 base。
+ * 身份合并、分集剧本 JSON 写回、场地与角色、形象槽位与默认 base。
  * @returns 供 `applyScriptVisualEnrichment` 使用的合并后剧本视图
  */
 export async function runParseScriptEntityPipeline(
@@ -157,10 +157,10 @@ export async function runParseScriptEntityPipeline(
 
   if (Object.keys(aliasToCanonical).length > 0) {
     for (const ep of capped) {
-      const sc = scriptFromJson(ep.rawScript)
+      const sc = scriptFromJson(ep.script)
       if (!sc) continue
       const normalized = normalizeScriptContent(sc, aliasToCanonical)
-      await episodeRepository.update(ep.id, { rawScript: normalized as object })
+      await episodeRepository.update(ep.id, { script: normalized as object })
     }
   }
 

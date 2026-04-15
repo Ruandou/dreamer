@@ -128,7 +128,7 @@ export class ProjectService {
     }
 
     const ep1 = await this.repo.findEpisode1ByProject(projectId)
-    const rs = ep1?.rawScript as { scenes?: unknown } | null
+    const rs = ep1?.script as { scenes?: unknown } | null
     if (!ep1 || !rs || !Array.isArray(rs.scenes) || rs.scenes.length === 0) {
       return { ok: false, status: 400, error: '请先生成第一集剧本' }
     }
@@ -171,7 +171,7 @@ export class ProjectService {
     }
 
     const ep1 = project.episodes[0]
-    const raw = ep1?.rawScript
+    const raw = ep1?.script
     const scenes = raw && typeof raw === 'object' ? (raw as { scenes?: unknown }).scenes : null
     if (!raw || typeof raw !== 'object' || !Array.isArray(scenes) || scenes.length === 0) {
       return { ok: false, status: 400, error: '请先生成第一集剧本' }

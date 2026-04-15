@@ -4,7 +4,7 @@
 > 状态：已定稿，可直接用于开发  
 > 核心设计：**以 Scene（场次）为视频生成单元**；**Shot（镜头）** 仅用于精细化控制与 **Prompt 拼接**，不单独生成视频；**Take** 挂在 Scene；**Composition MVP** 仅做 Scene 视频拼接。
 
-完整字段表、Pipeline 六步、rawScript 示例与术语对照以团队协作文档为准；实现代码以仓库内 [`packages/backend/prisma/schema.prisma`](packages/backend/prisma/schema.prisma) 为单一事实来源。
+完整字段表、Pipeline 六步、`Episode.script` 示例与术语对照以团队协作文档为准；实现代码以仓库内 [`packages/backend/prisma/schema.prisma`](packages/backend/prisma/schema.prisma) 为单一事实来源。
 
 ## 要点摘要
 
@@ -14,8 +14,8 @@
 - **SceneDialogue**（实现层模型名，对应概念「台词」）：`sceneId`、`characterId`、`order`、`startTimeMs`、`durationMs`、`text`、`voiceConfig`、`emotion`。
 - **Composition（MVP）**：`projectId`、`episodeId`、`title`、`status`（`draft` | `processing` | `completed` | `failed`）、`outputUrl`。
 - **CompositionScene（MVP）**：`compositionId`、`sceneId`、`takeId`、`order`；无转场 / 无音轨 / 无字幕字段。
-- **Episode**：`rawScript`（Json）；**无** `sceneIndices` 持久化字段。
-- **Project**：含 `synopsis`、`visualStyle`（`String[]`）。**生成大纲页**：批量续写各集 `rawScript`（`generate-remaining`）**不**要求已选风格；**「解析剧本」**（`parse`）**须**至少一项 `visualStyle`。**Location**：字段 `name`（场地名）。
+- **Episode**：`script`（Json，完整剧本）；**无** `sceneIndices` 持久化字段。
+- **Project**：含 `synopsis`、`visualStyle`（`String[]`）。**生成大纲页**：批量续写各集 `script`（`generate-remaining`）**不**要求已选风格；**「解析剧本」**（`parse`）**须**至少一项 `visualStyle`。**Location**：字段 `name`（场地名）。
 
 ## Prompt 拼接（规范）
 

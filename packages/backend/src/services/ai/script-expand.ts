@@ -127,10 +127,10 @@ export async function expandScript(
       }
 
       // 尝试解析JSON
-      const rawScript = JSON.parse(cleanContent)
+      const parsed = JSON.parse(cleanContent)
 
       // 转换格式
-      const script = convertDeepSeekResponse(rawScript)
+      const script = convertDeepSeekResponse(parsed)
 
       // 验证结构
       if (!script.title || !Array.isArray(script.scenes)) {

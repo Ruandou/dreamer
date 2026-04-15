@@ -23,7 +23,7 @@ const mkScript = (title: string, summary: string, sceneNums: number[]) => ({
 describe('project-script-jobs helpers', () => {
   it('mergeEpisodesToScriptContent produces empty scenes when no episode has valid script JSON', () => {
     const merged = mergeEpisodesToScriptContent([
-      { episodeNum: 1, title: 'E1', rawScript: { not: 'a script' } }
+      { episodeNum: 1, title: 'E1', script: { not: 'a script' } }
     ])
     expect(merged.scenes).toEqual([])
     expect(merged.title).toBe('剧本')
@@ -31,8 +31,8 @@ describe('project-script-jobs helpers', () => {
 
   it('mergeEpisodesToScriptContent concatenates scenes with sequential sceneNum', () => {
     const merged = mergeEpisodesToScriptContent([
-      { episodeNum: 2, title: 'E2', rawScript: mkScript('T2', 's2', [1, 2]) },
-      { episodeNum: 1, title: 'E1', rawScript: mkScript('T1', 's1', [1]) }
+      { episodeNum: 2, title: 'E2', script: mkScript('T2', 's2', [1, 2]) },
+      { episodeNum: 1, title: 'E1', script: mkScript('T1', 's1', [1]) }
     ])
     expect(merged.title).toBe('T1')
     expect(merged.summary).toBe('s1')
@@ -41,28 +41,28 @@ describe('project-script-jobs helpers', () => {
   })
 
   it('areEpisodeScriptsComplete returns false when any episode missing', () => {
-    const eps = [{ episodeNum: 1, rawScript: mkScript('a', 'b', [1]) }]
+    const eps = [{ episodeNum: 1, script: mkScript('a', 'b', [1]) }]
     expect(areEpisodeScriptsComplete(eps, 3)).toBe(false)
   })
 
   it('areEpisodeScriptsComplete returns true when 1..N all valid', () => {
     const eps = [
-      { episodeNum: 1, rawScript: mkScript('a', 'b', [1]) },
-      { episodeNum: 2, rawScript: mkScript('c', 'd', [1]) },
-      { episodeNum: 3, rawScript: mkScript('e', 'f', [1, 2]) }
+      { episodeNum: 1, script: mkScript('a', 'b', [1]) },
+      { episodeNum: 2, script: mkScript('c', 'd', [1]) },
+      { episodeNum: 3, script: mkScript('e', 'f', [1, 2]) }
     ]
     expect(areEpisodeScriptsComplete(eps, 3)).toBe(true)
   })
 
   it('buildEpisodePlansFromDbEpisodes sets sceneIndices into merged scene array', () => {
     const merged = mergeEpisodesToScriptContent([
-      { episodeNum: 1, title: null, rawScript: mkScript('T', 'S', [1]) },
-      { episodeNum: 2, title: null, rawScript: mkScript('T2', 'S2', [1, 2]) }
+      { episodeNum: 1, title: null, script: mkScript('T', 'S', [1]) },
+      { episodeNum: 2, title: null, script: mkScript('T2', 'S2', [1, 2]) }
     ])
     const plans = buildEpisodePlansFromDbEpisodes(
       [
-        { episodeNum: 2, title: null, synopsis: null, rawScript: mkScript('T2', 'S2', [1, 2]) },
-        { episodeNum: 1, title: null, synopsis: null, rawScript: mkScript('T', 'S', [1]) }
+        { episodeNum: 2, title: null, synopsis: null, script: mkScript('T2', 'S2', [1, 2]) },
+        { episodeNum: 1, title: null, synopsis: null, script: mkScript('T', 'S', [1]) }
       ],
       merged
     )

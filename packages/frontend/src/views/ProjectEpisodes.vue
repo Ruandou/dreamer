@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NCard, NButton, NSpace, useMessage, NTag } from 'naive-ui'
+import { NCard, NButton, NSpace, useMessage, NTag, useDialog } from 'naive-ui'
 import { useEpisodeStore } from '@/stores/episode'
 import { useSceneStore } from '@/stores/scene'
 import { api } from '@/api'
@@ -9,6 +9,7 @@ import { api } from '@/api'
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const dialog = useDialog()
 const episodeStore = useEpisodeStore()
 const sceneStore = useSceneStore()
 
@@ -31,6 +32,36 @@ async function selectEpisode(id: string) {
 
 function openStoryboard() {
   router.push(`/project/${projectId.value}/storyboard`)
+}
+
+function openGenerateStoryboardDialog() {
+  if (!selectedEpisodeId.value) {
+    message.warning('请先选择一集')
+    return
+  }
+  dialog.warning({
+    title: 'AI 生成分镜脚本',
+    content:
+      '将使用本集梗概与（若存在）已有剧本中的场次/梗概；生成后会替换当前集下的场次与首镜描述。',
+    positiveText: '开始生成',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      const id = selectedEpisodeId.value
+      if (!id) return
+      try {
+        const data = await episodeStore.generateStoryboardScript(id)
+        message.success(
+          data.message ||
+            `任务已提交（${data.jobId}），请稍后在任务中心查看进度，完成后刷新本分集或分镜控制台`
+        )
+      } catch (e: unknown) {
+        const err = e as { response?: { data?: { error?: string; message?: string } } }
+        const d = err?.response?.data
+        message.error(d?.error || d?.message || '生成失败')
+        throw e
+      }
+    }
+  })
 }
 
 async function composeEpisode(episodeId: string) {
@@ -84,6 +115,13 @@ async function composeEpisode(episodeId: string) {
             <NSpace>
               <NButton @click="openStoryboard">去分镜控制台</NButton>
               <NButton
+                type="info"
+                :loading="episodeStore.isGeneratingStoryboard"
+                @click="openGenerateStoryboardDialog"
+              >
+                AI 生成分镜脚本
+              </NButton>
+              <NButton
                 type="primary"
                 :loading="composingId === selectedEpisodeId"
                 @click="composeEpisode(selectedEpisodeId!)"
@@ -91,6 +129,9 @@ async function composeEpisode(episodeId: string) {
                 一键合成成片（按已选 Take）
               </NButton>
             </NSpace>
+            <p class="muted hint-below">
+              「AI 生成分镜脚本」会提交后台任务（任务中心可见），完成后覆盖本集场次与首镜；请先在剧本侧写好梗概或导入剧本。
+            </p>
           </template>
         </NCard>
       </div>
@@ -138,5 +179,9 @@ async function composeEpisode(episodeId: string) {
   color: var(--color-text-tertiary);
   font-size: var(--font-size-sm);
   margin-bottom: 12px;
+}
+.hint-below {
+  margin-top: 12px;
+  margin-bottom: 0;
 }
 </style>

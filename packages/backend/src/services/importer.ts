@@ -97,7 +97,7 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
     if (existing) {
       await episodeRepository.update(existing.id, {
         title: episodeData.title,
-        rawScript: episodeData.script as object
+        script: episodeData.script as object
       })
 
       await episodeRepository.deleteScenesByEpisode(existing.id)
@@ -128,7 +128,7 @@ export async function importParsedData(projectId: string, parsed: ParsedScript):
         projectId,
         episodeNum: episodeData.episodeNum,
         title: episodeData.title,
-        rawScript: episodeData.script as object
+        script: episodeData.script as object
       })
 
       for (const sc of episodeData.scenes) {

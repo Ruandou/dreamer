@@ -1,5 +1,10 @@
-import type { Episode, Prisma } from '@prisma/client'
-import { expandScript } from './ai/deepseek.js'
+import type { Episode as PrismaEpisode, Prisma } from '@prisma/client'
+import type { ScriptContent } from '@dreamer/shared/types'
+import {
+  expandScript,
+  generateStoryboardScriptFromEpisode,
+  hasEpisodeContentForStoryboard
+} from './ai/deepseek.js'
 import { runCompositionExport } from './composition-export.js'
 import { episodeRepository, type EpisodeRepository } from '../repositories/episode-repository.js'
 
@@ -31,11 +36,12 @@ export type ComposeEpisodeResult =
 export type ExpandEpisodeResult =
   | {
       ok: true
-      episode: Episode
+      episode: PrismaEpisode
       script: unknown
       scenesCreated: number
       aiCost: number
     }
+  | { ok: false; status: 400; error: string; message: string }
   | { ok: false; status: 404; error: string }
   | { ok: false; status: 401; error: string; message: string }
   | { ok: false; status: 429; error: string; message: string }
@@ -43,6 +49,57 @@ export type ExpandEpisodeResult =
 
 export class EpisodeService {
   constructor(private readonly repo: EpisodeRepository) {}
+
+  /** 将结构化剧本写入本集 `Episode.script`，并按场次生成 DB Scene + 首镜 Shot */
+  private async applyScriptContentToEpisode(
+    episodeId: string,
+    projectId: string,
+    episodeTitle: string | null | undefined,
+    script: ScriptContent
+  ): Promise<{ updatedEpisode: PrismaEpisode; scenesCreated: number }> {
+    const project = await this.repo.findProjectForExpandScript(projectId)
+
+    const updatedEpisode = await this.repo.update(episodeId, {
+      title: script.title || episodeTitle || undefined,
+      script: script as unknown as Prisma.InputJsonValue
+    })
+
+    if (!script.scenes?.length) {
+      return { updatedEpisode, scenesCreated: 0 }
+    }
+
+    await this.repo.deleteScenesByEpisode(episodeId)
+
+    for (const sc of script.scenes) {
+      let locationId: string | undefined
+      if (sc.location) {
+        const loc = await this.repo.findLocationByProjectAndName(projectId, sc.location)
+        locationId = loc?.id
+      }
+
+      const scene = await this.repo.createScene({
+        episodeId,
+        sceneNum: sc.sceneNum || 1,
+        locationId,
+        timeOfDay: sc.timeOfDay,
+        description: sc.description || `${sc.location} - ${sc.timeOfDay}`,
+        duration: 5000,
+        aspectRatio: project?.aspectRatio ?? '9:16',
+        visualStyle: [],
+        status: 'pending'
+      })
+
+      await this.repo.createShot({
+        sceneId: scene.id,
+        shotNum: 1,
+        order: 1,
+        description: buildScenePrompt(sc, script.title || ''),
+        duration: 5000
+      })
+    }
+
+    return { updatedEpisode, scenesCreated: script.scenes.length }
+  }
 
   listByProject(projectId: string) {
     return this.repo.findManyByProject(projectId)
@@ -62,16 +119,15 @@ export class EpisodeService {
 
   updateEpisode(
     episodeId: string,
-    body: { title?: string; synopsis?: string | null; script?: unknown; rawScript?: unknown }
+    body: { title?: string; synopsis?: string | null; script?: unknown }
   ) {
-    const { title, synopsis, script, rawScript } = body
-    const scriptPayload = rawScript ?? script
+    const { title, synopsis, script } = body
 
     return this.repo.update(episodeId, {
       title,
       ...(synopsis !== undefined && { synopsis }),
-      ...(scriptPayload !== undefined && {
-        rawScript: scriptPayload as Prisma.InputJsonValue
+      ...(script !== undefined && {
+        script: script as Prisma.InputJsonValue
       })
     })
   }
@@ -182,51 +238,18 @@ export class EpisodeService {
         op: 'episode_expand_script'
       })
 
-      const updatedEpisode = await this.repo.update(episodeId, {
-        title: script.title || episode.title,
-        rawScript: script as unknown as Prisma.InputJsonValue
-      })
-
-      if (script.scenes && script.scenes.length > 0) {
-        await this.repo.deleteScenesByEpisode(episodeId)
-
-        for (const sc of script.scenes) {
-          let locationId: string | undefined
-          if (sc.location) {
-            const loc = await this.repo.findLocationByProjectAndName(
-              episode.projectId,
-              sc.location
-            )
-            locationId = loc?.id
-          }
-
-          const scene = await this.repo.createScene({
-            episodeId,
-            sceneNum: sc.sceneNum || 1,
-            locationId,
-            timeOfDay: sc.timeOfDay,
-            description: sc.description || `${sc.location} - ${sc.timeOfDay}`,
-            duration: 5000,
-            aspectRatio: project?.aspectRatio ?? '9:16',
-            visualStyle: [],
-            status: 'pending'
-          })
-
-          await this.repo.createShot({
-            sceneId: scene.id,
-            shotNum: 1,
-            order: 1,
-            description: buildScenePrompt(sc, script.title || ''),
-            duration: 5000
-          })
-        }
-      }
+      const { updatedEpisode, scenesCreated } = await this.applyScriptContentToEpisode(
+        episodeId,
+        episode.projectId,
+        episode.title,
+        script
+      )
 
       return {
         ok: true,
         episode: updatedEpisode,
         script,
-        scenesCreated: script.scenes?.length || 0,
+        scenesCreated,
         aiCost: cost.costCNY
       }
     } catch (error) {
@@ -254,6 +277,87 @@ export class EpisodeService {
         ok: false,
         status: 500,
         error: '剧本生成失败',
+        message: error instanceof Error ? error.message : '未知错误'
+      }
+    }
+  }
+
+  async generateEpisodeStoryboardScript(
+    userId: string,
+    episodeId: string,
+    hint?: string | null
+  ): Promise<ExpandEpisodeResult> {
+    const episode = await this.repo.findUnique(episodeId)
+    if (!episode) {
+      return { ok: false, status: 404, error: 'Episode not found' }
+    }
+
+    if (!hasEpisodeContentForStoryboard(episode)) {
+      return {
+        ok: false,
+        status: 400,
+        error: '内容不足',
+        message: '请先填写本集梗概，或导入/保存含场次或梗概字段的剧本'
+      }
+    }
+
+    try {
+      const project = await this.repo.findProjectForExpandScript(episode.projectId)
+
+      const projectContext = project
+        ? `项目名称: ${project.name}\n已有角色: ${project.characters.map(c => c.name).join(', ') || '暂无'}\n已有集数: ${project.episodes.length}集`
+        : undefined
+
+      const { script, cost } = await generateStoryboardScriptFromEpisode(
+        episode,
+        projectContext,
+        {
+          userId,
+          projectId: episode.projectId,
+          op: 'episode_generate_storyboard_script'
+        },
+        hint
+      )
+
+      const { updatedEpisode, scenesCreated } = await this.applyScriptContentToEpisode(
+        episodeId,
+        episode.projectId,
+        episode.title,
+        script
+      )
+
+      return {
+        ok: true,
+        episode: updatedEpisode,
+        script,
+        scenesCreated,
+        aiCost: cost.costCNY
+      }
+    } catch (error) {
+      console.error('Storyboard script generation failed:', error)
+
+      if (error instanceof Error && error.name === 'DeepSeekAuthError') {
+        return {
+          ok: false,
+          status: 401,
+          error: 'AI 服务认证失败',
+          message: error.message
+        }
+      }
+
+      if (error instanceof Error && error.name === 'DeepSeekRateLimitError') {
+        return {
+          ok: false,
+          status: 429,
+          error: 'AI 服务请求受限',
+          message: error.message
+        }
+      }
+
+      return {
+        ok: false,
+        status: 500,
+        error: '分镜剧本生成失败',
         message: error instanceof Error ? error.message : '未知错误'
       }
     }

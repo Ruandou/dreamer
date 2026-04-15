@@ -20,7 +20,8 @@ const {
   mockCompositionCreate,
   mockCompositionSceneDeleteMany,
   mockCompositionSceneCreateMany,
-  mockRunCompositionExport
+  mockRunCompositionExport,
+  mockEnqueueEpisodeStoryboardScriptJob
 } = vi.hoisted(() => {
   return {
     mockEpisodeFindMany: vi.fn(),
@@ -44,25 +45,52 @@ const {
       ok: true,
       outputUrl: 'https://storage.example.com/out.mp4',
       duration: 9
+    }),
+    mockEnqueueEpisodeStoryboardScriptJob: vi.fn()
+  }
+})
+
+// Mock deepseek（保留 hasEpisodeContentForStoryboard 等真实实现）
+vi.mock('../src/services/ai/deepseek.js', async importOriginal => {
+  const mod = await importOriginal<typeof import('../src/services/ai/deepseek.js')>()
+  return {
+    ...mod,
+    expandScript: vi.fn().mockResolvedValue({
+      script: {
+        title: 'Expanded Episode',
+        summary: '',
+        scenes: [{ sceneNum: 1, description: 'Scene 1', location: 'indoor' }]
+      },
+      cost: { costCNY: 0.05 }
+    }),
+    generateStoryboardScriptFromEpisode: vi.fn().mockResolvedValue({
+      script: {
+        title: 'Storyboard Ep',
+        summary: 'sum',
+        scenes: [
+          {
+            sceneNum: 1,
+            description: 'Scene 1',
+            location: 'indoor',
+            timeOfDay: '日',
+            characters: [],
+            dialogues: [],
+            actions: []
+          }
+        ]
+      },
+      cost: { costCNY: 0.03 }
     })
   }
 })
 
-// Mock deepseek
-vi.mock('../src/services/ai/deepseek.js', () => ({
-  expandScript: vi.fn().mockResolvedValue({
-    script: {
-      title: 'Expanded Episode',
-      scenes: [
-        { sceneNum: 1, description: 'Scene 1', location: 'indoor' }
-      ]
-    },
-    cost: { costCNY: 0.05 }
-  })
-}))
-
 vi.mock('../src/services/composition-export.js', () => ({
   runCompositionExport: (...args: unknown[]) => mockRunCompositionExport(...args)
+}))
+
+vi.mock('../src/services/episode-storyboard-job.js', () => ({
+  enqueueEpisodeStoryboardScriptJob: (...args: unknown[]) =>
+    mockEnqueueEpisodeStoryboardScriptJob(...args)
 }))
 
 // Mock verifyEpisodeOwnership and verifyProjectOwnership
@@ -434,6 +462,78 @@ describe('Episode Routes', () => {
       })
 
       expect(response.statusCode).toBe(404)
+    })
+  })
+
+  describe('POST /api/episodes/:id/generate-storyboard-script', () => {
+    it('should enqueue storyboard script job', async () => {
+      mockEnqueueEpisodeStoryboardScriptJob.mockResolvedValue({
+        ok: true,
+        jobId: 'job-sb-1'
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/episodes/ep-1/generate-storyboard-script',
+        payload: {}
+      })
+
+      expect(response.statusCode).toBe(200)
+      const data = JSON.parse(response.payload)
+      expect(data.jobId).toBe('job-sb-1')
+      expect(data.message).toBeDefined()
+      expect(mockEnqueueEpisodeStoryboardScriptJob).toHaveBeenCalled()
+    })
+
+    it('should return 400 when enqueue reports content missing', async () => {
+      mockEnqueueEpisodeStoryboardScriptJob.mockResolvedValue({
+        ok: false,
+        status: 400,
+        error: '内容不足',
+        message: '请先填写本集梗概'
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/episodes/ep-empty/generate-storyboard-script',
+        payload: {}
+      })
+
+      expect(response.statusCode).toBe(400)
+      const data = JSON.parse(response.payload)
+      expect(data.error).toBeDefined()
+    })
+
+    it('should return 404 when episode not found', async () => {
+      mockEnqueueEpisodeStoryboardScriptJob.mockResolvedValue({
+        ok: false,
+        status: 404,
+        error: 'Episode not found'
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/episodes/missing/generate-storyboard-script',
+        payload: {}
+      })
+
+      expect(response.statusCode).toBe(404)
+    })
+
+    it('should return 409 when concurrent job exists', async () => {
+      mockEnqueueEpisodeStoryboardScriptJob.mockResolvedValue({
+        ok: false,
+        status: 409,
+        error: '该集已有进行中的分镜剧本生成任务，请稍后再试'
+      })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/episodes/ep-1/generate-storyboard-script',
+        payload: {}
+      })
+
+      expect(response.statusCode).toBe(409)
     })
   })
 })

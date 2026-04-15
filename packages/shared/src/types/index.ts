@@ -52,7 +52,8 @@ export interface Episode {
   episodeNum: number
   title?: string
   synopsis?: string | null
-  rawScript?: ScriptContent
+  /** 完整剧本 JSON（与 Prisma `Episode.script` 一致） */
+  script?: ScriptContent
   createdAt: Date
   updatedAt: Date
 }

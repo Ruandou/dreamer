@@ -10,6 +10,13 @@ export { getDeepSeekBalance } from './deepseek-balance.js'
 
 export { convertDeepSeekResponse, expandScript } from './script-expand.js'
 
+export {
+  generateStoryboardScriptFromEpisode,
+  hasEpisodeContentForStoryboard,
+  buildStoryboardUserPrompt,
+  type EpisodeStoryboardInput
+} from './script-storyboard-generate.js'
+
 export { optimizePrompt } from './scene-prompt-optimize.js'
 
 export { generateCharacterSlotImagePrompt } from './character-slot-image-prompt.js'

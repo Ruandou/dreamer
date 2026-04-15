@@ -28,7 +28,7 @@ export async function getActiveOutlinePipelineJob(projectId: string) {
   return pipelineRepository.getActiveOutlinePipelineJob(projectId)
 }
 
-/** 将分集 rawScript 转为 ScriptContent（无效则 null） */
+/** 将分集 `Episode.script` 转为 ScriptContent（无效则 null） */
 export function scriptFromJson(raw: unknown): ScriptContent | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
@@ -36,28 +36,28 @@ export function scriptFromJson(raw: unknown): ScriptContent | null {
   return raw as ScriptContent
 }
 
-/** 判断 1..targetEpisodes 是否均有有效 rawScript */
+/** 判断 1..targetEpisodes 是否均有有效剧本 JSON（`Episode.script`） */
 export function areEpisodeScriptsComplete(
-  episodes: { episodeNum: number; rawScript: unknown }[],
+  episodes: { episodeNum: number; script: unknown }[],
   targetEpisodes: number
 ): boolean {
   for (let n = 1; n <= targetEpisodes; n++) {
     const ep = episodes.find(e => e.episodeNum === n)
-    if (!ep || !scriptFromJson(ep.rawScript)) return false
+    if (!ep || !scriptFromJson(ep.script)) return false
   }
   return true
 }
 
 /** 从已落库分集构建 EpisodePlan（sceneIndices 指向 mergeEpisodesToScriptContent 后的全局 scenes 下标） */
 export function buildEpisodePlansFromDbEpisodes(
-  episodes: { episodeNum: number; title: string | null; synopsis: string | null; rawScript: unknown }[],
+  episodes: { episodeNum: number; title: string | null; synopsis: string | null; script: unknown }[],
   merged: ScriptContent
 ): EpisodePlan[] {
   const ordered = [...episodes].sort((a, b) => a.episodeNum - b.episodeNum)
   let offset = 0
   const plans: EpisodePlan[] = []
   for (const ep of ordered) {
-    const sc = scriptFromJson(ep.rawScript)
+    const sc = scriptFromJson(ep.script)
     if (!sc) continue
     const len = sc.scenes.length
     plans.push({
@@ -97,9 +97,9 @@ async function updateJob(
   await pipelineRepository.updateJob(jobId, payload)
 }
 
-/** 合并多集 rawScript 为单一 ScriptContent（供实体提取 / 分镜等） */
+/** 合并多集剧本 JSON 为单一 ScriptContent（供实体提取 / 分镜等） */
 export function mergeEpisodesToScriptContent(
-  episodes: { episodeNum: number; title: string | null; rawScript: unknown }[]
+  episodes: { episodeNum: number; title: string | null; script: unknown }[]
 ): ScriptContent {
   const ordered = [...episodes].sort((a, b) => a.episodeNum - b.episodeNum)
   const allScenes: ScriptScene[] = []
@@ -107,7 +107,7 @@ export function mergeEpisodesToScriptContent(
   let baseSummary = ''
 
   for (const ep of ordered) {
-    const sc = scriptFromJson(ep.rawScript)
+    const sc = scriptFromJson(ep.script)
     if (!sc) continue
     if (ep.episodeNum === 1) {
       baseTitle = sc.title || ep.title || baseTitle
@@ -134,7 +134,7 @@ async function fillEpisodeSynopses(projectId: string) {
   const episodes = await projectRepository.findManyEpisodesOrdered(projectId)
   for (const ep of episodes) {
     if (ep.synopsis?.trim()) continue
-    const sc = scriptFromJson(ep.rawScript)
+    const sc = scriptFromJson(ep.script)
     if (!sc) continue
     const synopsis =
       sc.summary?.trim() ||
@@ -225,7 +225,7 @@ export async function runScriptBatchJob(
   try {
     for (let n = 2; n <= targetEpisodes; n++) {
       const existing = await projectRepository.findEpisodeByProjectNum(projectId, n)
-      if (existing && scriptFromJson(existing.rawScript)) {
+      if (existing && scriptFromJson(existing.script)) {
         const pct = Math.round(((n - 1) / Math.max(1, targetEpisodes - 1)) * 100)
         const progress = embedded ? mapBatchProgressToParseRange(pct) : Math.min(99, pct)
         await updateJob(jobId, {
@@ -287,7 +287,7 @@ export async function runScriptBatchJob(
 }
 
 /**
- * 补全缺失集 rawScript（在解析前调用）。
+ * 补全缺失集剧本（在解析前调用）。
  * @param reusePipelineJobId 若传入（通常为当前 parse-script 的 jobId），则不再新建 script-batch，把批量进度写到同一任务上，避免前端优先展示 parse 时长期卡在 5%。
  */
 export async function ensureAllEpisodeScripts(
@@ -296,7 +296,7 @@ export async function ensureAllEpisodeScripts(
   reusePipelineJobId?: string
 ) {
   const ep1 = await projectRepository.findEpisodeByProjectNum(projectId, 1)
-  if (!ep1 || !scriptFromJson(ep1.rawScript)) {
+  if (!ep1 || !scriptFromJson(ep1.script)) {
     await runGenerateFirstEpisode(projectId)
     if (reusePipelineJobId) {
       await updateJob(reusePipelineJobId, {
@@ -309,7 +309,7 @@ export async function ensureAllEpisodeScripts(
   let needBatch = false
   for (let n = 2; n <= targetEpisodes; n++) {
     const ep = await projectRepository.findEpisodeByProjectNum(projectId, n)
-    if (!ep || !scriptFromJson(ep.rawScript)) {
+    if (!ep || !scriptFromJson(ep.script)) {
       needBatch = true
       break
     }
@@ -351,7 +351,7 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
     }
 
     const ep1 = project.episodes.find(e => e.episodeNum === 1)
-    if (!scriptFromJson(ep1?.rawScript)) {
+    if (!scriptFromJson(ep1?.script)) {
       await updateJob(jobId, { status: 'failed', error: '第一集剧本不存在' })
       return
     }

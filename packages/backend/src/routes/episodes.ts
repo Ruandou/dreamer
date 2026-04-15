@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { verifyEpisodeOwnership, verifyProjectOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { episodeService } from '../services/episode-service.js'
+import { enqueueEpisodeStoryboardScriptJob } from '../services/episode-storyboard-job.js'
 
 export async function episodeRoutes(fastify: FastifyInstance) {
   // List episodes for a project
@@ -63,7 +64,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
   // Update episode (including script content)
   fastify.put<{
     Params: { id: string }
-    Body: { title?: string; synopsis?: string | null; script?: unknown; rawScript?: unknown }
+    Body: { title?: string; synopsis?: string | null; script?: unknown }
   }>(
     '/:id',
     { preHandler: [fastify.authenticate] },
@@ -167,6 +168,46 @@ export async function episodeRoutes(fastify: FastifyInstance) {
         script: result.script,
         scenesCreated: result.scenesCreated,
         aiCost: result.aiCost
+      }
+    }
+  )
+
+  /** 根据本集梗概与/或已有剧本，AI 生成分镜剧本并写入场次（Scene + 首镜） */
+  fastify.post<{ Params: { id: string }; Body: { hint?: string } }>(
+    '/:id/generate-storyboard-script',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request as any).user.id
+      const episodeId = request.params.id
+      const hint = request.body?.hint
+
+      if (!(await verifyEpisodeOwnership(userId, episodeId))) {
+        return reply.status(403).send(permissionDeniedBody)
+      }
+
+      const result = await enqueueEpisodeStoryboardScriptJob(userId, episodeId, hint)
+
+      if (!result.ok) {
+        if (result.status === 404) {
+          return reply.status(404).send({ error: result.error })
+        }
+        if (result.status === 400) {
+          return reply.status(400).send({
+            error: result.error,
+            message: result.message
+          })
+        }
+        if (result.status === 409) {
+          return reply.status(409).send({ error: result.error })
+        }
+        return reply.status(result.status).send({
+          error: result.error
+        })
+      }
+
+      return {
+        jobId: result.jobId,
+        message: '分镜剧本生成任务已提交，可在任务中心查看进度'
       }
     }
   )

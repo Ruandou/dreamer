@@ -57,7 +57,7 @@ model Episode {
   episodeNum Int
   title      String?
   synopsis   String?
-  rawScript  Json?    @map("script")
+  script     Json?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

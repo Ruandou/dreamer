@@ -63,6 +63,7 @@ function pipelineSubtypeLabel(jobType: string | undefined): string {
   if (t === 'script-first') return '生成第一集'
   if (t === 'script-batch') return '批量剧本'
   if (t === 'parse-script') return '解析剧本'
+  if (t === 'episode-storyboard-script') return '分镜剧本'
   if (t === 'full-pipeline') return '完整流水线'
   return 'Pipeline'
 }
@@ -142,10 +143,13 @@ const columns: DataTableColumns<Job> = [
       }
       if (row.type === 'pipeline') {
         const proj = row.projectName ? `项目：${row.projectName}` : '未关联项目'
+        const meta = row.progressMeta && typeof row.progressMeta === 'object' ? row.progressMeta : null
+        if (row.jobType === 'episode-storyboard-script' && meta && 'episodeNum' in meta) {
+          const n = (meta as { episodeNum?: number }).episodeNum
+          return n != null ? `${proj} · 第 ${n} 集` : proj
+        }
         const hint =
-          row.progressMeta && typeof row.progressMeta === 'object' && row.progressMeta.message
-            ? ` · ${String(row.progressMeta.message)}`
-            : ''
+          meta && 'message' in meta && meta.message ? ` · ${String(meta.message)}` : ''
         return `${proj}${hint}`
       }
       return row.contentPreview || (row.content || '').slice(0, 50) + ((row.content || '').length > 50 ? '...' : '')
@@ -190,6 +194,12 @@ const columns: DataTableColumns<Job> = [
         return `${r.episodesCreated || 0} 集, ${r.charactersCreated || 0} 角色`
       }
       if (row.type === 'pipeline' && row.status === 'completed') {
+        if (row.jobType === 'episode-storyboard-script' && row.progressMeta && typeof row.progressMeta === 'object') {
+          const m = row.progressMeta as { scenesCreated?: number; aiCost?: number }
+          if (m.scenesCreated != null && typeof m.aiCost === 'number') {
+            return `${m.scenesCreated} 场 · ¥${m.aiCost.toFixed(4)}`
+          }
+        }
         return '已完成'
       }
       if (row.type === 'pipeline' && (row.status === 'processing' || row.status === 'pending')) {
