@@ -14,12 +14,10 @@ import {
   NSelect
 } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
-import { useEpisodeStore } from '@/stores/episode'
 
 const route = useRoute()
 const message = useMessage()
 const projectStore = useProjectStore()
-const episodeStore = useEpisodeStore()
 
 const projectId = computed(() => route.params.id as string)
 
@@ -45,8 +43,6 @@ const styleOptions = [
   { label: '复古调色', value: 'vintage' }
 ]
 
-const episodeSynopsisDraft = ref<Record<string, string>>({})
-
 function hydrate() {
   const p = projectStore.currentProject
   if (!p) return
@@ -55,11 +51,6 @@ function hydrate() {
   synopsis.value = p.synopsis || ''
   visualStyle.value = [...(p.visualStyle || [])]
   aspectRatio.value = p.aspectRatio || '9:16'
-  const drafts: Record<string, string> = {}
-  for (const ep of p.episodes || []) {
-    drafts[ep.id] = ep.synopsis || ''
-  }
-  episodeSynopsisDraft.value = drafts
 }
 
 watch(
@@ -70,7 +61,6 @@ watch(
 
 onMounted(async () => {
   await projectStore.getProject(projectId.value)
-  await episodeStore.fetchEpisodes(projectId.value)
   hydrate()
 })
 
@@ -95,17 +85,6 @@ async function saveProject() {
   }
 }
 
-async function saveEpisodeSynopsis(episodeId: string) {
-  try {
-    await episodeStore.updateEpisode(episodeId, {
-      synopsis: episodeSynopsisDraft.value[episodeId] || ''
-    })
-    message.success('分集梗概已更新')
-    await projectStore.getProject(projectId.value)
-  } catch (e: any) {
-    message.error(e?.response?.data?.error || e?.message || '保存失败')
-  }
-}
 </script>
 
 <template>
@@ -143,20 +122,6 @@ async function saveEpisodeSynopsis(episodeId: string) {
         </NFormItem>
       </NForm>
     </NCard>
-
-    <NCard title="分集梗概" style="margin-top: 16px" segmented>
-      <p v-if="!(projectStore.currentProject?.episodes?.length)" class="muted">暂无分集</p>
-      <div v-for="ep in projectStore.currentProject?.episodes || []" :key="ep.id" class="ep-row">
-        <div class="ep-label">第 {{ ep.episodeNum }} 集</div>
-        <NInput
-          v-model:value="episodeSynopsisDraft[ep.id]"
-          type="textarea"
-          :rows="2"
-          placeholder="本集梗概"
-        />
-        <NButton size="small" @click="saveEpisodeSynopsis(ep.id)">保存该集</NButton>
-      </div>
-    </NCard>
   </div>
 </template>
 
@@ -164,21 +129,5 @@ async function saveEpisodeSynopsis(episodeId: string) {
 .overview {
   width: 100%;
   box-sizing: border-box;
-}
-.muted {
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-sm);
-}
-.ep-row {
-  display: grid;
-  grid-template-columns: 88px 1fr auto;
-  gap: 12px;
-  align-items: start;
-  margin-bottom: 12px;
-}
-.ep-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  padding-top: 6px;
 }
 </style>
