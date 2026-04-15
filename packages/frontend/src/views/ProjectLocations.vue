@@ -16,7 +16,8 @@ import {
   NModal,
   NForm,
   NFormItem,
-  useMessage
+  useMessage,
+  useDialog
 } from 'naive-ui'
 import type { ProjectLocation } from '@dreamer/shared/types'
 import { api } from '@/api'
@@ -26,6 +27,7 @@ import { fetchInFlightImageJobsForProject } from '@/lib/pending-image-jobs'
 
 const route = useRoute()
 const message = useMessage()
+const dialog = useDialog()
 const projectStore = useProjectStore()
 
 const projectId = computed(() => route.params.id as string)
@@ -319,7 +321,20 @@ async function removeLocation(loc: ProjectLocation) {
   }
 }
 
-async function generateAllMissing() {
+function generateAllMissing() {
+  dialog.warning({
+    title: '确认 AI 一键生成',
+    content:
+      '将为尚未有定场图且已填提示词的场地批量入队；若某场地提示词有改动会先保存。是否继续？',
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      void executeGenerateAllMissing()
+    }
+  })
+}
+
+async function executeGenerateAllMissing() {
   batchGenerating.value = true
   try {
     for (const l of locations.value) {

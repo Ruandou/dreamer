@@ -15,7 +15,8 @@ import {
   NTag,
   useMessage,
   NSpin,
-  NEmpty
+  NEmpty,
+  useDialog
 } from 'naive-ui'
 import { useCharacterStore } from '@/stores/character'
 import EmptyState from '@/components/EmptyState.vue'
@@ -27,6 +28,7 @@ import { fetchInFlightImageJobsForProject } from '@/lib/pending-image-jobs'
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const dialog = useDialog()
 const characterStore = useCharacterStore()
 
 const projectId = computed(() => route.params.id as string)
@@ -140,7 +142,20 @@ async function hydrateGeneratingFromQueue() {
   }
 }
 
-async function generateAllMissing() {
+function generateAllMissing() {
+  dialog.warning({
+    title: '确认 AI 一键生成',
+    content:
+      '将为当前项目内所有可生成的形象槽位入队（需已填提示词且未出图；衍生需父级已出图）。是否继续？',
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      void executeGenerateAllMissing()
+    }
+  })
+}
+
+async function executeGenerateAllMissing() {
   batchGenerating.value = true
   try {
     const data = await characterStore.batchGenerateMissingCharacterAvatars(projectId.value)

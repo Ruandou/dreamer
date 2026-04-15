@@ -35,6 +35,22 @@ export class CharacterImageRepository {
       orderBy: [{ characterId: 'asc' }, { order: 'asc' }]
     })
   }
+
+  /** 指定角色下尚未有定妆图的槽位（与 findSlotsWithoutAvatarByProject 规则一致，仅缩小范围） */
+  findSlotsWithoutAvatarByProjectAndCharacter(projectId: string, characterId: string) {
+    return this.prisma.characterImage.findMany({
+      where: {
+        characterId,
+        character: { projectId },
+        OR: [{ avatarUrl: null }, { avatarUrl: '' }]
+      },
+      include: {
+        character: { include: { project: true } },
+        parent: true
+      },
+      orderBy: [{ order: 'asc' }]
+    })
+  }
 }
 
 export const characterImageRepository = new CharacterImageRepository(prisma)

@@ -88,12 +88,15 @@ export class CharacterImageService {
     return { ok: true, jobId: job.id, kind: 'character_derived_regenerate' }
   }
 
-  /** 对项目内「无定妆图、有提示词、衍生父级已出图」的槽位逐个入队（与单槽 POST generate 规则一致） */
+  /** 对项目内（或指定角色内）「无定妆图、有提示词、衍生父级已出图」的槽位逐个入队（与单槽 POST generate 规则一致） */
   async batchEnqueueMissingAvatars(
     userId: string,
-    projectId: string
+    projectId: string,
+    characterId?: string
   ): Promise<BatchEnqueueCharacterMissingAvatarResult> {
-    const rows = await this.repository.findSlotsWithoutAvatarByProject(projectId)
+    const rows = characterId
+      ? await this.repository.findSlotsWithoutAvatarByProjectAndCharacter(projectId, characterId)
+      : await this.repository.findSlotsWithoutAvatarByProject(projectId)
     const jobIds: string[] = []
     const enqueuedCharacterImageIds: string[] = []
     const skipped: { id: string; name: string; reason: string }[] = []

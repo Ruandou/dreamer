@@ -1,23 +1,38 @@
 import { FastifyInstance } from 'fastify'
-import { verifyCharacterImageOwnership, verifyProjectOwnership } from '../plugins/auth.js'
+import {
+  verifyCharacterImageOwnership,
+  verifyCharacterOwnership,
+  verifyProjectOwnership
+} from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { characterImageService } from '../services/character-image-service.js'
 
 export async function characterImageRoutes(fastify: FastifyInstance) {
   /** 须在 /:id 之前注册 */
-  fastify.post<{ Body: { projectId: string } }>(
+  fastify.post<{ Body: { projectId: string; characterId?: string } }>(
     '/batch-generate-missing-avatars',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const userId = (request as any).user.id
       const projectId = request.body?.projectId
+      const rawCharacterId = request.body?.characterId
       if (!projectId || typeof projectId !== 'string') {
         return reply.status(400).send({ error: '缺少 projectId' })
       }
       if (!(await verifyProjectOwnership(userId, projectId))) {
         return reply.status(403).send(permissionDeniedBody)
       }
-      const result = await characterImageService.batchEnqueueMissingAvatars(userId, projectId)
+      let characterId: string | undefined
+      if (rawCharacterId !== undefined && rawCharacterId !== null && rawCharacterId !== '') {
+        if (typeof rawCharacterId !== 'string') {
+          return reply.status(400).send({ error: 'characterId 无效' })
+        }
+        characterId = rawCharacterId.trim()
+        if (!(await verifyCharacterOwnership(userId, characterId))) {
+          return reply.status(403).send(permissionDeniedBody)
+        }
+      }
+      const result = await characterImageService.batchEnqueueMissingAvatars(userId, projectId, characterId)
       return reply.status(202).send(result)
     }
   )

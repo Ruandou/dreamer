@@ -4,6 +4,7 @@ import Fastify, { FastifyInstance } from 'fastify'
 const {
   mockVerifyCharacterImageOwnership,
   mockVerifyProjectOwnership,
+  mockVerifyCharacterOwnership,
   mockCharacterImageFindUnique,
   mockCharacterImageFindMany,
   mockCharacterImageUpdate,
@@ -11,6 +12,7 @@ const {
 } = vi.hoisted(() => ({
   mockVerifyCharacterImageOwnership: vi.fn().mockResolvedValue(true),
   mockVerifyProjectOwnership: vi.fn().mockResolvedValue(true),
+  mockVerifyCharacterOwnership: vi.fn().mockResolvedValue(true),
   mockCharacterImageFindUnique: vi.fn(),
   mockCharacterImageFindMany: vi.fn(),
   mockCharacterImageUpdate: vi.fn(),
@@ -19,7 +21,8 @@ const {
 
 vi.mock('../src/plugins/auth.js', () => ({
   verifyCharacterImageOwnership: (...args: unknown[]) => mockVerifyCharacterImageOwnership(...args),
-  verifyProjectOwnership: (...args: unknown[]) => mockVerifyProjectOwnership(...args)
+  verifyProjectOwnership: (...args: unknown[]) => mockVerifyProjectOwnership(...args),
+  verifyCharacterOwnership: (...args: unknown[]) => mockVerifyCharacterOwnership(...args)
 }))
 
 vi.mock('../src/lib/prisma.js', () => ({
@@ -61,6 +64,7 @@ describe('Character image routes', () => {
     vi.clearAllMocks()
     mockVerifyCharacterImageOwnership.mockResolvedValue(true)
     mockVerifyProjectOwnership.mockResolvedValue(true)
+    mockVerifyCharacterOwnership.mockResolvedValue(true)
     mockCharacterImageFindMany.mockResolvedValue([])
     mockImageQueueAdd.mockResolvedValue({ id: 'job-1' })
   })
@@ -230,5 +234,47 @@ describe('Character image routes', () => {
     expect(data.enqueued).toBe(1)
     expect(data.enqueuedCharacterImageIds).toEqual(['img-1'])
     expect(mockImageQueueAdd).toHaveBeenCalled()
+  })
+
+  it('POST batch-generate-missing-avatars with characterId returns 403 when not character owner', async () => {
+    mockVerifyCharacterOwnership.mockResolvedValueOnce(false)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/character-images/batch-generate-missing-avatars',
+      payload: { projectId: 'p1', characterId: 'c1' }
+    })
+    expectPermissionDeniedPayload(res)
+  })
+
+  it('POST batch-generate-missing-avatars with characterId returns 202', async () => {
+    mockCharacterImageFindMany.mockResolvedValue([
+      {
+        id: 'img-1',
+        name: '主',
+        prompt: '中文',
+        avatarUrl: null,
+        parentId: null,
+        character: { name: 'A', project: { id: 'p1', visualStyle: [] } },
+        parent: null
+      }
+    ])
+    mockCharacterImageFindUnique.mockResolvedValue({
+      id: 'img-1',
+      prompt: '中文',
+      parentId: null,
+      character: { project: { id: 'p1', visualStyle: [] } },
+      parent: null
+    })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/character-images/batch-generate-missing-avatars',
+      payload: { projectId: 'p1', characterId: 'c1' }
+    })
+
+    expect(res.statusCode).toBe(202)
+    const data = JSON.parse(res.payload)
+    expect(data.enqueued).toBe(1)
+    expect(mockVerifyCharacterOwnership).toHaveBeenCalledWith('u1', 'c1')
   })
 })

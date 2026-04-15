@@ -12,8 +12,9 @@ import {
   NUpload,
   NTag,
   useMessage,
+  useDialog,
   NTree,
-  NDropdown,
+  NPopconfirm,
   NSpin,
   NBackTop,
   NAlert
@@ -34,6 +35,7 @@ import { fetchInFlightImageJobsForProject } from '@/lib/pending-image-jobs'
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const dialog = useDialog()
 const characterStore = useCharacterStore()
 
 const projectId = computed(() => route.params.id as string)
@@ -55,13 +57,28 @@ const selectedFile = ref<File | null>(null)
 const promptDraft = ref('')
 const generatingByImageId = ref<Record<string, boolean>>({})
 const uploadingAvatar = ref(false)
+const batchGeneratingCharacter = ref(false)
 let unsubProjectSse: (() => void) | null = null
 
 type CharacterTreeOption = TreeOption & { data?: CharacterImage }
 
-onMounted(async () => {
-  await loadCharacter()
-  await hydrateGeneratingFromQueue()
+/** 与角色库列表一致：沿用 store 顺序（同 GET /characters，按创建时间升序） */
+const projectCharactersInListOrder = computed(() =>
+  characterStore.characters.filter((c) => c.projectId === projectId.value)
+)
+
+/** 多于一个角色时显示左侧切换栏（与列表顺序一致） */
+const showCharacterRail = computed(() => projectCharactersInListOrder.value.length > 1)
+
+watch(
+  projectId,
+  (pid) => {
+    if (pid) void characterStore.fetchCharacters(pid)
+  },
+  { immediate: true }
+)
+
+onMounted(() => {
   unsubProjectSse = subscribeProjectUpdates(projectId.value, (p) => {
     if (p.type !== 'image-generation') return
     const ours =
@@ -136,7 +153,7 @@ async function handleAvatarUpload(options: { file: UploadFileInfo }) {
       selectedImage.value.id,
       f
     )
-    message.success('图片已上传')
+    message.success('已上传')
     await loadCharacter()
   } catch (e: any) {
     const err = e?.response?.data?.error
@@ -161,6 +178,22 @@ const loadCharacter = async () => {
   } finally {
     isLoading.value = false
   }
+}
+
+watch(
+  characterId,
+  async () => {
+    await loadCharacter()
+    await hydrateGeneratingFromQueue()
+  },
+  { immediate: true }
+)
+
+async function switchProjectCharacter(targetId: string) {
+  if (targetId === characterId.value) return
+  const ok = await savePromptDraftIfDirty(true)
+  if (!ok) return
+  await router.push(`/project/${projectId.value}/characters/${targetId}`)
 }
 
 function sortImagesByOrder(a: CharacterImage, b: CharacterImage): number {
@@ -307,14 +340,14 @@ function isPromptDirty(): boolean {
   )
 }
 
-/** 有未保存改动时写入服务端；silent 时不弹出「提示词已保存」 */
+/** 有未保存改动时写入服务端；silent 时不弹出「已保存」 */
 async function savePromptDraftIfDirty(silent = false): Promise<boolean> {
   if (!selectedImage.value || !isPromptDirty()) return true
   try {
     await characterStore.updateImage(characterId.value, selectedImage.value.id, {
       prompt: promptDraft.value || null
     })
-    if (!silent) message.success('提示词已保存')
+    if (!silent) message.success('已保存')
     await loadCharacter()
     return true
   } catch (e: any) {
@@ -326,6 +359,45 @@ async function savePromptDraftIfDirty(silent = false): Promise<boolean> {
 async function savePromptDraft() {
   if (!selectedImage.value) return
   await savePromptDraftIfDirty(false)
+}
+
+function batchGenerateThisCharacter() {
+  dialog.warning({
+    title: '确认 AI 一键生成',
+    content:
+      '将为当前角色下所有可生成的形象槽位入队（需已填提示词且未出图；衍生需父级已出图）。是否继续？',
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      void executeBatchGenerateThisCharacter()
+    }
+  })
+}
+
+async function executeBatchGenerateThisCharacter() {
+  const ok = await savePromptDraftIfDirty(true)
+  if (!ok) return
+  batchGeneratingCharacter.value = true
+  try {
+    const data = await characterStore.batchGenerateMissingCharacterAvatars(projectId.value, {
+      characterId: characterId.value
+    })
+    const { enqueued, skipped } = data
+    if (enqueued > 0) {
+      message.success(`已入队 ${enqueued} 个定妆生成任务`)
+      void hydrateGeneratingFromQueue()
+    } else {
+      message.warning('没有可生成的槽位（需提示词且无定妆图，衍生需父级已出图）')
+    }
+    if (skipped.length > 0) {
+      const reasons = [...new Set(skipped.map((s) => s.reason))]
+      message.info(`已跳过 ${skipped.length} 个：${reasons.join('；')}`)
+    }
+  } catch (e: any) {
+    message.error(e?.response?.data?.error || '批量入队失败')
+  } finally {
+    batchGeneratingCharacter.value = false
+  }
 }
 
 async function queueSelectedGenerate() {
@@ -385,59 +457,31 @@ const treeNodeProps = (option: CharacterTreeOption) => ({
   draggable: true
 })
 
-const imageActionOptions = computed(() => {
-  if (!selectedImage.value) return []
-
+/** 与场地卡片 header-extra 一致：需挂回主基础时显示「关联」 */
+const selectedImageLoosePrimary = computed(() => {
+  if (!selectedImage.value || !character.value?.images) return null
   const img = selectedImage.value
-  const images = character.value?.images || []
-  const options: { label: string; key: string }[] = []
-
+  const images = character.value.images
   const bases = getDisplayBaseImages(images)
   const primary = bases[0]
   const looseUnderPrimary =
     !img.parentId && img.type !== 'base' && primary?.type === 'base' && Boolean(primary.id)
-
-  if (img.type === 'base' && !img.parentId) {
-    options.push({ label: img.avatarUrl ? 'AI重新生成' : 'AI生成', key: 'ai-generate' })
-  } else {
-    const parentId = img.parentId || (looseUnderPrimary ? primary!.id : undefined)
-    const parent = parentId ? images.find((i) => i.id === parentId) : undefined
-    if (parent?.avatarUrl) {
-      options.push({ label: img.avatarUrl ? 'AI重新生成' : 'AI生成', key: 'ai-generate' })
-    }
-  }
-
-  if (looseUnderPrimary && primary) {
-    options.push({ label: `关联到「${primary.name}」`, key: 'attach-primary' })
-  }
-  if (!isRootBaseImage(img)) {
-    options.push({ label: '删除', key: 'delete' })
-  }
-
-  return options
+  if (!looseUnderPrimary || !primary) return null
+  return { primaryName: primary.name }
 })
 
-const handleImageAction = async (key: string) => {
-  if (!selectedImage.value) return
+const selectedImageCanDelete = computed(() =>
+  selectedImage.value ? !isRootBaseImage(selectedImage.value) : false
+)
 
-  switch (key) {
-    case 'ai-generate':
-      void queueSelectedGenerate()
-      break
-    case 'attach-primary': {
-      const imgs = character.value?.images || []
-      const p = getDisplayBaseImages(imgs)[0]
-      if (p) {
-        await characterStore.moveImage(characterId.value, selectedImage.value.id, p.id)
-        message.success('已关联到主形象')
-        await loadCharacter()
-      }
-      break
-    }
-    case 'delete':
-      handleDeleteImage(selectedImage.value.id)
-      break
-  }
+async function handleAttachToPrimary() {
+  const imgs = character.value?.images || []
+  const p = getDisplayBaseImages(imgs)[0]
+  const sel = selectedImage.value
+  if (!p || !sel) return
+  await characterStore.moveImage(characterId.value, sel.id, p.id)
+  message.success('已关联到主形象')
+  await loadCharacter()
 }
 
 const getTypeLabel = (type: string) => {
@@ -533,7 +577,33 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
     </EmptyState>
 
     <!-- Content -->
-    <div v-else class="detail-content">
+    <div
+      v-else
+      class="detail-content"
+      :class="{ 'detail-content--with-rail': showCharacterRail }"
+    >
+      <aside
+        v-if="showCharacterRail"
+        class="character-rail character-rail--tabs"
+        aria-label="切换角色"
+      >
+        <div class="character-rail__title">角色</div>
+        <nav class="character-rail__tablist" role="tablist">
+          <button
+            v-for="c in projectCharactersInListOrder"
+            :key="c.id"
+            type="button"
+            role="tab"
+            class="character-rail__tab"
+            :class="{ 'character-rail__tab--active': c.id === characterId }"
+            :aria-selected="c.id === characterId"
+            @click="switchProjectCharacter(c.id)"
+          >
+            {{ c.name }}
+          </button>
+        </nav>
+      </aside>
+
       <!-- Tree View -->
       <div class="tree-panel">
         <div class="tree-panel__header">
@@ -541,7 +611,16 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
             <h3>形象结构</h3>
             <p class="tree-panel__hint">基础定妆向下分支为衍生；点击行切换右侧详情，三角仅展开/收起</p>
           </div>
-          <NTag size="small" round>节点连线</NTag>
+          <NButton
+            size="small"
+            type="primary"
+            secondary
+            :loading="batchGeneratingCharacter"
+            :disabled="!character"
+            @click="batchGenerateThisCharacter"
+          >
+            AI一键生成
+          </NButton>
         </div>
         <NAlert
           v-if="multipleRootBases"
@@ -573,18 +652,53 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
       <div class="preview-panel">
         <div class="preview-panel__header">
           <h3>形象详情</h3>
-          <NDropdown
-            v-if="selectedImage"
-            trigger="click"
-            :options="imageActionOptions"
-            @select="handleImageAction"
+          <NSpace
+            v-if="
+              selectedImage &&
+              (selectedImageLoosePrimary || selectedImageCanDelete)
+            "
+            :size="8"
+            align="center"
+            wrap
           >
-            <NButton size="small">操作 ⋯</NButton>
-          </NDropdown>
+            <NButton
+              v-if="selectedImageLoosePrimary"
+              size="tiny"
+              quaternary
+              :disabled="!!generatingByImageId[selectedImage.id]"
+              @click="handleAttachToPrimary"
+            >
+              关联到「{{ selectedImageLoosePrimary.primaryName }}」
+            </NButton>
+            <NPopconfirm
+              v-if="selectedImageCanDelete"
+              positive-text="删除"
+              negative-text="取消"
+              @positive-click="handleDeleteImage(selectedImage.id)"
+            >
+              <template #trigger>
+                <NButton
+                  size="tiny"
+                  quaternary
+                  type="error"
+                  :disabled="!!generatingByImageId[selectedImage.id]"
+                >
+                  删除
+                </NButton>
+              </template>
+              确定删除形象「{{ selectedImage.name }}」？衍生节点将一并删除。
+            </NPopconfirm>
+          </NSpace>
         </div>
         <div class="preview-panel__body">
           <template v-if="selectedImage">
-            <div :key="selectedImage.id" class="preview-panel__selected">
+            <NSpin
+              :show="!!generatingByImageId[selectedImage.id]"
+              size="small"
+              description="生成中…"
+              class="preview-panel-spin"
+            >
+              <div :key="selectedImage.id" class="preview-panel__selected">
             <div class="preview-image-wrap">
               <NImage
                 v-if="selectedImage.avatarUrl"
@@ -599,17 +713,21 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
                 <span class="preview-image-placeholder__icon" aria-hidden="true">🖼</span>
                 <p class="preview-image-placeholder__title">暂无定妆图</p>
                 <p class="preview-image-placeholder__hint">
-                  可填写下方提示词后点「AI生成」，或上传本地参考图
+                  可先「本地上传」，或填写下方提示词后保存，再点「AI生成」
                 </p>
                 <NUpload
                   accept="image/jpeg,image/png,image/webp"
                   :max="1"
                   :show-file-list="false"
-                  :disabled="uploadingAvatar"
+                  :disabled="uploadingAvatar || generatingByImageId[selectedImage.id]"
                   @change="handleAvatarUpload"
                 >
-                  <NButton size="small" type="primary" :loading="uploadingAvatar">
-                    上传本地图片
+                  <NButton
+                    size="small"
+                    :loading="uploadingAvatar"
+                    :disabled="generatingByImageId[selectedImage.id]"
+                  >
+                    本地上传
                   </NButton>
                 </NUpload>
               </div>
@@ -618,11 +736,16 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
                   accept="image/jpeg,image/png,image/webp"
                   :max="1"
                   :show-file-list="false"
-                  :disabled="uploadingAvatar"
+                  :disabled="uploadingAvatar || generatingByImageId[selectedImage.id]"
                   @change="handleAvatarUpload"
                 >
-                  <NButton size="tiny" quaternary :loading="uploadingAvatar">
-                    替换为本地图片
+                  <NButton
+                    size="tiny"
+                    quaternary
+                    :loading="uploadingAvatar"
+                    :disabled="generatingByImageId[selectedImage.id]"
+                  >
+                    本地上传
                   </NButton>
                 </NUpload>
               </div>
@@ -651,14 +774,30 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
                   type="textarea"
                   placeholder="解析或手动填写；保存后再生成"
                   :rows="4"
+                  style="margin-top: 8px"
                 />
-                <NSpace style="margin-top: 10px" wrap>
-                  <NButton size="small" @click="savePromptDraft">保存提示词</NButton>
+                <NSpace style="margin-top: 8px" justify="end" wrap>
+                  <NButton size="small" @click="savePromptDraft">保存</NButton>
+                  <NUpload
+                    accept="image/jpeg,image/png,image/webp"
+                    :max="1"
+                    :show-file-list="false"
+                    :disabled="uploadingAvatar || generatingByImageId[selectedImage.id]"
+                    @change="handleAvatarUpload"
+                  >
+                    <NButton
+                      size="small"
+                      :loading="uploadingAvatar"
+                      :disabled="generatingByImageId[selectedImage.id]"
+                    >
+                      本地上传
+                    </NButton>
+                  </NUpload>
                   <NButton
                     size="small"
                     type="primary"
                     :loading="generatingByImageId[selectedImage.id]"
-                    :disabled="selectedImageGenerateDisabled"
+                    :disabled="selectedImageGenerateDisabled || uploadingAvatar"
                     @click="queueSelectedGenerate"
                   >
                     AI生成
@@ -667,6 +806,7 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
               </div>
             </div>
             </div>
+            </NSpin>
           </template>
           <EmptyState
             v-else
@@ -748,7 +888,7 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
   gap: var(--spacing-md);
 }
 
@@ -788,6 +928,94 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
   grid-template-columns: 360px 1fr;
   gap: var(--spacing-lg);
   min-height: 0;
+}
+
+.detail-content--with-rail {
+  grid-template-columns: 172px minmax(260px, 360px) minmax(0, 1fr);
+  gap: var(--spacing-md);
+}
+
+/* 左侧纵向 Tab（线型 + 当前项指示条，与 Naive line tabs 气质一致） */
+.character-rail--tabs {
+  background: var(--color-bg-white);
+  border-radius: var(--radius-lg);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.character-rail__title {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-tertiary);
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-gray);
+}
+
+.character-rail__tablist {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+.character-rail__tab {
+  position: relative;
+  text-align: left;
+  width: 100%;
+  padding: 10px 14px 10px 12px;
+  margin: 0;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.character-rail__tab:last-child {
+  border-bottom: none;
+}
+
+.character-rail__tab:hover:not(.character-rail__tab--active) {
+  background: var(--color-bg-gray);
+}
+
+.character-rail__tab--active {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+  background: var(--color-primary-light);
+}
+
+.character-rail__tab--active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--color-primary);
+  border-radius: 2px 0 0 2px;
+}
+
+.character-rail__tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  z-index: 1;
 }
 
 .tree-panel {
@@ -870,6 +1098,17 @@ const renderSuffix = ({ option }: { option: CharacterTreeOption }) => {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  min-height: 0;
+}
+
+.preview-panel-spin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.preview-panel-spin :deep(.n-spin-content) {
   min-height: 0;
 }
 

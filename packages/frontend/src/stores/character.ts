@@ -103,13 +103,19 @@ export const useCharacterStore = defineStore('character', () => {
   }
 
   /** 批量入队：无定妆图、有提示词、衍生父级已出图的槽位（与单槽生成规则一致） */
-  async function batchGenerateMissingCharacterAvatars(projectId: string) {
+  async function batchGenerateMissingCharacterAvatars(
+    projectId: string,
+    options?: { characterId?: string }
+  ) {
     const res = await api.post<{
       enqueued: number
       jobIds: string[]
       enqueuedCharacterImageIds: string[]
       skipped: { id: string; name: string; reason: string }[]
-    }>('/character-images/batch-generate-missing-avatars', { projectId })
+    }>('/character-images/batch-generate-missing-avatars', {
+      projectId,
+      ...(options?.characterId ? { characterId: options.characterId } : {})
+    })
     return res.data
   }
 
