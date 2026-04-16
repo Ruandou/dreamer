@@ -9,7 +9,6 @@ import {
   NSpin,
   NEmpty,
   NTooltip,
-  NTag,
   NDivider,
   NSelect,
   NDropdown
@@ -409,6 +408,16 @@ const moreMenuOptions = computed<DropdownOption[]>(() => [
   { label: '导出剧本 JSON', key: 'export' }
 ])
 
+const assetMenuOptions = [
+  { label: '角色', key: 'characters' },
+  { label: '场景', key: 'locations' }
+]
+
+function onAssetMenuSelect(key: string | number) {
+  if (key === 'characters') router.push(`/project/${projectId.value}/characters`)
+  if (key === 'locations') router.push(`/project/${projectId.value}/locations`)
+}
+
 function onMoreSelect(key: string | number) {
   if (key === 'storyboard') openStoryboard()
   if (key === 'ai') openGenerateStoryboardDialog()
@@ -522,78 +531,65 @@ function onCancelScriptEdit() {
             <aside class="episode-detail__assets">
               <div class="episode-detail__assets-head">
                 <span class="episode-detail__assets-title">资产库</span>
-                <NSpace :size="4">
-                  <NTooltip placement="top">
-                    <template #trigger>
-                      <NButton size="tiny" quaternary circle @click="router.push(`/project/${projectId}/characters`)">
-                        +
-                      </NButton>
-                    </template>
-                    管理角色
-                  </NTooltip>
-                  <NTooltip placement="top">
-                    <template #trigger>
-                      <NButton size="tiny" quaternary circle @click="router.push(`/project/${projectId}/locations`)">
-                        +
-                      </NButton>
-                    </template>
-                    管理场景
-                  </NTooltip>
-                </NSpace>
+                <NDropdown trigger="click" :options="assetMenuOptions" @select="onAssetMenuSelect">
+                  <NButton size="tiny" quaternary circle>+</NButton>
+                </NDropdown>
               </div>
 
-              <section class="episode-detail__asset-block">
-                <div class="episode-detail__asset-label">本集角色（{{ characterAssetTiles.length }}）</div>
-                <div class="episode-detail__asset-grid">
-                  <div
-                    v-for="tile in characterAssetTiles"
-                    :key="tile.key"
-                    class="episode-detail__asset-tile"
-                  >
-                    <div class="episode-detail__asset-thumb-wrap">
-                      <img
-                        v-if="tile.avatarUrl"
-                        :src="tile.avatarUrl"
-                        alt=""
-                        class="episode-detail__asset-thumb"
-                      />
-                      <div v-else class="episode-detail__asset-placeholder" />
+              <div class="episode-detail__assets-content">
+                <section class="episode-detail__asset-block">
+                  <div class="episode-detail__asset-label">本集角色（{{ characterAssetTiles.length }}）</div>
+                  <div class="episode-detail__asset-grid">
+                    <div
+                      v-for="tile in characterAssetTiles"
+                      :key="tile.key"
+                      class="episode-detail__asset-tile"
+                    >
+                      <div class="episode-detail__asset-thumb-wrap">
+                        <img
+                          v-if="tile.avatarUrl"
+                          :src="tile.avatarUrl"
+                          alt=""
+                          class="episode-detail__asset-thumb"
+                        />
+                        <div v-else class="episode-detail__asset-placeholder" />
+                      </div>
+                      <div class="episode-detail__asset-name">{{ tile.label }}</div>
                     </div>
-                    <div class="episode-detail__asset-name">{{ tile.label }}</div>
+                    <p v-if="!characterAssetTiles.length" class="episode-detail__muted episode-detail__asset-empty">
+                      本集暂未出现角色（台词或分镜出镜后会显示）
+                    </p>
                   </div>
-                  <p v-if="!characterAssetTiles.length" class="episode-detail__muted episode-detail__asset-empty">
-                    本集暂未出现角色（台词或分镜出镜后会显示）
-                  </p>
-                </div>
-              </section>
+                </section>
 
-              <NDivider class="episode-detail__divider" />
+                <NDivider class="episode-detail__divider" />
 
 
-              <section class="episode-detail__asset-block">
-                <div class="episode-detail__asset-label">本集场景（{{ episodeLocations.length }}）</div>
-                <div class="episode-detail__asset-grid episode-detail__asset-grid--loc">
-                  <div
-                    v-for="loc in episodeLocations"
-                    :key="loc.id"
-                    class="episode-detail__asset-tile"
-                  >
-                    <div class="episode-detail__asset-thumb-wrap episode-detail__asset-thumb-wrap--loc">
-                      <img
-                        v-if="loc.imageUrl"
-                        :src="loc.imageUrl"
-                        alt=""
-                        class="episode-detail__asset-thumb"
-                      />
-                      <div v-else class="episode-detail__asset-placeholder" />
+                <section class="episode-detail__asset-block">
+                  <div class="episode-detail__asset-label">本集场景（{{ episodeLocations.length }}）</div>
+                  <div class="episode-detail__asset-grid episode-detail__asset-grid--loc">
+                    <div
+                      v-for="loc in episodeLocations"
+                      :key="loc.id"
+                      class="episode-detail__asset-tile"
+                    >
+                      <div class="episode-detail__asset-thumb-wrap episode-detail__asset-thumb-wrap--loc">
+                        <img
+                          v-if="loc.imageUrl"
+                          :src="loc.imageUrl"
+                          alt=""
+                          class="episode-detail__asset-thumb"
+                        />
+                        <div v-else class="episode-detail__asset-placeholder" />
+                      </div>
+                      <div class="episode-detail__asset-name">{{ loc.name }}</div>
                     </div>
-                    <div class="episode-detail__asset-name">{{ loc.name }}</div>
+                    <p v-if="!episodeLocations.length" class="episode-detail__muted episode-detail__asset-empty">
+                      本集场次尚未绑定场地库场景
+                    </p>
                   </div>
-                  <p v-if="!episodeLocations.length" class="episode-detail__muted episode-detail__asset-empty">
-                    本集场次尚未绑定场地库场景
-                  </p>
-                </div>
-              </section>
+                </section>
+              </div>
             </aside>
 
             <div class="episode-detail__work">
@@ -611,12 +607,8 @@ function onCancelScriptEdit() {
                       @cancel="onCancelScriptEdit"
                       @save="onSaveScript"
                     >
-                      <template #head-extra>
-                        <span class="episode-detail__script-cost">
-                          视频按秒计费，预估与所选模型相关；最终以方舟控制台账单为准。
-                        </span>
-                      </template>
-                      <template #fab-extra>
+                      <template #fab-extra />
+                      <template #below-editor>
                         <NTooltip
                           :disabled="canGenerateSceneVideo"
                           placement="top"
@@ -624,7 +616,7 @@ function onCancelScriptEdit() {
                           <template #trigger>
                             <span class="episode-detail__fab-gen-wrap">
                               <NButton
-                                size="small"
+                                size="tiny"
                                 type="primary"
                                 :loading="sceneStore.isGenerating"
                                 :disabled="!canGenerateSceneVideo"
@@ -641,20 +633,10 @@ function onCancelScriptEdit() {
                       </template>
                     </StoryboardScriptEditor>
                   </div>
-
-                  <div v-if="selectedScene && selectedShot" class="episode-detail__shot-meta">
-                    <NTag size="small" round>镜位 {{ selectedShot.shotNum }}</NTag>
-                    <span class="episode-detail__muted">{{ selectedShot.cameraAngle || '景别' }} ·
-                      {{ selectedShot.cameraMovement || '运镜' }}</span>
-                  </div>
-                  <p v-if="selectedShot?.description" class="episode-detail__shot-inline-desc">
-                    {{ selectedShot.description }}
-                  </p>
                 </main>
 
                 <aside class="episode-detail__preview-col">
                   <div class="episode-detail__preview-label">预览</div>
-                  <p class="episode-detail__preview-note">竖屏 9:16 · 使用顶部「生成模型」· 计费以实际任务为准</p>
                   <div class="episode-detail__preview-frame" aria-label="竖屏 9:16 预览区域">
                     <div class="episode-detail__preview-box">
                       <video
@@ -807,9 +789,6 @@ function onCancelScriptEdit() {
 }
 .episode-detail__toolbar-icon {
   flex-shrink: 0;
-}
-.episode-detail__script-cost {
-  display: block;
 }
 .episode-detail__divider {
   margin: 4px 0 12px;
@@ -1012,24 +991,17 @@ function onCancelScriptEdit() {
   flex-direction: column;
   gap: 12px;
   overflow: hidden;
-  height: 100%;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   padding: 12px;
   background: var(--color-bg-gray);
   position: relative;
+  height: 100%;
 }
-/* 固定编辑框底部按钮 */
+/* 编辑框下方按钮区域 */
 .episode-detail__main-col :deep(.storyboard-script-editor__fab-bar) {
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
-  background: var(--color-bg-gray);
-  padding-top: 8px;
-  padding-bottom: 2px;
-  margin: 0 -12px -12px;
-  padding-right: 12px;
-  padding-left: 12px;
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
 }
 /* 三个区域统一滚动条样式 */
 .episode-detail__assets-content,
@@ -1069,19 +1041,6 @@ function onCancelScriptEdit() {
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
 }
-.episode-detail__shot-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.episode-detail__shot-inline-desc {
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
 .episode-detail__preview-col {
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
@@ -1104,13 +1063,6 @@ function onCancelScriptEdit() {
 .episode-detail__fab-gen-wrap {
   display: inline-flex;
   vertical-align: middle;
-}
-.episode-detail__preview-note {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-  margin: 0 0 var(--spacing-sm);
-  line-height: var(--line-height-normal);
-  flex-shrink: 0;
 }
 /* 竖屏 9:16：在列内垂直居中，宽不超过列宽、高不超过剩余空间 */
 .episode-detail__preview-frame {

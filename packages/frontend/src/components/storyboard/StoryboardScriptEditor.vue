@@ -324,17 +324,15 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="storyboard-script-editor" :class="{ 'is-readonly': !editing, 'is-editing': editing }">
-    <div v-if="fragmentTitle || $slots['head-extra']" class="storyboard-script-editor__head-row">
-      <div v-if="fragmentTitle" class="storyboard-script-editor__fragment-title">{{ fragmentTitle }}</div>
+    <div class="storyboard-script-editor__head-row">
+      <div class="storyboard-script-editor__head-left">
+        <span v-if="fragmentTitle" class="storyboard-script-editor__fragment-title">{{ fragmentTitle }}</span>
+        <span v-if="hint" class="storyboard-script-editor__hint">{{ hint }}</span>
+      </div>
       <div v-if="$slots['head-extra']" class="storyboard-script-editor__head-extra">
         <slot name="head-extra" />
       </div>
     </div>
-    <p v-if="hint" class="storyboard-script-editor__hint">{{ hint }}</p>
-    <NSpace v-if="editing" class="storyboard-script-editor__toolbar" align="center" :size="8">
-      <NButton size="small" quaternary @click="emit('cancel')">取消</NButton>
-      <NButton size="small" type="primary" :loading="saving" @click="handleSave">保存</NButton>
-    </NSpace>
     <div v-if="editor" class="storyboard-script-editor__canvas">
       <div 
         class="storyboard-script-editor__pane"
@@ -367,13 +365,20 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </Teleport>
-        <div v-if="!editing" class="storyboard-script-editor__fab-bar">
-          <div v-if="$slots['fab-extra']" class="storyboard-script-editor__fab-extra">
-            <slot name="fab-extra" />
-          </div>
+      </div>
+    </div>
+    <div class="storyboard-script-editor__fab-bar">
+      <template v-if="editing">
+        <NButton size="tiny" quaternary @click="emit('cancel')">取消</NButton>
+        <NButton size="tiny" type="primary" :loading="saving" @click="handleSave">保存</NButton>
+      </template>
+      <template v-else>
+        <slot name="below-editor" />
+        <slot name="fab-extra" />
+        <slot name="edit-button">
           <NButton
             class="storyboard-script-editor__edit-fab"
-            size="small"
+            size="tiny"
             secondary
             @click="emit('start-edit')"
           >
@@ -382,8 +387,8 @@ onBeforeUnmount(() => {
             </template>
             {{ editButtonLabel }}
           </NButton>
-        </div>
-      </div>
+        </slot>
+      </template>
     </div>
   </div>
 </template>
@@ -403,12 +408,18 @@ onBeforeUnmount(() => {
   margin-bottom: var(--spacing-xs);
   flex-shrink: 0;
 }
+.storyboard-script-editor__head-left {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
 .storyboard-script-editor__fragment-title {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
-  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 .storyboard-script-editor__head-extra {
   flex-shrink: 0;
@@ -419,15 +430,10 @@ onBeforeUnmount(() => {
   line-height: var(--line-height-normal);
 }
 .storyboard-script-editor__hint {
-  margin: 0 0 var(--spacing-sm);
+  margin: 0;
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
   line-height: var(--line-height-normal);
-  flex-shrink: 0;
-}
-.storyboard-script-editor__toolbar {
-  margin-bottom: var(--spacing-sm);
-  flex-shrink: 0;
 }
 .storyboard-script-editor__canvas {
   position: relative;
@@ -435,6 +441,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 .storyboard-script-editor__pane {
   position: relative;
@@ -442,7 +449,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: var(--spacing-md) var(--spacing-md) 56px;
+  padding: var(--spacing-md);
   background: var(--color-bg-gray);
   box-shadow: var(--shadow-sm);
   overflow-y: auto;
@@ -450,26 +457,22 @@ onBeforeUnmount(() => {
   -webkit-overflow-scrolling: touch;
 }
 .storyboard-script-editor.is-editing .storyboard-script-editor__pane {
-  padding-bottom: var(--spacing-md);
   background: var(--color-bg-white);
   border-color: var(--color-border-hover);
 }
 .storyboard-script-editor.is-readonly .storyboard-script-editor__pane {
   opacity: 1;
 }
-/* 只读：编辑脚本与插槽（如生成视频）并排锚定在编辑区右下角 */
+/* 按钮区在编辑器下方，全部靠右 */
 .storyboard-script-editor__fab-bar {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  z-index: 2;
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: var(--spacing-sm);
   flex-wrap: wrap;
   justify-content: flex-end;
-  max-width: calc(100% - 24px);
+  padding-top: var(--spacing-sm);
+  flex-shrink: 0;
 }
 .storyboard-script-editor__fab-extra {
   display: flex;
