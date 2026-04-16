@@ -356,16 +356,44 @@ const currentMenu = computed(() => {
   flex: 1;
   min-height: 0;
   max-height: 100%;
+}
+/* 其他子页面保持外层滚动 */
+.project-content:not(:has(.episode-detail)) {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 </style>
 
-<!-- episode-detail 占满 project-content，禁用 project-content 的滚动，内部自行处理 -->
+<!-- episode-detail 占满 project-content，仅内部区域滚动 -->
 <style>
+.project-content {
+  padding: var(--spacing-lg);
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+}
 .project-content > .episode-detail {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  height: 100%;
+}
+.project-content .episode-detail__shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.project-content .episode-detail__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.project-content .episode-detail__editor-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 </style>
