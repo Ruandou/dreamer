@@ -121,6 +121,13 @@ const canGenerateSceneVideo = computed(() => {
   return true
 })
 
+const sceneSelectOptions = computed(() =>
+  scenes.value.map((s) => ({
+    label: `片段 ${s.sceneNum}`,
+    value: s.id
+  }))
+)
+
 async function generateSceneVideo() {
   const sc = selectedScene.value
   if (!sc) {
@@ -616,6 +623,14 @@ function onCancelScriptEdit() {
               <div class="episode-detail__work-top">
                 <main class="episode-detail__main-col">
                   <div class="episode-detail__editor-wrap">
+                    <div class="episode-detail__scene-selector">
+                      <NSelect
+                        v-model:value="selectedSceneId"
+                        :options="sceneSelectOptions"
+                        size="small"
+                        placeholder="选择场次"
+                      />
+                    </div>
                     <StoryboardScriptEditor
                       :key="episodeId"
                       :project-id="projectId"
@@ -1003,6 +1018,10 @@ function onCancelScriptEdit() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+.episode-detail__scene-selector {
+  margin-bottom: var(--spacing-sm);
+  flex-shrink: 0;
 }
 .episode-detail__main-col {
   min-width: 0;
