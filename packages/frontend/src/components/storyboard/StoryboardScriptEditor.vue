@@ -77,10 +77,11 @@ const dropdownItems = ref<StoryboardMentionItem[]>([])
 const selectedIndex = ref(0)
 const mentionPosition = ref({ left: 0, top: 0 })
 const mentionRange = ref<{ from: number; to: number } | null>(null)
+const characters = ref<Character[]>([])
 
 // 不用Mention扩展，完全自己实现@功能
 const editor = useEditor({
-  content: scriptToEditorDoc(props.script ?? null),
+  content: scriptToEditorDoc(props.script ?? null, characters.value),
   editable: true,
   extensions: [
     StarterKit,
@@ -259,7 +260,7 @@ watch(
   () => props.script,
   (s) => {
     if (!editor.value) return
-    const next = scriptToEditorDoc(s ?? null)
+    const next = scriptToEditorDoc(s ?? null, characters.value)
     const cur = editor.value.getJSON()
     if (JSON.stringify(cur) === JSON.stringify(next)) return
     editor.value.commands.setContent(next, { emitUpdate: false })
@@ -275,6 +276,15 @@ watch(
   { immediate: true }
 )
 
+watch(
+  characters,
+  (chars) => {
+    if (!editor.value || chars.length === 0) return
+    const next = scriptToEditorDoc(props.script ?? null, chars)
+    editor.value.commands.setContent(next, false)
+  }
+)
+
 async function loadCharacters() {
   // 先加测试数据，确保一定有内容
   flatItems.value = [
@@ -285,6 +295,7 @@ async function loadCharacters() {
   if (!props.projectId) return
   try {
     const res = await api.get<Character[]>(`/characters?projectId=${props.projectId}`)
+    characters.value = res.data
     const items: StoryboardMentionItem[] = []
     for (const c of res.data) {
       for (const img of c.images ?? []) {

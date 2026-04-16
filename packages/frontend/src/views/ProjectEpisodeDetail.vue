@@ -424,24 +424,44 @@ function onMoreSelect(key: string | number) {
   if (key === 'export') exportEpisodeScript()
 }
 
-function asScript(sc: unknown): ScriptContent | null {
-  if (!sc || typeof sc !== 'object') return null
-  const o = sc as Record<string, unknown>
-  if (!Array.isArray(o.scenes)) {
-    return {
-      title: typeof o.title === 'string' ? o.title : '',
-      summary: typeof o.summary === 'string' ? o.summary : '',
-      scenes: [],
-      ...(o.editorDoc ? { editorDoc: o.editorDoc as Record<string, unknown> } : {})
-    }
+const editorScript = computed<ScriptContent | null>(() => {
+  const script = episode.value?.script
+  if (!script || typeof script !== 'object') return null
+  const o = script as Record<string, unknown>
+
+  // 只显示当前选中场次
+  const scenes = Array.isArray(o.scenes) ? o.scenes : []
+  const currentSceneNum = selectedScene.value?.sceneNum
+  const filteredScenes = currentSceneNum
+    ? scenes.filter((s: any) => s.sceneNum === currentSceneNum)
+    : scenes
+
+  return {
+    title: typeof o.title === 'string' ? o.title : '',
+    summary: typeof o.summary === 'string' ? o.summary : '',
+    scenes: filteredScenes as any[],
+    editorDoc: o.editorDoc as Record<string, unknown> | null
   }
-  return sc as ScriptContent
-}
+})
 
 async function onSaveScript(script: ScriptContent) {
   scriptSaving.value = true
   try {
-    await episodeStore.updateEpisode(episodeId.value, { script })
+    // 合并回完整剧本：当前场次用编辑器内容，其他场次保留
+    const fullScript = episode.value?.script as ScriptContent | undefined
+    const currentSceneNum = selectedScene.value?.sceneNum
+    let finalScript = script
+
+    if (fullScript?.scenes?.length && currentSceneNum) {
+      const otherScenes = fullScript.scenes.filter(s => s.sceneNum !== currentSceneNum)
+      finalScript = {
+        ...fullScript,
+        editorDoc: script.editorDoc,
+        scenes: [...otherScenes, ...(script.scenes || [])]
+      }
+    }
+
+    await episodeStore.updateEpisode(episodeId.value, { script: finalScript })
     scriptEditing.value = false
     await load()
     message.success('分镜脚本已保存')
@@ -599,7 +619,7 @@ function onCancelScriptEdit() {
                     <StoryboardScriptEditor
                       :key="episodeId"
                       :project-id="projectId"
-                      :script="asScript(episode.script)"
+                      :script="editorScript"
                       :editing="scriptEditing"
                       :saving="scriptSaving"
                       :fragment-title="selectedScene ? `片段 ${selectedScene.sceneNum}` : '片段'"
