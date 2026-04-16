@@ -117,6 +117,9 @@ export class EpisodeService {
       if (hasShots) {
         sceneDurationMs = sc.shots!.reduce((sum, sh) => sum + (sh.duration ?? 5000), 0)
       }
+      // 每个场次总时长不能超过 15 秒
+      const MAX_SCENE_DURATION_MS = 15000
+      sceneDurationMs = Math.min(sceneDurationMs, MAX_SCENE_DURATION_MS)
 
       const scene = await this.repo.createScene({
         episodeId,
