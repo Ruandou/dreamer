@@ -122,9 +122,6 @@ const editor = useEditor({
       return false
     }
   },
-    onCreate: ({ editor }) => {
-    console.debug('Editor created, editable:', editor.isEditable)
-  },
   onUpdate: ({ editor }) => {
     handleTextChange(editor)
   },
