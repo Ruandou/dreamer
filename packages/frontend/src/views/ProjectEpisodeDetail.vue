@@ -121,13 +121,6 @@ const canGenerateSceneVideo = computed(() => {
   return true
 })
 
-const sceneSelectOptions = computed(() =>
-  scenes.value.map((s) => ({
-    label: `片段 ${s.sceneNum}`,
-    value: s.id
-  }))
-)
-
 async function generateSceneVideo() {
   const sc = selectedScene.value
   if (!sc) {
@@ -623,14 +616,6 @@ function onCancelScriptEdit() {
               <div class="episode-detail__work-top">
                 <main class="episode-detail__main-col">
                   <div class="episode-detail__editor-wrap">
-                    <div class="episode-detail__scene-selector">
-                      <NSelect
-                        v-model:value="selectedSceneId"
-                        :options="sceneSelectOptions"
-                        size="small"
-                        placeholder="选择场次"
-                      />
-                    </div>
                     <StoryboardScriptEditor
                       :key="episodeId"
                       :project-id="projectId"
@@ -698,7 +683,7 @@ function onCancelScriptEdit() {
               </div>
 
               <div
-                v-if="selectedScene && selectedScene.shots?.length"
+                v-if="scenes.length"
                 class="episode-detail__work-bottom"
               >
                 <div class="episode-detail__transport">
@@ -715,26 +700,19 @@ function onCancelScriptEdit() {
 
                 <footer class="episode-detail__shot-rail">
                   <button
-                    v-for="sh in selectedScene.shots"
-                    :key="sh.id"
+                    v-for="sc in scenes"
+                    :key="sc.id"
                     type="button"
                     class="episode-detail__rail-cell"
-                    :class="{ 'is-active': sh.id === selectedShotId }"
-                    @click="selectedShotId = sh.id"
+                    :class="{ 'is-active': sc.id === selectedSceneId }"
+                    @click="selectedSceneId = sc.id"
                   >
                     <div
                       class="episode-detail__rail-thumb"
-                      :class="{ 'is-cover': !!railThumbUrl }"
-                      :style="
-                        railThumbUrl
-                          ? { backgroundImage: `url(${railThumbUrl})` }
-                          : undefined
-                      "
                     >
-                      <span class="episode-detail__rail-num">{{ sh.shotNum }}</span>
-                      <span v-if="!railThumbUrl" class="episode-detail__rail-ph">暂无内容</span>
+                      <span class="episode-detail__rail-num">{{ sc.sceneNum }}</span>
                     </div>
-                    <span class="episode-detail__rail-dur">{{ Math.round((sh.duration ?? 0) / 1000) || '—' }}s</span>
+                    <span class="episode-detail__rail-dur">{{ sc.status === 'processing' ? '生成中' : (sc.status || '待生成') }}</span>
                   </button>
                 </footer>
               </div>
@@ -1018,10 +996,6 @@ function onCancelScriptEdit() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-.episode-detail__scene-selector {
-  margin-bottom: var(--spacing-sm);
-  flex-shrink: 0;
 }
 .episode-detail__main-col {
   min-width: 0;
