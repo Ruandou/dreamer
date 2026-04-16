@@ -4,7 +4,7 @@ import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Mention from '@tiptap/extension-mention'
-import { mergeAttributes } from '@tiptap/core'
+import { Node, mergeAttributes } from '@tiptap/core'
 
 // 自定义 Mention 扩展，添加 avatarUrl 属性
 const StoryboardMention = Mention.extend({
@@ -24,7 +24,7 @@ const StoryboardMention = Mention.extend({
   renderHTML({ node, HTMLAttributes }) {
     const avatar = node.attrs.avatarUrl
     const label = node.attrs.label ?? node.attrs.id ?? ''
-    
+
     return [
       'span',
       mergeAttributes(HTMLAttributes, { 'data-avatar-url': avatar || '', class: 'storyboard-mention' }),
@@ -36,9 +36,44 @@ const StoryboardMention = Mention.extend({
   }
 })
 
+// 自定义 Location 节点，用于场景/地点
+const StoryboardLocation = Node.create({
+  name: 'storyboardLocation',
+  group: 'inline',
+  inline: true,
+  atom: true,
+
+  addAttributes() {
+    return {
+      id: { default: null },
+      label: { default: '' },
+      locationId: { default: null },
+      imageUrl: { default: null }
+    }
+  },
+
+  parseHTML() {
+    return [{ tag: 'span[data-storyboard-location]' }]
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    const label = node.attrs.label ?? node.attrs.id ?? ''
+    const imageUrl = node.attrs.imageUrl
+
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, { 'data-storyboard-location': '', class: 'storyboard-location' }),
+      ['span', { class: 'storyboard-location__name' }, `📍${label}`],
+      imageUrl
+        ? ['img', { src: imageUrl, class: 'storyboard-location__image', draggable: 'false' }]
+        : null
+    ].filter(Boolean)
+  }
+})
+
 import { NButton, NSpace } from 'naive-ui'
 import { CreateOutline } from '@vicons/ionicons5'
-import type { ScriptContent, Character } from '@dreamer/shared/types'
+import type { ScriptContent, Character, ProjectLocation } from '@dreamer/shared/types'
 import { api } from '@/api'
 import { scriptToEditorDoc } from '@/lib/storyboard-editor/script-to-doc'
 import type { StoryboardMentionItem } from '@/lib/storyboard-editor/mention-suggestion'
@@ -78,10 +113,11 @@ const selectedIndex = ref(0)
 const mentionPosition = ref({ left: 0, top: 0 })
 const mentionRange = ref<{ from: number; to: number } | null>(null)
 const characters = ref<Character[]>([])
+const locations = ref<ProjectLocation[]>([])
 
 // 不用Mention扩展，完全自己实现@功能
 const editor = useEditor({
-  content: scriptToEditorDoc(props.script ?? null, characters.value),
+  content: scriptToEditorDoc(props.script ?? null, characters.value, locations.value),
   editable: true,
   extensions: [
     StarterKit,
@@ -92,7 +128,8 @@ const editor = useEditor({
       HTMLAttributes: {
         class: 'storyboard-mention'
       }
-    })
+    }),
+    StoryboardLocation
   ],
   editorProps: {
     handleKeyDown: (view, event) => {
@@ -257,7 +294,7 @@ watch(
   () => props.script,
   (s) => {
     if (!editor.value) return
-    const next = scriptToEditorDoc(s ?? null, characters.value)
+    const next = scriptToEditorDoc(s ?? null, characters.value, locations.value)
     const cur = editor.value.getJSON()
     if (JSON.stringify(cur) === JSON.stringify(next)) return
     editor.value.commands.setContent(next, { emitUpdate: false })
@@ -269,6 +306,7 @@ watch(
   () => props.projectId,
   () => {
     void loadCharacters()
+    void loadLocations()
   },
   { immediate: true }
 )
@@ -277,7 +315,16 @@ watch(
   characters,
   (chars) => {
     if (!editor.value || chars.length === 0) return
-    const next = scriptToEditorDoc(props.script ?? null, chars)
+    const next = scriptToEditorDoc(props.script ?? null, chars, locations.value)
+    editor.value.commands.setContent(next, false)
+  }
+)
+
+watch(
+  locations,
+  (locs) => {
+    if (!editor.value || locs.length === 0) return
+    const next = scriptToEditorDoc(props.script ?? null, characters.value, locs)
     editor.value.commands.setContent(next, false)
   }
 )
@@ -309,6 +356,16 @@ async function loadCharacters() {
     }
   } catch (e) {
     console.error('加载角色失败', e)
+  }
+}
+
+async function loadLocations() {
+  if (!props.projectId) return
+  try {
+    const res = await api.get<ProjectLocation[]>(`/locations?projectId=${props.projectId}`)
+    locations.value = res.data
+  } catch (e) {
+    console.error('加载场景失败', e)
   }
 }
 
@@ -529,6 +586,24 @@ onBeforeUnmount(() => {
 }
 .storyboard-script-editor__pane :deep(.storyboard-mention__name) {
   font-size: 0.95em;
+}
+.storyboard-script-editor__pane :deep(.storyboard-location) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  background: #e8f5e9;
+  border-radius: 4px;
+  color: #2e7d32;
+  font-weight: 500;
+}
+.storyboard-script-editor__pane :deep(.storyboard-location__name) {
+  font-size: 0.95em;
+}
+.storyboard-script-editor__pane :deep(.storyboard-location__image) {
+  height: 20px;
+  border-radius: 3px;
+  object-fit: cover;
 }
 </style>
 

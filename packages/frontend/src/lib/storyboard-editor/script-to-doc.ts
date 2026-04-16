@@ -1,4 +1,4 @@
-import type { ScriptContent, Character } from '@dreamer/shared/types'
+import type { ScriptContent, Character, ProjectLocation } from '@dreamer/shared/types'
 
 const emptyDoc = () => ({ type: 'doc', content: [{ type: 'paragraph' }] })
 
@@ -12,16 +12,31 @@ interface MentionNode {
   }
 }
 
+interface LocationNode {
+  type: 'storyboardLocation'
+  attrs: {
+    id: string
+    label: string
+    locationId: string | null
+    imageUrl: string | null
+  }
+}
+
 interface TextNode {
   type: 'text'
   text: string
 }
 
-type ContentNode = MentionNode | TextNode
+type ContentNode = MentionNode | TextNode | LocationNode
 
 function findCharacterByName(name: string, characters: Character[]): Character | null {
   const lower = name.toLowerCase()
   return characters.find(c => c.name.toLowerCase() === lower) ?? null
+}
+
+function findLocationByName(name: string, locations: ProjectLocation[]): ProjectLocation | null {
+  const lower = name.toLowerCase()
+  return locations.find(l => l.name.toLowerCase() === lower) ?? null
 }
 
 function findImageByName(character: Character, imageName: string) {
@@ -60,10 +75,25 @@ function characterToMention(
   }
 }
 
-/** 无 editorDoc 时，用剧本场景拼 Tiptap doc（角色用 mention 节点） */
+/** 用场景名生成 location 节点 */
+function locationToNode(name: string, locations: ProjectLocation[] = []): LocationNode {
+  const location = findLocationByName(name, locations)
+  return {
+    type: 'storyboardLocation',
+    attrs: {
+      id: name,
+      label: name,
+      locationId: location?.id ?? null,
+      imageUrl: location?.imageUrl ?? null
+    }
+  }
+}
+
+/** 无 editorDoc 时，用剧本场景拼 Tiptap doc（角色用 mention 节点，场景用 location 节点） */
 export function scriptToEditorDoc(
   script: ScriptContent | null | undefined,
-  characters: Character[] = []
+  characters: Character[] = [],
+  locations: ProjectLocation[] = []
 ): Record<string, unknown> {
   // 当有 characters 数据时，用 scenes 重新生成（带 mention 节点）
   // 忽略 editorDoc，因为 editorDoc 可能只存了纯文本且包含所有 scenes
@@ -84,10 +114,20 @@ export function scriptToEditorDoc(
   const paragraphs: Record<string, unknown>[] = []
 
   for (const s of script.scenes) {
-    // 场景标题行：地点 · 时间
-    const headText = `${s.location || ''} · ${s.timeOfDay || ''}`
-    if (headText.trim()) {
-      paragraphs.push({ type: 'paragraph', content: [{ type: 'text', text: headText }] })
+    // 场景标题行：地点(用location节点) · 时间
+    const headContent: ContentNode[] = []
+    if (s.location) {
+      headContent.push(locationToNode(s.location, locations))
+    }
+    if (s.timeOfDay) {
+      if (headContent.length > 0) {
+        headContent.push({ type: 'text', text: ` · ${s.timeOfDay}` })
+      } else {
+        headContent.push({ type: 'text', text: s.timeOfDay })
+      }
+    }
+    if (headContent.length > 0) {
+      paragraphs.push({ type: 'paragraph', content: headContent })
     }
     // 场景描述
     if (s.description) {

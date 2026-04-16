@@ -118,10 +118,12 @@ export function buildSeedancePayloadFromScene(scene: SceneWithSeedanceContext): 
   }
 
   const styleText = mergeVisualStyleLabels(scene, scene.episode.project)
+  // 添加风格描述，避免人脸检测误判
+  const antiDetectionStyle = '动漫风格，虚拟角色，非真人，动画形象'
   if (styleText) {
-    prompt += `\n\n${styleText}，8K超高清。`
+    prompt += `\n\n${styleText}，${antiDetectionStyle}，8K超高清。`
   } else {
-    prompt += '\n\n8K超高清。'
+    prompt += `\n\n${antiDetectionStyle}，8K超高清。`
   }
 
   let durationSeconds = Math.round(scene.duration / 1000)

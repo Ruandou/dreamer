@@ -8,9 +8,32 @@ const SEEDANCE_MODEL = 'doubao-seedance-2-0-fast-260128'
 // 默认分辨率：720p
 const DEFAULT_RESOLUTION = '720p'
 
+/** 将图片 URL 转换为 base64 */
+export async function imageUrlToBase64(url: string): Promise<string> {
+  try {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`)
+    }
+    const arrayBuffer = await response.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    const mimeType = response.headers.get('content-type') || 'image/jpeg'
+    return `data:${mimeType};base64,${buffer.toString('base64')}`
+  } catch (error) {
+    console.error('Failed to convert image to base64:', error)
+    throw error
+  }
+}
+
+/** 批量将图片 URL 数组转换为 base64 */
+export async function imageUrlsToBase64(urls: string[]): Promise<string[]> {
+  return Promise.all(urls.map(url => imageUrlToBase64(url)))
+}
+
 export interface SeedanceGenerateRequest {
   prompt: string
   imageUrls?: string[]  // 参考图片 URL 数组，最多 9 张
+  imageBase64?: string[]  // 参考图片 base64 数组，与 imageUrls 二选一
   duration?: number // seconds, default 5, range 4-15
   aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive'
   resolution?: '480p' | '720p'
@@ -59,11 +82,21 @@ function buildArkRequest(request: SeedanceGenerateRequest): any {
   })
   
   // 添加参考图片（如果有）
+  // 支持 URL 或 base64
   if (request.imageUrls && request.imageUrls.length > 0) {
     request.imageUrls.forEach(url => {
       content.push({
         type: 'image_url',
         image_url: { url },
+        role: 'reference_image'
+      })
+    })
+  }
+  if (request.imageBase64 && request.imageBase64.length > 0) {
+    request.imageBase64.forEach(b64 => {
+      content.push({
+        type: 'image_url',
+        image_url: { url: b64 },
         role: 'reference_image'
       })
     })

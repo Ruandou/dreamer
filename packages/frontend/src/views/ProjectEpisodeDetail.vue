@@ -135,6 +135,21 @@ async function generateSceneVideo() {
     message.warning('当前场次视频生成中，请稍候')
     return
   }
+
+  // 二次确认
+  const confirmed = await new Promise<boolean>((resolve) => {
+    dialog.warning({
+      title: '确认生成视频',
+      content: `即将为场次「${sc.name || sc.id}」生成视频，是否继续？`,
+      positiveText: '确认生成',
+      negativeText: '取消',
+      onPositiveClick: () => resolve(true),
+      onNegativeClick: () => resolve(false)
+    })
+  })
+
+  if (!confirmed) return
+
   try {
     const model = toApiVideoModel(videoModel.value)
     await sceneStore.generateVideo(sc.id, model, {})

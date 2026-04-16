@@ -3,7 +3,7 @@ import IORedis from 'ioredis'
 import type { VideoJobData } from '@dreamer/shared/types'
 import { videoQueueService } from '../services/video-queue-service.js'
 import { submitWan26Task, waitForWan26Completion, calculateWan26Cost } from '../services/ai/wan26.js'
-import { submitSeedanceTask, waitForSeedanceCompletion, calculateSeedanceCost } from '../services/ai/seedance.js'
+import { submitSeedanceTask, waitForSeedanceCompletion, calculateSeedanceCost, imageUrlsToBase64 } from '../services/ai/seedance.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { sendTaskUpdate } from '../plugins/sse.js'
 import { logApiCall, updateApiCall } from '../services/ai/api-logger.js'
@@ -120,15 +120,20 @@ export const videoWorker = new Worker<VideoJobData>(
             model: 'seedance2.0',
             provider: 'volcengine',
             prompt,
-            requestParams: { imageUrls, duration: effectiveDuration },
+            requestParams: { imageBase64: imageUrls ? '[converted to base64]' : undefined, duration: effectiveDuration },
             takeId: taskId
           })
           apiCallId = log.id
         }
 
+        // 将图片 URL 转换为 base64
+        const imageBase64 = imageUrls?.length
+          ? await imageUrlsToBase64(imageUrls)
+          : undefined
+
         const response = await submitSeedanceTask({
           prompt,
-          imageUrls: imageUrls,
+          imageBase64,
           duration: effectiveDuration,
           aspectRatio: aspectRatio ?? '9:16'
         })
