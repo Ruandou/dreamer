@@ -27,11 +27,25 @@ export function createMentionSuggestionRender() {
       root = document.createElement('div')
       root.className = 'storyboard-mention-dropdown'
       root.setAttribute('role', 'listbox')
-      document.body.appendChild(root)
+      const editorEl = document.querySelector('.storyboard-script-editor__pane')
+      if (editorEl) {
+        editorEl.appendChild(root)
+        root.style.position = 'absolute'
+      } else {
+        document.body.appendChild(root)
+        root.style.position = 'fixed'
+      }
     }
     root.innerHTML = ''
     if (!items.length) {
-      root.style.display = 'none'
+      const noItems = document.createElement('div')
+      noItems.className = 'storyboard-mention-dropdown__no-items'
+      noItems.textContent = '暂无角色形象'
+      noItems.style.padding = '12px'
+      noItems.style.color = 'var(--color-text-tertiary)'
+      noItems.style.fontSize = '13px'
+      root.appendChild(noItems)
+      root.style.display = 'block'
       return
     }
     root.style.display = 'block'
@@ -57,12 +71,35 @@ export function createMentionSuggestionRender() {
       })
       root!.appendChild(row)
     })
+    
+    // 修复定位逻辑
     const rect = props.clientRect?.()
     if (rect && root) {
-      root.style.position = 'fixed'
-      root.style.left = `${rect.left}px`
-      root.style.top = `${rect.bottom + 4}px`
-      root.style.zIndex = '20000'
+      if (root.style.position === 'absolute') {
+        // 相对于编辑器容器定位
+        const paneRect = document.querySelector('.storyboard-script-editor__pane')?.getBoundingClientRect()
+        if (paneRect) {
+          root.style.left = `${rect.left - paneRect.left}px`
+          root.style.top = `${rect.bottom - paneRect.top + 4}px`
+        }
+      } else {
+        // 全局定位，加边界检查
+        let left = rect.left
+        let top = rect.bottom + 4
+        // 防止超出屏幕右边界
+        if (left + 220 > window.innerWidth) {
+          left = window.innerWidth - 220
+        }
+        // 防止超出屏幕左边界
+        if (left < 0) left = 0
+        // 防止超出屏幕下边界
+        if (top + 240 > window.innerHeight) {
+          top = rect.top - 240 - 4
+        }
+        root.style.left = `${left}px`
+        root.style.top = `${top}px`
+      }
+      root.style.zIndex = '9999999' // 足够高的层级
     }
   }
 

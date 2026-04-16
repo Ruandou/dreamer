@@ -8,6 +8,10 @@ export function createStoryboardMentionExtension(
 ) {
   const suggestionRender = createMentionSuggestionRender()
   return Mention.extend({
+    group: 'inline',
+    inline: true,
+    selectable: false,
+    atom: true,
     addAttributes() {
       return {
         id: {
@@ -43,11 +47,14 @@ export function createStoryboardMentionExtension(
     },
     addOptions() {
       const parent = this.parent?.()
+      // 在 tiptap v3 中，当只使用单个触发器时，不要设置 `suggestions` 为空数组
+      // 这会导致没有任何触发器可用！我们只需要设置 `suggestion`
       return {
         ...parent,
         HTMLAttributes: parent?.HTMLAttributes ?? {},
         deleteTriggerWithBackspace: parent?.deleteTriggerWithBackspace ?? false,
-        suggestions: parent?.suggestions ?? [],
+        // 不要覆盖 suggestions - 这就是问题！
+        // suggestions: parent?.suggestions ?? [],
         renderHTML({ options, node }) {
           const label = (node.attrs.label as string) ?? (node.attrs.id as string) ?? ''
           const avatar = node.attrs.avatarUrl as string | undefined
@@ -77,8 +84,28 @@ export function createStoryboardMentionExtension(
         },
         suggestion: {
           char: '@',
-          items: ({ query }: { query: string }) => getItems(query),
-          render: suggestionRender
+          // 允许行首匹配（startOfLine 处理）也允许空格后匹配
+          // allowedPrefixes 不包含 '^'，startOfLine 已经单独处理行首
+          allowedPrefixes: [' '],
+          // 不允许在查询中包含空格，这样 @ 后面的内容会一直查询直到空格
+          allowSpaces: false,
+          startOfLine: true,
+          items: ({ query }: { query: string; editor: unknown }) => {
+            return getItems(query)
+          },
+          render: suggestionRender,
+          command: ({ editor, range, props }) => {
+            editor.chain().focus().insertContentAt(range, [
+              {
+                type: this.name,
+                attrs: { ...props, mentionSuggestionChar: '@' }
+              },
+              {
+                type: 'text',
+                text: ' '
+              }
+            ]).run()
+          }
         }
       }
     }

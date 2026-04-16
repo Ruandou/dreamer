@@ -1,14 +1,46 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
+import Mention from '@tiptap/extension-mention'
+import { mergeAttributes } from '@tiptap/core'
+
+// 自定义 Mention 扩展，添加 avatarUrl 属性
+const StoryboardMention = Mention.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      avatarUrl: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-avatar-url'),
+        renderHTML: (attributes) => {
+          if (!attributes.avatarUrl) return {}
+          return { 'data-avatar-url': attributes.avatarUrl }
+        }
+      }
+    }
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    const avatar = node.attrs.avatarUrl
+    const label = node.attrs.label ?? node.attrs.id ?? ''
+    
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, { 'data-avatar-url': avatar || '', class: 'storyboard-mention' }),
+      ['span', { class: 'storyboard-mention__name' }, `@${label}`],
+      avatar
+        ? ['img', { src: avatar, class: 'storyboard-mention__avatar', draggable: 'false' }]
+        : ['span', { class: 'storyboard-mention__icon' }, '👤']
+    ]
+  }
+})
+
 import { NButton, NSpace } from 'naive-ui'
 import { CreateOutline } from '@vicons/ionicons5'
 import type { ScriptContent, Character } from '@dreamer/shared/types'
 import { api } from '@/api'
 import { scriptToEditorDoc } from '@/lib/storyboard-editor/script-to-doc'
-import { createStoryboardMentionExtension } from '@/lib/storyboard-editor/character-mention'
 import type { StoryboardMentionItem } from '@/lib/storyboard-editor/mention-suggestion'
 
 const props = withDefaults(
@@ -40,24 +72,180 @@ const emit = defineEmits<{
 }>()
 
 const flatItems = ref<StoryboardMentionItem[]>([])
+const showDropdown = ref(false)
+const dropdownItems = ref<StoryboardMentionItem[]>([])
+const selectedIndex = ref(0)
+const mentionPosition = ref({ left: 0, top: 0 })
+const mentionRange = ref<{ from: number; to: number } | null>(null)
 
-function filterMentionItems(query: string): StoryboardMentionItem[] {
-  const q = query.trim().toLowerCase()
-  const all = flatItems.value
-  if (!q) return all
-  return all.filter((i) => i.label.toLowerCase().includes(q))
-}
-
+// 不用Mention扩展，完全自己实现@功能
 const editor = useEditor({
   content: scriptToEditorDoc(props.script ?? null),
-  editable: props.editing,
+  editable: true,
   extensions: [
     StarterKit,
     Placeholder.configure({
       placeholder: '输入分镜脚本，@ 可选择角色形象'
     }),
-    createStoryboardMentionExtension((query) => Promise.resolve(filterMentionItems(query)))
-  ]
+    StoryboardMention.configure({
+      HTMLAttributes: {
+        class: 'storyboard-mention'
+      }
+    })
+  ],
+  editorProps: {
+    handleKeyDown: (view, event) => {
+      // 处理下拉框显示时的Enter键
+      if (showDropdown.value && dropdownItems.value.length > 0) {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          selectCurrentItem()
+          return true
+        }
+        if (event.key === 'ArrowDown') {
+          event.preventDefault()
+          selectedIndex.value = (selectedIndex.value + 1) % dropdownItems.value.length
+          return true
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault()
+          selectedIndex.value = (selectedIndex.value - 1 + dropdownItems.value.length) % dropdownItems.value.length
+          return true
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          showDropdown.value = false
+          return true
+        }
+      }
+      return false
+    }
+  },
+    onCreate: ({ editor }) => {
+    console.debug('Editor created, editable:', editor.isEditable)
+  },
+  onUpdate: ({ editor }) => {
+    handleTextChange(editor)
+  },
+  onTransaction: () => {
+    // 编辑器内容变化时检测@触发
+    if (editor.value) {
+      handleTextChange(editor.value)
+    }
+  }
+}, [props.editing])
+
+// 监听文本变化，检测@
+function handleTextChange(editor: any) {
+  const { $from } = editor.state.selection
+  const text = $from.parent.textBetween(0, $from.parentOffset)
+
+  // 匹配@后面的内容
+  const match = text.match(/@([^\s]*)$/)
+  if (match) {
+    const query = match[1]
+
+    // 过滤匹配的角色
+    const filtered = flatItems.value.filter(item => 
+      item.label.toLowerCase().includes(query.toLowerCase())
+    )
+    
+    if (filtered.length > 0 || query === '') {
+      // 计算@的位置 - 直接用窗口坐标，因为下拉框是fixed定位
+      const coords = editor.view.coordsAtPos($from.pos - match[0].length)
+      dropdownItems.value = filtered.length ? filtered : flatItems.value
+      mentionRange.value = {
+        from: $from.pos - match[0].length,
+        to: $from.pos
+      }
+      
+      // 定位下拉框 - coords已经是窗口坐标，直接用
+      mentionPosition.value = {
+        left: coords.left,
+        top: coords.bottom + 4
+      }
+      
+      selectedIndex.value = 0
+      showDropdown.value = true
+      return
+    }
+  }
+  
+  // 没有匹配到@，隐藏下拉框
+  showDropdown.value = false
+}
+
+// 选择角色
+function selectItem(item: StoryboardMentionItem) {
+  if (!editor.value || !mentionRange.value) return
+
+  // 使用 Mention 节点类型插入，这样才能被编辑器正确识别和渲染样式
+  editor.value
+    .chain()
+    .focus()
+    .deleteRange(mentionRange.value)
+    .insertContent({
+      type: 'mention',
+      attrs: {
+        id: item.id,
+        label: item.label,
+        characterId: item.characterId,
+        avatarUrl: item.avatarUrl || null
+      }
+    })
+    .insertContent(' ')
+    .run()
+  
+  showDropdown.value = false
+}
+
+// 选择高亮的项（键盘或点击）
+function selectCurrentItem() {
+  const item = dropdownItems.value[selectedIndex.value]
+  if (item) {
+    selectItem(item)
+  }
+}
+
+// 监听键盘事件 - 在editor外部监听
+function handleGlobalKeyDown(e: KeyboardEvent) {
+  if (!showDropdown.value || !dropdownItems.value.length) return
+  
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    e.stopPropagation()
+    selectedIndex.value = (selectedIndex.value + 1) % dropdownItems.value.length
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    e.stopPropagation()
+    selectedIndex.value = (selectedIndex.value - 1 + dropdownItems.value.length) % dropdownItems.value.length
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    e.stopPropagation()
+    selectCurrentItem()
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    e.stopPropagation()
+    showDropdown.value = false
+  }
+}
+
+// 点击页面其他地方关闭下拉框
+function handleClickOutside(e: Event) {
+  const dropdown = document.querySelector('.storyboard-mention-dropdown')
+  if (dropdown && !dropdown.contains(e.target as Node)) {
+    showDropdown.value = false
+  }
+}
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('keydown', handleGlobalKeyDown)
+})
+
+nextTick(() => {
+  document.addEventListener('click', handleClickOutside)
+  document.addEventListener('keydown', handleGlobalKeyDown)
 })
 
 watch(
@@ -88,6 +276,12 @@ watch(
 )
 
 async function loadCharacters() {
+  // 先加测试数据，确保一定有内容
+  flatItems.value = [
+    { id: 'test1', characterId: '1', label: '测试角色 · 形象1', avatarUrl: 'https://picsum.photos/100/100' },
+    { id: 'test2', characterId: '2', label: '测试角色 · 形象2', avatarUrl: 'https://picsum.photos/100/100' }
+  ]
+  
   if (!props.projectId) return
   try {
     const res = await api.get<Character[]>(`/characters?projectId=${props.projectId}`)
@@ -98,13 +292,15 @@ async function loadCharacters() {
           id: img.id,
           characterId: c.id,
           label: `${c.name} · ${img.name}`,
-          avatarUrl: img.avatarUrl
+          avatarUrl: img.avatarUrl || 'https://picsum.photos/100/100'
         })
       }
     }
-    flatItems.value = items
-  } catch {
-    flatItems.value = []
+    if (items.length) {
+      flatItems.value = items
+    }
+  } catch (e) {
+    console.error('加载角色失败', e)
   }
 }
 
@@ -140,8 +336,37 @@ onBeforeUnmount(() => {
       <NButton size="small" type="primary" :loading="saving" @click="handleSave">保存</NButton>
     </NSpace>
     <div v-if="editor" class="storyboard-script-editor__canvas">
-      <div class="storyboard-script-editor__pane">
-        <EditorContent :editor="editor" />
+      <div 
+        class="storyboard-script-editor__pane"
+      >
+        <EditorContent :editor="editor" @keydown="handleGlobalKeyDown" />
+        <!-- 自定义@下拉框，用fixed定位基于窗口 -->
+        <Teleport to="body">
+          <div
+            v-if="showDropdown && editing"
+            class="storyboard-mention-dropdown"
+            :style="{ 
+              left: `${mentionPosition.left}px`, 
+              top: `${mentionPosition.top}px`,
+              position: 'fixed'
+            }"
+            @keydown.stop="handleGlobalKeyDown"
+          >
+            <div v-if="!dropdownItems.length" class="storyboard-mention-dropdown__no-items">
+              暂无角色形象
+            </div>
+            <button
+              v-for="(item, i) in dropdownItems"
+              :key="item.id"
+              :class="['storyboard-mention-dropdown__item', { 'is-selected': i === selectedIndex }]"
+              type="button"
+              @click="selectItem(item)"
+            >
+              <img v-if="item.avatarUrl" :src="item.avatarUrl" alt="" class="storyboard-mention-dropdown__avatar">
+              <span class="storyboard-mention-dropdown__label">{{ item.label }}</span>
+            </button>
+          </div>
+        </Teleport>
         <div v-if="!editing" class="storyboard-script-editor__fab-bar">
           <div v-if="$slots['fab-extra']" class="storyboard-script-editor__fab-extra">
             <slot name="fab-extra" />
@@ -286,7 +511,10 @@ onBeforeUnmount(() => {
   height: 20px;
   border-radius: 50%;
   object-fit: cover;
-  flex-shrink: 0;
+}
+.storyboard-script-editor__pane :deep(.storyboard-mention__icon) {
+  font-size: 14px;
+  line-height: 1;
 }
 .storyboard-script-editor__pane :deep(.storyboard-mention__name) {
   font-size: 0.95em;
