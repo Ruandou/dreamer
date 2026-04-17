@@ -10,6 +10,7 @@ import { runCompositionExport } from './composition-export.js'
 import { episodeRepository, type EpisodeRepository } from '../repositories/episode-repository.js'
 import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import { sceneRepository } from '../repositories/scene-repository.js'
+import { getMemoryService } from './memory/index.js'
 
 const DEFAULT_VOICE_CONFIG: Prisma.InputJsonValue = {
   gender: 'male',
@@ -448,6 +449,21 @@ export class EpisodeService {
         episode.title,
         script
       )
+      
+      // 提取扩展剧本的记忆
+      try {
+        const memoryService = getMemoryService()
+        await memoryService.extractAndSaveMemories(
+          episode.projectId,
+          episode.episodeNum,
+          episodeId,
+          script,
+          { userId, projectId: episode.projectId, op: 'extract_expanded_script_memories' }
+        )
+      } catch (error) {
+        console.error('Failed to extract memories after script expansion:', error)
+        // 不阻断流程
+      }
 
       return {
         ok: true,

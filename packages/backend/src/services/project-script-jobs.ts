@@ -8,6 +8,7 @@ import { projectRepository } from '../repositories/project-repository.js'
 import { writeScriptFromIdea, writeEpisodeForProject } from './script-writer.js'
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
 import { runParseScriptEntityPipeline } from './parse-script-entity-pipeline.js'
+import { getMemoryService } from './memory/index.js'
 import type { ScriptContent, ScriptScene, EpisodePlan } from '@dreamer/shared/types'
 
 export const DEFAULT_TARGET_EPISODES = 36
@@ -160,7 +161,22 @@ export async function runGenerateFirstEpisode(projectId: string) {
     storyContext
   })
 
-  await projectRepository.upsertEpisodeFirstFromScript(projectId, script)
+  const episode = await projectRepository.upsertEpisodeFirstFromScript(projectId, script)
+  
+  // 提取第一集的记忆
+  try {
+    const memoryService = getMemoryService()
+    await memoryService.extractAndSaveMemories(
+      projectId,
+      1,
+      episode.id,
+      script,
+      { userId: project.userId, projectId, op: 'extract_first_episode_memories' }
+    )
+  } catch (error) {
+    console.error('Failed to extract memories for first episode:', error)
+    // 不阻断流程，继续执行
+  }
 }
 
 /**
@@ -218,6 +234,7 @@ export async function runScriptBatchJob(
 
   const synopsis = project.synopsis || ''
   let rolling = project.storyContext || synopsis
+  const memoryService = getMemoryService()
 
   const mapBatchProgressToParseRange = (batchPct: number) =>
     Math.min(28, 8 + Math.round((Math.min(100, batchPct) / 100) * 20))
@@ -235,16 +252,41 @@ export async function runScriptBatchJob(
         continue
       }
 
-      const { script } = await writeEpisodeForProject(n, synopsis, rolling, project.name, {
+      // 使用记忆系统构建上下文（如果有记忆）
+      let episodeContext = rolling
+      try {
+        const memoryContext = await memoryService.getEpisodeWritingContext(projectId, n)
+        // 如果记忆上下文不为空，使用它；否则使用原来的 rolling context
+        if (memoryContext.fullContext && !memoryContext.fullContext.includes('（暂无）')) {
+          episodeContext = memoryContext.fullContext
+        }
+      } catch (error) {
+        console.error('Failed to build memory context, falling back to rolling context:', error)
+      }
+
+      const { script } = await writeEpisodeForProject(n, synopsis, episodeContext, project.name, {
         userId: project.userId,
         projectId,
         op: 'script_batch_write_episode'
       })
 
-      await projectRepository.upsertEpisodeBatchFromScript(projectId, n, script)
+      const episode = await projectRepository.upsertEpisodeBatchFromScript(projectId, n, script)
 
       rolling = [rolling, `第${n}集：${script.summary}`].join('\n').slice(-12000)
       await projectRepository.update(projectId, { storyContext: rolling })
+      
+      // 提取本集的记忆
+      try {
+        await memoryService.extractAndSaveMemories(
+          projectId,
+          n,
+          episode.id,
+          script,
+          { userId: project.userId, projectId, op: 'extract_episode_memories' }
+        )
+      } catch (error) {
+        console.error(`Failed to extract memories for episode ${n}:`, error)
+      }
 
       const pct = Math.round(((n - 1) / Math.max(1, targetEpisodes - 1)) * 100)
       const progress = embedded ? mapBatchProgressToParseRange(pct) : Math.min(99, pct)
