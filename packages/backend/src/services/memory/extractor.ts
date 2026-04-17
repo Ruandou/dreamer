@@ -34,10 +34,13 @@ export async function extractMemoriesWithLLM(
   const llmProvider = provider || getDefaultProvider()
   const template = PromptRegistry.getInstance().getLatest('memory-extraction')
 
+  // 将剧本对象转为可读的文本格式，而不是 JSON
+  const scriptText = formatScriptForExtraction(script)
+
   const rendered = PromptRegistry.getInstance().render('memory-extraction', {
     variables: {
       episodeNum: String(episodeNum),
-      script: JSON.stringify(script, null, 2),
+      script: scriptText,
       existingMemories: existingMemories || ''
     }
   })
@@ -90,6 +93,64 @@ export async function extractMemoriesWithLLM(
     memories: result.content.memories,
     cost: result.cost
   }
+}
+
+/**
+ * 将剧本对象格式化为可读文本（用于记忆提取）
+ */
+function formatScriptForExtraction(script: ScriptContent): string {
+  const lines: string[] = []
+
+  // 标题和概要
+  if (script.title) {
+    lines.push(`# ${script.title}`)
+    lines.push('')
+  }
+
+  if (script.summary) {
+    lines.push(`## 概要`)
+    lines.push(script.summary)
+    lines.push('')
+  }
+
+  // 场景
+  if (script.scenes && script.scenes.length > 0) {
+    lines.push(`## 场景 (${script.scenes.length}个)`)
+    lines.push('')
+
+    script.scenes.forEach((scene, index) => {
+      lines.push(`### 场景 ${index + 1}: ${scene.location || '未知场地'}`)
+      if (scene.timeOfDay) lines.push(`时间: ${scene.timeOfDay}`)
+      if (scene.characters && scene.characters.length > 0) {
+        lines.push(`出场角色: ${scene.characters.join('、')}`)
+      }
+      lines.push('')
+
+      if (scene.description) {
+        lines.push(`**场景描述:**`)
+        lines.push(scene.description)
+        lines.push('')
+      }
+
+      if (scene.dialogues && scene.dialogues.length > 0) {
+        lines.push(`**对话:**`)
+        scene.dialogues.forEach((d) => {
+          lines.push(`${d.character}: ${d.content}`)
+        })
+        lines.push('')
+      }
+
+      if (scene.actions && scene.actions.length > 0) {
+        lines.push(`**动作:**`)
+        scene.actions.forEach((a) => {
+          lines.push(a)
+        })
+        lines.push('')
+      }
+    })
+  }
+
+  return lines.join('\n')
 }
 
 /**
