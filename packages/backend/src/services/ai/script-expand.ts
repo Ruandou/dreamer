@@ -146,7 +146,19 @@ export async function expandScript(
     const cleanContent = cleanMarkdownCodeBlocks(content)
 
     // 尝试JSON
-    const parsed = JSON.parse(cleanContent) as DeepSeekScriptData
+    let parsed: DeepSeekScriptData
+    try {
+      parsed = JSON.parse(cleanContent) as DeepSeekScriptData
+    } catch (error) {
+      console.error('[script-expand] JSON parse failed')
+      console.error('[script-expand] Raw content (first 500 chars):', content.substring(0, 500))
+      console.error(
+        '[script-expand] Clean content (first 500 chars):',
+        cleanContent.substring(0, 500)
+      )
+      console.error('[script-expand] Error:', error)
+      throw new Error(`剧本JSON格式不正确: ${error instanceof Error ? error.message : '未知错误'}`)
+    }
 
     // 转换格式
     const script = convertDeepSeekResponse(parsed)

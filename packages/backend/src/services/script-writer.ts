@@ -298,12 +298,30 @@ function parseScriptResponse(content: string): ScriptContent {
   try {
     const parsed = JSON.parse(cleanContent)
     return convertToScriptContent(parsed)
-  } catch {
+  } catch (error) {
     // 如果直接解析失败，尝试提取 JSON 部分
     const jsonMatch = cleanContent.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
-      return convertToScriptContent(JSON.parse(jsonMatch[0]))
+      try {
+        return convertToScriptContent(JSON.parse(jsonMatch[0]))
+      } catch (innerError) {
+        console.error('[script-writer] JSON extract failed')
+        console.error(
+          '[script-writer] Raw content (first 500 chars):',
+          cleanContent.substring(0, 500)
+        )
+        console.error(
+          '[script-writer] Extracted JSON (first 500 chars):',
+          jsonMatch[0].substring(0, 500)
+        )
+        console.error('[script-writer] Error:', innerError)
+        throw new Error(
+          `剧本JSON格式不正确: ${innerError instanceof Error ? innerError.message : '未知错误'}`
+        )
+      }
     }
+    console.error('[script-writer] No JSON found in response')
+    console.error('[script-writer] Content (first 500 chars):', cleanContent.substring(0, 500))
     throw new Error('剧本格式不正确，无法解析')
   }
 }
