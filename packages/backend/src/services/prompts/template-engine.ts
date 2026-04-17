@@ -182,13 +182,30 @@ export class PromptTemplateEngine {
   }
 
   /**
-   * 处理条件块和数组迭代（{{#...}}...{{/...}}）
+   * 处理条件块和数组迭代（{{#...}}...{{/...}} 和 {{^...}}...{{/...}}）
    */
   private processSections(template: string, variables: Record<string, any>): string {
     // 匹配 {{#section}}...{{/section}}
     const sectionRegex = /\{\{#([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g
 
-    return template.replace(sectionRegex, (match, path, content) => {
+    // 匹配 {{^section}}...{{/section}}（反条件：当 section 为空时渲染）
+    const inverseSectionRegex = /\{\{\^([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g
+
+    // 先处理反条件块
+    let result = template.replace(inverseSectionRegex, (match, path, content) => {
+      const value = this.resolvePath(variables, path.trim())
+
+      // 如果值为空或 false，渲染内容块
+      if (!value || (Array.isArray(value) && value.length === 0)) {
+        return content
+      }
+
+      // 否则删除整个块
+      return ''
+    })
+
+    // 再处理正条件块
+    result = result.replace(sectionRegex, (match, path, content) => {
       const value = this.resolvePath(variables, path.trim())
 
       // 如果值为空或 false，移除整个块
@@ -218,6 +235,8 @@ export class PromptTemplateEngine {
 
       return content
     })
+
+    return result
   }
 
   /**
