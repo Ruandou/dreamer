@@ -1,225 +1,244 @@
-import type { Prisma, Project } from '@prisma/client'
-import { normalizeProjectDefaultAspectRatio } from '../lib/project-aspect.js'
-import { ProjectRepository, projectRepository } from '../repositories/project-repository.js'
+import type { Prisma, Project } from "@prisma/client";
+import { normalizeProjectDefaultAspectRatio } from "../lib/project-aspect.js";
+import {
+  ProjectRepository,
+  projectRepository,
+} from "../repositories/project-repository.js";
+import { pipelineRepository } from "../repositories/pipeline-repository.js";
 import {
   runGenerateFirstEpisodePipelineJob,
   runScriptBatchJob,
   runParseScriptJob,
   DEFAULT_TARGET_EPISODES,
   hasConcurrentOutlinePipelineJob,
-  getActiveOutlinePipelineJob
-} from './project-script-jobs.js'
+  getActiveOutlinePipelineJob,
+} from "./project-script-jobs.js";
 
 export type CreateProjectInput = {
-  name: string
-  description?: string
-  aspectRatio?: string
-}
+  name: string;
+  description?: string;
+  aspectRatio?: string;
+};
 
 export type UpdateProjectBody = {
-  name?: string
-  description?: string
-  synopsis?: string | null
-  visualStyle?: string[]
-  aspectRatio?: string
-}
+  name?: string;
+  description?: string;
+  synopsis?: string | null;
+  visualStyle?: string[];
+  aspectRatio?: string;
+};
 
 export type GenerateFirstResult =
   | { ok: true; episode: unknown; synopsis: string | null | undefined }
   | { ok: false; status: 404; error: string }
   | { ok: false; status: 409; error: string }
-  | { ok: false; status: 500; error: string }
+  | { ok: false; status: 500; error: string };
 
 export type GenerateRemainingResult =
   | { ok: true; jobId: string; targetEpisodes: number }
   | { ok: false; status: 404; error: string }
   | { ok: false; status: 400; error: string }
-  | { ok: false; status: 409; error: string }
+  | { ok: false; status: 409; error: string };
 
 export type ParseScriptResult =
   | { ok: true; jobId: string }
   | { ok: false; status: 404; error: string }
   | { ok: false; status: 400; error: string }
-  | { ok: false; status: 409; error: string }
+  | { ok: false; status: 409; error: string };
 
 export type UpdateProjectResult =
   | { ok: true; project: Project }
   | { ok: false; status: 400; error: string }
-  | { ok: false; status: 404; error: string }
+  | { ok: false; status: 404; error: string };
 
 export class ProjectService {
   constructor(private readonly repo: ProjectRepository) {}
 
   listProjects(userId: string) {
-    return this.repo.findManyByUserForList(userId)
+    return this.repo.findManyByUserForList(userId);
   }
 
   createProject(userId: string, input: CreateProjectInput) {
-    const { name, description, aspectRatio } = input
+    const { name, description, aspectRatio } = input;
     return this.repo.create({
       name,
       description,
       userId,
       ...(aspectRatio !== undefined && {
-        aspectRatio: normalizeProjectDefaultAspectRatio(aspectRatio)
-      })
-    })
+        aspectRatio: normalizeProjectDefaultAspectRatio(aspectRatio),
+      }),
+    });
   }
 
   async generateFirstEpisode(
     userId: string,
     projectId: string,
-    body: { description?: string }
+    body: { description?: string },
   ): Promise<GenerateFirstResult> {
-    const project = await this.repo.findFirstOwned(projectId, userId)
+    const project = await this.repo.findFirstOwned(projectId, userId);
     if (!project) {
-      return { ok: false, status: 404, error: '项目不存在' }
+      return { ok: false, status: 404, error: "项目不存在" };
     }
 
-    const description = body?.description
+    const description = body?.description;
     if (description?.trim()) {
-      await this.repo.update(projectId, { description: description.trim() })
+      await this.repo.update(projectId, { description: description.trim() });
     }
 
     if (await hasConcurrentOutlinePipelineJob(projectId)) {
       return {
         ok: false,
         status: 409,
-        error: '已有剧本生成或解析任务进行中，请稍后再试'
-      }
+        error: "已有剧本生成或解析任务进行中，请稍后再试",
+      };
     }
 
     const job = await this.repo.createPipelineJob({
       projectId,
-      status: 'pending',
-      jobType: 'script-first',
-      currentStep: 'script-first',
-      progress: 0
-    })
+      status: "pending",
+      jobType: "script-first",
+      currentStep: "script-first",
+      progress: 0,
+    });
 
     try {
-      await runGenerateFirstEpisodePipelineJob(job.id, projectId)
+      await runGenerateFirstEpisodePipelineJob(job.id, projectId);
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e)
-      return { ok: false, status: 500, error: message || '生成第一集失败' }
+      const message = e instanceof Error ? e.message : String(e);
+      return { ok: false, status: 500, error: message || "生成第一集失败" };
     }
 
-    const updated = await this.repo.findUniqueWithEpisodesEp1(projectId)
-    const ep1 = updated?.episodes[0]
+    const updated = await this.repo.findUniqueWithEpisodesEp1(projectId);
+    const ep1 = updated?.episodes[0];
     return {
       ok: true,
       episode: ep1,
-      synopsis: updated?.synopsis
-    }
+      synopsis: updated?.synopsis,
+    };
   }
 
   async generateRemainingEpisodes(
     userId: string,
     projectId: string,
-    targetEpisodes: number = DEFAULT_TARGET_EPISODES
+    targetEpisodes: number = DEFAULT_TARGET_EPISODES,
   ): Promise<GenerateRemainingResult> {
-    const project = await this.repo.findFirstOwned(projectId, userId)
+    const project = await this.repo.findFirstOwned(projectId, userId);
     if (!project) {
-      return { ok: false, status: 404, error: '项目不存在' }
+      return { ok: false, status: 404, error: "项目不存在" };
     }
 
     if (targetEpisodes < 2 || targetEpisodes > 200) {
-      return { ok: false, status: 400, error: 'targetEpisodes 须在 2–200 之间' }
+      return {
+        ok: false,
+        status: 400,
+        error: "targetEpisodes 须在 2–200 之间",
+      };
     }
 
-    const ep1 = await this.repo.findEpisode1ByProject(projectId)
-    const rs = ep1?.script as { scenes?: unknown } | null
+    const ep1 = await this.repo.findEpisode1ByProject(projectId);
+    const rs = ep1?.script as { scenes?: unknown } | null;
     if (!ep1 || !rs || !Array.isArray(rs.scenes) || rs.scenes.length === 0) {
-      return { ok: false, status: 400, error: '请先生成第一集剧本' }
+      return { ok: false, status: 400, error: "请先生成第一集剧本" };
     }
 
     if (await hasConcurrentOutlinePipelineJob(projectId)) {
       return {
         ok: false,
         status: 409,
-        error: '已有剧本生成或解析任务进行中，请稍后再试'
-      }
+        error: "已有剧本生成或解析任务进行中，请稍后再试",
+      };
     }
 
     const job = await this.repo.createPipelineJob({
       projectId,
-      status: 'pending',
-      jobType: 'script-batch',
-      currentStep: 'script-batch',
-      progress: 0
-    })
+      status: "pending",
+      jobType: "script-batch",
+      currentStep: "script-batch",
+      progress: 0,
+    });
 
     // 异步执行任务，不阻塞响应
     setImmediate(async () => {
       try {
-        await runScriptBatchJob(job.id, projectId, targetEpisodes)
+        await runScriptBatchJob(job.id, projectId, targetEpisodes);
       } catch (err) {
-        console.error('script-batch job failed', err)
+        console.error("script-batch job failed", err);
       }
-    })
+    });
 
-    return { ok: true, jobId: job.id, targetEpisodes }
+    return { ok: true, jobId: job.id, targetEpisodes };
   }
 
   async parseScript(
     userId: string,
     projectId: string,
-    targetEpisodes: number = DEFAULT_TARGET_EPISODES
+    targetEpisodes: number = DEFAULT_TARGET_EPISODES,
   ): Promise<ParseScriptResult> {
-    const project = await this.repo.findFirstOwnedWithEpisodesEp1(projectId, userId)
+    const project = await this.repo.findFirstOwnedWithEpisodesEp1(
+      projectId,
+      userId,
+    );
     if (!project) {
-      return { ok: false, status: 404, error: '项目不存在' }
+      return { ok: false, status: 404, error: "项目不存在" };
     }
 
     if (!project.visualStyle?.length) {
-      return { ok: false, status: 400, error: '请至少选择一种视觉风格' }
+      return { ok: false, status: 400, error: "请至少选择一种视觉风格" };
     }
 
-    const ep1 = project.episodes[0]
-    const raw = ep1?.script
-    const scenes = raw && typeof raw === 'object' ? (raw as { scenes?: unknown }).scenes : null
-    if (!raw || typeof raw !== 'object' || !Array.isArray(scenes) || scenes.length === 0) {
-      return { ok: false, status: 400, error: '请先生成第一集剧本' }
+    const ep1 = project.episodes[0];
+    const raw = ep1?.script;
+    const scenes =
+      raw && typeof raw === "object"
+        ? (raw as { scenes?: unknown }).scenes
+        : null;
+    if (
+      !raw ||
+      typeof raw !== "object" ||
+      !Array.isArray(scenes) ||
+      scenes.length === 0
+    ) {
+      return { ok: false, status: 400, error: "请先生成第一集剧本" };
     }
 
     if (await hasConcurrentOutlinePipelineJob(projectId)) {
       return {
         ok: false,
         status: 409,
-        error: '已有剧本生成或解析任务进行中，请稍后再试'
-      }
+        error: "已有剧本生成或解析任务进行中，请稍后再试",
+      };
     }
 
     // 创建任务记录
     const job = await this.repo.createPipelineJob({
       projectId,
-      status: 'pending',
-      jobType: 'parse-script',
-      currentStep: 'parse-script',
-      progress: 0
-    })
+      status: "pending",
+      jobType: "parse-script",
+      currentStep: "parse-script",
+      progress: 0,
+    });
 
     // 异步执行任务，不阻塞响应
     // 使用 setImmediate 确保在下一个事件循环执行，立即返回 jobId
     setImmediate(async () => {
       try {
-        await runParseScriptJob(job.id, projectId, targetEpisodes)
+        await runParseScriptJob(job.id, projectId, targetEpisodes);
       } catch (err) {
-        console.error('parse-script job failed', err)
+        console.error("parse-script job failed", err);
       }
-    })
+    });
 
-    return { ok: true, jobId: job.id }
+    return { ok: true, jobId: job.id };
   }
 
   async getOutlineActiveJob(userId: string, projectId: string) {
-    const project = await this.repo.findFirstOwned(projectId, userId)
+    const project = await this.repo.findFirstOwned(projectId, userId);
     if (!project) {
-      return { ok: false as const, status: 404, error: '项目不存在' }
+      return { ok: false as const, status: 404, error: "项目不存在" };
     }
-    const job = await getActiveOutlinePipelineJob(projectId)
+    const job = await getActiveOutlinePipelineJob(projectId);
     if (!job) {
-      return { ok: true as const, job: null }
+      return { ok: true as const, job: null };
     }
     return {
       ok: true as const,
@@ -233,60 +252,63 @@ export class ProjectService {
         progressMeta: job.progressMeta,
         error: job.error,
         createdAt: job.createdAt,
-        updatedAt: job.updatedAt
-      }
-    }
+        updatedAt: job.updatedAt,
+      },
+    };
   }
 
   getProjectDetail(userId: string, projectId: string) {
-    return this.repo.findFirstOwnedFullDetail(projectId, userId)
+    return this.repo.findFirstOwnedFullDetail(projectId, userId);
   }
 
   async updateProject(
     userId: string,
     projectId: string,
-    body: UpdateProjectBody
+    body: UpdateProjectBody,
   ): Promise<UpdateProjectResult> {
-    const { name, description, synopsis, visualStyle, aspectRatio } = body
+    const { name, description, synopsis, visualStyle, aspectRatio } = body;
 
-    const project = await this.repo.findFirstOwned(projectId, userId)
+    const project = await this.repo.findFirstOwned(projectId, userId);
     if (!project) {
-      return { ok: false, status: 404, error: 'Project not found' }
+      return { ok: false, status: 404, error: "Project not found" };
     }
 
-    const data: Record<string, unknown> = {}
-    if (name !== undefined) data.name = name
-    if (description !== undefined) data.description = description
-    if (synopsis !== undefined) data.synopsis = synopsis
+    const data: Record<string, unknown> = {};
+    if (name !== undefined) data.name = name;
+    if (description !== undefined) data.description = description;
+    if (synopsis !== undefined) data.synopsis = synopsis;
     if (visualStyle !== undefined) {
       if (!Array.isArray(visualStyle)) {
-        return { ok: false, status: 400, error: 'visualStyle 须为字符串数组' }
+        return { ok: false, status: 400, error: "visualStyle 须为字符串数组" };
       }
-      data.visualStyle = visualStyle
+      data.visualStyle = visualStyle;
     }
     if (aspectRatio !== undefined) {
-      if (typeof aspectRatio !== 'string') {
-        return { ok: false, status: 400, error: 'aspectRatio 须为字符串' }
+      if (typeof aspectRatio !== "string") {
+        return { ok: false, status: 400, error: "aspectRatio 须为字符串" };
       }
-      data.aspectRatio = normalizeProjectDefaultAspectRatio(aspectRatio)
+      data.aspectRatio = normalizeProjectDefaultAspectRatio(aspectRatio);
     }
 
     if (Object.keys(data).length === 0) {
-      return { ok: true, project }
+      return { ok: true, project };
     }
 
-    const updated = await this.repo.update(projectId, data as Prisma.ProjectUpdateInput)
-    return { ok: true, project: updated }
+    const updated = await this.repo.update(
+      projectId,
+      data as Prisma.ProjectUpdateInput,
+    );
+    return { ok: true, project: updated };
   }
 
   async deleteProject(userId: string, projectId: string): Promise<boolean> {
-    const project = await this.repo.findFirstOwned(projectId, userId)
+    const project = await this.repo.findFirstOwned(projectId, userId);
     if (!project) {
-      return false
+      return false;
     }
-    await this.repo.delete(projectId)
-    return true
+    await this.repo.delete(projectId);
+    return true;
   }
 }
 
-export const projectService = new ProjectService(projectRepository)
+export const projectService = new ProjectService(projectRepository);

@@ -305,6 +305,8 @@ export async function runScriptBatchJob(
         continue;
       }
 
+      console.log(`[script-batch] 开始生成第 ${n}/${targetEpisodes} 集...`);
+
       // 使用记忆系统构建上下文（如果有记忆）
       let episodeContext = rolling;
       try {
@@ -374,6 +376,8 @@ export async function runScriptBatchJob(
           message: `正在生成第 ${n}/${targetEpisodes} 集`,
         },
       });
+      
+      console.log(`[script-batch] 第 ${n}/${targetEpisodes} 集生成完成`);
     }
 
     if (embedded) {
@@ -405,6 +409,8 @@ export async function runScriptBatchJob(
       error: e?.message || "批量生成失败",
       progressMeta: { message: e?.message },
     });
+    // 重新抛出错误，让调用方知道失败了
+    throw e;
   }
 }
 
