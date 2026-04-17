@@ -234,6 +234,9 @@ describe('Project outline & parse routes', () => {
           })
         })
       )
+      
+      // Wait for setImmediate to execute
+      await new Promise(resolve => setImmediate(resolve))
       expect(mockRunParseScriptJob).toHaveBeenCalledWith('job-parse-1', 'p1', 5)
     })
 
@@ -287,6 +290,9 @@ describe('Project outline & parse routes', () => {
       expect(res.statusCode).toBe(200)
       const body = JSON.parse(res.payload)
       expect(body.jobId).toBe('job-batch-1')
+      
+      // Wait for setImmediate to execute
+      await new Promise(resolve => setImmediate(resolve))
       expect(mockRunScriptBatchJob).toHaveBeenCalledWith('job-batch-1', 'p1', 8)
     })
 

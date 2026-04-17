@@ -34,6 +34,11 @@ export { prisma } from "./lib/prisma.js";
 
 const fastify = Fastify({
   logger: true,
+  // 设置请求超时时间为 30 秒（仅用于防止僵尸连接）
+  // 异步任务应立即返回 jobId，不应受此限制
+  requestTimeout: 30000,
+  // 连接超时
+  connectionTimeout: 0, // 0 = 无限制（用于长连接/SSE）
 });
 
 async function start() {

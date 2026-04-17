@@ -149,8 +149,13 @@ export class ProjectService {
       progress: 0
     })
 
-    void runScriptBatchJob(job.id, projectId, targetEpisodes).catch(err => {
-      console.error('script-batch job failed', err)
+    // 异步执行任务，不阻塞响应
+    setImmediate(async () => {
+      try {
+        await runScriptBatchJob(job.id, projectId, targetEpisodes)
+      } catch (err) {
+        console.error('script-batch job failed', err)
+      }
     })
 
     return { ok: true, jobId: job.id, targetEpisodes }
@@ -185,6 +190,7 @@ export class ProjectService {
       }
     }
 
+    // 创建任务记录
     const job = await this.repo.createPipelineJob({
       projectId,
       status: 'pending',
@@ -193,8 +199,14 @@ export class ProjectService {
       progress: 0
     })
 
-    void runParseScriptJob(job.id, projectId, targetEpisodes).catch(err => {
-      console.error('parse-script job failed', err)
+    // 异步执行任务，不阻塞响应
+    // 使用 setImmediate 确保在下一个事件循环执行，立即返回 jobId
+    setImmediate(async () => {
+      try {
+        await runParseScriptJob(job.id, projectId, targetEpisodes)
+      } catch (err) {
+        console.error('parse-script job failed', err)
+      }
     })
 
     return { ok: true, jobId: job.id }
