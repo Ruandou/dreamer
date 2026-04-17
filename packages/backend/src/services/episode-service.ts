@@ -84,7 +84,7 @@ export class EpisodeService {
   constructor(private readonly repo: EpisodeRepository) {}
 
   /** 将结构化剧本写入本集 `Episode.script`，并按场次生成 DB Scene + 首镜 Shot */
-  private async applyScriptContentToEpisode(
+  async applyScriptContentToEpisode(
     episodeId: string,
     projectId: string,
     episodeTitle: string | null | undefined,
