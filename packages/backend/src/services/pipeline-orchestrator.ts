@@ -66,10 +66,10 @@ export interface PipelineExecuteOptions {
   }
 }
 
-export interface PipelineStepResult {
+export interface PipelineStepResult<T = unknown> {
   step: PipelineStep
   status: 'completed' | 'failed' | 'skipped'
-  data?: any
+  data?: T
   error?: string
   duration?: number  // 执行耗时（毫秒）
 }
@@ -82,7 +82,7 @@ export async function executePipeline(
   context: PipelineContext,
   options?: PipelineExecuteOptions
 ): Promise<PipelineResult> {
-  const results: Record<PipelineStep, PipelineStepResult> = {} as any
+  const results: Partial<Record<PipelineStep, PipelineStepResult>> = {}
   const startTime = Date.now()
 
   try {
@@ -215,7 +215,7 @@ export async function executePipeline(
       sceneActions,
       assetRecommendations,
       storyboard,
-      seedanceConfigs: results['seedance-parametrization'].data
+      seedanceConfigs: results['seedance-parametrization'].data as SeedanceSegmentConfig[] | undefined
     }
 
   } catch (error) {

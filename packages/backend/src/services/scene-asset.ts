@@ -10,6 +10,18 @@ import type {
   SceneActions,
   CharacterImage
 } from '@dreamer/shared/types'
+import {
+  ASSET_PRIORITY,
+  ASSET_RELEVANCE,
+  MAX_ASSETS_PER_SCENE,
+  MAX_REFERENCE_IMAGES,
+  STYLE_KEYWORDS,
+  TIME_ATMOSPHERE_MAP,
+  DEFAULT_TIME_OF_DAY,
+  DEFAULT_VIDEO_STYLE,
+  DEFAULT_STYLE_TYPE,
+  MIN_KEYWORD_LENGTH
+} from './scene-asset.constants.js'
 
 export interface ProjectAsset {
   id: string
@@ -49,7 +61,7 @@ export function analyzeSceneRequirements(
       type: 'character',
       description: `角色形象：${scene.characters.join('、')}`
     })
-    priority = 3 // 高优先级
+    priority = ASSET_PRIORITY.CHARACTER // 高优先级
   }
 
   // 2. 背景素材（根据场景描述）
@@ -59,7 +71,7 @@ export function analyzeSceneRequirements(
       type: 'background',
       description: `场景背景：${scene.location}`
     })
-    priority = Math.max(priority, 2)
+    priority = Math.max(priority, ASSET_PRIORITY.BACKGROUND)
   }
 
   // 3. 氛围素材（根据时间和情绪）
@@ -73,8 +85,7 @@ export function analyzeSceneRequirements(
   }
 
   // 4. 风格素材（如果有特殊风格要求）
-  const styleKeywords = ['古风', '现代', '科幻', '赛博', '仙侠', '动漫']
-  for (const keyword of styleKeywords) {
+  for (const keyword of STYLE_KEYWORDS) {
     if (scene.description.includes(keyword)) {
       requiredTypes.push('style')
       suggestedAssets.push({
@@ -98,7 +109,7 @@ export function matchAssets(
   sceneActions?: SceneActions,
   options?: SceneAssetMatcherOptions
 ): SceneAssetRecommendation {
-  const maxAssets = options?.maxAssetsPerScene || 5
+  const maxAssets = options?.maxAssetsPerScene || MAX_ASSETS_PER_SCENE
   const { requiredTypes, suggestedAssets } = analyzeSceneRequirements(scene, sceneActions)
 
   const recommendedAssets: SceneAssetRecommendation['recommendedAssets'] = []
@@ -122,7 +133,7 @@ export function matchAssets(
           url: asset.url,
           description: asset.description || asset.name
         },
-        relevance: 0.95,
+        relevance: ASSET_RELEVANCE.CHARACTER_MATCH,
         usage: 'reference'
       })
       usedUrls.add(asset.url)
@@ -165,7 +176,7 @@ export function matchAssets(
         url: atmosphereAssets[0].url,
         description: atmosphereAssets[0].description || atmosphereAssets[0].name
       },
-      relevance: 0.7,
+      relevance: ASSET_RELEVANCE.ATMOSPHERE_MATCH,
       usage: 'atmosphere'
     })
     usedUrls.add(atmosphereAssets[0].url)
@@ -189,7 +200,7 @@ export function matchAssets(
         url: styleAssets[0].url,
         description: styleAssets[0].description || styleAssets[0].name
       },
-      relevance: 0.6,
+      relevance: ASSET_RELEVANCE.STYLE_MATCH,
       usage: 'style'
     })
   }
@@ -267,7 +278,7 @@ export function suggestAssetGeneration(
     suggestions.push({
       assetType: 'character',
       prompt: generateCharacterPrompt(character, scene),
-      priority: 3
+      priority: ASSET_PRIORITY.CHARACTER
     })
   }
 
@@ -276,7 +287,7 @@ export function suggestAssetGeneration(
     suggestions.push({
       assetType: 'background',
       prompt: generateBackgroundPrompt(scene),
-      priority: 2
+      priority: ASSET_PRIORITY.BACKGROUND
     })
   }
 
@@ -284,7 +295,7 @@ export function suggestAssetGeneration(
   suggestions.push({
     assetType: 'atmosphere',
     prompt: generateAtmospherePrompt(scene, sceneActions),
-    priority: 1
+    priority: ASSET_PRIORITY.ATMOSPHERE
   })
 
   return suggestions.sort((a, b) => b.priority - a.priority)
@@ -299,16 +310,16 @@ function generateCharacterPrompt(
 ): string {
   const style = scene.description.includes('古风') ? '古风' :
                 scene.description.includes('现代') ? '现代' :
-                scene.description.includes('科幻') ? '科幻' : '通用'
+                scene.description.includes('科幻') ? '科幻' : DEFAULT_STYLE_TYPE
 
-  return `${style}${characterName}，${scene.timeOfDay || '日'}时场景，${scene.location || '通用场景'}，${scene.description.slice(0, 50)}`
+  return `${style}${characterName}，${scene.timeOfDay || DEFAULT_TIME_OF_DAY}时场景，${scene.location || '通用场景'}，${scene.description.slice(0, 50)}`
 }
 
 /**
  * 生成背景提示词
  */
 function generateBackgroundPrompt(scene: ScriptScene): string {
-  return `${scene.location || '场景'}，${scene.timeOfDay || '日'}时，${scene.description.slice(0, 100)}`
+  return `${scene.location || '场景'}，${scene.timeOfDay || DEFAULT_TIME_OF_DAY}时，${scene.description.slice(0, 100)}`
 }
 
 /**
@@ -318,17 +329,10 @@ function generateAtmospherePrompt(
   scene: ScriptScene,
   sceneActions?: SceneActions
 ): string {
-  const timeOfDay = scene.timeOfDay || '日'
-  const style = sceneActions?.videoStyle || 'mixed'
+  const timeOfDay = scene.timeOfDay || DEFAULT_TIME_OF_DAY
+  const style = sceneActions?.videoStyle || DEFAULT_VIDEO_STYLE
 
-  const timeAtmosphere: Record<string, string> = {
-    '日': '温暖阳光，明亮色调',
-    '夜': '月光夜色，神秘氛围',
-    '晨': '清晨曙光，柔和光线',
-    '昏': '黄昏暮色，温暖余晖'
-  }
-
-  return `${scene.location || '场景'}，${timeAtmosphere[timeOfDay] || timeOfDay}，${style}风格`
+  return `${scene.location || '场景'}，${TIME_ATMOSPHERE_MAP[timeOfDay] || timeOfDay}，${style}风格`
 }
 
 /**
@@ -338,22 +342,22 @@ function calculateLocationRelevance(
   sceneLocation: string,
   assetLocation?: string
 ): number {
-  if (!assetLocation) return 0.5
+  if (!assetLocation) return ASSET_RELEVANCE.UNKNOWN_LOCATION
 
   const sceneLower = sceneLocation.toLowerCase()
   const assetLower = assetLocation.toLowerCase()
 
-  if (sceneLower === assetLower) return 1.0
-  if (sceneLower.includes(assetLower) || assetLower.includes(sceneLower)) return 0.8
+  if (sceneLower === assetLower) return ASSET_RELEVANCE.EXACT_MATCH
+  if (sceneLower.includes(assetLower) || assetLower.includes(sceneLower)) return ASSET_RELEVANCE.CONTAINS_MATCH
 
   // 检查关键词匹配
   const sceneWords = sceneLower.split(/[，。、\s]+/)
   const assetWords = assetLower.split(/[，。、\s]+/)
-  const commonWords = sceneWords.filter(w => assetWords.includes(w) && w.length > 2)
+  const commonWords = sceneWords.filter(w => assetWords.includes(w) && w.length > MIN_KEYWORD_LENGTH)
 
-  if (commonWords.length > 0) return 0.6
+  if (commonWords.length > 0) return ASSET_RELEVANCE.KEYWORD_MATCH
 
-  return 0.3
+  return ASSET_RELEVANCE.PARTIAL_MATCH
 }
 
 /**
@@ -391,7 +395,7 @@ export function convertCharacterImagesToAssets(
  */
 export function getReferenceImageUrls(
   recommendations: SceneAssetRecommendation[],
-  maxImages: number = 9
+  maxImages: number = MAX_REFERENCE_IMAGES
 ): string[] {
   const urls: string[] = []
 

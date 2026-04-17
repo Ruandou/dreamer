@@ -3,82 +3,16 @@ import type { ScriptContent, ScriptScene, ScriptDialogueLine, Character } from '
 import { calculateDeepSeekCost, type DeepSeekCost, DeepSeekAuthError, DeepSeekRateLimitError } from './ai/deepseek.js'
 import type { ModelCallLogContext } from './ai/api-logger.js'
 import { logDeepSeekChat } from './ai/model-call-log.js'
-
-// Script Writer System Prompt
-const SCRIPT_WRITER_PROMPT = `你是一个专业的短视频剧本作家，擅长创作适合AI视频生成的高质量短剧剧本。
-
-## 你的能力
-
-1. 从一句话想法生成完整剧本
-2. 根据用户反馈改进剧本
-3. 优化剧本结构以适应视频生成
-
-## 剧本格式（严格遵循）
-
-剧本必须符合以下JSON格式（不要包含markdown代码块标记）：
-
-{
-  "title": "剧集标题",
-  "summary": "3-5句话故事梗概",
-  "metadata": {
-    "genre": "古装/现代/科幻/都市/校园",
-    "style": "穿越/逆袭/甜宠/搞笑/虐心/热血/悬疑",
-    "tone": "幽默/严肃/悬疑/感人/浪漫",
-    "targetAudience": "18-25女性/25-35女性/通用",
-    "coreConflict": "一句话核心冲突",
-    "keyPlotPoints": ["情节点1", "情节点2", "情节点3"],
-    "totalEstimatedDuration": 180,
-    "recommendedEpisodes": 3,
-    "characters": ["角色名1", "角色名2"]
-  },
-  "segments": [
-    {
-      "segmentNum": 1,
-      "location": "场景地点",
-      "timeOfDay": "日/夜/晨/昏",
-      "characters": ["角色1", "角色2"],
-      "description": "场景描述（视觉画面）",
-      "dialogues": [
-        {"character": "角色名", "content": "对话内容"}
-      ],
-      "actions": ["动作1", "动作2"]
-    }
-  ]
-}
-
-## 创作原则
-
-### 短视频友好
-- 每集时长控制在60-90秒（适合短视频平台）
-- 场景数量：每集3-5个场景
-- 每场景时长：10-20秒
-- 开场前3秒必须有"钩子"抓人
-
-### AI视频友好
-- 场景描述要具体（便于AI生成画面）
-- 动作要明确（便于AI理解）
-- 避免过于复杂的场景切换
-- 每个场景应有明确的视觉焦点
-
-### 情绪节奏
-- 起承转合结构清晰
-- 每集至少一个情绪高潮点
-- 结尾留有悬念或钩子（吸引看完）
-
-### 角色设计
-- 主要角色不超过3个
-- 每个角色有明确性格标签
-- 角色关系要清晰
-
-## 创作流程
-
-1. 分析用户想法，确定题材和风格
-2. 设计核心冲突和关键情节点
-3. 规划场景结构
-4. 填充具体场景内容
-5. 检查是否符合格式要求
-
-直接返回JSON格式，不要包含其他文字。`
+import {
+  DEEPSEEK_TEMPERATURE,
+  DEEPSEEK_MAX_TOKENS,
+  DEFAULT_RETRY_ATTEMPTS,
+  AUTH_RETRY_DELAY_MS,
+  RETRY_BASE_DELAY_MS,
+  AUTH_ERROR_STATUS_CODES,
+  RATE_LIMIT_STATUS_CODE
+} from './ai/ai.constants.js'
+import { SCRIPT_WRITER_PROMPT, EPISODE_WRITER_PROMPT } from './prompts/script-prompts.js'
 
 export interface ScriptWriterOptions {
   characters?: Character[]
@@ -105,7 +39,7 @@ export async function writeScriptFromIdea(
 
   let lastError: Error | null = null
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt++) {
     try {
       const completion = await deepseek.chat.completions.create({
         model: 'deepseek-chat',
@@ -113,8 +47,8 @@ export async function writeScriptFromIdea(
           { role: 'system', content: SCRIPT_WRITER_PROMPT },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.7,
-        max_tokens: 4000
+        temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
+        max_tokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING
       })
 
       const content = completion.choices[0]?.message?.content
@@ -135,7 +69,7 @@ export async function writeScriptFromIdea(
     } catch (error: any) {
       lastError = error
 
-      if (error?.status === 401 || error?.status === 403) {
+      if (AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
         await logDeepSeekChat(options?.modelLog, userPrompt, {
           status: 'failed',
           errorMsg: error?.message || 'auth'
@@ -143,9 +77,9 @@ export async function writeScriptFromIdea(
         throw new DeepSeekAuthError()
       }
 
-      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
-        if (attempt < 2) {
-          await sleep(2000 * attempt)
+      if (error?.status === RATE_LIMIT_STATUS_CODE || error?.message?.includes('rate_limit')) {
+        if (attempt < DEFAULT_RETRY_ATTEMPTS) {
+          await sleep(AUTH_RETRY_DELAY_MS * attempt)
           continue
         }
         await logDeepSeekChat(options?.modelLog, userPrompt, {
@@ -155,8 +89,8 @@ export async function writeScriptFromIdea(
         throw new DeepSeekRateLimitError()
       }
 
-      if (attempt < 2) {
-        await sleep(1000)
+      if (attempt < DEFAULT_RETRY_ATTEMPTS) {
+        await sleep(RETRY_BASE_DELAY_MS)
         continue
       }
     }
@@ -168,25 +102,6 @@ export async function writeScriptFromIdea(
   })
   throw lastError || new Error('剧本生成失败')
 }
-
-const EPISODE_WRITER_PROMPT = `你是短视频分集编剧。只输出一集剧本 JSON（不要 markdown），结构必须严格为：
-{
-  "title": "本集标题",
-  "summary": "本集一句话梗概",
-  "metadata": {},
-  "scenes": [
-    {
-      "sceneNum": 1,
-      "location": "地点",
-      "timeOfDay": "日",
-      "characters": ["角色"],
-      "description": "画面与动作",
-      "dialogues": [{"character":"名","content":"台词"}],
-      "actions": ["动作"]
-    }
-  ]
-}
-每集 3-6 个场景，保持人物与全剧梗概一致。`
 
 /**
  * 根据全剧梗概与前情续写某一集（用于批量生成第 2 集及以后）
@@ -206,7 +121,7 @@ export async function writeEpisodeForProject(
 请只写第 ${episodeNum} 集的剧本 JSON。`
 
   let lastError: Error | null = null
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt++) {
     try {
       const completion = await deepseek.chat.completions.create({
         model: 'deepseek-chat',
@@ -214,8 +129,8 @@ export async function writeEpisodeForProject(
           { role: 'system', content: EPISODE_WRITER_PROMPT },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.75,
-        max_tokens: 4000
+        temperature: DEEPSEEK_TEMPERATURE.SCRIPT_IMPROVEMENT,
+        max_tokens: DEEPSEEK_MAX_TOKENS.SCRIPT_IMPROVEMENT
       })
       const content = completion.choices[0]?.message?.content
       if (!content) throw new Error('DeepSeek API 返回为空')
@@ -226,22 +141,22 @@ export async function writeEpisodeForProject(
       return { script, cost }
     } catch (error: any) {
       lastError = error
-      if (error?.status === 401 || error?.status === 403) {
+      if (AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
         await logDeepSeekChat(modelLog, userPrompt, {
           status: 'failed',
           errorMsg: error?.message || 'auth'
         })
         throw new DeepSeekAuthError()
       }
-      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
-        if (attempt < 2) {
-          await sleep(2000 * attempt)
+      if (error?.status === RATE_LIMIT_STATUS_CODE || error?.message?.includes('rate_limit')) {
+        if (attempt < DEFAULT_RETRY_ATTEMPTS) {
+          await sleep(AUTH_RETRY_DELAY_MS * attempt)
           continue
         }
         await logDeepSeekChat(modelLog, userPrompt, { status: 'failed', errorMsg: 'rate_limit' })
         throw new DeepSeekRateLimitError()
       }
-      if (attempt < 2) await sleep(1000)
+      if (attempt < DEFAULT_RETRY_ATTEMPTS) await sleep(RETRY_BASE_DELAY_MS)
     }
   }
   await logDeepSeekChat(modelLog, userPrompt, {
@@ -277,7 +192,7 @@ ${JSON.stringify(script, null, 2)}
 
   let lastError: Error | null = null
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt++) {
     try {
       const completion = await deepseek.chat.completions.create({
         model: 'deepseek-chat',
@@ -285,8 +200,8 @@ ${JSON.stringify(script, null, 2)}
           { role: 'system', content: SCRIPT_WRITER_PROMPT },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.7,
-        max_tokens: 4000
+        temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
+        max_tokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING
       })
 
       const content = completion.choices[0]?.message?.content
@@ -307,7 +222,7 @@ ${JSON.stringify(script, null, 2)}
     } catch (error: any) {
       lastError = error
 
-      if (error?.status === 401 || error?.status === 403) {
+      if (AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
         await logDeepSeekChat(options?.modelLog, userPrompt, {
           status: 'failed',
           errorMsg: error?.message || 'auth'
@@ -315,9 +230,9 @@ ${JSON.stringify(script, null, 2)}
         throw new DeepSeekAuthError()
       }
 
-      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
-        if (attempt < 2) {
-          await sleep(2000 * attempt)
+      if (error?.status === RATE_LIMIT_STATUS_CODE || error?.message?.includes('rate_limit')) {
+        if (attempt < DEFAULT_RETRY_ATTEMPTS) {
+          await sleep(AUTH_RETRY_DELAY_MS * attempt)
           continue
         }
         await logDeepSeekChat(options?.modelLog, userPrompt, {
@@ -327,8 +242,8 @@ ${JSON.stringify(script, null, 2)}
         throw new DeepSeekRateLimitError()
       }
 
-      if (attempt < 2) {
-        await sleep(1000)
+      if (attempt < DEFAULT_RETRY_ATTEMPTS) {
+        await sleep(RETRY_BASE_DELAY_MS)
         continue
       }
     }
@@ -365,7 +280,7 @@ ${feedback}
 
   let lastError: Error | null = null
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt++) {
     try {
       const completion = await deepseek.chat.completions.create({
         model: 'deepseek-chat',
@@ -373,8 +288,8 @@ ${feedback}
           { role: 'system', content: SCRIPT_WRITER_PROMPT },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.7,
-        max_tokens: 4000
+        temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
+        max_tokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING
       })
 
       const content = completion.choices[0]?.message?.content
@@ -395,7 +310,7 @@ ${feedback}
     } catch (error: any) {
       lastError = error
 
-      if (error?.status === 401 || error?.status === 403) {
+      if (AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
         await logDeepSeekChat(options?.modelLog, userPrompt, {
           status: 'failed',
           errorMsg: error?.message || 'auth'
@@ -403,9 +318,9 @@ ${feedback}
         throw new DeepSeekAuthError()
       }
 
-      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
-        if (attempt < 2) {
-          await sleep(2000 * attempt)
+      if (error?.status === RATE_LIMIT_STATUS_CODE || error?.message?.includes('rate_limit')) {
+        if (attempt < DEFAULT_RETRY_ATTEMPTS) {
+          await sleep(AUTH_RETRY_DELAY_MS * attempt)
           continue
         }
         await logDeepSeekChat(options?.modelLog, userPrompt, {
@@ -415,8 +330,8 @@ ${feedback}
         throw new DeepSeekRateLimitError()
       }
 
-      if (attempt < 2) {
-        await sleep(1000)
+      if (attempt < DEFAULT_RETRY_ATTEMPTS) {
+        await sleep(RETRY_BASE_DELAY_MS)
         continue
       }
     }
@@ -464,7 +379,7 @@ ${contextStr}
 
   let lastError: Error | null = null
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt++) {
     try {
       const completion = await deepseek.chat.completions.create({
         model: 'deepseek-chat',
@@ -490,7 +405,7 @@ ${contextStr}
     } catch (error: any) {
       lastError = error
 
-      if (error?.status === 401 || error?.status === 403) {
+      if (AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
         await logDeepSeekChat(modelLog, userPrompt, {
           status: 'failed',
           errorMsg: error?.message || 'auth'
@@ -498,17 +413,17 @@ ${contextStr}
         throw new DeepSeekAuthError()
       }
 
-      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
-        if (attempt < 2) {
-          await sleep(2000 * attempt)
+      if (error?.status === RATE_LIMIT_STATUS_CODE || error?.message?.includes('rate_limit')) {
+        if (attempt < DEFAULT_RETRY_ATTEMPTS) {
+          await sleep(AUTH_RETRY_DELAY_MS * attempt)
           continue
         }
         await logDeepSeekChat(modelLog, userPrompt, { status: 'failed', errorMsg: 'rate_limit' })
         throw new DeepSeekRateLimitError()
       }
 
-      if (attempt < 2) {
-        await sleep(1000)
+      if (attempt < DEFAULT_RETRY_ATTEMPTS) {
+        await sleep(RETRY_BASE_DELAY_MS)
         continue
       }
     }
