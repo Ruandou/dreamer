@@ -1,4 +1,4 @@
-import type { ScriptContent, Character, ProjectLocation } from '@dreamer/shared/types'
+import type { ScriptContent, Character, ProjectLocation, ScriptScene, ScriptStoryboardShot } from '@dreamer/shared/types'
 
 const emptyDoc = () => ({ type: 'doc', content: [{ type: 'paragraph' }] })
 
@@ -134,9 +134,26 @@ export function scriptToEditorDoc(
       paragraphs.push({ type: 'paragraph', content: [{ type: 'text', text: s.description }] })
     }
 
+    // 对话
+    if (s.dialogues?.length) {
+      for (const d of s.dialogues) {
+        const dialogueLine: ContentNode[] = []
+        const charMention = characterToMention(d.character, undefined, characters)
+        dialogueLine.push(charMention)
+        dialogueLine.push({ type: 'text', text: `：${d.content}` })
+        paragraphs.push({ type: 'paragraph', content: dialogueLine })
+      }
+    }
+
     // shots
     if (s.shots?.length) {
-      for (const sh of s.shots) {
+      for (let i = 0; i < s.shots.length; i++) {
+        const sh = s.shots[i]
+        // 镜头标签行
+        const shotNum = sh.shotNum ?? (i + 1)
+        const durationSec = sh.duration ? ` [${Math.round(sh.duration / 1000)}s]` : ''
+        paragraphs.push({ type: 'paragraph', content: [{ type: 'text', text: `🎬 镜头${shotNum}${durationSec}` }] })
+
         const shotLine: ContentNode[] = []
 
         // 优先用 characters 数组生成 mention
@@ -192,4 +209,82 @@ export function scriptToEditorDoc(
     type: 'doc',
     content: paragraphs.length > 0 ? paragraphs : [{ type: 'paragraph' }]
   } as unknown as Record<string, unknown>
+}
+
+/**
+ * 从 Tiptap JSON 解析回结构化场景数据
+ */
+export function parseEditorDocToScene(
+  doc: Record<string, unknown> | null,
+  sceneNum: number,
+  existingScene?: Partial<ScriptScene>
+): Partial<ScriptScene> {
+  if (!doc || !doc.content || !Array.isArray(doc.content)) {
+    return existingScene || {}
+  }
+
+  const dialogues: { character: string; content: string }[] = []
+  const shots: ScriptStoryboardShot[] = []
+
+  let currentShot: Partial<ScriptStoryboardShot> | null = null
+
+  const flushShot = () => {
+    if (currentShot && currentShot.description) {
+      shots.push(currentShot as ScriptStoryboardShot)
+    }
+    currentShot = null
+  }
+
+  const parseParagraph = (nodes: ContentNode[]) => {
+    const text = nodes.map(n => n.type === 'text' ? n.text : '').join('').trim()
+    if (!text) return
+
+    // 镜头标签行：🎬 镜头1 [5s]
+    const shotMatch = text.match(/^🎬\s*镜头(\d+)(?:\[(\d+)s\])?/)
+    if (shotMatch) {
+      flushShot()
+      currentShot = {
+        shotNum: parseInt(shotMatch[1], 10),
+        description: '',
+        duration: shotMatch[2] ? parseInt(shotMatch[2], 10) * 1000 : undefined
+      }
+      return
+    }
+
+    // 对话行：@角色：对白 或 @角色·形象：对白
+    const mentionNodes = nodes.filter(n => n.type === 'mention')
+    if (mentionNodes.length > 0) {
+      const mention = mentionNodes[0] as MentionNode
+      const mentionLabel = mention.attrs.label || mention.attrs.id || ''
+      // 去掉 @ 符号
+      const charName = mentionLabel.replace(/^@/, '').split('·')[0].trim()
+      const restText = nodes.filter(n => n.type === 'text').map(n => n.text).join('')
+      const dialogueMatch = restText.match(/^[\s：:]+(.+)/)
+      if (dialogueMatch && charName) {
+        dialogues.push({ character: charName, content: dialogueMatch[1].trim() })
+        return
+      }
+    }
+
+    // 普通描述行，添加到当前 shot
+    if (currentShot) {
+      currentShot.description = (currentShot.description || '') + text + '\n'
+    }
+  }
+
+  for (const para of doc.content) {
+    if (para.type !== 'paragraph') continue
+    const nodes = para.content as ContentNode[]
+    if (!nodes || !nodes.length) continue
+    parseParagraph(nodes)
+  }
+
+  flushShot()
+
+  return {
+    ...existingScene,
+    sceneNum,
+    dialogues: dialogues.length > 0 ? dialogues : existingScene?.dialogues,
+    shots: shots.length > 0 ? shots.map((s, i) => ({ ...s, order: i + 1 })) : existingScene?.shots
+  }
 }

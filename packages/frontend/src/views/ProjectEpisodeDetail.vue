@@ -18,6 +18,7 @@ import { CaretForwardOutline, ChevronDownOutline, HelpCircleOutline } from '@vic
 import { useEpisodeStore, type EpisodeDetailPayload } from '@/stores/episode'
 import { useEpisodeStoryboardPipelineJob } from '@/composables/useEpisodeStoryboardPipelineJob'
 import { api } from '@/api'
+import { parseEditorDocToScene } from '@/lib/storyboard-editor/script-to-doc'
 import type { ScriptContent, Character, VideoModel } from '@dreamer/shared/types'
 import { useSceneStore } from '@/stores/scene'
 import StoryboardScriptEditor from '@/components/storyboard/StoryboardScriptEditor.vue'
@@ -468,11 +469,19 @@ async function onSaveScript(script: ScriptContent) {
     let finalScript = script
 
     if (fullScript?.scenes?.length && currentSceneNum) {
+      // 解析编辑器内容，提取对话和镜头
+      const currentScene = fullScript.scenes.find(s => s.sceneNum === currentSceneNum)
+      const parsedScene = parseEditorDocToScene(
+        script.editorDoc || null,
+        currentSceneNum,
+        currentScene
+      )
+
       const otherScenes = fullScript.scenes.filter(s => s.sceneNum !== currentSceneNum)
       finalScript = {
         ...fullScript,
         editorDoc: script.editorDoc,
-        scenes: [...otherScenes, ...(script.scenes || [])]
+        scenes: [...otherScenes, parsedScene]
       }
     }
 
