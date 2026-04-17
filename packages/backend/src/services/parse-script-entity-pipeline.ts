@@ -2,106 +2,192 @@
  * 大纲「解析剧本」与 Pipeline 跳过前期步骤时共用：身份合并、分集 `script` 写回、场地/角色落库、形象槽位。
  */
 
-import type { ScriptContent } from '@dreamer/shared/types'
-import { episodeRepository } from '../repositories/episode-repository.js'
-import { characterRepository } from '../repositories/character-repository.js'
-import { projectRepository } from '../repositories/project-repository.js'
-import { saveCharacters, saveLocations } from './script-entities.js'
-import { normalizeScriptContent } from './character-identity-normalize.js'
-import { fetchCharacterIdentityMerge } from './ai/character-identity-merge.js'
-import { collectUniqueCharacterNamesFromScript } from './script-entities.js'
-import type { ParsedCharacter } from './ai/parsed-script-types.js'
-import { normalizeParsedCharacterList } from './ai/parsed-script-types.js'
-import { mergeEpisodesToScriptContent, scriptFromJson } from './project-script-jobs.js'
-import type { ModelCallLogContext } from './ai/api-logger.js'
+import type { ScriptContent } from "@dreamer/shared/types";
+import { episodeRepository } from "../repositories/episode-repository.js";
+import { characterRepository } from "../repositories/character-repository.js";
+import { projectRepository } from "../repositories/project-repository.js";
+import { saveCharacters, saveLocations } from "./script-entities.js";
+import { normalizeScriptContent } from "./character-identity-normalize.js";
+import { fetchCharacterIdentityMerge } from "./ai/character-identity-merge.js";
+import { collectUniqueCharacterNamesFromScript } from "./script-entities.js";
+import type { ParsedCharacter } from "./ai/parsed-script-types.js";
+import { normalizeParsedCharacterList } from "./ai/parsed-script-types.js";
+import {
+  mergeEpisodesToScriptContent,
+  scriptFromJson,
+} from "./project-script-jobs.js";
+import type { ModelCallLogContext } from "./ai/api-logger.js";
 
-async function deleteAliasCharacterRows(projectId: string, aliasToCanonical: Record<string, string>) {
+async function deleteAliasCharacterRows(
+  projectId: string,
+  aliasToCanonical: Record<string, string>,
+) {
+  // 批量收集需要删除的别名角色ID
+  const idsToDelete: string[] = [];
+
   for (const [alias, canonical] of Object.entries(aliasToCanonical)) {
-    if (alias === canonical) continue
-    const dupe = await characterRepository.findFirstByProjectAndName(projectId, alias)
-    if (!dupe) continue
-    const main = await characterRepository.findFirstByProjectAndName(projectId, canonical)
+    if (alias === canonical) continue;
+    const dupe = await characterRepository.findFirstByProjectAndName(
+      projectId,
+      alias,
+    );
+    if (!dupe) continue;
+    const main = await characterRepository.findFirstByProjectAndName(
+      projectId,
+      canonical,
+    );
     if (main && dupe.id !== main.id) {
-      try {
-        await characterRepository.deleteCharacter(dupe.id)
-      } catch (e) {
-        console.warn('[parse_script_entity] 无法删除别名角色（可能存在关联数据）', {
+      idsToDelete.push(dupe.id);
+    }
+  }
+
+  // 批量删除
+  if (idsToDelete.length > 0) {
+    try {
+      await characterRepository.deleteManyCharacters(idsToDelete);
+    } catch (e) {
+      console.warn(
+        "[parse_script_entity] 无法批量删除别名角色（可能存在关联数据）",
+        {
           projectId,
-          alias,
-          err: e
-        })
-      }
+          count: idsToDelete.length,
+          err: e,
+        },
+      );
     }
   }
 }
 
-async function updateCanonicalCharacterDescriptions(projectId: string, characters: ParsedCharacter[]) {
-  for (const pc of characters) {
-    if (!pc.name?.trim() || !pc.description?.trim()) continue
-    const row = await characterRepository.findFirstByProjectAndName(projectId, pc.name)
-    if (row) {
-      await characterRepository.updateCharacter(row.id, { description: pc.description })
-    }
+async function updateCanonicalCharacterDescriptions(
+  projectId: string,
+  characters: ParsedCharacter[],
+) {
+  // 收集需要更新的角色描述
+  const updates = characters
+    .filter((pc) => pc.name?.trim() && pc.description?.trim())
+    .map((pc) => ({
+      name: pc.name.trim(),
+      description: pc.description.trim(),
+    }));
+
+  if (updates.length > 0) {
+    await characterRepository.updateManyCharacterDescriptions(
+      projectId,
+      updates,
+    );
   }
 }
 
-async function ensureCharacterImagesFromIdentityMerge(projectId: string, characters: ParsedCharacter[]) {
+async function ensureCharacterImagesFromIdentityMerge(
+  projectId: string,
+  characters: ParsedCharacter[],
+) {
+  // 批量获取所有相关角色及其形象图
+  const validNames = characters
+    .filter((pc) => pc.name?.trim())
+    .map((pc) => pc.name.trim());
+  const allCharacters = await characterRepository.findManyByProjectAndNames(
+    projectId,
+    validNames,
+  );
+
+  if (allCharacters.length === 0) return;
+
+  const characterIds = allCharacters.map((c) => c.id);
+  const allImages =
+    await characterRepository.findImagesByCharacterIds(characterIds);
+
+  // 构建映射：characterId -> images[]
+  const imagesByChar = new Map<string, typeof allImages>();
+  for (const img of allImages) {
+    if (!imagesByChar.has(img.characterId)) {
+      imagesByChar.set(img.characterId, []);
+    }
+    imagesByChar.get(img.characterId)!.push(img);
+  }
+
+  // 收集需要批量创建的形象图
+  const imagesToCreate: Array<{
+    characterId: string;
+    name: string;
+    type: string;
+    parentId: string | null;
+    description: string | undefined;
+    prompt: null;
+    avatarUrl: null;
+    order: number;
+  }> = [];
+
   for (const pc of characters) {
-    if (!pc.name?.trim()) continue
-    const c = await characterRepository.findFirstByProjectAndName(projectId, pc.name)
-    if (!c) continue
-    const full = await characterRepository.findUniqueWithImagesOrdered(c.id)
-    if (!full) continue
-    const existing = [...full.images]
-    const slots = normalizeParsedCharacterList([pc])[0].images || []
-    let baseId = existing.find((i) => i.type === 'base' && !i.parentId)?.id ?? null
+    if (!pc.name?.trim()) continue;
+    const c = allCharacters.find((char) => char.name === pc.name.trim());
+    if (!c) continue;
+
+    const existing = imagesByChar.get(c.id) || [];
+    const slots = normalizeParsedCharacterList([pc])[0].images || [];
+    let baseId =
+      existing.find((i) => i.type === "base" && !i.parentId)?.id ?? null;
 
     for (const slot of slots) {
-      const st = (slot.type || 'base').toLowerCase()
+      const st = (slot.type || "base").toLowerCase();
       const dup = existing.find((i) => {
-        if (i.name !== slot.name || i.type !== st) return false
-        if (st === 'base') return !i.parentId
-        return i.parentId === baseId
-      })
+        if (i.name !== slot.name || i.type !== st) return false;
+        if (st === "base") return !i.parentId;
+        return i.parentId === baseId;
+      });
       if (dup) {
-        if (st === 'base') baseId = dup.id
+        if (st === "base") baseId = dup.id;
         if (slot.description?.trim() && !dup.description?.trim()) {
-          await characterRepository.updateCharacterImage(dup.id, { description: slot.description })
+          await characterRepository.updateCharacterImage(dup.id, {
+            description: slot.description,
+          });
         }
-        continue
+        continue;
       }
 
-      if (st === 'base') {
-        const created = await characterRepository.createCharacterImage({
+      if (st === "base") {
+        imagesToCreate.push({
           characterId: c.id,
           name: slot.name,
-          type: 'base',
+          type: "base",
+          parentId: null,
           description: slot.description || undefined,
           prompt: null,
           avatarUrl: null,
-          order: 0
-        })
-        baseId = created.id
-        existing.push(created)
-        continue
+          order: 0,
+        });
+        // 注意：这里需要特殊处理，因为base的ID会被后续slot引用
+        // 所以我们先单独创建base，再批量创建其他的
+        const created = await characterRepository.createCharacterImage({
+          characterId: c.id,
+          name: slot.name,
+          type: "base",
+          description: slot.description || undefined,
+          prompt: null,
+          avatarUrl: null,
+          order: 0,
+        });
+        baseId = created.id;
+        existing.push(created);
+        continue;
       }
 
       if (!baseId) {
         const b = await characterRepository.createCharacterImage({
           characterId: c.id,
-          name: '基础形象',
-          type: 'base',
+          name: "基础形象",
+          type: "base",
           description: pc.description || undefined,
           prompt: null,
           avatarUrl: null,
-          order: 0
-        })
-        baseId = b.id
-        existing.push(b)
+          order: 0,
+        });
+        baseId = b.id;
+        existing.push(b);
       }
 
-      const maxOrder = await characterRepository.maxSiblingOrder(c.id, baseId)
-      const created = await characterRepository.createCharacterImage({
+      const maxOrder = await characterRepository.maxSiblingOrder(c.id, baseId);
+      imagesToCreate.push({
         characterId: c.id,
         name: slot.name,
         type: st,
@@ -109,20 +195,46 @@ async function ensureCharacterImagesFromIdentityMerge(projectId: string, charact
         description: slot.description || undefined,
         prompt: null,
         avatarUrl: null,
-        order: (maxOrder._max.order ?? 0) + 1
-      })
-      existing.push(created)
+        order: (maxOrder._max.order ?? 0) + 1,
+      });
     }
+  }
+
+  // 批量创建非base形象图
+  if (imagesToCreate.length > 0) {
+    await characterRepository.createManyCharacterImages(imagesToCreate);
   }
 }
 
 async function ensureEveryCharacterHasBaseImageSlot(projectId: string) {
-  const characters = await characterRepository.findManyByProject(projectId)
-  for (const c of characters) {
-    const existing = await characterRepository.findFirstBaseImage(c.id)
-    if (!existing) {
-      await characterRepository.createDefaultBaseCharacterImage(c.id)
+  const characters = await characterRepository.findManyByProject(projectId);
+
+  // 收集缺少base形象的角色ID
+  const characterIds = characters.map((c) => c.id);
+  const existingImages =
+    await characterRepository.findImagesByCharacterIds(characterIds);
+
+  // 构建映射：characterId -> 是否有base
+  const hasBaseMap = new Map<string, boolean>();
+  for (const img of existingImages) {
+    if (img.type === "base") {
+      hasBaseMap.set(img.characterId, true);
     }
+  }
+
+  // 批量创建缺少的base形象
+  const basesToCreate = characters
+    .filter((c) => !hasBaseMap.has(c.id))
+    .map((c) => ({
+      characterId: c.id,
+      name: "默认形象",
+      type: "base" as const,
+      avatarUrl: null,
+      order: 0,
+    }));
+
+  if (basesToCreate.length > 0) {
+    await characterRepository.createManyCharacterImages(basesToCreate);
   }
 }
 
@@ -133,51 +245,59 @@ async function ensureEveryCharacterHasBaseImageSlot(projectId: string) {
 export async function runParseScriptEntityPipeline(
   projectId: string,
   userId: string,
-  targetEpisodes: number
+  targetEpisodes: number,
 ): Promise<ScriptContent> {
-  const project = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
+  const project =
+    await projectRepository.findUniqueWithEpisodesOrdered(projectId);
   if (!project) {
-    throw new Error('项目不存在')
+    throw new Error("项目不存在");
   }
 
-  const capped = project.episodes.filter((e) => e.episodeNum <= targetEpisodes)
-  let merged = mergeEpisodesToScriptContent(capped as any)
+  const capped = project.episodes.filter((e) => e.episodeNum <= targetEpisodes);
+  let merged = mergeEpisodesToScriptContent(capped as any);
 
-  const uniqueNames = collectUniqueCharacterNamesFromScript(merged)
-  const log: ModelCallLogContext = { userId, projectId, op: 'character_identity_merge' }
+  const uniqueNames = collectUniqueCharacterNamesFromScript(merged);
+  const log: ModelCallLogContext = {
+    userId,
+    projectId,
+    op: "character_identity_merge",
+  };
 
-  let mergeCharacters: ParsedCharacter[] = []
-  let aliasToCanonical: Record<string, string> = {}
+  let mergeCharacters: ParsedCharacter[] = [];
+  let aliasToCanonical: Record<string, string> = {};
 
   if (uniqueNames.length > 0) {
-    const { result } = await fetchCharacterIdentityMerge(merged, uniqueNames, log)
-    mergeCharacters = result.characters
-    aliasToCanonical = result.aliasToCanonical
+    const { result } = await fetchCharacterIdentityMerge(
+      merged,
+      uniqueNames,
+      log,
+    );
+    mergeCharacters = result.characters;
+    aliasToCanonical = result.aliasToCanonical;
   }
 
   if (Object.keys(aliasToCanonical).length > 0) {
     for (const ep of capped) {
-      const sc = scriptFromJson(ep.script)
-      if (!sc) continue
-      const normalized = normalizeScriptContent(sc, aliasToCanonical)
-      await episodeRepository.update(ep.id, { script: normalized as object })
+      const sc = scriptFromJson(ep.script);
+      if (!sc) continue;
+      const normalized = normalizeScriptContent(sc, aliasToCanonical);
+      await episodeRepository.update(ep.id, { script: normalized as object });
     }
   }
 
-  const project2 = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
-  if (!project2) {
-    throw new Error('项目不存在')
+  // 优化：避免重新获取整个项目，直接从本地数据重新合并
+  // 只有在脚本被修改后才需要重新合并
+  if (Object.keys(aliasToCanonical).length > 0) {
+    merged = mergeEpisodesToScriptContent(capped as any);
   }
-  const capped2 = project2.episodes.filter((e) => e.episodeNum <= targetEpisodes)
-  merged = mergeEpisodesToScriptContent(capped2 as any)
 
-  await saveLocations(projectId, merged)
-  await saveCharacters(projectId, merged)
+  await saveLocations(projectId, merged);
+  await saveCharacters(projectId, merged);
 
-  await deleteAliasCharacterRows(projectId, aliasToCanonical)
-  await updateCanonicalCharacterDescriptions(projectId, mergeCharacters)
-  await ensureCharacterImagesFromIdentityMerge(projectId, mergeCharacters)
-  await ensureEveryCharacterHasBaseImageSlot(projectId)
+  await deleteAliasCharacterRows(projectId, aliasToCanonical);
+  await updateCanonicalCharacterDescriptions(projectId, mergeCharacters);
+  await ensureCharacterImagesFromIdentityMerge(projectId, mergeCharacters);
+  await ensureEveryCharacterHasBaseImageSlot(projectId);
 
-  return merged
+  return merged;
 }
