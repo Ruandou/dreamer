@@ -2,15 +2,15 @@ import { PromptRegistry } from "../prompts/registry.js";
 import {
   getDefaultProvider,
   type LLMProvider,
-  type LLMMessage,
-} from "../ai/llm-provider.js";
+} from "../ai/llm-factory.js";
+import type { LLMMessage } from "../ai/llm-provider.js";
 import {
   callLLMWithRetry,
   type LLMCallOptions,
 } from "../ai/llm-call-wrapper.js";
 import type { MemoryType } from "../../repositories/memory-repository.js";
 import type { ScriptContent } from "@dreamer/shared/types";
-import type { ModelCallLogContext } from "../../types/index.js";
+import type { ModelCallLogContext } from "../ai/api-logger.js";
 
 export interface ExtractedMemory {
   type: MemoryType;
