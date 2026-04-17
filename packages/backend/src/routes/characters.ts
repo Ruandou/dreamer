@@ -101,139 +101,145 @@ export async function characterRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Params: { id: string }
     Body?: { name?: string; type?: string; description?: string; parentId?: string }
-  }>(
-    '/:id/images',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id
-      const characterId = request.params.id
+  }>('/:id/images', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const characterId = request.params.id
 
-      if (!(await verifyCharacterOwnership(userId, characterId))) {
-        return reply.status(403).send(permissionDeniedBody)
+    if (!(await verifyCharacterOwnership(userId, characterId))) {
+      return reply.status(403).send(permissionDeniedBody)
+    }
+
+    const isMultipart =
+      typeof (request as any).isMultipart === 'function' && (request as any).isMultipart()
+    if (!isMultipart) {
+      const { name, type, description, parentId } = (request.body || {}) as {
+        name?: string
+        type?: string
+        description?: string
+        parentId?: string
       }
-
-      const isMultipart =
-        typeof (request as any).isMultipart === 'function' && (request as any).isMultipart()
-      if (!isMultipart) {
-        const { name, type, description, parentId } = (request.body || {}) as {
-          name?: string
-          type?: string
-          description?: string
-          parentId?: string
-        }
-        if (!name?.trim()) {
-          return reply.status(400).send({ error: 'Name is required' })
-        }
-
-        const result = await characterService.createImageSlotWithAiPrompt(characterId, userId, {
-          name,
-          type,
-          description,
-          parentId
-        })
-
-        if (!result.ok) {
-          if (result.error === 'base_exists') {
-            return reply.status(409).send({ error: '每个角色只能有一个基础形象（无父级的定妆槽）' })
-          }
-          if (result.error === 'invalid_parent') {
-            return reply.status(400).send({ error: 'Invalid parentId' })
-          }
-          if (result.error === 'deepseek_auth') {
-            return reply.status(401).send({ error: 'AI 服务认证失败', message: result.message })
-          }
-          if (result.error === 'deepseek_rate') {
-            return reply.status(429).send({ error: 'AI 服务请求受限', message: result.message })
-          }
-          return reply.status(500).send({
-            error: '生成提示词失败',
-            message: result.message
-          })
-        }
-
-        return reply.status(201).send(result.image)
-      }
-
-      // Parse multipart form - collect fields first
-      let name = ''
-      let parentId: string | undefined
-      let type: string | undefined
-      let description: string | undefined
-      let fileBuffer: Buffer | null = null
-      let fileMimeType = ''
-
-      const parts = request.parts()
-      for await (const part of parts) {
-        if (part.type === 'file') {
-          const buffers: Buffer[] = []
-          for await (const chunk of part.file) {
-            buffers.push(chunk)
-          }
-          fileBuffer = Buffer.concat(buffers)
-          fileMimeType = part.mimetype
-        } else {
-          const value = await part.value
-          if (part.fieldname === 'name') name = value as string
-          else if (part.fieldname === 'parentId') parentId = value as string || undefined
-          else if (part.fieldname === 'type') type = value as string || undefined
-          else if (part.fieldname === 'description') description = value as string || undefined
-        }
-      }
-
-      if (!fileBuffer) {
-        return reply.status(400).send({ error: 'No file uploaded' })
-      }
-
-      if (!name) {
+      if (!name?.trim()) {
         return reply.status(400).send({ error: 'Name is required' })
       }
 
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
-      if (!allowedTypes.includes(fileMimeType)) {
-        return reply.status(400).send({ error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.' })
-      }
-
-      const fileResult = await characterService.createImageFromUploadedFile({
-        characterId,
+      const result = await characterService.createImageSlotWithAiPrompt(characterId, userId, {
         name,
-        parentId,
         type,
         description,
-        fileBuffer,
-        fileMimeType
+        parentId
       })
 
-      if (!fileResult.ok) {
-        if (fileResult.error === 'base_exists') {
+      if (!result.ok) {
+        if (result.error === 'base_exists') {
           return reply.status(409).send({ error: '每个角色只能有一个基础形象（无父级的定妆槽）' })
         }
-        return reply.status(400).send({ error: '创建失败' })
+        if (result.error === 'invalid_parent') {
+          return reply.status(400).send({ error: 'Invalid parentId' })
+        }
+        if (result.error === 'deepseek_auth') {
+          return reply.status(401).send({ error: 'AI 服务认证失败', message: result.message })
+        }
+        if (result.error === 'deepseek_rate') {
+          return reply.status(429).send({ error: 'AI 服务请求受限', message: result.message })
+        }
+        return reply.status(500).send({
+          error: '生成提示词失败',
+          message: result.message
+        })
       }
 
-      return reply.status(201).send(fileResult.image)
+      return reply.status(201).send(result.image)
     }
-  )
+
+    // Parse multipart form - collect fields first
+    let name = ''
+    let parentId: string | undefined
+    let type: string | undefined
+    let description: string | undefined
+    let fileBuffer: Buffer | null = null
+    let fileMimeType = ''
+
+    const parts = request.parts()
+    for await (const part of parts) {
+      if (part.type === 'file') {
+        const buffers: Buffer[] = []
+        for await (const chunk of part.file) {
+          buffers.push(chunk)
+        }
+        fileBuffer = Buffer.concat(buffers)
+        fileMimeType = part.mimetype
+      } else {
+        const value = await part.value
+        if (part.fieldname === 'name') name = value as string
+        else if (part.fieldname === 'parentId') parentId = (value as string) || undefined
+        else if (part.fieldname === 'type') type = (value as string) || undefined
+        else if (part.fieldname === 'description') description = (value as string) || undefined
+      }
+    }
+
+    if (!fileBuffer) {
+      return reply.status(400).send({ error: 'No file uploaded' })
+    }
+
+    if (!name) {
+      return reply.status(400).send({ error: 'Name is required' })
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(fileMimeType)) {
+      return reply
+        .status(400)
+        .send({ error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.' })
+    }
+
+    const fileResult = await characterService.createImageFromUploadedFile({
+      characterId,
+      name,
+      parentId,
+      type,
+      description,
+      fileBuffer,
+      fileMimeType
+    })
+
+    if (!fileResult.ok) {
+      if (fileResult.error === 'base_exists') {
+        return reply.status(409).send({ error: '每个角色只能有一个基础形象（无父级的定妆槽）' })
+      }
+      return reply.status(400).send({ error: '创建失败' })
+    }
+
+    return reply.status(201).send(fileResult.image)
+  })
 
   // Update image
   fastify.put<{
     Params: { id: string; imageId: string }
-    Body: { name?: string; type?: string; description?: string; order?: number; prompt?: string | null }
-  }>(
-    '/:id/images/:imageId',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id
-      const { id: characterId, imageId } = request.params
-
-      if (!(await verifyCharacterOwnership(userId, characterId))) {
-        return reply.status(403).send(permissionDeniedBody)
-      }
-
-      const { name, type, description, order, prompt } = request.body
-
-      return characterService.updateCharacterImage(imageId, { name, type, description, order, prompt })
+    Body: {
+      name?: string
+      type?: string
+      description?: string
+      order?: number
+      prompt?: string | null
     }
-  )
+  }>('/:id/images/:imageId', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const { id: characterId, imageId } = request.params
+
+    if (!(await verifyCharacterOwnership(userId, characterId))) {
+      return reply.status(403).send(permissionDeniedBody)
+    }
+
+    const { name, type, description, order, prompt } = request.body
+
+    return characterService.updateCharacterImage(imageId, {
+      name,
+      type,
+      description,
+      order,
+      prompt
+    })
+  })
 
   // 为已有形象槽位上传/替换定妆图（multipart，字段名 file）
   fastify.post<{ Params: { id: string; imageId: string } }>(

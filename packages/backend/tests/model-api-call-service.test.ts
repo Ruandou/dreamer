@@ -6,7 +6,10 @@ vi.mock('../src/services/ai/api-logger.js', () => ({
   parseModelApiRequestParams: (params: unknown) => params
 }))
 
-import { parseListQuery, listModelApiCallsForUser } from '../src/services/ai/model-api-call-service.js'
+import {
+  parseListQuery,
+  listModelApiCallsForUser
+} from '../src/services/ai/model-api-call-service.js'
 
 describe('model-api-call-service', () => {
   beforeEach(() => {
@@ -106,9 +109,12 @@ describe('model-api-call-service', () => {
         model: 'gpt-4'
       })
 
-      expect(mockGetApiCalls).toHaveBeenCalledWith('user-1', expect.objectContaining({
-        model: 'gpt-4'
-      }))
+      expect(mockGetApiCalls).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({
+          model: 'gpt-4'
+        })
+      )
     })
 
     it('returns empty array when no results', async () => {

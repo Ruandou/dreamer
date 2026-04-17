@@ -105,29 +105,16 @@ export class SceneService {
       imageUrls?: string[]
       duration?: number
     }
-  ): Promise<
-    | { ok: true; taskId: string; sceneId: string }
-    | { ok: false; reason: 'no_prompt' }
-  > {
+  ): Promise<{ ok: true; taskId: string; sceneId: string } | { ok: false; reason: 'no_prompt' }> {
     const { model, referenceImage, duration: bodyDuration } = body
     let imageUrls = body.imageUrls
     let prompt = await this.resolveSceneGeneratePrompt(sceneId)
     let duration = bodyDuration
 
     const useAuto =
-      model === 'seedance2.0' &&
-      (!imageUrls || imageUrls.length === 0) &&
-      !referenceImage
+      model === 'seedance2.0' && (!imageUrls || imageUrls.length === 0) && !referenceImage
 
-    let aspectRatio:
-      | '16:9'
-      | '9:16'
-      | '1:1'
-      | '4:3'
-      | '3:4'
-      | '21:9'
-      | 'adaptive'
-      | undefined
+    let aspectRatio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive' | undefined
 
     if (useAuto) {
       const built = await buildSeedanceScenePayload(sceneId)
@@ -184,15 +171,7 @@ export class SceneService {
       let prompt = await this.resolveSceneGeneratePrompt(sceneId)
       let effectiveImageUrls = imageUrls
       let effectiveDuration: number | undefined = undefined
-      let aspectRatio:
-        | '16:9'
-        | '9:16'
-        | '1:1'
-        | '4:3'
-        | '3:4'
-        | '21:9'
-        | 'adaptive'
-        | undefined
+      let aspectRatio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive' | undefined
 
       if (
         model === 'seedance2.0' &&
@@ -261,9 +240,7 @@ export class SceneService {
       return { ok: false, reason: 'not_found' }
     }
 
-    const targetPrompt =
-      bodyPrompt ||
-      (await this.resolveSceneGeneratePrompt(sceneId))
+    const targetPrompt = bodyPrompt || (await this.resolveSceneGeneratePrompt(sceneId))
 
     const characters = scene.episode.project.characters
     const context =

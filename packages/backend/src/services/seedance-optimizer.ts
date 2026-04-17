@@ -12,7 +12,7 @@ import type {
 export interface SeedanceOptimizerOptions {
   defaultResolution?: '480p' | '720p'
   defaultAspectRatio?: '16:9' | '9:16' | '1:1'
-  maxReferenceImages?: number  // 最大参考图数量，默认9
+  maxReferenceImages?: number // 最大参考图数量，默认9
   generateAudio?: boolean
 }
 
@@ -23,7 +23,7 @@ const REFERENCE_IMAGE_ALLOCATION = {
   atmosphere: { min: 1, max: 2, priority: 1 },
   style: { min: 0, max: 1, priority: 1 },
   action: { min: 1, max: 2, priority: 2 },
-  reserve: { count: 1 }  // 预留位
+  reserve: { count: 1 } // 预留位
 }
 
 /**
@@ -63,10 +63,7 @@ export function buildSeedanceConfig(
 /**
  * 选择参考图（智能分配9张配额）
  */
-function selectReferenceImages(
-  segment: StoryboardSegment,
-  maxImages: number
-): string[] {
+function selectReferenceImages(segment: StoryboardSegment, maxImages: number): string[] {
   const selected: string[] = []
   const allocations = { ...REFERENCE_IMAGE_ALLOCATION }
 
@@ -148,15 +145,19 @@ function determineDuration(segment: StoryboardSegment): SeedanceSegmentConfig['d
  */
 function enhancePrompt(segment: StoryboardSegment): string {
   const parts: string[] = []
-  const visualStyle = Array.isArray(segment.visualStyle) ? segment.visualStyle.join('，') : segment.visualStyle
+  const visualStyle = Array.isArray(segment.visualStyle)
+    ? segment.visualStyle.join('，')
+    : segment.visualStyle
 
   // 1. 视觉风格
   parts.push(visualStyle)
 
   // 2. 添加画质锚定词
-  if (visualStyle.includes('电影') ||
-      visualStyle.includes('史诗') ||
-      visualStyle.includes('大片')) {
+  if (
+    visualStyle.includes('电影') ||
+    visualStyle.includes('史诗') ||
+    visualStyle.includes('大片')
+  ) {
     parts.push('8K超高清', 'cinematic film grain')
   }
 
@@ -202,15 +203,16 @@ export function buildSeedanceConfigs(
   segments: StoryboardSegment[],
   options?: SeedanceOptimizerOptions
 ): SeedanceSegmentConfig[] {
-  return segments.map(segment => buildSeedanceConfig(segment, options))
+  return segments.map((segment) => buildSeedanceConfig(segment, options))
 }
 
 /**
  * 验证 Seedance 配置
  */
-export function validateSeedanceConfig(
-  config: SeedanceSegmentConfig
-): { valid: boolean; errors: string[] } {
+export function validateSeedanceConfig(config: SeedanceSegmentConfig): {
+  valid: boolean
+  errors: string[]
+} {
   const errors: string[] = []
 
   // 检查提示词长度
@@ -252,10 +254,12 @@ export function optimizePromptForSeedance(prompt: string): string {
   optimized = optimized.replace(/@image(\d+)/gi, '@图片$1')
 
   // 添加默认质量锚定（如果没有）
-  if (!optimized.includes('cinematic') &&
-      !optimized.includes('电影') &&
-      !optimized.includes('4K') &&
-      !optimized.includes('8K')) {
+  if (
+    !optimized.includes('cinematic') &&
+    !optimized.includes('电影') &&
+    !optimized.includes('4K') &&
+    !optimized.includes('8K')
+  ) {
     optimized += '，cinematic film grain'
   }
 
@@ -280,17 +284,16 @@ export function selectBestCharacterImage(
   context?: string
 ): string | undefined {
   // 筛选该角色的图片
-  const relevantImages = characterImages.filter(img =>
-    img.characterId && (
-      img.name.includes(characterName) ||
-      img.description?.includes(characterName)
-    )
+  const relevantImages = characterImages.filter(
+    (img) =>
+      img.characterId &&
+      (img.name.includes(characterName) || img.description?.includes(characterName))
   )
 
   if (relevantImages.length === 0) return undefined
 
   // 优先选择 base 类型的图片
-  const baseImage = relevantImages.find(img => img.type === 'base')
+  const baseImage = relevantImages.find((img) => img.type === 'base')
   if (baseImage?.avatarUrl) return baseImage.avatarUrl
 
   // 否则选择第一张有 avatarUrl 的
@@ -309,7 +312,9 @@ export function generateFirstFramePrompt(
   characterImageUrl?: string
 ): string {
   const parts: string[] = []
-  const visualStyle = Array.isArray(segment.visualStyle) ? segment.visualStyle.join('，') : segment.visualStyle
+  const visualStyle = Array.isArray(segment.visualStyle)
+    ? segment.visualStyle.join('，')
+    : segment.visualStyle
 
   // 风格
   parts.push(visualStyle)

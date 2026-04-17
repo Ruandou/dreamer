@@ -14,10 +14,7 @@ export interface ImportResults {
   scenesCreated: number
 }
 
-async function createCharacterImagesForCharacter(
-  characterId: string,
-  char: ParsedCharacter
-) {
+async function createCharacterImagesForCharacter(characterId: string, char: ParsedCharacter) {
   const [normalized] = normalizeParsedCharacterList([char])
   const images = normalized.images || []
   let baseImageId: string | null = null
@@ -67,7 +64,10 @@ async function createCharacterImagesForCharacter(
   }
 }
 
-export async function importParsedData(projectId: string, parsed: ParsedScript): Promise<ImportResults> {
+export async function importParsedData(
+  projectId: string,
+  parsed: ParsedScript
+): Promise<ImportResults> {
   const results: ImportResults = {
     episodesCreated: 0,
     episodesUpdated: 0,

@@ -67,7 +67,7 @@ vi.mock('bullmq', () => {
     close: vi.fn().mockResolvedValue(undefined),
     on: vi.fn()
   }
-  
+
   const MockWorker = vi.fn((name, processor, options) => {
     capturedImageProcessor = processor
     return {
@@ -75,7 +75,7 @@ vi.mock('bullmq', () => {
       close: vi.fn().mockResolvedValue(undefined)
     }
   })
-  
+
   return {
     Queue: vi.fn(() => mockQueue),
     Worker: MockWorker
@@ -97,9 +97,9 @@ describe('Image Queue Worker', () => {
 
   it('should process character_base_create job successfully', async () => {
     await import('../src/queues/image.js')
-    
+
     expect(capturedImageProcessor).toBeDefined()
-    
+
     const mockJob = {
       id: 'img-job-1',
       data: {
@@ -160,7 +160,7 @@ describe('Image Queue Worker', () => {
 
   it('should process character_base_regenerate job', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'img-job-2',
       data: {
@@ -194,7 +194,7 @@ describe('Image Queue Worker', () => {
 
   it('should process character_derived_create job', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'img-job-3',
       data: {
@@ -233,7 +233,7 @@ describe('Image Queue Worker', () => {
 
   it('should process character_derived_regenerate job', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'img-job-4',
       data: {
@@ -257,15 +257,18 @@ describe('Image Queue Worker', () => {
 
     await capturedImageProcessor(mockJob)
 
-    expect(mockUpdateCharacterImageAvatar).toHaveBeenCalledWith('img-3', expect.objectContaining({
-      avatarUrl: 'https://example.com/new-edited.jpg',
-      imageCost: 0.035
-    }))
+    expect(mockUpdateCharacterImageAvatar).toHaveBeenCalledWith(
+      'img-3',
+      expect.objectContaining({
+        avatarUrl: 'https://example.com/new-edited.jpg',
+        imageCost: 0.035
+      })
+    )
   })
 
   it('should process location_establishing job', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'img-job-5',
       data: {
@@ -300,7 +303,7 @@ describe('Image Queue Worker', () => {
 
   it('should handle image generation failure', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'img-job-6',
       data: {
@@ -317,7 +320,7 @@ describe('Image Queue Worker', () => {
     mockGenerateTextToImageAndPersist.mockRejectedValue(new Error('Content safety violation'))
 
     await expect(capturedImageProcessor(mockJob)).rejects.toThrow('Content safety violation')
-    
+
     expect(mockSendProjectUpdate).toHaveBeenCalledWith(
       'user-1',
       'project-1',
@@ -330,7 +333,7 @@ describe('Image Queue Worker', () => {
 
   it('should handle null imageCost gracefully', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'img-job-7',
       data: {
@@ -363,7 +366,7 @@ describe('Image Queue Worker', () => {
 
   it('should handle missing project aspect ratio', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'img-job-8',
       data: {
@@ -394,7 +397,7 @@ describe('Image Queue Worker', () => {
 
   it('should record API call with correct parameters', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'img-job-9',
       data: {

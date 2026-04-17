@@ -79,22 +79,22 @@ export interface Episode {
 export interface ScriptContent {
   title: string
   summary: string // 梗概
-  metadata?: ScriptMetadata  // 剧本元数据
+  metadata?: ScriptMetadata // 剧本元数据
   scenes: ScriptScene[]
   /** 分镜脚本富文本（TipTap JSON 等），可选，与 scenes 并存 */
   editorDoc?: Record<string, unknown> | null
 }
 
 export interface ScriptMetadata {
-  genre?: string        // 古装/现代/科幻
-  style?: string        // 穿越/逆袭/甜宠
-  tone?: string         // 幽默/严肃/悬疑
+  genre?: string // 古装/现代/科幻
+  style?: string // 穿越/逆袭/甜宠
+  tone?: string // 幽默/严肃/悬疑
   targetAudience?: string // 18-25女性/25-35女性/通用
-  coreConflict?: string  // 核心冲突
-  keyPlotPoints?: string[]  // 关键情节点
-  totalEstimatedDuration?: number  // 总时长预估（秒）
-  recommendedEpisodes?: number    // 推荐集数
-  characters?: string[]            // 角色列表
+  coreConflict?: string // 核心冲突
+  keyPlotPoints?: string[] // 关键情节点
+  totalEstimatedDuration?: number // 总时长预估（秒）
+  recommendedEpisodes?: number // 推荐集数
+  characters?: string[] // 角色列表
 }
 
 /** 分镜脚本中每镜出场角色（关联 CharacterImage.name） */
@@ -153,8 +153,8 @@ export interface CharacterImage {
   avatarUrl?: string
   /** 方舟文生图 / 图生图最近一次成功生成的估算成本（元） */
   imageCost?: number | null
-  parentId?: string  // 父节点，null 为基础形象
-  type: string       // base/outfit/expression/pose
+  parentId?: string // 父节点，null 为基础形象
+  type: string // base/outfit/expression/pose
   description?: string
   order: number
   createdAt: Date
@@ -374,11 +374,11 @@ export type ImageGenerationJobData =
 export interface EpisodePlan {
   episodeNum: number
   title: string
-  synopsis: string           // 本集梗概
-  sceneCount: number         // 场景数
-  estimatedDuration: number  // 预估时长（秒）
-  keyMoments: string[]      // 关键画面
-  sceneIndices?: number[]   // 对应原始剧本的场景索引
+  synopsis: string // 本集梗概
+  sceneCount: number // 场景数
+  estimatedDuration: number // 预估时长（秒）
+  keyMoments: string[] // 关键画面
+  sceneIndices?: number[] // 对应原始剧本的场景索引
 }
 
 /**
@@ -387,10 +387,10 @@ export interface EpisodePlan {
 export interface CharacterAction {
   characterName: string
   actionType: 'movement' | 'expression' | 'dialogue' | 'reaction'
-  description: string        // 动作描述
-  emotion?: string          // 情绪
+  description: string // 动作描述
+  emotion?: string // 情绪
   intensity?: 'low' | 'medium' | 'high'
-  suggestedReferenceImageTypes?: string[]  // 建议参考图类型
+  suggestedReferenceImageTypes?: string[] // 建议参考图类型
 }
 
 /**
@@ -399,9 +399,9 @@ export interface CharacterAction {
 export interface SceneActions {
   sceneNum: number
   actions: CharacterAction[]
-  suggestedDuration: number   // 建议时长 4-15秒
+  suggestedDuration: number // 建议时长 4-15秒
   videoStyle: 'action' | 'dialogue' | 'landscape' | 'mixed'
-  suggestedCameraMovement?: string  // 建议镜头运动
+  suggestedCameraMovement?: string // 建议镜头运动
   suggestedAspectRatio?: '16:9' | '9:16' | '1:1'
 }
 
@@ -425,10 +425,10 @@ export interface SceneAssetRecommendation {
   sceneNum: number
   recommendedAssets: Array<{
     asset: SceneAsset
-    relevance: number      // 相关度 0-1
+    relevance: number // 相关度 0-1
     usage: 'background' | 'reference' | 'style' | 'atmosphere'
   }>
-  compositePrompt?: string  // 组合后的素材提示词
+  compositePrompt?: string // 组合后的素材提示词
 }
 
 /**
@@ -437,9 +437,9 @@ export interface SceneAssetRecommendation {
 export interface StoryboardSegment {
   id?: string
   episodeNum: number
-  segmentNum: number         // 片段编号
-  description: string       // 分镜描述（给AI看）
-  duration: number         // 4-15秒
+  segmentNum: number // 片段编号
+  description: string // 分镜描述（给AI看）
+  duration: number // 4-15秒
   aspectRatio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9'
   characters: Array<{
     name: string
@@ -448,16 +448,16 @@ export interface StoryboardSegment {
   }>
   location: string
   timeOfDay: string
-  visualStyle: string[]       // 视觉风格描述
-  cameraMovement: string    // 镜头运动
-  specialEffects: string[]  // 特效建议
-  seedancePrompt: string    // 最终给Seedance的提示词
-  contextForNext?: string   // 给下一步AI的操作提示
+  visualStyle: string[] // 视觉风格描述
+  cameraMovement: string // 镜头运动
+  specialEffects: string[] // 特效建议
+  seedancePrompt: string // 最终给Seedance的提示词
+  contextForNext?: string // 给下一步AI的操作提示
   sceneAssets: SceneAsset[] // 关联的素材
-  compositeImageUrls: string[]  // 最终传给Seedance的参考图（最多9张）
-  subShots?: SubShot[]     // 子片段列表
-  characterActions?: Record<string, string>  // characterName -> action
-  voiceSegments?: VoiceSegment[]  // 语音片段列表
+  compositeImageUrls: string[] // 最终传给Seedance的参考图（最多9张）
+  subShots?: SubShot[] // 子片段列表
+  characterActions?: Record<string, string> // characterName -> action
+  voiceSegments?: VoiceSegment[] // 语音片段列表
 }
 
 /**
@@ -475,23 +475,23 @@ export interface SubShot {
  */
 export interface SeedanceSegmentConfig {
   prompt: string
-  imageUrls: string[]                    // 最多9张参考图
+  imageUrls: string[] // 最多9张参考图
   duration: 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15
   aspectRatio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9'
   resolution: '480p' | '720p'
   generateAudio: boolean
-  audioConfig?: SeedanceAudioPayload    // TTS 音频配置
+  audioConfig?: SeedanceAudioPayload // TTS 音频配置
 }
 
 /**
  * Seedance 音频片段
  */
 export interface SeedanceAudioSegment {
-  character_tag: string      // @Character1
+  character_tag: string // @Character1
   text: string
   voice_config: VoiceConfig
-  start_time: number        // 秒
-  duration: number          // 秒
+  start_time: number // 秒
+  duration: number // 秒
 }
 
 /**
@@ -506,13 +506,13 @@ export interface SeedanceAudioPayload {
  * 流水线步骤
  */
 export type PipelineStep =
-  | 'script-writing'       // 阶段1
-  | 'episode-splitting'   // 阶段2
-  | 'action-extraction'   // 阶段3
-  | 'asset-matching'     // 阶段3.5
+  | 'script-writing' // 阶段1
+  | 'episode-splitting' // 阶段2
+  | 'action-extraction' // 阶段3
+  | 'asset-matching' // 阶段3.5
   | 'storyboard-generation' // 阶段4
   | 'seedance-parametrization' // 阶段5
-  | 'video-generation'     // 阶段6
+  | 'video-generation' // 阶段6
 
 /**
  * 流水线状态
@@ -521,7 +521,7 @@ export interface PipelineStatus {
   projectId: string
   currentStep: PipelineStep
   status: 'pending' | 'running' | 'completed' | 'failed'
-  progress: number  // 0-100
+  progress: number // 0-100
   results?: Record<PipelineStep, any>
   error?: string
 }
@@ -535,8 +535,8 @@ export interface VoiceConfig {
   tone: 'high' | 'mid' | 'low' | 'low_mid'
   timbre: 'warm_solid' | 'warm_thick' | 'clear_bright' | 'soft_gentle'
   speed: 'slow' | 'medium' | 'fast'
-  pitch?: number      // 可选，音高偏移
-  volume?: number     // 可选，音量
+  pitch?: number // 可选，音高偏移
+  volume?: number // 可选，音量
 }
 
 /**

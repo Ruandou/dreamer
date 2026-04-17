@@ -175,7 +175,9 @@ function tokensToEstimatedYuan(tokens: number): number {
   return Math.round(yuan * 1_000_000) / 1_000_000
 }
 
-async function postImagesGenerations(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function postImagesGenerations(
+  body: Record<string, unknown>
+): Promise<Record<string, unknown>> {
   const res = await fetch(`${ARK_API_URL}/images/generations`, {
     method: 'POST',
     headers: getAuthHeaders(),
@@ -230,7 +232,8 @@ export async function persistRemoteImageToAssets(remoteUrl: string): Promise<str
   }
   const buf = Buffer.from(await res.arrayBuffer())
   const ct = res.headers.get('content-type') || 'image/png'
-  const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png'
+  const ext =
+    ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png'
   const key = generateFileKey('assets', `ai_gen_${Date.now()}.${ext}`)
   return uploadFile('assets', key, buf, ct)
 }

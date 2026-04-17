@@ -98,16 +98,24 @@ export const useSceneStore = defineStore('scene', () => {
     return res.data
   }
 
-  async function createScene(data: { episodeId: string; sceneNum: number; description?: string; prompt: string }) {
+  async function createScene(data: {
+    episodeId: string
+    sceneNum: number
+    description?: string
+    prompt: string
+  }) {
     const res = await api.post<SceneRow>('/scenes', data)
     scenes.value.push(res.data)
     scenes.value.sort((a, b) => a.sceneNum - b.sceneNum)
     return res.data
   }
 
-  async function updateScene(id: string, data: { description?: string; sceneNum?: number; prompt?: string }) {
+  async function updateScene(
+    id: string,
+    data: { description?: string; sceneNum?: number; prompt?: string }
+  ) {
     const res = await api.put<SceneRow>(`/scenes/${id}`, data)
-    const index = scenes.value.findIndex(s => s.id === id)
+    const index = scenes.value.findIndex((s) => s.id === id)
     if (index !== -1) {
       scenes.value[index] = res.data
     }
@@ -119,33 +127,38 @@ export const useSceneStore = defineStore('scene', () => {
 
   async function deleteScene(id: string) {
     await api.delete(`/scenes/${id}`)
-    scenes.value = scenes.value.filter(s => s.id !== id)
+    scenes.value = scenes.value.filter((s) => s.id !== id)
     if (currentScene.value?.id === id) {
       currentScene.value = null
     }
   }
 
   async function reorderScenes(episodeId: string, sceneIds: string[]) {
-    const updates = sceneIds.map((id, index) =>
-      updateScene(id, { sceneNum: index + 1 })
-    )
+    const updates = sceneIds.map((id, index) => updateScene(id, { sceneNum: index + 1 }))
     await Promise.all(updates)
     await fetchScenes(episodeId)
   }
 
-  async function generateVideo(sceneId: string, model: 'wan2.6' | 'seedance2.0', options?: {
-    referenceImage?: string
-    imageUrls?: string[]
-    duration?: number
-  }) {
+  async function generateVideo(
+    sceneId: string,
+    model: 'wan2.6' | 'seedance2.0',
+    options?: {
+      referenceImage?: string
+      imageUrls?: string[]
+      duration?: number
+    }
+  ) {
     isGenerating.value = true
     try {
-      const res = await api.post<{ taskId: string; sceneId: string }>(`/scenes/${sceneId}/generate`, {
-        model,
-        referenceImage: options?.referenceImage,
-        imageUrls: options?.imageUrls,
-        duration: options?.duration
-      })
+      const res = await api.post<{ taskId: string; sceneId: string }>(
+        `/scenes/${sceneId}/generate`,
+        {
+          model,
+          referenceImage: options?.referenceImage,
+          imageUrls: options?.imageUrls,
+          duration: options?.duration
+        }
+      )
       await getScene(sceneId)
       return res.data
     } finally {
@@ -153,10 +166,14 @@ export const useSceneStore = defineStore('scene', () => {
     }
   }
 
-  async function batchGenerate(sceneIds: string[], model: 'wan2.6' | 'seedance2.0', options?: {
-    referenceImage?: string
-    imageUrls?: string[]
-  }) {
+  async function batchGenerate(
+    sceneIds: string[],
+    model: 'wan2.6' | 'seedance2.0',
+    options?: {
+      referenceImage?: string
+      imageUrls?: string[]
+    }
+  ) {
     isGenerating.value = true
     try {
       const res = await api.post<{ sceneId: string; taskId: string }[]>(`/scenes/batch-generate`, {
@@ -178,7 +195,9 @@ export const useSceneStore = defineStore('scene', () => {
   }
 
   async function optimizePrompt(sceneId: string, prompt?: string) {
-    const res = await api.post<{ optimizedPrompt: string }>(`/scenes/${sceneId}/optimize-prompt`, { prompt })
+    const res = await api.post<{ optimizedPrompt: string }>(`/scenes/${sceneId}/optimize-prompt`, {
+      prompt
+    })
     return res.data.optimizedPrompt
   }
 

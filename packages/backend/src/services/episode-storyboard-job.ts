@@ -39,7 +39,9 @@ export async function enqueueEpisodeStoryboardScriptJob(
     }
   }
 
-  if (await pipelineRepository.hasCompletedEpisodeStoryboardScriptJob(episode.projectId, episodeId)) {
+  if (
+    await pipelineRepository.hasCompletedEpisodeStoryboardScriptJob(episode.projectId, episodeId)
+  ) {
     return {
       ok: false,
       status: 409,
@@ -72,7 +74,7 @@ export async function enqueueEpisodeStoryboardScriptJob(
       } as Prisma.InputJsonValue
     })
 
-    void runEpisodeStoryboardPipelineJob(job.id, userId, episodeId, hint).catch(err => {
+    void runEpisodeStoryboardPipelineJob(job.id, userId, episodeId, hint).catch((err) => {
       console.error(`episode-storyboard-script job ${job.id} failed:`, err)
     })
 

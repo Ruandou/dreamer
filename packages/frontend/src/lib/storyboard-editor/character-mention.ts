@@ -95,16 +95,20 @@ export function createStoryboardMentionExtension(
           },
           render: suggestionRender,
           command: ({ editor, range, props }) => {
-            editor.chain().focus().insertContentAt(range, [
-              {
-                type: this.name,
-                attrs: { ...props, mentionSuggestionChar: '@' }
-              },
-              {
-                type: 'text',
-                text: ' '
-              }
-            ]).run()
+            editor
+              .chain()
+              .focus()
+              .insertContentAt(range, [
+                {
+                  type: this.name,
+                  attrs: { ...props, mentionSuggestionChar: '@' }
+                },
+                {
+                  type: 'text',
+                  text: ' '
+                }
+              ])
+              .run()
           }
         }
       }

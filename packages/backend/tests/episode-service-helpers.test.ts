@@ -49,10 +49,7 @@ describe('Episode Service - Helper Functions', () => {
 
     it('ignores empty and whitespace character names', () => {
       const script = {
-        scenes: [
-          { characters: ['Alice', '', '  ', 'Bob'] },
-          { characters: [null, undefined, 123] }
-        ]
+        scenes: [{ characters: ['Alice', '', '  ', 'Bob'] }, { characters: [null, undefined, 123] }]
       }
       const names = new Set<string>()
       for (const sc of script.scenes) {
@@ -86,7 +83,7 @@ describe('Episode Service - Helper Functions', () => {
         scene.timeOfDay,
         scene.description,
         scene.actions?.join(' ') || '',
-        scene.dialogues?.map(d => `${d.character}: ${d.content}`).join(' ') || ''
+        scene.dialogues?.map((d) => `${d.character}: ${d.content}`).join(' ') || ''
       ].filter(Boolean)
 
       const prompt = parts.join(', ')
@@ -149,12 +146,7 @@ describe('Episode Service - Helper Functions', () => {
         description: 'Scene desc'
       }
 
-      const parts = [
-        'Title',
-        scene.location,
-        scene.timeOfDay,
-        scene.description
-      ].filter(Boolean)
+      const parts = ['Title', scene.location, scene.timeOfDay, scene.description].filter(Boolean)
 
       expect(parts).toEqual(['Title', 'Scene desc'])
     })

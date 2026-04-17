@@ -55,7 +55,10 @@ api.interceptors.response.use(
 )
 
 // Helper for form data requests (file uploads)
-;(api as any).postFormData = async <T>(url: string, formData: FormData): Promise<AxiosResponse<T>> => {
+;(api as any).postFormData = async <T>(
+  url: string,
+  formData: FormData
+): Promise<AxiosResponse<T>> => {
   return api.post<T>(url, formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
@@ -78,10 +81,7 @@ export async function importScript(
 }
 
 // Import and create new project from document (async task)
-export async function importProject(
-  content: string,
-  type: 'markdown' | 'json' = 'markdown'
-) {
+export async function importProject(content: string, type: 'markdown' | 'json' = 'markdown') {
   const res = await api.post('/import/project', {
     content,
     type

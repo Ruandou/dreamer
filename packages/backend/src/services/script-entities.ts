@@ -14,15 +14,7 @@ export function isCrowdExtraCharacterName(raw: string): boolean {
   const name = raw.trim()
   if (!name) return true
 
-  const exact = new Set([
-    '群演',
-    '群众',
-    '群众演员',
-    '路人',
-    '龙套',
-    'npc',
-    'NPC'
-  ])
+  const exact = new Set(['群演', '群众', '群众演员', '路人', '龙套', 'npc', 'NPC'])
   if (exact.has(name)) return true
 
   const low = name.toLowerCase()

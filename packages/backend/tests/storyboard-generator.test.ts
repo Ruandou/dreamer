@@ -140,9 +140,7 @@ describe('Storyboard Generator Service', () => {
           timeOfDay: '夜',
           characters: ['女主'],
           description: '女主惊讶地发现门开着',
-          dialogues: [
-            { character: '女主', content: '太震惊了！这是怎么回事？' }
-          ],
+          dialogues: [{ character: '女主', content: '太震惊了！这是怎么回事？' }],
           actions: ['惊讶']
         }
       ]

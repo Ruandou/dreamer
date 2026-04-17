@@ -2,8 +2,17 @@ import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
 import type { VideoJobData } from '@dreamer/shared/types'
 import { videoQueueService } from '../services/video-queue-service.js'
-import { submitWan26Task, waitForWan26Completion, calculateWan26Cost } from '../services/ai/wan26.js'
-import { submitSeedanceTask, waitForSeedanceCompletion, calculateSeedanceCost, imageUrlsToBase64 } from '../services/ai/seedance.js'
+import {
+  submitWan26Task,
+  waitForWan26Completion,
+  calculateWan26Cost
+} from '../services/ai/wan26.js'
+import {
+  submitSeedanceTask,
+  waitForSeedanceCompletion,
+  calculateSeedanceCost,
+  imageUrlsToBase64
+} from '../services/ai/seedance.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { sendTaskUpdate } from '../plugins/sse.js'
 import { logApiCall, updateApiCall } from '../services/ai/api-logger.js'
@@ -27,7 +36,8 @@ export const videoQueue = new Queue<VideoJobData>('video-generation', {
 export const videoWorker = new Worker<VideoJobData>(
   'video-generation',
   async (job) => {
-    const { sceneId, taskId, prompt, model, referenceImage, imageUrls, duration, aspectRatio } = job.data
+    const { sceneId, taskId, prompt, model, referenceImage, imageUrls, duration, aspectRatio } =
+      job.data
 
     console.log(`Processing video job ${job.id} for scene ${sceneId}, model: ${model}`)
 
@@ -91,7 +101,10 @@ export const videoWorker = new Worker<VideoJobData>(
 
         if (!result.videoUrl) {
           if (apiCallId) {
-            await updateApiCall(externalTaskId, { status: 'failed', errorMsg: 'No video URL returned' })
+            await updateApiCall(externalTaskId, {
+              status: 'failed',
+              errorMsg: 'No video URL returned'
+            })
           }
           throw new Error('Wan 2.6 returned no video URL')
         }
@@ -108,10 +121,11 @@ export const videoWorker = new Worker<VideoJobData>(
             duration: effectiveDuration
           })
         }
-
       } else {
         // Seedance 2.0 API call
-        console.log(`Submitting Seedance 2.0 task for scene ${sceneId}, reference images: ${imageUrls?.length || 0}`)
+        console.log(
+          `Submitting Seedance 2.0 task for scene ${sceneId}, reference images: ${imageUrls?.length || 0}`
+        )
 
         // Log API call
         if (userId) {
@@ -120,16 +134,17 @@ export const videoWorker = new Worker<VideoJobData>(
             model: 'seedance2.0',
             provider: 'volcengine',
             prompt,
-            requestParams: { imageBase64: imageUrls ? '[converted to base64]' : undefined, duration: effectiveDuration },
+            requestParams: {
+              imageBase64: imageUrls ? '[converted to base64]' : undefined,
+              duration: effectiveDuration
+            },
             takeId: taskId
           })
           apiCallId = log.id
         }
 
         // 将图片 URL 转换为 base64
-        const imageBase64 = imageUrls?.length
-          ? await imageUrlsToBase64(imageUrls)
-          : undefined
+        const imageBase64 = imageUrls?.length ? await imageUrlsToBase64(imageUrls) : undefined
 
         const response = await submitSeedanceTask({
           prompt,
@@ -151,7 +166,10 @@ export const videoWorker = new Worker<VideoJobData>(
 
         if (!result.videoUrl) {
           if (apiCallId) {
-            await updateApiCall(externalTaskId, { status: 'failed', errorMsg: 'No video URL returned' })
+            await updateApiCall(externalTaskId, {
+              status: 'failed',
+              errorMsg: 'No video URL returned'
+            })
           }
           throw new Error('Seedance 2.0 returned no video URL')
         }
@@ -176,12 +194,7 @@ export const videoWorker = new Worker<VideoJobData>(
       const videoBuffer = Buffer.from(await videoResponse.arrayBuffer())
 
       const videoKey = generateFileKey('videos', `${taskId}.mp4`)
-      const uploadedVideoUrl = await uploadFile(
-        'videos',
-        videoKey,
-        videoBuffer,
-        'video/mp4'
-      )
+      const uploadedVideoUrl = await uploadFile('videos', videoKey, videoBuffer, 'video/mp4')
 
       // Upload thumbnail if exists
       let uploadedThumbnailUrl = ''
@@ -189,12 +202,7 @@ export const videoWorker = new Worker<VideoJobData>(
         const thumbResponse = await fetch(thumbnailUrl)
         const thumbBuffer = Buffer.from(await thumbResponse.arrayBuffer())
         const thumbKey = generateFileKey('assets', `${taskId}_thumb.jpg`)
-        uploadedThumbnailUrl = await uploadFile(
-          'assets',
-          thumbKey,
-          thumbBuffer,
-          'image/jpeg'
-        )
+        uploadedThumbnailUrl = await uploadFile('assets', thumbKey, thumbBuffer, 'image/jpeg')
       }
 
       // Update task as completed
@@ -218,7 +226,6 @@ export const videoWorker = new Worker<VideoJobData>(
       }
 
       console.log(`Video job ${job.id} completed successfully with URL: ${uploadedVideoUrl}`)
-
     } catch (error) {
       console.error(`Video job ${job.id} failed:`, error)
 

@@ -19,7 +19,13 @@ process.env.S3_BUCKET_ASSETS = 'dreamer-assets'
 process.env.S3_BUCKET_VIDEOS = 'dreamer-videos'
 
 // Import storage functions after mocks
-import { uploadFile, getFileUrl, deleteFile, generateFileKey, type BucketType } from '../src/services/storage.js'
+import {
+  uploadFile,
+  getFileUrl,
+  deleteFile,
+  generateFileKey,
+  type BucketType
+} from '../src/services/storage.js'
 
 describe('Storage Service', () => {
   beforeEach(() => {

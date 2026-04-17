@@ -57,7 +57,7 @@ export const useEpisodeStore = defineStore('episode', () => {
     if (data.synopsis !== undefined) payload.synopsis = data.synopsis
     if (data.script !== undefined) payload.script = data.script
     const res = await api.put<Episode>(`/episodes/${id}`, payload)
-    const index = episodes.value.findIndex(e => e.id === id)
+    const index = episodes.value.findIndex((e) => e.id === id)
     if (index !== -1) {
       episodes.value[index] = res.data
     }
@@ -69,7 +69,7 @@ export const useEpisodeStore = defineStore('episode', () => {
 
   async function deleteEpisode(id: string) {
     await api.delete(`/episodes/${id}`)
-    episodes.value = episodes.value.filter(e => e.id !== id)
+    episodes.value = episodes.value.filter((e) => e.id !== id)
     if (currentEpisode.value?.id === id) {
       currentEpisode.value = null
     }

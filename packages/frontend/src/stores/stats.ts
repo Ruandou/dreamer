@@ -1,6 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getUserStats, getProjectStats, getCostTrend, type UserCostStats, type ProjectCostStats, type DailyCost } from '@/api'
+import {
+  getUserStats,
+  getProjectStats,
+  getCostTrend,
+  type UserCostStats,
+  type ProjectCostStats,
+  type DailyCost
+} from '@/api'
 
 export const useStatsStore = defineStore('stats', () => {
   const userStats = ref<UserCostStats | null>(null)

@@ -45,12 +45,12 @@ function buildProjectCostStats(
   imageCost: number,
   recentSlice: number
 ): ProjectCostStats {
-  const tasks = project.episodes.flatMap(e => e.scenes.flatMap(s => s.takes))
-  const completedTasks = tasks.filter(t => t.status === 'completed')
-  const failedTasks = tasks.filter(t => t.status === 'failed')
+  const tasks = project.episodes.flatMap((e) => e.scenes.flatMap((s) => s.takes))
+  const completedTasks = tasks.filter((t) => t.status === 'completed')
+  const failedTasks = tasks.filter((t) => t.status === 'failed')
 
-  const wanTasks = completedTasks.filter(t => t.model === 'wan2.6')
-  const seedanceTasks = completedTasks.filter(t => t.model === 'seedance2.0')
+  const wanTasks = completedTasks.filter((t) => t.model === 'wan2.6')
+  const seedanceTasks = completedTasks.filter((t) => t.model === 'seedance2.0')
 
   const videoCost = completedTasks.reduce((sum, t) => sum + (t.cost || 0), 0)
   const aiCost = project.importTasks.reduce((sum, t) => {
@@ -81,7 +81,7 @@ function buildProjectCostStats(
     recentTasks: tasks
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, recentSlice)
-      .map(t => ({
+      .map((t) => ({
         id: t.id,
         model: t.model,
         cost: t.cost || 0,
@@ -113,13 +113,13 @@ export class StatsService {
   async getUserCostStats(userId: string): Promise<UserCostStats> {
     const projects = await this.repo.findManyProjectsForUserCostStats(userId)
 
-    const allTasks = projects.flatMap(p =>
-      p.episodes.flatMap(e => e.scenes.flatMap(s => s.takes))
+    const allTasks = projects.flatMap((p) =>
+      p.episodes.flatMap((e) => e.scenes.flatMap((s) => s.takes))
     )
-    const completedTasks = allTasks.filter(t => t.status === 'completed')
+    const completedTasks = allTasks.filter((t) => t.status === 'completed')
 
     const projectStats: ProjectCostStats[] = await Promise.all(
-      projects.map(async project => {
+      projects.map(async (project) => {
         const imageCost = await this.repo.sumImageCostForProject(project.id)
         return buildProjectCostStats(project, imageCost, 5)
       })
@@ -184,9 +184,7 @@ export class StatsService {
     const imageWhereChar = {
       imageCost: { not: null } as const,
       updatedAt: { gte: startDate },
-      character: projectId
-        ? { projectId }
-        : { project: { userId } }
+      character: projectId ? { projectId } : { project: { userId } }
     }
     const imageWhereLoc = {
       imageCost: { not: null } as const,
@@ -208,7 +206,7 @@ export class StatsService {
       return dailyCosts.get(date)!
     }
 
-    tasks.forEach(task => {
+    tasks.forEach((task) => {
       const date = task.createdAt.toISOString().split('T')[0]
       const day = ensureDay(date)
       if (task.cost) {

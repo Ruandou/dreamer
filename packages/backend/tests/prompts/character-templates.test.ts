@@ -21,7 +21,7 @@ describe('Character Templates', () => {
     })
 
     it('each template has required fields', () => {
-      CHARACTER_TEMPLATES.forEach(template => {
+      CHARACTER_TEMPLATES.forEach((template) => {
         expect(template.id).toBeDefined()
         expect(template.version).toBe('1.0.0')
         expect(template.systemPrompt).toBeDefined()
@@ -245,7 +245,7 @@ describe('Character Templates', () => {
     })
 
     it('each template has unique ID', () => {
-      const ids = CHARACTER_TEMPLATES.map(t => t.id)
+      const ids = CHARACTER_TEMPLATES.map((t) => t.id)
       const uniqueIds = new Set(ids)
       expect(uniqueIds.size).toBe(CHARACTER_TEMPLATES.length)
     })

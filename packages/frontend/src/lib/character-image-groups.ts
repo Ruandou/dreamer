@@ -27,7 +27,10 @@ export function getDisplayBaseImages(images: CharacterImage[]): CharacterImage[]
  * 挂在某个基础下的衍生：parentId 指向该基础；
  * 无父且非 base 的「松散根」仅归并到首个基础下，避免与主形象割裂。
  */
-export function getDisplayDerivedImages(images: CharacterImage[], baseId: string): CharacterImage[] {
+export function getDisplayDerivedImages(
+  images: CharacterImage[],
+  baseId: string
+): CharacterImage[] {
   const sorted = [...images].sort(byOrder)
   const bases = getDisplayBaseImages(images)
   const primaryId = bases[0]?.id

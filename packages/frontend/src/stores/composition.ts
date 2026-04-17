@@ -38,7 +38,7 @@ export const useCompositionStore = defineStore('composition', () => {
 
   async function updateComposition(id: string, data: Partial<Composition>) {
     const res = await api.put<Composition>(`/compositions/${id}`, data)
-    const index = compositions.value.findIndex(c => c.id === id)
+    const index = compositions.value.findIndex((c) => c.id === id)
     if (index !== -1) {
       compositions.value[index] = res.data
     }
@@ -50,13 +50,16 @@ export const useCompositionStore = defineStore('composition', () => {
 
   async function deleteComposition(id: string) {
     await api.delete(`/compositions/${id}`)
-    compositions.value = compositions.value.filter(c => c.id !== id)
+    compositions.value = compositions.value.filter((c) => c.id !== id)
     if (currentComposition.value?.id === id) {
       currentComposition.value = null
     }
   }
 
-  async function updateTimeline(id: string, clips: Omit<CompositionTimelineClip, 'id' | 'compositionId'>[]) {
+  async function updateTimeline(
+    id: string,
+    clips: Omit<CompositionTimelineClip, 'id' | 'compositionId'>[]
+  ) {
     const res = await api.put<Composition>(`/compositions/${id}/timeline`, { clips })
     currentComposition.value = res.data
     return res.data

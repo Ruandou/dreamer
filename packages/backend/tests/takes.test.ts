@@ -1,14 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import Fastify, { FastifyInstance } from 'fastify'
 
-const { mockVerifyTaskOwnership, mockTakeFindUnique, mockTakeUpdateMany, mockTakeUpdate } = vi.hoisted(
-  () => ({
+const { mockVerifyTaskOwnership, mockTakeFindUnique, mockTakeUpdateMany, mockTakeUpdate } =
+  vi.hoisted(() => ({
     mockVerifyTaskOwnership: vi.fn().mockResolvedValue(true),
     mockTakeFindUnique: vi.fn(),
     mockTakeUpdateMany: vi.fn(),
     mockTakeUpdate: vi.fn()
-  })
-)
+  }))
 
 vi.mock('../src/plugins/auth.js', () => ({
   verifyTaskOwnership: (...args: unknown[]) => mockVerifyTaskOwnership(...args)
@@ -75,5 +74,4 @@ describe('Take routes', () => {
     const res = await app.inject({ method: 'PATCH', url: '/api/takes/t1/select' })
     expectPermissionDeniedPayload(res)
   })
-
 })

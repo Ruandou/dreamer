@@ -12,7 +12,7 @@ export const ASSET_PRIORITY = {
   /** 背景素材 - 中等优先级 */
   BACKGROUND: 2,
   /** 角色素材 - 最高优先级 */
-  CHARACTER: 3,
+  CHARACTER: 3
 } as const
 
 // ==================== 相关度评分 ====================
@@ -34,7 +34,7 @@ export const ASSET_RELEVANCE = {
   /** 完全匹配 - 最高 */
   EXACT_MATCH: 1.0,
   /** 关键词匹配 - 中等 */
-  KEYWORD_MATCH: 0.6,
+  KEYWORD_MATCH: 0.6
 } as const
 
 // ==================== 数量限制 ====================
@@ -57,10 +57,10 @@ export const STYLE_KEYWORDS = ['古风', '现代', '科幻', '赛博', '仙侠',
 
 /** 时间段对应的氛围描述 */
 export const TIME_ATMOSPHERE_MAP: Record<string, string> = {
-  '日': '温暖阳光，明亮色调',
-  '夜': '月光夜色，神秘氛围',
-  '晨': '清晨曙光，柔和光线',
-  '昏': '黄昏暮色，温暖余晖',
+  日: '温暖阳光，明亮色调',
+  夜: '月光夜色，神秘氛围',
+  晨: '清晨曙光，柔和光线',
+  昏: '黄昏暮色，温暖余晖'
 } as const
 
 /** 默认时间段 */

@@ -140,7 +140,12 @@ describe('executeSingleStep', () => {
   })
 
   it('fails storyboard-generation when prerequisites missing', async () => {
-    const r = await executeSingleStep('storyboard-generation', { script: twoSceneScript() }, ctx, {})
+    const r = await executeSingleStep(
+      'storyboard-generation',
+      { script: twoSceneScript() },
+      ctx,
+      {}
+    )
     expect(r.status).toBe('failed')
   })
 

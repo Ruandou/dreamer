@@ -32,9 +32,7 @@ describe('Parser Service', () => {
       const jsonContent = JSON.stringify({
         projectName: 'Test Project',
         description: 'A test project',
-        characters: [
-          { name: 'Alice', description: 'Young woman with red hair' }
-        ],
+        characters: [{ name: 'Alice', description: 'Young woman with red hair' }],
         episodes: [
           {
             episodeNum: 1,
@@ -199,8 +197,8 @@ describe('Parser Service', () => {
                 sceneNum: 1,
                 description: '对话场景',
                 dialogues: {
-                  'A': '你好',
-                  'B': '很高兴见到你'
+                  A: '你好',
+                  B: '很高兴见到你'
                 }
               }
             ]
@@ -246,27 +244,33 @@ describe('Parser Service', () => {
 
     it('should parse markdown format with AI and build prompts', async () => {
       mockCreate.mockResolvedValueOnce({
-        choices: [{
-          message: {
-            content: JSON.stringify({
-              projectName: 'AI Project',
-              description: 'AI parsed project',
-              characters: [{ name: 'Bob', description: 'Tall man' }],
-              episodes: [{
-                episodeNum: 1,
-                title: 'AI Episode',
-                scenes: [{
-                  sceneNum: 1,
-                  location: '办公室',
-                  timeOfDay: '夜',
-                  description: '紧张的气氛',
-                  actions: '角色在打电话',
-                  dialogues: ['A: 喂？', 'B: 紧急情况！']
-                }]
-              }]
-            })
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                projectName: 'AI Project',
+                description: 'AI parsed project',
+                characters: [{ name: 'Bob', description: 'Tall man' }],
+                episodes: [
+                  {
+                    episodeNum: 1,
+                    title: 'AI Episode',
+                    scenes: [
+                      {
+                        sceneNum: 1,
+                        location: '办公室',
+                        timeOfDay: '夜',
+                        description: '紧张的气氛',
+                        actions: '角色在打电话',
+                        dialogues: ['A: 喂？', 'B: 紧急情况！']
+                      }
+                    ]
+                  }
+                ]
+              })
+            }
           }
-        }],
+        ],
         usage: { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 }
       })
 
@@ -288,11 +292,13 @@ describe('Parser Service', () => {
       error.status = 401
       mockCreate.mockRejectedValueOnce(error)
 
-      await expect(parseScriptDocument('test content', 'markdown', {
-        userId: 'test-user',
-        projectId: 'test-project',
-        op: 'test'
-      })).rejects.toThrow('DeepSeek API 认证失败')
+      await expect(
+        parseScriptDocument('test content', 'markdown', {
+          userId: 'test-user',
+          projectId: 'test-project',
+          op: 'test'
+        })
+      ).rejects.toThrow('DeepSeek API 认证失败')
     })
 
     it('should throw error for specific parsing failure messages without retry', async () => {
@@ -300,11 +306,13 @@ describe('Parser Service', () => {
         .mockRejectedValueOnce(new Error('剧本解析失败，请检查文档格式'))
         .mockRejectedValueOnce(new Error('剧本解析失败，请检查文档格式'))
 
-      await expect(parseScriptDocument('test content', 'markdown', {
-        userId: 'test-user',
-        projectId: 'test-project',
-        op: 'test'
-      })).rejects.toThrow('剧本解析失败')
+      await expect(
+        parseScriptDocument('test content', 'markdown', {
+          userId: 'test-user',
+          projectId: 'test-project',
+          op: 'test'
+        })
+      ).rejects.toThrow('剧本解析失败')
     })
   })
 })

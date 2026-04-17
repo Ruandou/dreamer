@@ -167,7 +167,9 @@ describe('Seedance Service', () => {
         })
       })
 
-      await expect(waitForSeedanceCompletion('task-123', undefined, 60000)).rejects.toThrow('Seedance 2.0 task failed: Processing error')
+      await expect(waitForSeedanceCompletion('task-123', undefined, 60000)).rejects.toThrow(
+        'Seedance 2.0 task failed: Processing error'
+      )
     })
   })
 })

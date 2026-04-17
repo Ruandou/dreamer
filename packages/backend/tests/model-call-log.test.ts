@@ -28,18 +28,16 @@ afterEach(() => {
 import { logDeepSeekChat } from '../src/services/ai/model-call-log.js'
 
 describe('model-call-log', () => {
-
   it('logDeepSeekChat returns early when log is undefined', async () => {
     await logDeepSeekChat(undefined, 'hello', { status: 'completed' })
     expect(recordMock).not.toHaveBeenCalled()
   })
 
   it('logDeepSeekChat calls recordModelApiCall on success', async () => {
-    await logDeepSeekChat(
-      { userId: 'u1', op: 'test-op', projectId: 'p1' },
-      'user text',
-      { status: 'completed', costCNY: 0.12 }
-    )
+    await logDeepSeekChat({ userId: 'u1', op: 'test-op', projectId: 'p1' }, 'user text', {
+      status: 'completed',
+      costCNY: 0.12
+    })
     expect(recordMock).toHaveBeenCalledTimes(1)
     expect(recordMock.mock.calls[0][0]).toMatchObject({
       userId: 'u1',
@@ -63,9 +61,14 @@ describe('model-call-log', () => {
   })
 
   it('logDeepSeekChat merges systemMessage into prompt for audit', async () => {
-    await logDeepSeekChat({ userId: 'u1', op: 'op' }, 'user only', { status: 'completed' }, {
-      systemMessage: 'SYS'
-    })
+    await logDeepSeekChat(
+      { userId: 'u1', op: 'op' },
+      'user only',
+      { status: 'completed' },
+      {
+        systemMessage: 'SYS'
+      }
+    )
     expect(recordMock.mock.calls[0][0].prompt).toContain('【system】')
     expect(recordMock.mock.calls[0][0].prompt).toContain('SYS')
     expect(recordMock.mock.calls[0][0].prompt).toContain('【user】')

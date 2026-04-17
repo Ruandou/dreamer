@@ -144,7 +144,9 @@ describe('Wan26 Service', () => {
         })
       })
 
-      await expect(waitForWan26Completion('task-456', 60000)).rejects.toThrow('Wan 2.6 task failed: Processing error')
+      await expect(waitForWan26Completion('task-456', 60000)).rejects.toThrow(
+        'Wan 2.6 task failed: Processing error'
+      )
     })
   })
 })

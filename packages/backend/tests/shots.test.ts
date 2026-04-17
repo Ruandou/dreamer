@@ -1,10 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import Fastify, { FastifyInstance } from 'fastify'
 
-const {
-  mockVerifyShotOwnership,
-  mockCharacterShotServiceCreateForShot
-} = vi.hoisted(() => {
+const { mockVerifyShotOwnership, mockCharacterShotServiceCreateForShot } = vi.hoisted(() => {
   return {
     mockVerifyShotOwnership: vi.fn().mockResolvedValue(true),
     mockCharacterShotServiceCreateForShot: vi.fn()
@@ -116,7 +113,11 @@ describe('Shot Routes', () => {
       expect(data.id).toBe('cs-1')
       expect(data.shotId).toBe('shot-1')
       expect(data.characterImageId).toBe('img-1')
-      expect(mockCharacterShotServiceCreateForShot).toHaveBeenCalledWith('shot-1', 'img-1', undefined)
+      expect(mockCharacterShotServiceCreateForShot).toHaveBeenCalledWith(
+        'shot-1',
+        'img-1',
+        undefined
+      )
     })
 
     it('should return 201 when character shot created with action', async () => {

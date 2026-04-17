@@ -27,13 +27,13 @@ export async function imageUrlToBase64(url: string): Promise<string> {
 
 /** 批量将图片 URL 数组转换为 base64 */
 export async function imageUrlsToBase64(urls: string[]): Promise<string[]> {
-  return Promise.all(urls.map(url => imageUrlToBase64(url)))
+  return Promise.all(urls.map((url) => imageUrlToBase64(url)))
 }
 
 export interface SeedanceGenerateRequest {
   prompt: string
-  imageUrls?: string[]  // 参考图片 URL 数组，最多 9 张
-  imageBase64?: string[]  // 参考图片 base64 数组，与 imageUrls 二选一
+  imageUrls?: string[] // 参考图片 URL 数组，最多 9 张
+  imageBase64?: string[] // 参考图片 base64 数组，与 imageUrls 二选一
   duration?: number // seconds, default 5, range 4-15
   aspectRatio?: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | 'adaptive'
   resolution?: '480p' | '720p'
@@ -66,25 +66,25 @@ export interface SeedanceStatusResponse {
 // 构建火山方舟格式的请求体
 function buildArkRequest(request: SeedanceGenerateRequest): any {
   const content = []
-  
+
   // 添加文本提示
   let promptText = request.prompt
-  
+
   // 添加参数到提示词中（火山方舟格式）
   if (request.aspectRatio) {
     promptText += ` --ratio ${request.aspectRatio}`
   }
   promptText += ` --fps 24 --dur ${request.duration || 5}`
-  
+
   content.push({
     type: 'text',
     text: promptText
   })
-  
+
   // 添加参考图片（如果有）
   // 支持 URL 或 base64
   if (request.imageUrls && request.imageUrls.length > 0) {
-    request.imageUrls.forEach(url => {
+    request.imageUrls.forEach((url) => {
       content.push({
         type: 'image_url',
         image_url: { url },
@@ -93,7 +93,7 @@ function buildArkRequest(request: SeedanceGenerateRequest): any {
     })
   }
   if (request.imageBase64 && request.imageBase64.length > 0) {
-    request.imageBase64.forEach(b64 => {
+    request.imageBase64.forEach((b64) => {
       content.push({
         type: 'image_url',
         image_url: { url: b64 },
@@ -101,7 +101,7 @@ function buildArkRequest(request: SeedanceGenerateRequest): any {
       })
     })
   }
-  
+
   return {
     model: SEEDANCE_MODEL,
     content,
@@ -117,14 +117,16 @@ function buildArkRequest(request: SeedanceGenerateRequest): any {
 function getAuthHeaders(): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${ARK_API_KEY}`
+    Authorization: `Bearer ${ARK_API_KEY}`
   }
 }
 
-export async function submitSeedanceTask(request: SeedanceGenerateRequest): Promise<SeedanceGenerateResponse> {
+export async function submitSeedanceTask(
+  request: SeedanceGenerateRequest
+): Promise<SeedanceGenerateResponse> {
   const body = buildArkRequest(request)
   const headers = getAuthHeaders()
-  
+
   const response = await fetch(`${ARK_API_URL}/contents/generations/tasks`, {
     method: 'POST',
     headers,
@@ -137,7 +139,7 @@ export async function submitSeedanceTask(request: SeedanceGenerateRequest): Prom
   }
 
   const data = await response.json()
-  
+
   return {
     taskId: data.id,
     status: 'queued'
@@ -146,7 +148,7 @@ export async function submitSeedanceTask(request: SeedanceGenerateRequest): Prom
 
 export async function pollSeedanceStatus(taskId: string): Promise<SeedanceStatusResponse> {
   const headers = getAuthHeaders()
-  
+
   const response = await fetch(`${ARK_API_URL}/contents/generations/tasks/${taskId}`, {
     method: 'GET',
     headers
@@ -158,7 +160,7 @@ export async function pollSeedanceStatus(taskId: string): Promise<SeedanceStatus
   }
 
   const data = await response.json()
-  
+
   return {
     taskId: data.id,
     status: mapStatus(data.status),
@@ -210,7 +212,7 @@ export async function waitForSeedanceCompletion(
       throw new Error(`Seedance 2.0 task failed: ${status.error || 'Unknown error'}`)
     }
 
-    await new Promise(resolve => setTimeout(resolve, pollInterval))
+    await new Promise((resolve) => setTimeout(resolve, pollInterval))
   }
 
   throw new Error('Seedance 2.0 task timeout')
@@ -223,6 +225,6 @@ export function calculateSeedanceCost(durationSeconds: number): number {
   // 官方估算：15秒视频约30.888万tokens，成本约 ¥15
   // 简化计算：¥1/秒
   const CNY_PER_SECOND = 1.0
-  
+
   return durationSeconds * CNY_PER_SECOND
 }

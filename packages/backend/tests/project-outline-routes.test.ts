@@ -1,13 +1,5 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  vi,
-  beforeEach,
-} from "vitest";
-import Fastify, { FastifyInstance } from "fastify";
+import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
+import Fastify, { FastifyInstance } from 'fastify'
 
 const {
   mockProjectFindFirst,
@@ -22,7 +14,7 @@ const {
   mockRunScriptBatchJob,
   mockRunGenerateFirstEpisodePipelineJob,
   mockHasConcurrentOutlinePipelineJob,
-  mockGetActiveOutlinePipelineJob,
+  mockGetActiveOutlinePipelineJob
 } = vi.hoisted(() => ({
   mockProjectFindFirst: vi.fn(),
   mockProjectFindUnique: vi.fn(),
@@ -36,24 +28,22 @@ const {
   mockRunScriptBatchJob: vi.fn(),
   mockRunGenerateFirstEpisodePipelineJob: vi.fn(),
   mockHasConcurrentOutlinePipelineJob: vi.fn(),
-  mockGetActiveOutlinePipelineJob: vi.fn(),
-}));
+  mockGetActiveOutlinePipelineJob: vi.fn()
+}))
 
-vi.mock("../src/services/project-script-jobs.js", () => ({
-  runParseScriptJob: (...args: unknown[]) =>
-    mockRunParseScriptJob(...args) as Promise<void>,
-  runScriptBatchJob: (...args: unknown[]) =>
-    mockRunScriptBatchJob(...args) as Promise<void>,
+vi.mock('../src/services/project-script-jobs.js', () => ({
+  runParseScriptJob: (...args: unknown[]) => mockRunParseScriptJob(...args) as Promise<void>,
+  runScriptBatchJob: (...args: unknown[]) => mockRunScriptBatchJob(...args) as Promise<void>,
   runGenerateFirstEpisodePipelineJob: (...args: unknown[]) =>
     mockRunGenerateFirstEpisodePipelineJob(...args) as Promise<void>,
   hasConcurrentOutlinePipelineJob: (...args: unknown[]) =>
     mockHasConcurrentOutlinePipelineJob(...args) as Promise<boolean>,
   getActiveOutlinePipelineJob: (...args: unknown[]) =>
     mockGetActiveOutlinePipelineJob(...args) as Promise<unknown>,
-  DEFAULT_TARGET_EPISODES: 36,
-}));
+  DEFAULT_TARGET_EPISODES: 36
+}))
 
-vi.mock("../src/lib/prisma.js", () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     project: {
       findMany: mockProjectFindMany,
@@ -61,380 +51,367 @@ vi.mock("../src/lib/prisma.js", () => ({
       findUnique: mockProjectFindUnique,
       create: mockProjectCreate,
       update: mockProjectUpdate,
-      delete: mockProjectDelete,
+      delete: mockProjectDelete
     },
     episode: {
-      findUnique: mockEpisodeFindUnique,
+      findUnique: mockEpisodeFindUnique
     },
     pipelineJob: {
-      create: mockPipelineJobCreate,
+      create: mockPipelineJobCreate
     },
     $connect: vi.fn(),
-    $disconnect: vi.fn(),
-  },
-}));
+    $disconnect: vi.fn()
+  }
+}))
 
-import { projectRoutes } from "../src/routes/projects.js";
+import { projectRoutes } from '../src/routes/projects.js'
 
 const rawEp1 = {
-  title: "第一集",
-  summary: "一",
+  title: '第一集',
+  summary: '一',
   scenes: [
     {
       sceneNum: 1,
-      location: "屋内",
-      timeOfDay: "夜",
-      characters: ["甲"],
-      description: "开场",
+      location: '屋内',
+      timeOfDay: '夜',
+      characters: ['甲'],
+      description: '开场',
       dialogues: [],
-      actions: [],
-    },
-  ],
-};
+      actions: []
+    }
+  ]
+}
 
-describe("Project outline & parse routes", () => {
-  let app: FastifyInstance;
+describe('Project outline & parse routes', () => {
+  let app: FastifyInstance
 
   beforeAll(async () => {
-    app = Fastify({ logger: false });
+    app = Fastify({ logger: false })
     app.decorate(
-      "authenticate",
+      'authenticate',
       vi.fn().mockImplementation(async (request: any) => {
-        request.user = { id: "test-user-id", email: "test@example.com" };
-      }),
-    );
-    await app.register(projectRoutes, { prefix: "/api/projects" });
-    await app.ready();
-  });
+        request.user = { id: 'test-user-id', email: 'test@example.com' }
+      })
+    )
+    await app.register(projectRoutes, { prefix: '/api/projects' })
+    await app.ready()
+  })
 
   afterAll(async () => {
-    await app.close();
-  });
+    await app.close()
+  })
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    mockRunParseScriptJob.mockReturnValue(Promise.resolve());
-    mockRunScriptBatchJob.mockReturnValue(Promise.resolve());
-    mockRunGenerateFirstEpisodePipelineJob.mockReturnValue(Promise.resolve());
-    mockHasConcurrentOutlinePipelineJob.mockResolvedValue(false);
-    mockGetActiveOutlinePipelineJob.mockResolvedValue(null);
-  });
+    vi.clearAllMocks()
+    mockRunParseScriptJob.mockReturnValue(Promise.resolve())
+    mockRunScriptBatchJob.mockReturnValue(Promise.resolve())
+    mockRunGenerateFirstEpisodePipelineJob.mockReturnValue(Promise.resolve())
+    mockHasConcurrentOutlinePipelineJob.mockResolvedValue(false)
+    mockGetActiveOutlinePipelineJob.mockResolvedValue(null)
+  })
 
-  describe("GET /api/projects/:id/outline-active-job", () => {
-    it("returns 404 when project missing", async () => {
-      mockProjectFindFirst.mockResolvedValue(null);
-
-      const res = await app.inject({
-        method: "GET",
-        url: "/api/projects/missing/outline-active-job",
-      });
-      expect(res.statusCode).toBe(404);
-    });
-
-    it("returns { job: null } when no active outline job", async () => {
-      mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-      });
+  describe('GET /api/projects/:id/outline-active-job', () => {
+    it('returns 404 when project missing', async () => {
+      mockProjectFindFirst.mockResolvedValue(null)
 
       const res = await app.inject({
-        method: "GET",
-        url: "/api/projects/p1/outline-active-job",
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.payload);
-      expect(body.job).toBeNull();
-      expect(mockGetActiveOutlinePipelineJob).toHaveBeenCalledWith("p1");
-    });
+        method: 'GET',
+        url: '/api/projects/missing/outline-active-job'
+      })
+      expect(res.statusCode).toBe(404)
+    })
 
-    it("returns active job payload when present", async () => {
+    it('returns { job: null } when no active outline job', async () => {
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-      });
+        id: 'p1',
+        userId: 'test-user-id'
+      })
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/projects/p1/outline-active-job'
+      })
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.payload)
+      expect(body.job).toBeNull()
+      expect(mockGetActiveOutlinePipelineJob).toHaveBeenCalledWith('p1')
+    })
+
+    it('returns active job payload when present', async () => {
+      mockProjectFindFirst.mockResolvedValue({
+        id: 'p1',
+        userId: 'test-user-id'
+      })
       mockGetActiveOutlinePipelineJob.mockResolvedValue({
-        id: "job-1",
-        projectId: "p1",
-        status: "running",
-        jobType: "script-batch",
-        currentStep: "script-batch",
+        id: 'job-1',
+        projectId: 'p1',
+        status: 'running',
+        jobType: 'script-batch',
+        currentStep: 'script-batch',
         progress: 40,
-        progressMeta: { message: "生成中" },
+        progressMeta: { message: '生成中' },
         error: null,
-        createdAt: new Date("2025-01-01"),
-        updatedAt: new Date("2025-01-01"),
-      });
+        createdAt: new Date('2025-01-01'),
+        updatedAt: new Date('2025-01-01')
+      })
 
       const res = await app.inject({
-        method: "GET",
-        url: "/api/projects/p1/outline-active-job",
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.payload);
-      expect(body.job?.id).toBe("job-1");
-      expect(body.job?.jobType).toBe("script-batch");
-    });
-  });
+        method: 'GET',
+        url: '/api/projects/p1/outline-active-job'
+      })
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.payload)
+      expect(body.job?.id).toBe('job-1')
+      expect(body.job?.jobType).toBe('script-batch')
+    })
+  })
 
-  describe("POST /api/projects/:id/parse", () => {
-    it("returns 400 when visualStyle is empty", async () => {
+  describe('POST /api/projects/:id/parse', () => {
+    it('returns 400 when visualStyle is empty', async () => {
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
+        id: 'p1',
+        userId: 'test-user-id',
         visualStyle: [],
-        episodes: [{ episodeNum: 1, script: rawEp1 }],
-      });
+        episodes: [{ episodeNum: 1, script: rawEp1 }]
+      })
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/p1/parse",
-        payload: {},
-      });
-      expect(res.statusCode).toBe(400);
-      const body = JSON.parse(res.payload);
-      expect(body.error).toMatch(/视觉风格/);
-    });
+        method: 'POST',
+        url: '/api/projects/p1/parse',
+        payload: {}
+      })
+      expect(res.statusCode).toBe(400)
+      const body = JSON.parse(res.payload)
+      expect(body.error).toMatch(/视觉风格/)
+    })
 
-    it("returns 400 when episode 1 script has no scenes array", async () => {
+    it('returns 400 when episode 1 script has no scenes array', async () => {
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-        visualStyle: ["cinematic"],
-        episodes: [{ episodeNum: 1, script: { title: "x", summary: "y" } }],
-      });
+        id: 'p1',
+        userId: 'test-user-id',
+        visualStyle: ['cinematic'],
+        episodes: [{ episodeNum: 1, script: { title: 'x', summary: 'y' } }]
+      })
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/p1/parse",
-        payload: {},
-      });
-      expect(res.statusCode).toBe(400);
-    });
+        method: 'POST',
+        url: '/api/projects/p1/parse',
+        payload: {}
+      })
+      expect(res.statusCode).toBe(400)
+    })
 
-    it("returns 400 when episode 1 has empty scenes array", async () => {
+    it('returns 400 when episode 1 has empty scenes array', async () => {
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-        visualStyle: ["cinematic"],
-        episodes: [
-          { episodeNum: 1, script: { title: "x", summary: "y", scenes: [] } },
-        ],
-      });
+        id: 'p1',
+        userId: 'test-user-id',
+        visualStyle: ['cinematic'],
+        episodes: [{ episodeNum: 1, script: { title: 'x', summary: 'y', scenes: [] } }]
+      })
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/p1/parse",
-        payload: {},
-      });
-      expect(res.statusCode).toBe(400);
-    });
+        method: 'POST',
+        url: '/api/projects/p1/parse',
+        payload: {}
+      })
+      expect(res.statusCode).toBe(400)
+    })
 
-    it("returns 200 and starts parse job", async () => {
+    it('returns 200 and starts parse job', async () => {
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-        visualStyle: ["cinematic"],
-        episodes: [{ episodeNum: 1, script: rawEp1 }],
-      });
-      mockPipelineJobCreate.mockResolvedValue({ id: "job-parse-1" });
+        id: 'p1',
+        userId: 'test-user-id',
+        visualStyle: ['cinematic'],
+        episodes: [{ episodeNum: 1, script: rawEp1 }]
+      })
+      mockPipelineJobCreate.mockResolvedValue({ id: 'job-parse-1' })
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/p1/parse",
-        payload: { targetEpisodes: 5 },
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.payload);
-      expect(body.jobId).toBe("job-parse-1");
+        method: 'POST',
+        url: '/api/projects/p1/parse',
+        payload: { targetEpisodes: 5 }
+      })
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.payload)
+      expect(body.jobId).toBe('job-parse-1')
       expect(mockPipelineJobCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            projectId: "p1",
-            jobType: "parse-script",
-            currentStep: "parse-script",
-          }),
-        }),
-      );
+            projectId: 'p1',
+            jobType: 'parse-script',
+            currentStep: 'parse-script'
+          })
+        })
+      )
 
       // Wait for setImmediate to execute
-      await new Promise((resolve) => setImmediate(resolve));
-      expect(mockRunParseScriptJob).toHaveBeenCalledWith(
-        "job-parse-1",
-        "p1",
-        5,
-      );
-    });
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(mockRunParseScriptJob).toHaveBeenCalledWith('job-parse-1', 'p1', 5)
+    })
 
-    it("returns 409 when another outline job is in progress", async () => {
-      mockHasConcurrentOutlinePipelineJob.mockResolvedValue(true);
+    it('returns 409 when another outline job is in progress', async () => {
+      mockHasConcurrentOutlinePipelineJob.mockResolvedValue(true)
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-        visualStyle: ["cinematic"],
-        episodes: [{ episodeNum: 1, script: rawEp1 }],
-      });
+        id: 'p1',
+        userId: 'test-user-id',
+        visualStyle: ['cinematic'],
+        episodes: [{ episodeNum: 1, script: rawEp1 }]
+      })
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/p1/parse",
-        payload: { targetEpisodes: 5 },
-      });
-      expect(res.statusCode).toBe(409);
-      const body = JSON.parse(res.payload);
-      expect(body.error).toMatch(/进行中/);
-      expect(mockPipelineJobCreate).not.toHaveBeenCalled();
-      expect(mockRunParseScriptJob).not.toHaveBeenCalled();
-    });
-  });
+        method: 'POST',
+        url: '/api/projects/p1/parse',
+        payload: { targetEpisodes: 5 }
+      })
+      expect(res.statusCode).toBe(409)
+      const body = JSON.parse(res.payload)
+      expect(body.error).toMatch(/进行中/)
+      expect(mockPipelineJobCreate).not.toHaveBeenCalled()
+      expect(mockRunParseScriptJob).not.toHaveBeenCalled()
+    })
+  })
 
-  describe("POST /api/projects/:id/episodes/generate-remaining", () => {
-    it("returns 400 when episode 1 missing", async () => {
+  describe('POST /api/projects/:id/episodes/generate-remaining', () => {
+    it('returns 400 when episode 1 missing', async () => {
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-      });
-      mockEpisodeFindUnique.mockResolvedValue(null);
+        id: 'p1',
+        userId: 'test-user-id'
+      })
+      mockEpisodeFindUnique.mockResolvedValue(null)
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/p1/episodes/generate-remaining",
-        payload: { targetEpisodes: 10 },
-      });
-      expect(res.statusCode).toBe(400);
-      const body = JSON.parse(res.payload);
-      expect(body.error).toMatch(/第一集/);
-    });
+        method: 'POST',
+        url: '/api/projects/p1/episodes/generate-remaining',
+        payload: { targetEpisodes: 10 }
+      })
+      expect(res.statusCode).toBe(400)
+      const body = JSON.parse(res.payload)
+      expect(body.error).toMatch(/第一集/)
+    })
 
-    it("returns 200 and creates script-batch job", async () => {
+    it('returns 200 and creates script-batch job', async () => {
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-      });
-      mockEpisodeFindUnique.mockResolvedValue({ id: "e1", script: rawEp1 });
-      mockPipelineJobCreate.mockResolvedValue({ id: "job-batch-1" });
+        id: 'p1',
+        userId: 'test-user-id'
+      })
+      mockEpisodeFindUnique.mockResolvedValue({ id: 'e1', script: rawEp1 })
+      mockPipelineJobCreate.mockResolvedValue({ id: 'job-batch-1' })
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/p1/episodes/generate-remaining",
-        payload: { targetEpisodes: 8 },
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.payload);
-      expect(body.jobId).toBe("job-batch-1");
+        method: 'POST',
+        url: '/api/projects/p1/episodes/generate-remaining',
+        payload: { targetEpisodes: 8 }
+      })
+      expect(res.statusCode).toBe(200)
+      const body = JSON.parse(res.payload)
+      expect(body.jobId).toBe('job-batch-1')
 
       // Wait for setImmediate to execute
-      await new Promise((resolve) => setImmediate(resolve));
-      expect(mockRunScriptBatchJob).toHaveBeenCalledWith(
-        "job-batch-1",
-        "p1",
-        8,
-      );
-    });
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(mockRunScriptBatchJob).toHaveBeenCalledWith('job-batch-1', 'p1', 8)
+    })
 
-    it("returns 409 when another outline job is in progress", async () => {
-      mockHasConcurrentOutlinePipelineJob.mockResolvedValue(true);
+    it('returns 409 when another outline job is in progress', async () => {
+      mockHasConcurrentOutlinePipelineJob.mockResolvedValue(true)
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-      });
-      mockEpisodeFindUnique.mockResolvedValue({ id: "e1", script: rawEp1 });
+        id: 'p1',
+        userId: 'test-user-id'
+      })
+      mockEpisodeFindUnique.mockResolvedValue({ id: 'e1', script: rawEp1 })
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/p1/episodes/generate-remaining",
-        payload: { targetEpisodes: 10 },
-      });
-      expect(res.statusCode).toBe(409);
-      const body = JSON.parse(res.payload);
-      expect(body.error).toMatch(/进行中/);
-      expect(mockPipelineJobCreate).not.toHaveBeenCalled();
-      expect(mockRunScriptBatchJob).not.toHaveBeenCalled();
-    });
+        method: 'POST',
+        url: '/api/projects/p1/episodes/generate-remaining',
+        payload: { targetEpisodes: 10 }
+      })
+      expect(res.statusCode).toBe(409)
+      const body = JSON.parse(res.payload)
+      expect(body.error).toMatch(/进行中/)
+      expect(mockPipelineJobCreate).not.toHaveBeenCalled()
+      expect(mockRunScriptBatchJob).not.toHaveBeenCalled()
+    })
 
-    it("returns 400 when targetEpisodes out of range", async () => {
+    it('returns 400 when targetEpisodes out of range', async () => {
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-      });
+        id: 'p1',
+        userId: 'test-user-id'
+      })
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/p1/episodes/generate-remaining",
-        payload: { targetEpisodes: 1 },
-      });
-      expect(res.statusCode).toBe(400);
-    });
-  });
+        method: 'POST',
+        url: '/api/projects/p1/episodes/generate-remaining',
+        payload: { targetEpisodes: 1 }
+      })
+      expect(res.statusCode).toBe(400)
+    })
+  })
 
-  describe("POST /api/projects/:id/episodes/generate-first", () => {
-    it("returns 404 when project missing", async () => {
-      mockProjectFindFirst.mockResolvedValue(null);
+  describe('POST /api/projects/:id/episodes/generate-first', () => {
+    it('returns 404 when project missing', async () => {
+      mockProjectFindFirst.mockResolvedValue(null)
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/missing/episodes/generate-first",
-        payload: {},
-      });
-      expect(res.statusCode).toBe(404);
-    });
+        method: 'POST',
+        url: '/api/projects/missing/episodes/generate-first',
+        payload: {}
+      })
+      expect(res.statusCode).toBe(404)
+    })
 
-    it("returns episode and synopsis after generate", async () => {
+    it('returns episode and synopsis after generate', async () => {
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-        name: "N",
-      });
-      mockPipelineJobCreate.mockResolvedValue({ id: "job-first-1" });
-      mockRunGenerateFirstEpisodePipelineJob.mockResolvedValue(undefined);
+        id: 'p1',
+        userId: 'test-user-id',
+        name: 'N'
+      })
+      mockPipelineJobCreate.mockResolvedValue({ id: 'job-first-1' })
+      mockRunGenerateFirstEpisodePipelineJob.mockResolvedValue(undefined)
       mockProjectFindUnique.mockResolvedValue({
-        id: "p1",
-        synopsis: "全剧梗概",
-        episodes: [{ id: "ep1", episodeNum: 1, script: rawEp1 }],
-      });
+        id: 'p1',
+        synopsis: '全剧梗概',
+        episodes: [{ id: 'ep1', episodeNum: 1, script: rawEp1 }]
+      })
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/p1/episodes/generate-first",
-        payload: { description: "  新创意  " },
-      });
-      expect(res.statusCode).toBe(200);
-      expect(mockHasConcurrentOutlinePipelineJob).toHaveBeenCalledWith("p1");
+        method: 'POST',
+        url: '/api/projects/p1/episodes/generate-first',
+        payload: { description: '  新创意  ' }
+      })
+      expect(res.statusCode).toBe(200)
+      expect(mockHasConcurrentOutlinePipelineJob).toHaveBeenCalledWith('p1')
       expect(mockPipelineJobCreate).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          projectId: "p1",
-          jobType: "script-first",
-          currentStep: "script-first",
-        }),
-      });
-      expect(mockRunGenerateFirstEpisodePipelineJob).toHaveBeenCalledWith(
-        "job-first-1",
-        "p1",
-      );
+          projectId: 'p1',
+          jobType: 'script-first',
+          currentStep: 'script-first'
+        })
+      })
+      expect(mockRunGenerateFirstEpisodePipelineJob).toHaveBeenCalledWith('job-first-1', 'p1')
       expect(mockProjectUpdate).toHaveBeenCalledWith({
-        where: { id: "p1" },
-        data: { description: "新创意" },
-      });
-      const body = JSON.parse(res.payload);
-      expect(body.synopsis).toBe("全剧梗概");
-      expect(body.episode.episodeNum).toBe(1);
-    });
+        where: { id: 'p1' },
+        data: { description: '新创意' }
+      })
+      const body = JSON.parse(res.payload)
+      expect(body.synopsis).toBe('全剧梗概')
+      expect(body.episode.episodeNum).toBe(1)
+    })
 
-    it("returns 409 when another outline job is in progress", async () => {
+    it('returns 409 when another outline job is in progress', async () => {
       mockProjectFindFirst.mockResolvedValue({
-        id: "p1",
-        userId: "test-user-id",
-        name: "N",
-      });
-      mockHasConcurrentOutlinePipelineJob.mockResolvedValue(true);
+        id: 'p1',
+        userId: 'test-user-id',
+        name: 'N'
+      })
+      mockHasConcurrentOutlinePipelineJob.mockResolvedValue(true)
 
       const res = await app.inject({
-        method: "POST",
-        url: "/api/projects/p1/episodes/generate-first",
-        payload: {},
-      });
-      expect(res.statusCode).toBe(409);
-      expect(mockPipelineJobCreate).not.toHaveBeenCalled();
-      expect(mockRunGenerateFirstEpisodePipelineJob).not.toHaveBeenCalled();
-    });
-  });
-});
+        method: 'POST',
+        url: '/api/projects/p1/episodes/generate-first',
+        payload: {}
+      })
+      expect(res.statusCode).toBe(409)
+      expect(mockPipelineJobCreate).not.toHaveBeenCalled()
+      expect(mockRunGenerateFirstEpisodePipelineJob).not.toHaveBeenCalled()
+    })
+  })
+})

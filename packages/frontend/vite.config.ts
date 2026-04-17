@@ -10,38 +10,38 @@ export default defineConfig({
     vue(),
     AutoImport({
       imports: ['vue', 'vue-router', 'pinia'],
-      dts: 'src/auto-imports.d.ts',
+      dts: 'src/auto-imports.d.ts'
     }),
     Components({
       resolvers: [NaiveUiResolver()],
-      dts: 'src/components.d.ts',
-    }),
+      dts: 'src/components.d.ts'
+    })
   ],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
-    },
+      '@': resolve(__dirname, 'src')
+    }
   },
   server: {
     port: 3000,
     host: 'localhost',
     hmr: {
       overlay: true,
-      clientPort: 3000,
+      clientPort: 3000
     },
     watch: {
       usePolling: true,
-      interval: 100,
+      interval: 100
     },
     proxy: {
       '/api': {
         target: 'http://localhost:4000',
-        changeOrigin: true,
-      },
-    },
+        changeOrigin: true
+      }
+    }
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
-  },
+    sourcemap: true
+  }
 })

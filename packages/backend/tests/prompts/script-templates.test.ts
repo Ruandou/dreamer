@@ -23,7 +23,7 @@ describe('Script Templates', () => {
     })
 
     it('each template has required fields', () => {
-      SCRIPT_TEMPLATES.forEach(template => {
+      SCRIPT_TEMPLATES.forEach((template) => {
         expect(template.id).toBeDefined()
         expect(template.version).toBeDefined()
         expect(template.systemPrompt).toBeDefined()

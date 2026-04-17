@@ -1,16 +1,10 @@
 import type { ScriptContent } from '@dreamer/shared/types'
 import type { ModelCallLogContext } from './api-logger.js'
 import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
-import {
-  DEEPSEEK_TEMPERATURE,
-  DEEPSEEK_MAX_TOKENS
-} from './ai.constants.js'
+import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
 import type { ParsedCharacter } from './parsed-script-types.js'
 import { normalizeParsedCharacterList } from './parsed-script-types.js'
-import {
-  callDeepSeekWithRetry,
-  type DeepSeekCallOptions
-} from './deepseek-call-wrapper.js'
+import { callDeepSeekWithRetry, type DeepSeekCallOptions } from './deepseek-call-wrapper.js'
 interface CharacterIdentityMergeResult {
   characters: ParsedCharacter[]
   /** 非规范称谓 -> 规范名（含与自身相等的映射时可忽略） */
@@ -62,9 +56,7 @@ function buildMergeUserScript(script: ScriptContent, uniqueNames: string[]): str
   ]
   for (const scene of script.scenes.slice(0, 80)) {
     const ch = (scene.characters || []).join('、')
-    const speakers = (scene.dialogues || [])
-      .map((d) => d.character)
-      .filter(Boolean)
+    const speakers = (scene.dialogues || []).map((d) => d.character).filter(Boolean)
     const sp = [...new Set(speakers)].join('、')
     lines.push(`场${scene.sceneNum}：角色=${ch || '—'}；说话人=${sp || '—'}`)
   }

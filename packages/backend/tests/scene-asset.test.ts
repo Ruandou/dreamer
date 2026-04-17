@@ -99,17 +99,29 @@ describe('Scene Asset Service', () => {
           sceneNum: 1,
           recommendedAssets: [
             {
-              asset: { type: 'character' as const, description: '1', url: 'https://example.com/1.png' },
+              asset: {
+                type: 'character' as const,
+                description: '1',
+                url: 'https://example.com/1.png'
+              },
               relevance: 0.9,
               usage: 'reference' as const
             },
             {
-              asset: { type: 'character' as const, description: '2', url: 'https://example.com/2.png' },
+              asset: {
+                type: 'character' as const,
+                description: '2',
+                url: 'https://example.com/2.png'
+              },
               relevance: 0.9,
               usage: 'reference' as const
             },
             {
-              asset: { type: 'character' as const, description: '3', url: 'https://example.com/3.png' },
+              asset: {
+                type: 'character' as const,
+                description: '3',
+                url: 'https://example.com/3.png'
+              },
               relevance: 0.9,
               usage: 'reference' as const
             }
@@ -190,7 +202,9 @@ describe('Scene Asset Service', () => {
           actions: []
         }
       ]
-      const assets = [{ id: 'x', type: 'character' as const, name: 'n', url: 'u', description: 'A' }]
+      const assets = [
+        { id: 'x', type: 'character' as const, name: 'n', url: 'u', description: 'A' }
+      ]
       const recs = matchAssetsForScenes(scenes, assets)
       expect(recs).toHaveLength(2)
       expect(recs[0].sceneNum).toBe(1)

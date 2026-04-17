@@ -1,9 +1,6 @@
 import type { ModelCallLogContext } from './api-logger.js'
 import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
-import {
-  DEEPSEEK_TEMPERATURE,
-  DEEPSEEK_MAX_TOKENS
-} from './ai.constants.js'
+import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
 import {
   type ParsedCharacter,
   type ParsedCharacterImage,
@@ -171,10 +168,10 @@ function normalizeParsedData(data: any): ParsedScript {
   }
 
   const episodes = data.episodes || data.chapters || data.scripts || []
-  
+
   for (const ep of episodes) {
     const scenes: ParsedScript['episodes'][0]['scenes'] = []
-    
+
     const epScenes = ep.scenes || ep.chapters || ep.content || []
     for (const scene of epScenes) {
       scenes.push({

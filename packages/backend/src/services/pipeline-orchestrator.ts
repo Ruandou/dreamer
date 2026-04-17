@@ -16,20 +16,11 @@ import type {
   CharacterImage
 } from '@dreamer/shared/types'
 
-import {
-  writeScriptFromIdea,
-  improveScript,
-  optimizeSceneDescription
-} from './script-writer.js'
+import { writeScriptFromIdea, improveScript, optimizeSceneDescription } from './script-writer.js'
 
-import {
-  splitIntoEpisodes
-} from './episode-splitter.js'
+import { splitIntoEpisodes } from './episode-splitter.js'
 
-import {
-  extractActionsFromScenes,
-  extractActionsFromScene
-} from './action-extractor.js'
+import { extractActionsFromScenes, extractActionsFromScene } from './action-extractor.js'
 
 import {
   matchAssetsForScenes,
@@ -37,14 +28,9 @@ import {
   type ProjectAsset
 } from './scene-asset.js'
 
-import {
-  generateStoryboard
-} from './storyboard-generator.js'
+import { generateStoryboard } from './storyboard-generator.js'
 
-import {
-  buildSeedanceConfigs,
-  validateSeedanceConfig
-} from './seedance-optimizer.js'
+import { buildSeedanceConfigs, validateSeedanceConfig } from './seedance-optimizer.js'
 
 export interface PipelineContext {
   projectId: string
@@ -55,9 +41,9 @@ export interface PipelineContext {
 }
 
 export interface PipelineExecuteOptions {
-  runAllSteps?: boolean      // 是否运行所有步骤
-  startFromStep?: PipelineStep  // 从哪一步开始
-  endAtStep?: PipelineStep     // 到哪一步结束
+  runAllSteps?: boolean // 是否运行所有步骤
+  startFromStep?: PipelineStep // 从哪一步开始
+  endAtStep?: PipelineStep // 到哪一步结束
   customOptions?: {
     targetEpisodes?: number
     targetDuration?: number
@@ -71,7 +57,7 @@ export interface PipelineStepResult<T = unknown> {
   status: 'completed' | 'failed' | 'skipped'
   data?: T
   error?: string
-  duration?: number  // 执行耗时（毫秒）
+  duration?: number // 执行耗时（毫秒）
 }
 
 /**
@@ -87,20 +73,17 @@ export async function executePipeline(
 
   try {
     // 步骤1: 剧本生成
-    results['script-writing'] = await executeStep(
-      'script-writing',
-      async () => {
-        const result = await writeScriptFromIdea(idea, {
-          characters: context.characters,
-          modelLog: {
-            userId: context.userId,
-            projectId: context.projectId,
-            op: 'pipeline_write_script'
-          }
-        })
-        return result.script
-      }
-    )
+    results['script-writing'] = await executeStep('script-writing', async () => {
+      const result = await writeScriptFromIdea(idea, {
+        characters: context.characters,
+        modelLog: {
+          userId: context.userId,
+          projectId: context.projectId,
+          op: 'pipeline_write_script'
+        }
+      })
+      return result.script
+    })
 
     if (results['script-writing'].status === 'failed') {
       throw new Error('剧本生成失败: ' + results['script-writing'].error)
@@ -108,14 +91,11 @@ export async function executePipeline(
 
     // 步骤2: 智能分集
     const script = results['script-writing'].data as ScriptContent
-    results['episode-splitting'] = await executeStep(
-      'episode-splitting',
-      async () => {
-        return splitIntoEpisodes(script, {
-          targetDuration: options?.customOptions?.targetDuration || 60
-        })
-      }
-    )
+    results['episode-splitting'] = await executeStep('episode-splitting', async () => {
+      return splitIntoEpisodes(script, {
+        targetDuration: options?.customOptions?.targetDuration || 60
+      })
+    })
 
     if (results['episode-splitting'].status === 'failed') {
       throw new Error('分集失败: ' + results['episode-splitting'].error)
@@ -123,12 +103,9 @@ export async function executePipeline(
 
     // 步骤3: 动作提取
     const episodes = results['episode-splitting'].data as EpisodePlan[]
-    results['action-extraction'] = await executeStep(
-      'action-extraction',
-      async () => {
-        return extractActionsFromScenes(script.scenes, context.characters)
-      }
-    )
+    results['action-extraction'] = await executeStep('action-extraction', async () => {
+      return extractActionsFromScenes(script.scenes, context.characters)
+    })
 
     if (results['action-extraction'].status === 'failed') {
       throw new Error('动作提取失败: ' + results['action-extraction'].error)
@@ -141,12 +118,9 @@ export async function executePipeline(
       ...context.projectAssets
     ]
 
-    results['asset-matching'] = await executeStep(
-      'asset-matching',
-      async () => {
-        return matchAssetsForScenes(script.scenes, projectAssets, sceneActions)
-      }
-    )
+    results['asset-matching'] = await executeStep('asset-matching', async () => {
+      return matchAssetsForScenes(script.scenes, projectAssets, sceneActions)
+    })
 
     if (results['asset-matching'].status === 'failed') {
       throw new Error('素材匹配失败: ' + results['asset-matching'].error)
@@ -154,26 +128,18 @@ export async function executePipeline(
 
     // 步骤4: 分镜生成
     const assetRecommendations = results['asset-matching'].data as SceneAssetRecommendation[]
-    results['storyboard-generation'] = await executeStep(
-      'storyboard-generation',
-      async () => {
-        const allSegments: StoryboardSegment[] = []
+    results['storyboard-generation'] = await executeStep('storyboard-generation', async () => {
+      const allSegments: StoryboardSegment[] = []
 
-        for (const episode of episodes) {
-          const segments = generateStoryboard(
-            episode,
-            script.scenes,
-            assetRecommendations,
-            {
-              defaultAspectRatio: options?.customOptions?.defaultAspectRatio || '9:16'
-            }
-          )
-          allSegments.push(...segments)
-        }
-
-        return allSegments
+      for (const episode of episodes) {
+        const segments = generateStoryboard(episode, script.scenes, assetRecommendations, {
+          defaultAspectRatio: options?.customOptions?.defaultAspectRatio || '9:16'
+        })
+        allSegments.push(...segments)
       }
-    )
+
+      return allSegments
+    })
 
     if (results['storyboard-generation'].status === 'failed') {
       throw new Error('分镜生成失败: ' + results['storyboard-generation'].error)
@@ -215,9 +181,10 @@ export async function executePipeline(
       sceneActions,
       assetRecommendations,
       storyboard,
-      seedanceConfigs: results['seedance-parametrization'].data as SeedanceSegmentConfig[] | undefined
+      seedanceConfigs: results['seedance-parametrization'].data as
+        | SeedanceSegmentConfig[]
+        | undefined
     }
-
   } catch (error) {
     console.error('流水线执行失败:', error)
     throw error
@@ -282,16 +249,16 @@ export async function executeSingleStep(
       if (!previousResults.script) {
         return { step, status: 'failed', error: '缺少 script 数据' }
       }
-      return executeStep(step, () =>
-        Promise.resolve(splitIntoEpisodes(previousResults.script!))
-      )
+      return executeStep(step, () => Promise.resolve(splitIntoEpisodes(previousResults.script!)))
 
     case 'action-extraction':
       if (!previousResults.script) {
         return { step, status: 'failed', error: '缺少 script 数据' }
       }
       return executeStep(step, () =>
-        Promise.resolve(extractActionsFromScenes(previousResults.script!.scenes, context.characters))
+        Promise.resolve(
+          extractActionsFromScenes(previousResults.script!.scenes, context.characters)
+        )
       )
 
     case 'asset-matching':
@@ -303,7 +270,13 @@ export async function executeSingleStep(
         ...context.projectAssets
       ]
       return executeStep(step, () =>
-        Promise.resolve(matchAssetsForScenes(previousResults.script!.scenes, projectAssets, previousResults.sceneActions))
+        Promise.resolve(
+          matchAssetsForScenes(
+            previousResults.script!.scenes,
+            projectAssets,
+            previousResults.sceneActions
+          )
+        )
       )
 
     case 'storyboard-generation':

@@ -9,10 +9,7 @@ import {
 } from '../lib/location-establishing-prompt.js'
 
 export interface ImageQueueAdapter {
-  add(
-    name: string,
-    data: ImageGenerationJobData
-  ): Promise<{ id?: string | null }>
+  add(name: string, data: ImageGenerationJobData): Promise<{ id?: string | null }>
 }
 
 export interface BatchEstablishingResult {

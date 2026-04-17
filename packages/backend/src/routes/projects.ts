@@ -3,34 +3,26 @@ import { projectService } from '../services/project-service.js'
 
 export async function projectRoutes(fastify: FastifyInstance) {
   // List projects
-  fastify.get(
-    '/',
-    { preHandler: [fastify.authenticate] },
-    async (request) => {
-      const user = (request as any).user
-      return projectService.listProjects(user.id)
-    }
-  )
+  fastify.get('/', { preHandler: [fastify.authenticate] }, async (request) => {
+    const user = (request as any).user
+    return projectService.listProjects(user.id)
+  })
 
   // Create project
   fastify.post<{
     Body: { name: string; description?: string; aspectRatio?: string }
-  }>(
-    '/',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const user = (request as any).user
-      const { name, description, aspectRatio } = request.body
+  }>('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const user = (request as any).user
+    const { name, description, aspectRatio } = request.body
 
-      const project = await projectService.createProject(user.id, {
-        name,
-        description,
-        aspectRatio
-      })
+    const project = await projectService.createProject(user.id, {
+      name,
+      description,
+      aspectRatio
+    })
 
-      return reply.status(201).send(project)
-    }
-  )
+    return reply.status(201).send(project)
+  })
 
   // 生成第一集（须注册在 GET /:id 之前，避免被误匹配）
   fastify.post<{
@@ -94,27 +86,23 @@ export async function projectRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Params: { id: string }
     Body: { targetEpisodes?: number }
-  }>(
-    '/:id/parse',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const user = (request as any).user
-      const projectId = request.params.id
-      const targetEpisodes = request.body?.targetEpisodes
+  }>('/:id/parse', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const user = (request as any).user
+    const projectId = request.params.id
+    const targetEpisodes = request.body?.targetEpisodes
 
-      const result = await projectService.parseScript(user.id, projectId, targetEpisodes)
+    const result = await projectService.parseScript(user.id, projectId, targetEpisodes)
 
-      if (!result.ok) {
-        return reply.status(result.status).send({ error: result.error })
-      }
-
-      return {
-        jobId: result.jobId,
-        status: 'processing',
-        message: '解析任务已启动'
-      }
+    if (!result.ok) {
+      return reply.status(result.status).send({ error: result.error })
     }
-  )
+
+    return {
+      jobId: result.jobId,
+      status: 'processing',
+      message: '解析任务已启动'
+    }
+  })
 
   /** 大纲页：是否有进行中的第一集 / 批量 / 解析任务（刷新后恢复互斥与轮询） */
   fastify.get<{ Params: { id: string } }>(
@@ -189,10 +177,8 @@ export async function projectRoutes(fastify: FastifyInstance) {
       visualStyle?: string[]
       aspectRatio?: string
     }
-  }>(
-    '/:id',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => handleProjectUpdate(request, reply)
+  }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) =>
+    handleProjectUpdate(request, reply)
   )
 
   fastify.patch<{
@@ -204,10 +190,8 @@ export async function projectRoutes(fastify: FastifyInstance) {
       visualStyle?: string[]
       aspectRatio?: string
     }
-  }>(
-    '/:id',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => handleProjectUpdate(request, reply)
+  }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) =>
+    handleProjectUpdate(request, reply)
   )
 
   // Delete project

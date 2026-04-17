@@ -8,7 +8,7 @@ export function sendSSEToUser(userId: string, event: string, data: any) {
   const connections = sseConnections.get(userId) || []
   const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 
-  connections.forEach(reply => {
+  connections.forEach((reply) => {
     try {
       reply.raw.write(message)
     } catch (e) {
@@ -49,7 +49,8 @@ export const ssePlugin = fp(async (fastify: FastifyInstance) => {
       let userId = 'anonymous'
       try {
         // Try to get token from query string for SSE
-        const token = (request.query as any)?.subscribe || request.headers.authorization?.replace('Bearer ', '')
+        const token =
+          (request.query as any)?.subscribe || request.headers.authorization?.replace('Bearer ', '')
         if (token) {
           const decoded = await fastify.jwt.verify(token)
           userId = (decoded as any).id || 'anonymous'
@@ -62,7 +63,7 @@ export const ssePlugin = fp(async (fastify: FastifyInstance) => {
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
         'X-Accel-Buffering': 'no'
       })
 

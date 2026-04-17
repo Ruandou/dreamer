@@ -35,8 +35,8 @@ export interface ProjectAsset {
 }
 
 export interface SceneAssetMatcherOptions {
-  maxAssetsPerScene?: number  // 每场景最多素材数
-  maxReferenceImages?: number  // 最多参考图数量
+  maxAssetsPerScene?: number // 每场景最多素材数
+  maxReferenceImages?: number // 最多参考图数量
 }
 
 /**
@@ -118,9 +118,7 @@ export function matchAssets(
   // 1. 首先匹配角色素材（最重要）
   for (const character of scene.characters) {
     const characterAssets = projectAssets.filter(
-      a => a.type === 'character' &&
-           a.name.includes(character) &&
-           !usedUrls.has(a.url)
+      (a) => a.type === 'character' && a.name.includes(character) && !usedUrls.has(a.url)
     )
 
     if (characterAssets.length > 0) {
@@ -142,9 +140,10 @@ export function matchAssets(
 
   // 2. 匹配背景素材
   const backgroundAssets = projectAssets.filter(
-    a => a.type === 'background' &&
-         (a.location?.includes(scene.location) || !a.location) &&
-         !usedUrls.has(a.url)
+    (a) =>
+      a.type === 'background' &&
+      (a.location?.includes(scene.location) || !a.location) &&
+      !usedUrls.has(a.url)
   )
 
   if (backgroundAssets.length > 0) {
@@ -163,9 +162,10 @@ export function matchAssets(
 
   // 3. 匹配氛围素材
   const atmosphereAssets = projectAssets.filter(
-    a => a.type === 'atmosphere' &&
-         (!scene.timeOfDay || a.mood?.includes(scene.timeOfDay)) &&
-         !usedUrls.has(a.url)
+    (a) =>
+      a.type === 'atmosphere' &&
+      (!scene.timeOfDay || a.mood?.includes(scene.timeOfDay)) &&
+      !usedUrls.has(a.url)
   )
 
   if (atmosphereAssets.length > 0) {
@@ -184,12 +184,11 @@ export function matchAssets(
 
   // 4. 匹配风格素材
   const styleAssets = projectAssets.filter(
-    a => a.type === 'style' &&
-         sceneActions?.videoStyle &&
-         a.tags?.some(tag =>
-           sceneActions.videoStyle?.includes(tag.toLowerCase())
-         ) &&
-         !usedUrls.has(a.url)
+    (a) =>
+      a.type === 'style' &&
+      sceneActions?.videoStyle &&
+      a.tags?.some((tag) => sceneActions.videoStyle?.includes(tag.toLowerCase())) &&
+      !usedUrls.has(a.url)
   )
 
   if (styleAssets.length > 0) {
@@ -206,7 +205,10 @@ export function matchAssets(
   }
 
   // 5. 生成组合提示词
-  const compositePrompt = generateCompositePrompt(scene, recommendedAssets.map(r => r.asset))
+  const compositePrompt = generateCompositePrompt(
+    scene,
+    recommendedAssets.map((r) => r.asset)
+  )
 
   return {
     sceneNum: scene.sceneNum,
@@ -218,36 +220,33 @@ export function matchAssets(
 /**
  * 生成组合素材提示词
  */
-export function generateCompositePrompt(
-  scene: ScriptScene,
-  assets: SceneAsset[]
-): string {
+export function generateCompositePrompt(scene: ScriptScene, assets: SceneAsset[]): string {
   const parts: string[] = []
 
   // 1. 添加场景信息
   parts.push(`场景：${scene.location || '未指定'}，${scene.timeOfDay || '时间未指定'}`)
 
   // 2. 按类型添加素材信息
-  const characterAssets = assets.filter(a => a.type === 'character')
-  const backgroundAssets = assets.filter(a => a.type === 'background')
-  const atmosphereAssets = assets.filter(a => a.type === 'atmosphere')
+  const characterAssets = assets.filter((a) => a.type === 'character')
+  const backgroundAssets = assets.filter((a) => a.type === 'background')
+  const atmosphereAssets = assets.filter((a) => a.type === 'atmosphere')
 
   if (characterAssets.length > 0) {
-    const descriptions = characterAssets.map(a => a.description).filter(Boolean)
+    const descriptions = characterAssets.map((a) => a.description).filter(Boolean)
     if (descriptions.length > 0) {
       parts.push(`角色：${descriptions.join('，')}`)
     }
   }
 
   if (backgroundAssets.length > 0) {
-    const locations = backgroundAssets.map(a => a.description).filter(Boolean)
+    const locations = backgroundAssets.map((a) => a.description).filter(Boolean)
     if (locations.length > 0) {
       parts.push(`背景：${locations.join('，')}`)
     }
   }
 
   if (atmosphereAssets.length > 0) {
-    const moods = atmosphereAssets.flatMap(a => a.mood || []).filter(Boolean)
+    const moods = atmosphereAssets.flatMap((a) => a.mood || []).filter(Boolean)
     if (moods.length > 0) {
       parts.push(`氛围：${moods.join('，')}`)
     }
@@ -304,13 +303,14 @@ export function suggestAssetGeneration(
 /**
  * 生成角色提示词
  */
-function generateCharacterPrompt(
-  characterName: string,
-  scene: ScriptScene
-): string {
-  const style = scene.description.includes('古风') ? '古风' :
-                scene.description.includes('现代') ? '现代' :
-                scene.description.includes('科幻') ? '科幻' : DEFAULT_STYLE_TYPE
+function generateCharacterPrompt(characterName: string, scene: ScriptScene): string {
+  const style = scene.description.includes('古风')
+    ? '古风'
+    : scene.description.includes('现代')
+      ? '现代'
+      : scene.description.includes('科幻')
+        ? '科幻'
+        : DEFAULT_STYLE_TYPE
 
   return `${style}${characterName}，${scene.timeOfDay || DEFAULT_TIME_OF_DAY}时场景，${scene.location || '通用场景'}，${scene.description.slice(0, 50)}`
 }
@@ -325,10 +325,7 @@ function generateBackgroundPrompt(scene: ScriptScene): string {
 /**
  * 生成氛围提示词
  */
-function generateAtmospherePrompt(
-  scene: ScriptScene,
-  sceneActions?: SceneActions
-): string {
+function generateAtmospherePrompt(scene: ScriptScene, sceneActions?: SceneActions): string {
   const timeOfDay = scene.timeOfDay || DEFAULT_TIME_OF_DAY
   const style = sceneActions?.videoStyle || DEFAULT_VIDEO_STYLE
 
@@ -338,22 +335,22 @@ function generateAtmospherePrompt(
 /**
  * 计算位置相关度
  */
-function calculateLocationRelevance(
-  sceneLocation: string,
-  assetLocation?: string
-): number {
+function calculateLocationRelevance(sceneLocation: string, assetLocation?: string): number {
   if (!assetLocation) return ASSET_RELEVANCE.UNKNOWN_LOCATION
 
   const sceneLower = sceneLocation.toLowerCase()
   const assetLower = assetLocation.toLowerCase()
 
   if (sceneLower === assetLower) return ASSET_RELEVANCE.EXACT_MATCH
-  if (sceneLower.includes(assetLower) || assetLower.includes(sceneLower)) return ASSET_RELEVANCE.CONTAINS_MATCH
+  if (sceneLower.includes(assetLower) || assetLower.includes(sceneLower))
+    return ASSET_RELEVANCE.CONTAINS_MATCH
 
   // 检查关键词匹配
   const sceneWords = sceneLower.split(/[，。、\s]+/)
   const assetWords = assetLower.split(/[，。、\s]+/)
-  const commonWords = sceneWords.filter(w => assetWords.includes(w) && w.length > MIN_KEYWORD_LENGTH)
+  const commonWords = sceneWords.filter(
+    (w) => assetWords.includes(w) && w.length > MIN_KEYWORD_LENGTH
+  )
 
   if (commonWords.length > 0) return ASSET_RELEVANCE.KEYWORD_MATCH
 
@@ -377,10 +374,8 @@ export function matchAssetsForScenes(
 /**
  * 将 CharacterImage 转换为 ProjectAsset 格式
  */
-export function convertCharacterImagesToAssets(
-  characterImages: CharacterImage[]
-): ProjectAsset[] {
-  return characterImages.map(img => ({
+export function convertCharacterImagesToAssets(characterImages: CharacterImage[]): ProjectAsset[] {
+  return characterImages.map((img) => ({
     id: img.id,
     type: 'character' as const,
     name: img.name,

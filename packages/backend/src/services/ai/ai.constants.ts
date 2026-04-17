@@ -24,7 +24,7 @@ export const DEEPSEEK_TEMPERATURE = {
   /** 场景提示词优化 - 中等创造性 */
   SCENE_PROMPT_OPTIMIZE: 0.5,
   /** 分镜脚本生成 - 中等创造性 */
-  STORYBOARD_GENERATE: 0.65,
+  STORYBOARD_GENERATE: 0.65
 } as const
 
 /** 默认最大 token 限制 */
@@ -46,7 +46,7 @@ export const DEEPSEEK_MAX_TOKENS = {
   /** 场景提示词优化 */
   SCENE_PROMPT_OPTIMIZE: 1000,
   /** 分镜脚本生成 */
-  STORYBOARD_GENERATE: 6000,
+  STORYBOARD_GENERATE: 6000
 } as const
 
 // ==================== 重试配置 ====================

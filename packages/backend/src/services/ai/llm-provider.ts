@@ -73,10 +73,7 @@ export interface LLMProvider {
    * @param options 完成选项
    * @returns 完成结果
    */
-  complete(
-    messages: LLMMessage[],
-    options?: LLMCompletionOptions
-  ): Promise<LLMCompletion>
+  complete(messages: LLMMessage[], options?: LLMCompletionOptions): Promise<LLMCompletion>
 
   /**
    * 获取提供者配置

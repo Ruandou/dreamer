@@ -52,12 +52,7 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
       scenes: []
     }
 
-    const result = await callApplyScriptContentToEpisode(
-      'ep-1',
-      'proj-1',
-      'Old Title',
-      script
-    )
+    const result = await callApplyScriptContentToEpisode('ep-1', 'proj-1', 'Old Title', script)
 
     expect(mockRepo.update).toHaveBeenCalledWith('ep-1', {
       title: 'Episode Script',

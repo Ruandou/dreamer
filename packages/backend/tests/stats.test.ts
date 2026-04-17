@@ -89,15 +89,19 @@ describe('Stats Routes', () => {
             scenes: [
               {
                 takes: [
-                  { id: 'task-1', model: 'wan2.6', status: 'completed', cost: 0.5, createdAt: new Date() }
+                  {
+                    id: 'task-1',
+                    model: 'wan2.6',
+                    status: 'completed',
+                    cost: 0.5,
+                    createdAt: new Date()
+                  }
                 ]
               }
             ]
           }
         ],
-        importTasks: [
-          { status: 'completed', result: { aiCost: 0.1 } }
-        ]
+        importTasks: [{ status: 'completed', result: { aiCost: 0.1 } }]
       })
 
       const response = await app.inject({
@@ -134,7 +138,13 @@ describe('Stats Routes', () => {
               scenes: [
                 {
                   takes: [
-                    { id: 'task-1', model: 'wan2.6', status: 'completed', cost: 0.5, createdAt: new Date() }
+                    {
+                      id: 'task-1',
+                      model: 'wan2.6',
+                      status: 'completed',
+                      cost: 0.5,
+                      createdAt: new Date()
+                    }
                   ]
                 }
               ]

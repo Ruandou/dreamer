@@ -100,13 +100,16 @@ export async function logApiCall(params: ApiCallParams, result?: ApiCallResult) 
   })
 }
 
-export async function updateApiCall(externalTaskId: string, update: {
-  status?: string
-  responseData?: Record<string, any>
-  cost?: number
-  duration?: number
-  errorMsg?: string
-}) {
+export async function updateApiCall(
+  externalTaskId: string,
+  update: {
+    status?: string
+    responseData?: Record<string, any>
+    cost?: number
+    duration?: number
+    errorMsg?: string
+  }
+) {
   return modelApiCallRepository.updateManyByExternalTaskId(externalTaskId, {
     status: update.status,
     responseData: update.responseData ? JSON.stringify(update.responseData) : undefined,
@@ -131,17 +134,20 @@ export function parseModelApiRequestParams(
   }
 }
 
-export async function getApiCalls(userId: string, options?: {
-  model?: string
-  /** 筛选 requestParams.op（JSON 子串匹配） */
-  op?: string
-  /** 筛选 requestParams.projectId */
-  projectId?: string
-  /** 按状态：completed / failed / processing */
-  status?: string
-  limit?: number
-  offset?: number
-}) {
+export async function getApiCalls(
+  userId: string,
+  options?: {
+    model?: string
+    /** 筛选 requestParams.op（JSON 子串匹配） */
+    op?: string
+    /** 筛选 requestParams.projectId */
+    projectId?: string
+    /** 按状态：completed / failed / processing */
+    status?: string
+    limit?: number
+    offset?: number
+  }
+) {
   const ands: Prisma.ModelApiCallWhereInput[] = [{ userId }]
   if (options?.model) ands.push({ model: options.model })
   if (options?.op?.trim()) {
@@ -156,9 +162,5 @@ export async function getApiCalls(userId: string, options?: {
   if (st && ['completed', 'failed', 'processing'].includes(st)) {
     ands.push({ status: st })
   }
-  return modelApiCallRepository.findMany(
-    { AND: ands },
-    options?.limit || 50,
-    options?.offset || 0
-  )
+  return modelApiCallRepository.findMany({ AND: ands }, options?.limit || 50, options?.offset || 0)
 }

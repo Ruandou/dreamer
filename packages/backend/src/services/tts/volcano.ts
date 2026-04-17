@@ -16,11 +16,7 @@ export class VolcanoTTSProvider implements TTSProvider {
     return getVoiceIdFromConfig(config, 'volcano')
   }
 
-  async synthesize(
-    text: string,
-    voiceId: string,
-    options?: TTSOptions
-  ): Promise<string> {
+  async synthesize(text: string, voiceId: string, options?: TTSOptions): Promise<string> {
     // 火山引擎 TTS API 调用
     // 实际实现需要根据火山引擎 API 文档调整
     const requestBody = {
@@ -36,7 +32,7 @@ export class VolcanoTTSProvider implements TTSProvider {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${VOLCANO_ACCESS_TOKEN}`
+        Authorization: `Bearer ${VOLCANO_ACCESS_TOKEN}`
       },
       body: JSON.stringify(requestBody)
     })

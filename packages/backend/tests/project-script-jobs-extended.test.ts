@@ -271,9 +271,7 @@ describe('project-script-jobs helpers extended', () => {
                 timeOfDay: 'morning',
                 characters: ['Alice', 'Bob'],
                 description: 'Meeting scene',
-                dialogues: [
-                  { character: 'Alice', content: 'Hello' }
-                ],
+                dialogues: [{ character: 'Alice', content: 'Hello' }],
                 actions: ['enter', 'sit']
               }
             ]

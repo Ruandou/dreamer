@@ -11,9 +11,7 @@ describe('Action Extractor Service', () => {
         timeOfDay: '日',
         characters: ['主角'],
         description: '主角走进办公室，坐下',
-        dialogues: [
-          { character: '主角', content: '今天的工作真多啊' }
-        ],
+        dialogues: [{ character: '主角', content: '今天的工作真多啊' }],
         actions: ['走进办公室', '坐下']
       }
 

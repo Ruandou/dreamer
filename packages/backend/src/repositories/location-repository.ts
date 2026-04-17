@@ -69,10 +69,7 @@ export class LocationRepository {
   }
 
   /** 定场图队列：仅更新未软删场地 */
-  updateManyActiveImage(
-    locationId: string,
-    data: { imageUrl: string; imageCost: number | null }
-  ) {
+  updateManyActiveImage(locationId: string, data: { imageUrl: string; imageCost: number | null }) {
     return this.prisma.location.updateMany({
       where: { id: locationId, deletedAt: null },
       data: { imageUrl: data.imageUrl, imageCost: data.imageCost }

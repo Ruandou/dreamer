@@ -43,9 +43,12 @@ describe('Project Routes', () => {
     app = Fastify({ logger: false })
 
     // Mock authenticate
-    app.decorate('authenticate', vi.fn().mockImplementation(async (request: any, reply: any) => {
-      request.user = { id: 'test-user-id', email: 'test@example.com' }
-    }))
+    app.decorate(
+      'authenticate',
+      vi.fn().mockImplementation(async (request: any, reply: any) => {
+        request.user = { id: 'test-user-id', email: 'test@example.com' }
+      })
+    )
 
     await app.register(projectRoutes, { prefix: '/api/projects' })
     await app.ready()

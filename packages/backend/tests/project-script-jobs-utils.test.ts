@@ -79,9 +79,7 @@ describe('areEpisodeScriptsComplete', () => {
   })
 
   it('checks episodes in order 1..targetEpisodes', () => {
-    const episodes = [
-      { episodeNum: 5, script: { title: 'Ep5', scenes: [] } }
-    ]
+    const episodes = [{ episodeNum: 5, script: { title: 'Ep5', scenes: [] } }]
     expect(areEpisodeScriptsComplete(episodes, 5)).toBe(false)
   })
 })
@@ -106,9 +104,7 @@ describe('mergeEpisodesToScriptContent', () => {
         title: 'Episode 2',
         script: {
           title: 'My Story',
-          scenes: [
-            { sceneNum: 1, description: 'Scene 3' }
-          ]
+          scenes: [{ sceneNum: 1, description: 'Scene 3' }]
         }
       }
     ]
@@ -258,8 +254,8 @@ describe('mergeEpisodesToScriptContent', () => {
 
     const result = mergeEpisodesToScriptContent(episodes)
     expect(result.scenes).toHaveLength(5)
-    expect(result.scenes.map(s => s.sceneNum)).toEqual([1, 2, 3, 4, 5])
-    expect(result.scenes.map(s => s.description)).toEqual(['S1', 'S2', 'S3', 'S4', 'S5'])
+    expect(result.scenes.map((s) => s.sceneNum)).toEqual([1, 2, 3, 4, 5])
+    expect(result.scenes.map((s) => s.description)).toEqual(['S1', 'S2', 'S3', 'S4', 'S5'])
   })
 })
 
@@ -284,9 +280,7 @@ describe('buildEpisodePlansFromDbEpisodes', () => {
         title: 'Episode 2',
         synopsis: 'Synopsis 2',
         script: {
-          scenes: [
-            { sceneNum: 1, description: 'S3' }
-          ]
+          scenes: [{ sceneNum: 1, description: 'S3' }]
         }
       }
     ]

@@ -15,47 +15,47 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'Login',
-    component: () => import('@/views/Login.vue'),
+    component: () => import('@/views/Login.vue')
   },
   {
     path: '/register',
     name: 'Register',
-    component: () => import('@/views/Register.vue'),
+    component: () => import('@/views/Register.vue')
   },
   {
     path: '/import',
     name: 'Import',
-    component: () => import('@/views/Import.vue'),
+    component: () => import('@/views/Import.vue')
   },
   {
     path: '/generate',
     name: 'Generate',
-    component: () => import('@/views/Generate.vue'),
+    component: () => import('@/views/Generate.vue')
   },
   {
     path: '/stats',
     name: 'Stats',
-    component: () => import('@/views/Stats.vue'),
+    component: () => import('@/views/Stats.vue')
   },
   {
     path: '/model-calls',
     name: 'ModelCalls',
-    component: () => import('@/views/ModelCalls.vue'),
+    component: () => import('@/views/ModelCalls.vue')
   },
   {
     path: '/jobs',
     name: 'Jobs',
-    component: () => import('@/views/Jobs.vue'),
+    component: () => import('@/views/Jobs.vue')
   },
   {
     path: '/settings',
     name: 'Settings',
-    component: () => import('@/views/Settings.vue'),
+    component: () => import('@/views/Settings.vue')
   },
   {
     path: '/projects',
     name: 'Projects',
-    component: () => import('@/views/Projects.vue'),
+    component: () => import('@/views/Projects.vue')
   },
   {
     path: '/project/:id',

@@ -1,11 +1,11 @@
-import type { PromptTemplate } from "../prompts/template-engine.js";
+import type { PromptTemplate } from '../prompts/template-engine.js'
 
 /**
  * 记忆提取模板 - 从剧本中提取剧情记忆
  */
 export const MEMORY_EXTRACTION_TEMPLATE: PromptTemplate = {
-  id: "memory-extraction",
-  version: "1.0.0",
+  id: 'memory-extraction',
+  version: '1.0.0',
   systemPrompt: `你是剧情记忆提取专家。你的任务是从剧本中提取关键剧情元素，并以结构化 JSON 格式返回。
 
 需要提取的内容：
@@ -60,20 +60,20 @@ export const MEMORY_EXTRACTION_TEMPLATE: PromptTemplate = {
 
 请提取本集的关键剧情记忆，返回 JSON 格式。`,
   metadata: {
-    category: "memory",
+    category: 'memory',
     creativity: 0.3, // 低创意，高准确度
     maxOutputTokens: 4000,
-    description: "从剧本中提取剧情记忆",
-    tags: ["memory", "extraction", "analysis"],
-  },
-};
+    description: '从剧本中提取剧情记忆',
+    tags: ['memory', 'extraction', 'analysis']
+  }
+}
 
 /**
  * 记忆合并模板 - 合并重复的记忆条目
  */
 export const MEMORY_MERGE_TEMPLATE: PromptTemplate = {
-  id: "memory-merge",
-  version: "1.0.0",
+  id: 'memory-merge',
+  version: '1.0.0',
   systemPrompt: `你是剧情记忆整理专家。你的任务是识别并合并重复或高度相似的剧情记忆。
 
 合并规则：
@@ -101,20 +101,20 @@ export const MEMORY_MERGE_TEMPLATE: PromptTemplate = {
 
 请识别并合并重复的记忆条目。`,
   metadata: {
-    category: "memory",
+    category: 'memory',
     creativity: 0.2,
     maxOutputTokens: 3000,
-    description: "合并重复的剧情记忆",
-    tags: ["memory", "merge", "deduplication"],
-  },
-};
+    description: '合并重复的剧情记忆',
+    tags: ['memory', 'merge', 'deduplication']
+  }
+}
 
 /**
  * 上下文构建模板 - 为剧本生成构建上下文
  */
 export const CONTEXT_BUILD_TEMPLATE: PromptTemplate = {
-  id: "context-build",
-  version: "1.0.0",
+  id: 'context-build',
+  version: '1.0.0',
   systemPrompt: `你是剧情上下文整理专家。你的任务是将结构化的剧情记忆整理成适合 LLM 阅读的自然语言上下文。
 
 整理规则：
@@ -152,16 +152,16 @@ export const CONTEXT_BUILD_TEMPLATE: PromptTemplate = {
 
 请将以上信息整理成连贯的自然语言上下文，用于指导第 {{targetEpisodeNum}} 集的剧本创作。`,
   metadata: {
-    category: "memory",
+    category: 'memory',
     creativity: 0.4,
     maxOutputTokens: 3000,
-    description: "将剧情记忆整理为写作上下文",
-    tags: ["memory", "context", "writing"],
-  },
-};
+    description: '将剧情记忆整理为写作上下文',
+    tags: ['memory', 'context', 'writing']
+  }
+}
 
 export const MEMORY_TEMPLATES: PromptTemplate[] = [
   MEMORY_EXTRACTION_TEMPLATE,
   MEMORY_MERGE_TEMPLATE,
-  CONTEXT_BUILD_TEMPLATE,
-];
+  CONTEXT_BUILD_TEMPLATE
+]

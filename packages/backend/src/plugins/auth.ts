@@ -53,13 +53,19 @@ export async function verifySceneOwnership(userId: string, sceneId: string): Pro
 }
 
 // Helper to verify user owns the character's project
-export async function verifyCharacterOwnership(userId: string, characterId: string): Promise<boolean> {
+export async function verifyCharacterOwnership(
+  userId: string,
+  characterId: string
+): Promise<boolean> {
   const character = await ownershipRepository.findCharacterWithProjectUser(characterId)
   return character?.project.userId === userId
 }
 
 // Helper to verify user owns the composition's project
-export async function verifyCompositionOwnership(userId: string, compositionId: string): Promise<boolean> {
+export async function verifyCompositionOwnership(
+  userId: string,
+  compositionId: string
+): Promise<boolean> {
   const composition = await ownershipRepository.findCompositionWithProjectUser(compositionId)
   return composition?.project.userId === userId
 }
@@ -70,7 +76,10 @@ export async function verifyTaskOwnership(userId: string, taskId: string): Promi
   return task?.scene.episode.project.userId === userId
 }
 
-export async function verifyLocationOwnership(userId: string, locationId: string): Promise<boolean> {
+export async function verifyLocationOwnership(
+  userId: string,
+  locationId: string
+): Promise<boolean> {
   const row = await ownershipRepository.findLocationWithProjectUser(locationId)
   return row?.project.userId === userId
 }

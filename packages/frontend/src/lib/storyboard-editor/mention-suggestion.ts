@@ -71,13 +71,15 @@ export function createMentionSuggestionRender() {
       })
       root!.appendChild(row)
     })
-    
+
     // 修复定位逻辑
     const rect = props.clientRect?.()
     if (rect && root) {
       if (root.style.position === 'absolute') {
         // 相对于编辑器容器定位
-        const paneRect = document.querySelector('.storyboard-script-editor__pane')?.getBoundingClientRect()
+        const paneRect = document
+          .querySelector('.storyboard-script-editor__pane')
+          ?.getBoundingClientRect()
         if (paneRect) {
           root.style.left = `${rect.left - paneRect.left}px`
           root.style.top = `${rect.bottom - paneRect.top + 4}px`

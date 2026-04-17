@@ -22,7 +22,10 @@ const mockPrisma = vi.hoisted(() => {
 
 vi.mock('../src/lib/prisma.js', () => mockPrisma)
 
-import { CharacterShotService, characterShotService } from '../src/services/character-shot-service.js'
+import {
+  CharacterShotService,
+  characterShotService
+} from '../src/services/character-shot-service.js'
 
 describe('CharacterShotService', () => {
   beforeEach(() => {
@@ -177,11 +180,11 @@ describe('CharacterShotService', () => {
       mockPrisma.prisma.characterImage.findUnique.mockResolvedValueOnce({
         character: { projectId: 'proj-1' }
       })
-      mockPrisma.prisma.characterShot.create.mockRejectedValueOnce(
-        new Error('Database error')
-      )
+      mockPrisma.prisma.characterShot.create.mockRejectedValueOnce(new Error('Database error'))
 
-      await expect(characterShotService.createForShot('shot-1', 'img-1')).rejects.toThrow('Database error')
+      await expect(characterShotService.createForShot('shot-1', 'img-1')).rejects.toThrow(
+        'Database error'
+      )
     })
 
     it('should return created character shot on success', async () => {

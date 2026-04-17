@@ -28,37 +28,30 @@ export async function authRoutes(fastify: FastifyInstance) {
   )
 
   // Login
-  fastify.post<{ Body: { email: string; password: string } }>(
-    '/login',
-    async (request, reply) => {
-      const { email, password } = request.body
+  fastify.post<{ Body: { email: string; password: string } }>('/login', async (request, reply) => {
+    const { email, password } = request.body
 
-      const result = await authService.login(email, password)
-      if (!result.ok) {
-        return reply.status(401).send({ error: 'Invalid credentials' })
-      }
-
-      const accessToken = fastify.jwt.sign({ id: result.user.id, email: result.user.email })
-      const refreshToken = fastify.jwt.sign(
-        { id: result.user.id, email: result.user.email },
-        { expiresIn: '7d' }
-      )
-
-      return {
-        accessToken,
-        refreshToken,
-        user: result.user
-      }
+    const result = await authService.login(email, password)
+    if (!result.ok) {
+      return reply.status(401).send({ error: 'Invalid credentials' })
     }
-  )
+
+    const accessToken = fastify.jwt.sign({ id: result.user.id, email: result.user.email })
+    const refreshToken = fastify.jwt.sign(
+      { id: result.user.id, email: result.user.email },
+      { expiresIn: '7d' }
+    )
+
+    return {
+      accessToken,
+      refreshToken,
+      user: result.user
+    }
+  })
 
   // Get current user
-  fastify.get(
-    '/me',
-    { preHandler: [fastify.authenticate] },
-    async (request) => {
-      const user = (request as any).user
-      return authService.getMe(user.id)
-    }
-  )
+  fastify.get('/me', { preHandler: [fastify.authenticate] }, async (request) => {
+    const user = (request as any).user
+    return authService.getMe(user.id)
+  })
 }

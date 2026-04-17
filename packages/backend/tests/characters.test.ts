@@ -44,7 +44,8 @@ const { mockGenerateCharacterSlotImagePrompt } = vi.hoisted(() => ({
 }))
 
 vi.mock('../src/services/ai/deepseek.js', () => ({
-  generateCharacterSlotImagePrompt: (...args: unknown[]) => mockGenerateCharacterSlotImagePrompt(...args)
+  generateCharacterSlotImagePrompt: (...args: unknown[]) =>
+    mockGenerateCharacterSlotImagePrompt(...args)
 }))
 
 // Mock storage service
@@ -265,7 +266,9 @@ describe('Character Routes', () => {
           id: 'char-1',
           name: '主角',
           projectId: 'proj-1',
-          images: [{ id: 'img-new', name: '夜礼服', type: 'outfit', prompt: '中文定妆提示词用于测试' }]
+          images: [
+            { id: 'img-new', name: '夜礼服', type: 'outfit', prompt: '中文定妆提示词用于测试' }
+          ]
         }
       ])
 
@@ -431,9 +434,7 @@ describe('Character Routes', () => {
         type: 'outfit',
         parentId: 'base-1'
       })
-      mockCharacterImageFindMany.mockResolvedValueOnce([
-        { id: 'child-1', parentId: 'img-1' }
-      ])
+      mockCharacterImageFindMany.mockResolvedValueOnce([{ id: 'child-1', parentId: 'img-1' }])
       mockCharacterImageFindMany.mockResolvedValueOnce([]) // Child has no children
       mockCharacterImageDelete.mockResolvedValue({ id: 'child-1' })
       mockCharacterImageDelete.mockResolvedValue({ id: 'img-1' })

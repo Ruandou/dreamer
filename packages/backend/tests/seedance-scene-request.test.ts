@@ -3,16 +3,17 @@ import { describe, it, expect } from 'vitest'
 describe('seedance-scene-request utilities', () => {
   // Import the pure functions we want to test
   // We'll test them through the module
-  
+
   describe('escapeRegExp (internal)', () => {
     it('escapes special regex characters', async () => {
       // Test by importing and using indirectly
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       // We can't test escapeRegExp directly (it's not exported)
       // But we can verify it works through buildSeedancePayloadFromScene
       // by creating a scene with special characters in character names
-      
+
       const mockScene = {
         id: 'scene-1',
         description: 'Alice meets Bob',
@@ -43,8 +44,9 @@ describe('seedance-scene-request utilities', () => {
     })
 
     it('handles character names with special regex characters', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Test with [brackets] and (parens)',
@@ -74,8 +76,9 @@ describe('seedance-scene-request utilities', () => {
 
   describe('voiceConfigToShortDesc (internal)', () => {
     it('converts voice config to short description', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Scene with dialogue',
@@ -145,8 +148,9 @@ describe('seedance-scene-request utilities', () => {
     })
 
     it('handles missing voice config', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Scene',
@@ -212,8 +216,9 @@ describe('seedance-scene-request utilities', () => {
 
   describe('mergeVisualStyleLabels (internal)', () => {
     it('merges scene and project visual styles', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Test scene',
@@ -244,8 +249,9 @@ describe('seedance-scene-request utilities', () => {
     })
 
     it('removes duplicate styles', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Test',
@@ -276,8 +282,9 @@ describe('seedance-scene-request utilities', () => {
     })
 
     it('handles empty visual styles', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Minimal',
@@ -307,8 +314,9 @@ describe('seedance-scene-request utilities', () => {
 
   describe('duration clamping', () => {
     it('clamps duration to minimum 4 seconds', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Short scene',
@@ -346,8 +354,9 @@ describe('seedance-scene-request utilities', () => {
     })
 
     it('clamps duration to maximum 15 seconds', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Long scene',
@@ -374,8 +383,9 @@ describe('seedance-scene-request utilities', () => {
     })
 
     it('uses shot durations when scene duration is invalid', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Test',
@@ -425,8 +435,9 @@ describe('seedance-scene-request utilities', () => {
 
   describe('aspect ratio validation', () => {
     it('uses scene aspect ratio when valid', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Test',
@@ -453,8 +464,9 @@ describe('seedance-scene-request utilities', () => {
     })
 
     it('falls back to project aspect ratio', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Test',
@@ -481,8 +493,9 @@ describe('seedance-scene-request utilities', () => {
     })
 
     it('defaults to 9:16 when invalid', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const mockScene = {
         id: 'scene-1',
         description: 'Test',
@@ -511,8 +524,9 @@ describe('seedance-scene-request utilities', () => {
 
   describe('image URL capping', () => {
     it('limits reference images to 9', async () => {
-      const { buildSeedancePayloadFromScene } = await import('../src/services/seedance-scene-request.js')
-      
+      const { buildSeedancePayloadFromScene } =
+        await import('../src/services/seedance-scene-request.js')
+
       const characterShots = Array.from({ length: 15 }, (_, i) => ({
         id: `cs-${i}`,
         characterImage: {

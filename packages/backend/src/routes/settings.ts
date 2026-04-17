@@ -3,14 +3,10 @@ import { settingsService } from '../services/settings-service.js'
 
 export async function settingsRoutes(fastify: FastifyInstance) {
   // Get user settings
-  fastify.get(
-    '/me',
-    { preHandler: [fastify.authenticate] },
-    async (request) => {
-      const user = (request as any).user
-      return settingsService.getMePayload(user.id)
-    }
-  )
+  fastify.get('/me', { preHandler: [fastify.authenticate] }, async (request) => {
+    const user = (request as any).user
+    return settingsService.getMePayload(user.id)
+  })
 
   // Update user settings
   fastify.put<{
@@ -25,20 +21,16 @@ export async function settingsRoutes(fastify: FastifyInstance) {
         arkApiUrl?: string
       }
     }
-  }>(
-    '/me',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const user = (request as any).user
+  }>('/me', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const user = (request as any).user
 
-      try {
-        return await settingsService.updateMe(user.id, request.body)
-      } catch (error) {
-        console.error('Failed to update user settings:', error)
-        return reply.status(500).send({ error: '更新设置失败' })
-      }
+    try {
+      return await settingsService.updateMe(user.id, request.body)
+    } catch (error) {
+      console.error('Failed to update user settings:', error)
+      return reply.status(500).send({ error: '更新设置失败' })
     }
-  )
+  })
 
   // Verify API key (test connection)
   fastify.post<{ Body: { apiKey: string } }>(

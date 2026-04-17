@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+coverage
+*.log
+.env
+.env.local
+.env.*.local
+pnpm-lock.yaml
+packages/backend/prisma/migrations

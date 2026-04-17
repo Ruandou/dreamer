@@ -2,14 +2,7 @@
  * 项目级默认画幅：与 Scene.aspectRatio、方舟文生图尺寸对齐。
  */
 
-export const PROJECT_DEFAULT_ASPECT_RATIOS = [
-  '16:9',
-  '9:16',
-  '1:1',
-  '4:3',
-  '3:4',
-  '21:9'
-] as const
+export const PROJECT_DEFAULT_ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'] as const
 
 export type ProjectDefaultAspectRatio = (typeof PROJECT_DEFAULT_ASPECT_RATIOS)[number]
 

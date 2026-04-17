@@ -20,7 +20,7 @@ import { matchAssets, getReferenceImageUrls } from './scene-asset.js'
 export interface StoryboardGeneratorOptions {
   defaultAspectRatio?: '16:9' | '9:16' | '1:1'
   defaultResolution?: '480p' | '720p'
-  enableDialogueFormat?: boolean  // 是否启用对话格式
+  enableDialogueFormat?: boolean // 是否启用对话格式
 }
 
 /**
@@ -37,20 +37,20 @@ export function generateStoryboard(
 
   // 获取本集对应的场景
   const episodeScenes = episodePlan.sceneIndices
-    ? episodePlan.sceneIndices.map(i => scenes[i]).filter(Boolean)
+    ? episodePlan.sceneIndices.map((i) => scenes[i]).filter(Boolean)
     : scenes.slice(0, episodePlan.sceneCount)
 
   for (let i = 0; i < episodeScenes.length; i++) {
     const scene = episodeScenes[i]
     const sceneActions = extractActionsFromScene(scene)
-    const assets = assetRecommendations?.find(a => a.sceneNum === scene.sceneNum)
+    const assets = assetRecommendations?.find((a) => a.sceneNum === scene.sceneNum)
 
     const segment = createSegment(
       episodePlan.episodeNum,
       i + 1,
       scene,
       sceneActions,
-      assets?.recommendedAssets.map(r => r.asset) || [],
+      assets?.recommendedAssets.map((r) => r.asset) || [],
       aspectRatio,
       options
     )
@@ -100,9 +100,7 @@ function createSegment(
   )
 
   // 获取参考图 URL
-  const compositeImageUrls = assets
-    .filter(a => a.url)
-    .map(a => a.url!)
+  const compositeImageUrls = assets.filter((a) => a.url).map((a) => a.url!)
 
   return {
     episodeNum,
@@ -148,8 +146,7 @@ function buildCharacterInfo(
   for (const characterName of scene.characters) {
     const actions = characterActions.get(characterName) || []
     const characterAsset = assets.find(
-      a => a.type === 'character' &&
-           a.description?.includes(characterName)
+      (a) => a.type === 'character' && a.description?.includes(characterName)
     )
 
     characters.push({
@@ -165,10 +162,7 @@ function buildCharacterInfo(
 /**
  * 确定视觉风格
  */
-function determineVisualStyle(
-  scene: ScriptScene,
-  sceneActions: SceneActions
-): string[] {
+function determineVisualStyle(scene: ScriptScene, sceneActions: SceneActions): string[] {
   const styles: string[] = []
 
   // 根据时代/题材
@@ -207,10 +201,7 @@ function determineVisualStyle(
 /**
  * 确定镜头运动
  */
-function determineCameraMovement(
-  scene: ScriptScene,
-  sceneActions: SceneActions
-): string {
+function determineCameraMovement(scene: ScriptScene, sceneActions: SceneActions): string {
   // 如果已有建议，使用建议
   if (sceneActions.suggestedCameraMovement) {
     return sceneActions.suggestedCameraMovement
@@ -407,16 +398,16 @@ function generateSeedancePrompt(
   parts.push(styleStr)
 
   // 2. 主体描述
-  const characterDescriptions = characters.map(c => {
+  const characterDescriptions = characters.map((c) => {
     const desc = [c.name]
     if (c.actions.length > 0) {
       const mainAction = c.actions[0]
       desc.push(mainAction.description)
     }
     // 添加参考图标记
-    const asset = assets.find(a => a.url === c.referenceImageUrl)
+    const asset = assets.find((a) => a.url === c.referenceImageUrl)
     if (asset) {
-      const index = assets.filter(a => a.url).indexOf(asset) + 1
+      const index = assets.filter((a) => a.url).indexOf(asset) + 1
       desc.push(`@图片${index}`)
     }
     return desc.join('，')
@@ -437,9 +428,9 @@ function generateSeedancePrompt(
   }
 
   // 6. 添加素材信息
-  const backgroundAsset = assets.find(a => a.type === 'background')
+  const backgroundAsset = assets.find((a) => a.type === 'background')
   if (backgroundAsset?.url) {
-    const index = assets.filter(a => a.url).indexOf(backgroundAsset) + 1
+    const index = assets.filter((a) => a.url).indexOf(backgroundAsset) + 1
     parts.push(`背景参考 @图片${index}`)
   }
 
@@ -454,10 +445,7 @@ function generateSeedancePrompt(
 /**
  * 生成分镜间的衔接提示
  */
-function generateContextForNext(
-  currentScene: ScriptScene,
-  segmentNum: number
-): string {
+function generateContextForNext(currentScene: ScriptScene, segmentNum: number): string {
   const hints: string[] = []
 
   // 如果有对话，提示下一镜接续情绪
@@ -477,9 +465,7 @@ function generateContextForNext(
 /**
  * 优化分镜提示词（调用 AI）
  */
-export async function enhancePromptWithAI(
-  segment: StoryboardSegment
-): Promise<string> {
+export async function enhancePromptWithAI(segment: StoryboardSegment): Promise<string> {
   // TODO: 调用 DeepSeek 优化提示词
   // 暂时返回原始提示词
   return segment.seedancePrompt
@@ -488,9 +474,7 @@ export async function enhancePromptWithAI(
 /**
  * 将分镜导出为文本格式
  */
-export function exportStoryboardAsText(
-  segments: StoryboardSegment[]
-): string {
+export function exportStoryboardAsText(segments: StoryboardSegment[]): string {
   const lines: string[] = []
 
   lines.push('# 分镜脚本')
@@ -500,7 +484,7 @@ export function exportStoryboardAsText(
     lines.push(`## 分镜 ${segment.episodeNum}-${segment.segmentNum}`)
     lines.push(`时长：${segment.duration}秒`)
     lines.push(`场景：${segment.location}，${segment.timeOfDay}`)
-    lines.push(`角色：${segment.characters.map(c => c.name).join('、')}`)
+    lines.push(`角色：${segment.characters.map((c) => c.name).join('、')}`)
     lines.push('')
     lines.push('### 描述')
     lines.push(segment.description)
@@ -527,8 +511,6 @@ export function exportStoryboardAsText(
 /**
  * 将分镜导出为 JSON 格式
  */
-export function exportStoryboardAsJSON(
-  segments: StoryboardSegment[]
-): string {
+export function exportStoryboardAsJSON(segments: StoryboardSegment[]): string {
   return JSON.stringify(segments, null, 2)
 }

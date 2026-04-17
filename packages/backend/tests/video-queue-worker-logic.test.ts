@@ -104,7 +104,7 @@ vi.mock('bullmq', () => {
     close: vi.fn().mockResolvedValue(undefined),
     on: vi.fn()
   }
-  
+
   const MockWorker = vi.fn((name, processor, options) => {
     capturedVideoProcessor = processor
     capturedVideoWorkerOptions = options
@@ -113,7 +113,7 @@ vi.mock('bullmq', () => {
       close: vi.fn().mockResolvedValue(undefined)
     }
   })
-  
+
   return {
     Queue: vi.fn(() => mockQueue),
     Worker: MockWorker
@@ -136,9 +136,9 @@ describe('Video Queue Worker', () => {
   it('should process Wan 2.6 video generation successfully', async () => {
     // Import to trigger worker registration
     await import('../src/queues/video.js')
-    
+
     expect(capturedVideoProcessor).toBeDefined()
-    
+
     // Mock job data
     const mockJob = {
       id: 'job-123',
@@ -169,7 +169,9 @@ describe('Video Queue Worker', () => {
     // Verify service calls
     expect(mockGetProjectUserIdForTask).toHaveBeenCalledWith('task-1')
     expect(mockSetTaskProcessing).toHaveBeenCalledWith('task-1')
-    expect(mockSendTaskUpdate).toHaveBeenCalledWith('user-1', 'task-1', 'processing', { sceneId: 'scene-1' })
+    expect(mockSendTaskUpdate).toHaveBeenCalledWith('user-1', 'task-1', 'processing', {
+      sceneId: 'scene-1'
+    })
     expect(mockSetSceneGenerating).toHaveBeenCalledWith('scene-1')
     expect(mockSubmitWan26Task).toHaveBeenCalledWith({
       prompt: 'A person walking',
@@ -186,7 +188,7 @@ describe('Video Queue Worker', () => {
 
   it('should process Seedance video generation successfully', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'job-124',
       data: {
@@ -219,7 +221,7 @@ describe('Video Queue Worker', () => {
 
   it('should handle Wan 2.6 API failure', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'job-125',
       data: {
@@ -235,14 +237,14 @@ describe('Video Queue Worker', () => {
     mockSubmitWan26Task.mockRejectedValue(new Error('API rate limit exceeded'))
 
     await expect(capturedVideoProcessor(mockJob)).rejects.toThrow('API rate limit exceeded')
-    
+
     expect(mockSetTaskFailed).toHaveBeenCalled()
     expect(mockSetSceneFailed).toHaveBeenCalled()
   })
 
   it('should handle empty video URL response', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'job-126',
       data: {
@@ -265,7 +267,7 @@ describe('Video Queue Worker', () => {
 
   it('should use default duration when not provided', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'job-127',
       data: {
@@ -294,7 +296,7 @@ describe('Video Queue Worker', () => {
 
   it('should handle missing userId gracefully', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'job-128',
       data: {
@@ -320,7 +322,7 @@ describe('Video Queue Worker', () => {
 
   it('should handle Seedance with multiple image URLs', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'job-129',
       data: {

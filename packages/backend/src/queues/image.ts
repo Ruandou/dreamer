@@ -27,11 +27,7 @@ export const imageQueue = new Queue<ImageGenerationJobData>('image-generation', 
   }
 })
 
-function notify(
-  userId: string,
-  projectId: string,
-  payload: Record<string, unknown>
-) {
+function notify(userId: string, projectId: string, payload: Record<string, unknown>) {
   try {
     sendProjectUpdate(userId, projectId, 'image-generation', payload)
   } catch (e) {
@@ -92,11 +88,14 @@ const imageWorker = new Worker<ImageGenerationJobData>(
           const { url: avatarUrl, imageCost } = await generateTextToImageAndPersist(data.prompt, {
             size: imageSize
           })
-          const updated = await imageQueueService.updateCharacterImageAvatar(data.characterImageId, {
-            avatarUrl,
-            prompt: data.prompt,
-            imageCost: imageCost ?? null
-          })
+          const updated = await imageQueueService.updateCharacterImageAvatar(
+            data.characterImageId,
+            {
+              avatarUrl,
+              prompt: data.prompt,
+              imageCost: imageCost ?? null
+            }
+          )
           notify(userId, projectId, {
             status: 'completed',
             kind: data.kind,
@@ -126,11 +125,14 @@ const imageWorker = new Worker<ImageGenerationJobData>(
             data.editPrompt,
             { strength: data.strength ?? 0.35, size: imageSize }
           )
-          const updated = await imageQueueService.updateCharacterImageAvatar(data.characterImageId, {
-            avatarUrl,
-            prompt: data.editPrompt,
-            imageCost: imageCost ?? null
-          })
+          const updated = await imageQueueService.updateCharacterImageAvatar(
+            data.characterImageId,
+            {
+              avatarUrl,
+              prompt: data.editPrompt,
+              imageCost: imageCost ?? null
+            }
+          )
           notify(userId, projectId, {
             status: 'completed',
             kind: data.kind,

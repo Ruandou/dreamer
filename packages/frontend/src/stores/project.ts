@@ -26,7 +26,7 @@ export const useProjectStore = defineStore('project', () => {
 
   async function updateProject(id: string, data: Partial<Project>) {
     const res = await api.put<Project>(`/projects/${id}`, data)
-    const index = projects.value.findIndex(p => p.id === id)
+    const index = projects.value.findIndex((p) => p.id === id)
     if (index !== -1) {
       projects.value[index] = res.data
     }
@@ -35,7 +35,7 @@ export const useProjectStore = defineStore('project', () => {
 
   async function deleteProject(id: string) {
     await api.delete(`/projects/${id}`)
-    projects.value = projects.value.filter(p => p.id !== id)
+    projects.value = projects.value.filter((p) => p.id !== id)
   }
 
   return {

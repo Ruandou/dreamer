@@ -1,9 +1,6 @@
 import type { ModelCallLogContext } from './api-logger.js'
 import type { DeepSeekCost } from './deepseek-client.js'
-import {
-  callLLMWithRetry,
-  type LLMCallOptions
-} from './llm-call-wrapper.js'
+import { callLLMWithRetry, type LLMCallOptions } from './llm-call-wrapper.js'
 import { getDefaultProvider, type LLMProvider } from './llm-factory.js'
 import { PromptRegistry } from '../prompts/registry.js'
 import type { LLMMessage } from './llm-provider.js'
@@ -50,17 +47,18 @@ export async function generateCharacterSlotImagePrompt(
     parentSlotSummary?: string | null
   },
   log?: ModelCallLogContext,
-  provider?: LLMProvider  // 新增：可选的自定义提供者
+  provider?: LLMProvider // 新增：可选的自定义提供者
 ): Promise<{ prompt: string; cost: DeepSeekCost }> {
   const llmProvider = provider || getDefaultProvider()
-  
+
   // 根据槽位类型选择模板
-  const templateId = input.slotType === 'base' 
-    ? 'character-base-prompt'
-    : input.slotType === 'outfit'
-    ? 'character-outfit-prompt'
-    : 'character-expression-prompt'
-  
+  const templateId =
+    input.slotType === 'base'
+      ? 'character-base-prompt'
+      : input.slotType === 'outfit'
+        ? 'character-outfit-prompt'
+        : 'character-expression-prompt'
+
   const rendered = PromptRegistry.getInstance().render(templateId, {
     characterName: input.characterName,
     characterDescription: input.characterDescription || '',

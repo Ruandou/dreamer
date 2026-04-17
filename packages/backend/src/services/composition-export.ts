@@ -9,7 +9,9 @@ export type CompositionExportResult =
   | { ok: true; outputUrl: string; duration: number }
   | { ok: false; error: string; httpStatus: number }
 
-export async function runCompositionExport(compositionId: string): Promise<CompositionExportResult> {
+export async function runCompositionExport(
+  compositionId: string
+): Promise<CompositionExportResult> {
   const composition = await compositionRepository.findUniqueForExport(compositionId)
 
   if (!composition) {

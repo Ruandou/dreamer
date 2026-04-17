@@ -16,11 +16,7 @@ export class AliyunTTSProvider implements TTSProvider {
     return getVoiceIdFromConfig(config, 'aliyun')
   }
 
-  async synthesize(
-    text: string,
-    voiceId: string,
-    options?: TTSOptions
-  ): Promise<string> {
+  async synthesize(text: string, voiceId: string, options?: TTSOptions): Promise<string> {
     // 构建请求体
     const requestBody = {
       model: 'qwen-tts',
@@ -39,7 +35,7 @@ export class AliyunTTSProvider implements TTSProvider {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${ARK_API_KEY}`
+        Authorization: `Bearer ${ARK_API_KEY}`
       },
       body: JSON.stringify(requestBody)
     })

@@ -64,7 +64,9 @@ function mapQueueState(state: string): ImageGenerationJobRow['status'] {
   return 'pending'
 }
 
-export async function listImageGenerationJobsForUser(userId: string): Promise<ImageGenerationJobRow[]> {
+export async function listImageGenerationJobsForUser(
+  userId: string
+): Promise<ImageGenerationJobRow[]> {
   const types = ['completed', 'failed', 'active', 'waiting', 'delayed', 'paused'] as const
   const rawJobs = await imageQueue.getJobs([...types], 0, 199, false)
 
@@ -76,7 +78,9 @@ export async function listImageGenerationJobsForUser(userId: string): Promise<Im
 
     const state = await job.getState()
     const status = mapQueueState(state)
-    const createdAt = job.timestamp ? new Date(job.timestamp).toISOString() : new Date().toISOString()
+    const createdAt = job.timestamp
+      ? new Date(job.timestamp).toISOString()
+      : new Date().toISOString()
     const updatedAt = job.finishedOn
       ? new Date(job.finishedOn).toISOString()
       : job.processedOn

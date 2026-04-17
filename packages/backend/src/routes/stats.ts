@@ -25,14 +25,10 @@ export async function statsRoutes(fastify: FastifyInstance) {
   )
 
   // Get cost statistics for current user (all projects)
-  fastify.get(
-    '/me',
-    { preHandler: [fastify.authenticate] },
-    async (request) => {
-      const user = (request as any).user
-      return statsService.getUserCostStats(user.id)
-    }
-  )
+  fastify.get('/me', { preHandler: [fastify.authenticate] }, async (request) => {
+    const user = (request as any).user
+    return statsService.getUserCostStats(user.id)
+  })
 
   // Get daily cost trend
   fastify.get<{ Querystring: { projectId?: string; days?: number } }>(
@@ -47,11 +43,7 @@ export async function statsRoutes(fastify: FastifyInstance) {
   )
 
   // Get DeepSeek account balance
-  fastify.get(
-    '/ai-balance',
-    { preHandler: [fastify.authenticate] },
-    async () => {
-      return statsService.getAiBalance()
-    }
-  )
+  fastify.get('/ai-balance', { preHandler: [fastify.authenticate] }, async () => {
+    return statsService.getAiBalance()
+  })
 }

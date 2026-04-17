@@ -97,22 +97,18 @@ export async function compositionRoutes(fastify: FastifyInstance) {
   fastify.put<{
     Params: { id: string }
     Body: { clips: Array<{ sceneId: string; takeId: string; order: number }> }
-  }>(
-    '/:id/timeline',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id
-      const compositionId = request.params.id
+  }>('/:id/timeline', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const compositionId = request.params.id
 
-      if (!(await verifyCompositionOwnership(userId, compositionId))) {
-        return reply.status(403).send(permissionDeniedBody)
-      }
-
-      const { clips } = request.body
-
-      return compositionService.updateTimeline(compositionId, clips)
+    if (!(await verifyCompositionOwnership(userId, compositionId))) {
+      return reply.status(403).send(permissionDeniedBody)
     }
-  )
+
+    const { clips } = request.body
+
+    return compositionService.updateTimeline(compositionId, clips)
+  })
 
   fastify.post<{ Params: { id: string } }>(
     '/:id/export',

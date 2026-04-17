@@ -76,9 +76,7 @@ describe('script-expand', () => {
             timeOfDay: 'afternoon',
             characters: ['Alice', 'Boss'],
             description: 'Alice at work',
-            dialogues: [
-              { character: 'Boss', content: 'Work harder!' }
-            ],
+            dialogues: [{ character: 'Boss', content: 'Work harder!' }],
             actions: ['types', 'meets boss']
           },
           {
@@ -204,9 +202,7 @@ describe('script-expand', () => {
         timeOfDay: 'day',
         characters: [`Character ${i}`],
         description: `Scene ${i} description`,
-        dialogues: [
-          { character: `Character ${i}`, content: `Dialogue ${i}` }
-        ],
+        dialogues: [{ character: `Character ${i}`, content: `Dialogue ${i}` }],
         actions: [`Action ${i}`]
       }))
 
@@ -232,8 +228,8 @@ describe('script-expand', () => {
             sceneNum: 1,
             description: 'Scene',
             dialogues: [
-              { 
-                character: 'Alice', 
+              {
+                character: 'Alice',
                 content: 'Hello',
                 extra: 'ignored field'
               }

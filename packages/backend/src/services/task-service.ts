@@ -27,17 +27,15 @@ export class TaskService {
   async listByProject(projectId: string): Promise<TaskWithSceneMeta[]> {
     const scenes = await this.takeRepo.findScenesWithTakesByProject(projectId)
 
-    const tasks = scenes.flatMap(scene =>
-      scene.takes.map(task => ({
+    const tasks = scenes.flatMap((scene) =>
+      scene.takes.map((task) => ({
         ...task,
         sceneNum: scene.sceneNum,
         sceneDescription: scene.description
       }))
     )
 
-    return tasks.sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
+    return tasks.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }
 
   async cancelTask(taskId: string): Promise<CancelTaskResult> {

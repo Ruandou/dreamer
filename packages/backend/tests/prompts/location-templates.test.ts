@@ -19,7 +19,7 @@ describe('Location Templates', () => {
     })
 
     it('each template has required fields', () => {
-      LOCATION_TEMPLATES.forEach(template => {
+      LOCATION_TEMPLATES.forEach((template) => {
         expect(template.id).toBeDefined()
         expect(template.version).toBe('1.0.0')
         expect(template.systemPrompt).toBeDefined()
@@ -244,7 +244,7 @@ describe('Location Templates', () => {
     })
 
     it('each template has unique ID', () => {
-      const ids = LOCATION_TEMPLATES.map(t => t.id)
+      const ids = LOCATION_TEMPLATES.map((t) => t.id)
       const uniqueIds = new Set(ids)
       expect(uniqueIds.size).toBe(LOCATION_TEMPLATES.length)
     })

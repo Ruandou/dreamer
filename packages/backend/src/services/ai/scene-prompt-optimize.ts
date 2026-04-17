@@ -1,13 +1,7 @@
 import type { ModelCallLogContext } from './api-logger.js'
 import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
-import {
-  DEEPSEEK_TEMPERATURE,
-  DEEPSEEK_MAX_TOKENS
-} from './ai.constants.js'
-import {
-  callDeepSeekWithRetry,
-  type DeepSeekCallOptions
-} from './deepseek-call-wrapper.js'
+import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
+import { callDeepSeekWithRetry, type DeepSeekCallOptions } from './deepseek-call-wrapper.js'
 
 export async function optimizePrompt(
   prompt: string,

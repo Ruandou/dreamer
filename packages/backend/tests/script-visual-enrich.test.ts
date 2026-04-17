@@ -43,8 +43,10 @@ const {
 }))
 
 vi.mock('../src/services/ai/deepseek.js', () => ({
-  fetchScriptVisualEnrichmentJson: (...args: unknown[]) => mockFetchScriptVisualEnrichmentJson(...args),
-  generateCharacterSlotImagePrompt: (...args: unknown[]) => mockGenerateCharacterSlotImagePrompt(...args)
+  fetchScriptVisualEnrichmentJson: (...args: unknown[]) =>
+    mockFetchScriptVisualEnrichmentJson(...args),
+  generateCharacterSlotImagePrompt: (...args: unknown[]) =>
+    mockGenerateCharacterSlotImagePrompt(...args)
 }))
 
 // Mock recordModelApiCall to prevent Prisma errors
@@ -87,7 +89,9 @@ const script = { title: 'T', summary: 'S', scenes: [] as any[] }
 
 describe('sanitizeLocationImagePromptForImageApi', () => {
   it('replaces terms that often trigger image API moderation', () => {
-    expect(sanitizeLocationImagePromptForImageApi('对面是审讯室，旁有刑讯室')).toBe('对面是会谈室，旁有会谈室')
+    expect(sanitizeLocationImagePromptForImageApi('对面是审讯室，旁有刑讯室')).toBe(
+      '对面是会谈室，旁有会谈室'
+    )
     expect(sanitizeLocationImagePromptForImageApi('看守所外墙')).toBe('院落建筑外墙')
   })
 })
@@ -119,8 +123,7 @@ describe('applyScriptVisualEnrichment', () => {
   })
 
   it('sanitizes image API–sensitive terms in location imagePrompt before save', async () => {
-    const longPrompt =
-      '空旷的单向玻璃观察室，映出对面空无一人的审讯室轮廓，室内有控制台。'
+    const longPrompt = '空旷的单向玻璃观察室，映出对面空无一人的审讯室轮廓，室内有控制台。'
     mockFetchScriptVisualEnrichmentJson.mockResolvedValue({
       jsonText: JSON.stringify({
         locations: [{ name: '咖啡厅', imagePrompt: longPrompt }],

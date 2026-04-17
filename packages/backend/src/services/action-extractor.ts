@@ -6,8 +6,8 @@
 import type { ScriptScene, CharacterAction, SceneActions, Character } from '@dreamer/shared/types'
 
 export interface ActionExtractorOptions {
-  maxActionsPerCharacter?: number  // 每个角色最多提取的动作数
-  includeEmotions?: boolean       // 是否提取情绪信息
+  maxActionsPerCharacter?: number // 每个角色最多提取的动作数
+  includeEmotions?: boolean // 是否提取情绪信息
 }
 
 /**
@@ -76,16 +76,13 @@ export function extractActionsFromScenes(
   characters?: Character[],
   options?: ActionExtractorOptions
 ): SceneActions[] {
-  return scenes.map(scene => extractActionsFromScene(scene, characters, options))
+  return scenes.map((scene) => extractActionsFromScene(scene, characters, options))
 }
 
 /**
  * 解析动作文本
  */
-function parseActionText(
-  actionText: string,
-  characters: string[]
-): CharacterAction | null {
+function parseActionText(actionText: string, characters: string[]): CharacterAction | null {
   // 尝试匹配 "角色：动作" 格式
   for (const character of characters) {
     if (actionText.includes(character)) {
@@ -110,32 +107,52 @@ function classifyActionType(actionText: string): CharacterAction['actionType'] {
   const lowerText = actionText.toLowerCase()
 
   // 对话类关键词
-  if (lowerText.includes('说') || lowerText.includes('道') ||
-      lowerText.includes('喊') || lowerText.includes('叫') ||
-      lowerText.includes('ask') || lowerText.includes('say')) {
+  if (
+    lowerText.includes('说') ||
+    lowerText.includes('道') ||
+    lowerText.includes('喊') ||
+    lowerText.includes('叫') ||
+    lowerText.includes('ask') ||
+    lowerText.includes('say')
+  ) {
     return 'dialogue'
   }
 
   // 表情类关键词
-  if (lowerText.includes('看') || lowerText.includes('望') ||
-      lowerText.includes('笑') || lowerText.includes('哭') ||
-      lowerText.includes('look') || lowerText.includes('smile') ||
-      lowerText.includes('cry')) {
+  if (
+    lowerText.includes('看') ||
+    lowerText.includes('望') ||
+    lowerText.includes('笑') ||
+    lowerText.includes('哭') ||
+    lowerText.includes('look') ||
+    lowerText.includes('smile') ||
+    lowerText.includes('cry')
+  ) {
     return 'expression'
   }
 
   // 移动类关键词
-  if (lowerText.includes('走') || lowerText.includes('跑') ||
-      lowerText.includes('跳') || lowerText.includes('坐') ||
-      lowerText.includes('walk') || lowerText.includes('run') ||
-      lowerText.includes('jump') || lowerText.includes('sit')) {
+  if (
+    lowerText.includes('走') ||
+    lowerText.includes('跑') ||
+    lowerText.includes('跳') ||
+    lowerText.includes('坐') ||
+    lowerText.includes('walk') ||
+    lowerText.includes('run') ||
+    lowerText.includes('jump') ||
+    lowerText.includes('sit')
+  ) {
     return 'movement'
   }
 
   // 反应类关键词
-  if (lowerText.includes('惊') || lowerText.includes('愣') ||
-      lowerText.includes('反应') || lowerText.includes('surprise') ||
-      lowerText.includes('react')) {
+  if (
+    lowerText.includes('惊') ||
+    lowerText.includes('愣') ||
+    lowerText.includes('反应') ||
+    lowerText.includes('surprise') ||
+    lowerText.includes('react')
+  ) {
     return 'reaction'
   }
 
@@ -150,28 +167,38 @@ function inferEmotionFromDialogue(dialogue: string): string {
   const lowerText = dialogue.toLowerCase()
 
   // 强烈情绪词
-  if (lowerText.includes('!') || lowerText.includes('！') ||
-      lowerText.includes('震惊') || lowerText.includes('惊讶')) {
+  if (
+    lowerText.includes('!') ||
+    lowerText.includes('！') ||
+    lowerText.includes('震惊') ||
+    lowerText.includes('惊讶')
+  ) {
     return '震惊'
   }
 
-  if (lowerText.includes('哭') || lowerText.includes('泪') ||
-      lowerText.includes('cry') || lowerText.includes('tear')) {
+  if (
+    lowerText.includes('哭') ||
+    lowerText.includes('泪') ||
+    lowerText.includes('cry') ||
+    lowerText.includes('tear')
+  ) {
     return '悲伤'
   }
 
-  if (lowerText.includes('笑') || lowerText.includes('开心') ||
-      lowerText.includes('happy') || lowerText.includes('joy')) {
+  if (
+    lowerText.includes('笑') ||
+    lowerText.includes('开心') ||
+    lowerText.includes('happy') ||
+    lowerText.includes('joy')
+  ) {
     return '开心'
   }
 
-  if (lowerText.includes('怒') || lowerText.includes('气愤') ||
-      lowerText.includes('angry')) {
+  if (lowerText.includes('怒') || lowerText.includes('气愤') || lowerText.includes('angry')) {
     return '愤怒'
   }
 
-  if (lowerText.includes('爱') || lowerText.includes('喜欢') ||
-      lowerText.includes('love')) {
+  if (lowerText.includes('爱') || lowerText.includes('喜欢') || lowerText.includes('love')) {
     return '爱慕'
   }
 
@@ -185,16 +212,26 @@ function inferEmotionFromAction(actionText: string): string {
   const lowerText = actionText.toLowerCase()
 
   const emotionKeywords: [string, string][] = [
-    ['颤抖', '紧张'], ['颤抖', 'nervous'],
-    ['流泪', '悲伤'], ['cry', 'sad'],
-    ['微笑', '开心'], ['smile', 'happy'],
-    ['大笑', '欢乐'], ['laugh', 'joy'],
-    ['皱眉', '忧虑'], ['frown', 'worried'],
-    ['抬头', '坚定'], ['抬头', 'determined'],
-    ['低头', '沮丧'], ['低头', 'depressed'],
-    ['握拳', '愤怒'], ['clench', 'angry'],
-    ['拥抱', '亲密'], ['hug', 'intimate'],
-    ['挥手', '告别'], ['wave', 'goodbye']
+    ['颤抖', '紧张'],
+    ['颤抖', 'nervous'],
+    ['流泪', '悲伤'],
+    ['cry', 'sad'],
+    ['微笑', '开心'],
+    ['smile', 'happy'],
+    ['大笑', '欢乐'],
+    ['laugh', 'joy'],
+    ['皱眉', '忧虑'],
+    ['frown', 'worried'],
+    ['抬头', '坚定'],
+    ['抬头', 'determined'],
+    ['低头', '沮丧'],
+    ['低头', 'depressed'],
+    ['握拳', '愤怒'],
+    ['clench', 'angry'],
+    ['拥抱', '亲密'],
+    ['hug', 'intimate'],
+    ['挥手', '告别'],
+    ['wave', 'goodbye']
   ]
 
   for (const [keyword, emotion] of emotionKeywords) {
@@ -209,20 +246,23 @@ function inferEmotionFromAction(actionText: string): string {
 /**
  * 从场景描述中提取隐含动作
  */
-function extractImpliedActions(
-  description: string,
-  characters: string[]
-): CharacterAction[] {
+function extractImpliedActions(description: string, characters: string[]): CharacterAction[] {
   const actions: CharacterAction[] = []
 
   // 从描述中识别动作模式
   const actionPatterns = [
     // 表情模式
-    { regex: /([^，,。\s]+)低着头|([^，,。\s]+)抬起头|([^，,。\s]+)微笑着|([^，,。\s]+)眼中含着泪/g, type: 'expression' as const },
+    {
+      regex: /([^，,。\s]+)低着头|([^，,。\s]+)抬起头|([^，,。\s]+)微笑着|([^，,。\s]+)眼中含着泪/g,
+      type: 'expression' as const
+    },
     // 动作模式
     { regex: /([^，,。\s]+)走进|([^，,。\s]+)冲出|([^，,。\s]+)站在/g, type: 'movement' as const },
     // 反应模式
-    { regex: /([^，,。\s]+)惊讶|([^，,。\s]+)愣住|([^，,。\s]+)反应过来/g, type: 'reaction' as const }
+    {
+      regex: /([^，,。\s]+)惊讶|([^，,。\s]+)愣住|([^，,。\s]+)反应过来/g,
+      type: 'reaction' as const
+    }
   ]
 
   for (const pattern of actionPatterns) {
@@ -277,24 +317,26 @@ function determineVideoStyle(
   scene: ScriptScene,
   actions: CharacterAction[]
 ): SceneActions['videoStyle'] {
-  const actionTypes = actions.map(a => a.actionType)
+  const actionTypes = actions.map((a) => a.actionType)
 
   // 对话为主
-  const dialogueCount = actionTypes.filter(t => t === 'dialogue').length
+  const dialogueCount = actionTypes.filter((t) => t === 'dialogue').length
   if (dialogueCount > actions.length * 0.6) {
     return 'dialogue'
   }
 
   // 动作/运动为主
-  const movementCount = actionTypes.filter(t => t === 'movement').length
+  const movementCount = actionTypes.filter((t) => t === 'movement').length
   if (movementCount > actions.length * 0.4) {
     return 'action'
   }
 
   // 检查场景描述是否以风景/环境为主
-  if (scene.description.length > 100 &&
-      !scene.description.includes('角色') &&
-      !scene.description.includes('人物')) {
+  if (
+    scene.description.length > 100 &&
+    !scene.description.includes('角色') &&
+    !scene.description.includes('人物')
+  ) {
     return 'landscape'
   }
 
@@ -304,10 +346,7 @@ function determineVideoStyle(
 /**
  * 计算建议时长
  */
-function calculateSuggestedDuration(
-  scene: ScriptScene,
-  actions: CharacterAction[]
-): number {
+function calculateSuggestedDuration(scene: ScriptScene, actions: CharacterAction[]): number {
   // 基础时长
   let duration = 5
 
@@ -317,7 +356,7 @@ function calculateSuggestedDuration(
   }
 
   // 根据对话数量调整
-  const dialogueCount = actions.filter(a => a.actionType === 'dialogue').length
+  const dialogueCount = actions.filter((a) => a.actionType === 'dialogue').length
   if (dialogueCount >= 3) {
     duration += 3
   }
@@ -340,14 +379,12 @@ function calculateSuggestedDuration(
 /**
  * 建议镜头运动
  */
-function suggestCameraMovement(
-  videoStyle: SceneActions['videoStyle']
-): string {
+function suggestCameraMovement(videoStyle: SceneActions['videoStyle']): string {
   const suggestions: Record<SceneActions['videoStyle'], string> = {
-    'dialogue': 'Medium close-up, subtle push-in on key dialogue',
-    'action': 'Dynamic tracking shot, smooth dolly follow',
-    'landscape': 'Slow wide pan, aerial crane reveal',
-    'mixed': 'Medium shot, gentle tracking movement'
+    dialogue: 'Medium close-up, subtle push-in on key dialogue',
+    action: 'Dynamic tracking shot, smooth dolly follow',
+    landscape: 'Slow wide pan, aerial crane reveal',
+    mixed: 'Medium shot, gentle tracking movement'
   }
 
   return suggestions[videoStyle]
@@ -362,17 +399,13 @@ export function extractCharacterActionSequence(
 ): CharacterAction[] {
   const allActions = extractActionsFromScene(scene)
 
-  return allActions.actions.filter(
-    action => action.characterName === characterName
-  )
+  return allActions.actions.filter((action) => action.characterName === characterName)
 }
 
 /**
  * 合并多个连续场景的动作（用于长视频）
  */
-export function mergeSceneActions(
-  sceneActions: SceneActions[]
-): CharacterAction[] {
+export function mergeSceneActions(sceneActions: SceneActions[]): CharacterAction[] {
   const merged: CharacterAction[] = []
 
   for (const sa of sceneActions) {

@@ -1,11 +1,13 @@
 import OpenAI from 'openai'
-import type { ScriptContent, ScriptScene, ScriptDialogueLine, Character } from '@dreamer/shared/types'
+import type {
+  ScriptContent,
+  ScriptScene,
+  ScriptDialogueLine,
+  Character
+} from '@dreamer/shared/types'
 import type { DeepSeekCost } from './ai/deepseek.js'
 import type { ModelCallLogContext } from './ai/api-logger.js'
-import {
-  DEEPSEEK_TEMPERATURE,
-  DEEPSEEK_MAX_TOKENS
-} from './ai/ai.constants.js'
+import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai/ai.constants.js'
 import { SCRIPT_WRITER_PROMPT, EPISODE_WRITER_PROMPT } from './prompts/script-prompts.js'
 import {
   callDeepSeekWithRetry,
@@ -265,7 +267,7 @@ function buildUserPrompt(idea: string, options?: ScriptWriterOptions): string {
 
   if (options?.characters && options.characters.length > 0) {
     const characterList = options.characters
-      .map(c => `- ${c.name}: ${c.description || '未描述'}`)
+      .map((c) => `- ${c.name}: ${c.description || '未描述'}`)
       .join('\n')
     prompt += `\n\n角色设定：\n${characterList}`
   }
@@ -281,7 +283,10 @@ function parseScriptResponse(content: string): ScriptContent {
   // 清理返回内容，移除可能的 markdown 代码块
   let cleanContent = content
   if (content.includes('```json')) {
-    cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    cleanContent = content
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim()
   }
 
   // 移除可能的引号包裹
@@ -381,5 +386,5 @@ function validateScript(script: ScriptContent): void {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

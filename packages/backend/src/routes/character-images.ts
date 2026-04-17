@@ -32,7 +32,11 @@ export async function characterImageRoutes(fastify: FastifyInstance) {
           return reply.status(403).send(permissionDeniedBody)
         }
       }
-      const result = await characterImageService.batchEnqueueMissingAvatars(userId, projectId, characterId)
+      const result = await characterImageService.batchEnqueueMissingAvatars(
+        userId,
+        projectId,
+        characterId
+      )
       return reply.status(202).send(result)
     }
   )
@@ -49,18 +53,22 @@ export async function characterImageRoutes(fastify: FastifyInstance) {
         return reply.status(403).send(permissionDeniedBody)
       }
 
-      const result = await characterImageService.enqueueGenerate(userId, characterImageId, bodyPrompt)
+      const result = await characterImageService.enqueueGenerate(
+        userId,
+        characterImageId,
+        bodyPrompt
+      )
 
       if (!result.ok) {
         if (result.reason === 'not_found') {
           return reply.status(404).send({ error: 'Character image not found' })
         }
         if (result.reason === 'missing_prompt') {
-          return reply.status(400).send({ error: '缺少提示词：请在形象中填写 prompt 或传入 prompt' })
+          return reply
+            .status(400)
+            .send({ error: '缺少提示词：请在形象中填写 prompt 或传入 prompt' })
         }
-        return reply
-          .status(400)
-          .send({ error: '父级基础形象尚未生成，无法做换装/衍生图' })
+        return reply.status(400).send({ error: '父级基础形象尚未生成，无法做换装/衍生图' })
       }
 
       return reply.status(202).send({ jobId: result.jobId, kind: result.kind })

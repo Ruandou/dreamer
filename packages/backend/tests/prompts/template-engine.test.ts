@@ -33,9 +33,7 @@ describe('PromptTemplateEngine', () => {
     })
 
     it('throws error for non-existent template', () => {
-      expect(() => engine.getTemplate('non-existent')).toThrow(
-        'Template "non-existent" not found'
-      )
+      expect(() => engine.getTemplate('non-existent')).toThrow('Template "non-existent" not found')
     })
 
     it('supports multiple versions and returns latest by default', () => {
@@ -334,7 +332,7 @@ describe('PromptTemplateEngine', () => {
 
       const scripts = engine.getByCategory('script')
       expect(scripts.length).toBe(2)
-      expect(scripts.every(t => t.metadata.category === 'script')).toBe(true)
+      expect(scripts.every((t) => t.metadata.category === 'script')).toBe(true)
     })
   })
 

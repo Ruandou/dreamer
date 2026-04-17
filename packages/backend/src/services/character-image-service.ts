@@ -7,10 +7,7 @@ import {
 import { buildCharacterImageStyledPrompt } from '../lib/character-image-prompt.js'
 
 export interface ImageQueueAdapter {
-  add(
-    name: string,
-    data: ImageGenerationJobData
-  ): Promise<{ id?: string | null }>
+  add(name: string, data: ImageGenerationJobData): Promise<{ id?: string | null }>
 }
 
 export type EnqueueCharacterImageGenerateResult =

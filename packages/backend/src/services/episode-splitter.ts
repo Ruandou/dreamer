@@ -12,9 +12,9 @@ const DEFAULT_EPISODE_DURATION = 60
 const ESTIMATED_SCENE_DURATION = 12
 
 export interface EpisodeSplitterOptions {
-  targetDuration?: number    // 每集目标时长
-  minScenesPerEpisode?: number  // 每集最少场景数
-  maxScenesPerEpisode?: number  // 每集最多场景数
+  targetDuration?: number // 每集目标时长
+  minScenesPerEpisode?: number // 每集最少场景数
+  maxScenesPerEpisode?: number // 每集最多场景数
 }
 
 /**
@@ -38,7 +38,10 @@ export function splitIntoEpisodes(
 
   // 计算集数
   const calculatedEpisodes = Math.ceil(totalDuration / targetDuration)
-  const episodeCount = Math.max(1, Math.min(calculatedEpisodes, Math.ceil(totalScenes / minScenesPerEpisode)))
+  const episodeCount = Math.max(
+    1,
+    Math.min(calculatedEpisodes, Math.ceil(totalScenes / minScenesPerEpisode))
+  )
 
   // 场景分配算法
   const episodes = distributeScenesToEpisodes(
@@ -62,7 +65,7 @@ export function splitIntoEpisodes(
       sceneCount: episodeScenes.length,
       estimatedDuration: episodeScenes.length * ESTIMATED_SCENE_DURATION,
       keyMoments,
-      sceneIndices: episodeScenes.map(s => s.sceneNum - 1)
+      sceneIndices: episodeScenes.map((s) => s.sceneNum - 1)
     }
   })
 }
@@ -91,10 +94,10 @@ function distributeScenesToEpisodes(
   }))
 
   // 按结构分配：开头、中间、高潮、结尾
-  const openingScenes = sceneTypes.filter(s => s.type === 'opening')
-  const climaxScenes = sceneTypes.filter(s => s.type === 'climax')
-  const endingScenes = sceneTypes.filter(s => s.type === 'ending')
-  const middleScenes = sceneTypes.filter(s => s.type === 'middle')
+  const openingScenes = sceneTypes.filter((s) => s.type === 'opening')
+  const climaxScenes = sceneTypes.filter((s) => s.type === 'climax')
+  const endingScenes = sceneTypes.filter((s) => s.type === 'ending')
+  const middleScenes = sceneTypes.filter((s) => s.type === 'middle')
 
   // 打乱场景顺序以增加多样性（但保持结构）
   const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => Math.random() - 0.5)
@@ -145,9 +148,9 @@ function distributeScenesToEpisodes(
     episode.sort((a, b) => a.sceneNum - b.sceneNum)
 
     // 确保每集至少有一定数量的场景（使用未使用的场景）
-    const usedIndices = new Set(episodes.flat().map(s => s.sceneNum))
+    const usedIndices = new Set(episodes.flat().map((s) => s.sceneNum))
     while (episode.length < minScenes) {
-      const nextScene = scenes.find(s => !usedIndices.has(s.sceneNum))
+      const nextScene = scenes.find((s) => !usedIndices.has(s.sceneNum))
       if (nextScene) {
         usedIndices.add(nextScene.sceneNum)
         episode.push(nextScene)
@@ -228,19 +231,31 @@ function classifyScene(
  * 检查场景是否有高潮指标
  */
 function hasClimaxIndicators(scene: ScriptScene): boolean {
-  const text = [
-    scene.description,
-    ...scene.dialogues.map(d => d.content),
-    ...scene.actions
-  ].join(' ').toLowerCase()
+  const text = [scene.description, ...scene.dialogues.map((d) => d.content), ...scene.actions]
+    .join(' ')
+    .toLowerCase()
 
   const climaxKeywords = [
-    '爆发', '冲突', '对决', '表白', '揭露', '真相',
-    '转折', '震惊', '高潮', '决定', '战斗', '争吵',
-    'cry', 'explosion', 'fight', 'revelation', 'climax'
+    '爆发',
+    '冲突',
+    '对决',
+    '表白',
+    '揭露',
+    '真相',
+    '转折',
+    '震惊',
+    '高潮',
+    '决定',
+    '战斗',
+    '争吵',
+    'cry',
+    'explosion',
+    'fight',
+    'revelation',
+    'climax'
   ]
 
-  return climaxKeywords.some(keyword => text.includes(keyword))
+  return climaxKeywords.some((keyword) => text.includes(keyword))
 }
 
 /**
@@ -251,16 +266,14 @@ function generateEpisodeSynopsis(scenes: ScriptScene[], episodeNum: number): str
 
   // 提取主要角色
   const allCharacters = new Set<string>()
-  scenes.forEach(s => s.characters.forEach(c => allCharacters.add(c)))
+  scenes.forEach((s) => s.characters.forEach((c) => allCharacters.add(c)))
   const mainCharacters = Array.from(allCharacters).slice(0, 3)
 
   // 提取关键动作
-  const keyActions = scenes
-    .flatMap(s => s.actions)
-    .slice(0, 2)
+  const keyActions = scenes.flatMap((s) => s.actions).slice(0, 2)
 
   // 提取场景地点
-  const locations = [...new Set(scenes.map(s => s.location))].slice(0, 2)
+  const locations = [...new Set(scenes.map((s) => s.location))].slice(0, 2)
 
   // 构建梗概
   const parts: string[] = []
@@ -294,9 +307,9 @@ function extractKeyMoments(scenes: ScriptScene[]): string[] {
 
     // 提取关键对话
     const importantDialogues = scene.dialogues
-      .filter(d => d.content.length > 10)
+      .filter((d) => d.content.length > 10)
       .slice(0, 1)
-      .map(d => `${d.character}：${d.content.slice(0, 30)}...`)
+      .map((d) => `${d.character}：${d.content.slice(0, 30)}...`)
 
     moments.push(...importantDialogues)
   }

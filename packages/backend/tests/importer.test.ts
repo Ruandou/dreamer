@@ -121,9 +121,7 @@ describe('Importer Service', () => {
             episodeNum: 1,
             title: 'Updated Episode 1',
             script: { scenes: [] },
-            scenes: [
-              { sceneNum: 1, description: 'New Scene 1', prompt: 'new prompt' }
-            ]
+            scenes: [{ sceneNum: 1, description: 'New Scene 1', prompt: 'new prompt' }]
           }
         ]
       }
@@ -151,9 +149,7 @@ describe('Importer Service', () => {
     it('should use default description for characters without description', async () => {
       const parsed: ParsedScript = {
         projectName: 'Test Project',
-        characters: [
-          { name: 'Alice', description: '' }
-        ],
+        characters: [{ name: 'Alice', description: '' }],
         episodes: []
       }
 

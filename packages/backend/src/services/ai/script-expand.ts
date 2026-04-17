@@ -6,10 +6,7 @@ import type {
 } from '@dreamer/shared/types'
 import type { ModelCallLogContext } from './api-logger.js'
 import type { DeepSeekCost } from './deepseek-client.js'
-import {
-  DEEPSEEK_TEMPERATURE,
-  DEEPSEEK_MAX_TOKENS
-} from './ai.constants.js'
+import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
 import {
   type DeepSeekScriptData,
   type DeepSeekScene,
@@ -128,11 +125,11 @@ export async function expandScript(
   summary: string,
   projectContext?: string,
   log?: ModelCallLogContext,
-  provider?: LLMProvider  // 新增：可选的自定义提供者
+  provider?: LLMProvider // 新增：可选的自定义提供者
 ): Promise<{ script: ScriptContent; cost: DeepSeekCost }> {
   const llmProvider = provider || getDefaultProvider()
   const template = PromptRegistry.getInstance().getLatest('script-expand')
-  
+
   const rendered = PromptRegistry.getInstance().render('script-expand', {
     summary,
     projectContext: projectContext || ''

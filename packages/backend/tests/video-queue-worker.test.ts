@@ -247,9 +247,7 @@ describe('Video Queue Worker', () => {
         await capturedProcessor.current(mockJob)
       }
 
-      expect(mockSubmitWan26Task).toHaveBeenCalledWith(
-        expect.objectContaining({ duration: 5 })
-      )
+      expect(mockSubmitWan26Task).toHaveBeenCalledWith(expect.objectContaining({ duration: 5 }))
     })
 
     it('should send SSE notification on processing', async () => {
@@ -275,12 +273,9 @@ describe('Video Queue Worker', () => {
         await capturedProcessor.current(mockJob)
       }
 
-      expect(mockSendTaskUpdate).toHaveBeenCalledWith(
-        'user-123',
-        'task-111',
-        'processing',
-        { sceneId: 'scene-111' }
-      )
+      expect(mockSendTaskUpdate).toHaveBeenCalledWith('user-123', 'task-111', 'processing', {
+        sceneId: 'scene-111'
+      })
     })
 
     it('should handle job failure', async () => {

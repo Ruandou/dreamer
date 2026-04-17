@@ -83,11 +83,13 @@ describe('DeepSeek Call Wrapper', () => {
   describe('callDeepSeekWithRetry', () => {
     it('should successfully call API and return parsed result on first attempt', async () => {
       const mockResponse = {
-        choices: [{
-          message: {
-            content: '{"result": "success"}'
+        choices: [
+          {
+            message: {
+              content: '{"result": "success"}'
+            }
           }
-        }],
+        ],
         usage: {
           prompt_tokens: 100,
           completion_tokens: 200,
@@ -112,20 +114,21 @@ describe('DeepSeek Call Wrapper', () => {
       expect(result.cost).toEqual({ costCNY: 0.05, promptCost: 0.01, completionCost: 0.04 })
       expect(result.rawResponse).toEqual(mockResponse)
       expect(mockClient.chat.completions.create).toHaveBeenCalledTimes(1)
-      expect(logDeepSeekChat).toHaveBeenCalledWith(
-        undefined,
-        'Hello',
-        { status: 'completed', costCNY: 0.05 }
-      )
+      expect(logDeepSeekChat).toHaveBeenCalledWith(undefined, 'Hello', {
+        status: 'completed',
+        costCNY: 0.05
+      })
     })
 
     it('should use default values when options are not provided', async () => {
       const mockResponse = {
-        choices: [{
-          message: {
-            content: '{"data": "test"}'
+        choices: [
+          {
+            message: {
+              content: '{"data": "test"}'
+            }
           }
-        }],
+        ],
         usage: {
           prompt_tokens: 50,
           completion_tokens: 100,
@@ -156,11 +159,13 @@ describe('DeepSeek Call Wrapper', () => {
 
     it('should retry on general error and succeed', async () => {
       const mockResponse = {
-        choices: [{
-          message: {
-            content: '{"success": true}'
+        choices: [
+          {
+            message: {
+              content: '{"success": true}'
+            }
           }
-        }],
+        ],
         usage: {
           prompt_tokens: 100,
           completion_tokens: 200,
@@ -210,13 +215,12 @@ describe('DeepSeek Call Wrapper', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(DeepSeekAuthError)
       }
-      
+
       expect(mockClient.chat.completions.create).toHaveBeenCalledTimes(1)
-      expect(logDeepSeekChat).toHaveBeenCalledWith(
-        undefined,
-        'Test',
-        { status: 'failed', errorMsg: 'Authentication failed' }
-      )
+      expect(logDeepSeekChat).toHaveBeenCalledWith(undefined, 'Test', {
+        status: 'failed',
+        errorMsg: 'Authentication failed'
+      })
     })
 
     it('should throw DeepSeekAuthError immediately on 403 error without retry', async () => {
@@ -238,17 +242,19 @@ describe('DeepSeek Call Wrapper', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(DeepSeekAuthError)
       }
-      
+
       expect(mockClient.chat.completions.create).toHaveBeenCalledTimes(1)
     })
 
     it('should retry on rate limit error (429) and succeed', async () => {
       const mockResponse = {
-        choices: [{
-          message: {
-            content: '{"data": "after retry"}'
+        choices: [
+          {
+            message: {
+              content: '{"data": "after retry"}'
+            }
           }
-        }],
+        ],
         usage: {
           prompt_tokens: 100,
           completion_tokens: 200,
@@ -297,19 +303,18 @@ describe('DeepSeek Call Wrapper', () => {
       const promise = callDeepSeekWithRetry(options, JSON.parse)
       // Set up assertion BEFORE advancing timers
       const assertion = expect(promise).rejects.toBeInstanceOf(DeepSeekRateLimitError)
-      
+
       // Fast-forward through all retries
       await vi.advanceTimersByTimeAsync(2000)
       await vi.advanceTimersByTimeAsync(4000)
-      
+
       await assertion
-      
+
       expect(mockClient.chat.completions.create).toHaveBeenCalledTimes(2)
-      expect(logDeepSeekChat).toHaveBeenCalledWith(
-        undefined,
-        'Test',
-        { status: 'failed', errorMsg: 'rate_limit' }
-      )
+      expect(logDeepSeekChat).toHaveBeenCalledWith(undefined, 'Test', {
+        status: 'failed',
+        errorMsg: 'rate_limit'
+      })
     })
 
     it('should handle rate limit error with message containing rate_limit', async () => {
@@ -327,20 +332,22 @@ describe('DeepSeek Call Wrapper', () => {
 
       const promise = callDeepSeekWithRetry(options, JSON.parse)
       const assertion = expect(promise).rejects.toBeInstanceOf(DeepSeekRateLimitError)
-      
+
       await vi.advanceTimersByTimeAsync(2000)
       await vi.advanceTimersByTimeAsync(4000)
-      
+
       await assertion
     })
 
     it('should throw error when API returns empty content', async () => {
       const mockResponse = {
-        choices: [{
-          message: {
-            content: null
+        choices: [
+          {
+            message: {
+              content: null
+            }
           }
-        }],
+        ],
         usage: {
           prompt_tokens: 100,
           completion_tokens: 200,
@@ -367,11 +374,13 @@ describe('DeepSeek Call Wrapper', () => {
 
     it('should pass modelLog context to logDeepSeekChat', async () => {
       const mockResponse = {
-        choices: [{
-          message: {
-            content: '{"test": true}'
+        choices: [
+          {
+            message: {
+              content: '{"test": true}'
+            }
           }
-        }],
+        ],
         usage: {
           prompt_tokens: 100,
           completion_tokens: 200,
@@ -396,20 +405,21 @@ describe('DeepSeek Call Wrapper', () => {
 
       await callDeepSeekWithRetry(options, JSON.parse)
 
-      expect(logDeepSeekChat).toHaveBeenCalledWith(
-        modelLog,
-        'Test',
-        { status: 'completed', costCNY: 0.05 }
-      )
+      expect(logDeepSeekChat).toHaveBeenCalledWith(modelLog, 'Test', {
+        status: 'completed',
+        costCNY: 0.05
+      })
     })
 
     it('should retry with custom maxRetries', async () => {
       const mockResponse = {
-        choices: [{
-          message: {
-            content: '{"retry": 3}'
+        choices: [
+          {
+            message: {
+              content: '{"retry": 3}'
+            }
           }
-        }],
+        ],
         usage: {
           prompt_tokens: 100,
           completion_tokens: 200,
@@ -454,11 +464,11 @@ describe('DeepSeek Call Wrapper', () => {
 
       const promise = callDeepSeekWithRetry(options, JSON.parse)
       const assertion = expect(promise).rejects.toThrow('Network timeout')
-      
+
       await vi.advanceTimersByTimeAsync(1000)
-      
+
       await assertion
-      
+
       expect(mockClient.chat.completions.create).toHaveBeenCalledTimes(2)
     })
 
@@ -487,11 +497,10 @@ describe('DeepSeek Call Wrapper', () => {
 
       await assertion
 
-      expect(logDeepSeekChat).toHaveBeenCalledWith(
-        modelLog,
-        'Test prompt',
-        { status: 'failed', errorMsg: 'Connection refused' }
-      )
+      expect(logDeepSeekChat).toHaveBeenCalledWith(modelLog, 'Test prompt', {
+        status: 'failed',
+        errorMsg: 'Connection refused'
+      })
     })
   })
 

@@ -32,8 +32,14 @@ export class PipelineRouteService {
     | { ok: false; status: 404; error: string }
     | { ok: false; status: 500; error: string }
   > {
-    const { projectId, idea, targetEpisodes, targetDuration, defaultAspectRatio, defaultResolution } =
-      body
+    const {
+      projectId,
+      idea,
+      targetEpisodes,
+      targetDuration,
+      defaultAspectRatio,
+      defaultResolution
+    } = body
 
     if (!projectId || !idea) {
       return { ok: false, status: 400, error: '缺少必要参数: projectId, idea' }
@@ -71,7 +77,7 @@ export class PipelineRouteService {
         targetDuration,
         defaultAspectRatio: resolvedAspect,
         defaultResolution: defaultResolution || '720p'
-      }).catch(error => {
+      }).catch((error) => {
         console.error(`Pipeline Job ${job.id} failed:`, error)
       })
 
@@ -141,7 +147,7 @@ export class PipelineRouteService {
 
   async listJobsForUser(userId: string) {
     const jobs = await this.repo.findManyJobsForUser(userId)
-    return jobs.map(job => ({
+    return jobs.map((job) => ({
       id: job.id,
       projectId: job.projectId,
       projectName: job.project?.name,

@@ -56,8 +56,8 @@ describe('character-identity-normalize', () => {
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith',
-        'Bob': 'Bob Jones'
+        Alice: 'Alice Smith',
+        Bob: 'Bob Jones'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -86,8 +86,8 @@ describe('character-identity-normalize', () => {
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith',
-        'Bob': 'Bob Jones'
+        Alice: 'Alice Smith',
+        Bob: 'Bob Jones'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -114,7 +114,7 @@ describe('character-identity-normalize', () => {
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith'
+        Alice: 'Alice Smith'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -134,8 +134,8 @@ describe('character-identity-normalize', () => {
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith',
-        'Bob': 'Bob Jones'
+        Alice: 'Alice Smith',
+        Bob: 'Bob Jones'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -154,7 +154,7 @@ describe('character-identity-normalize', () => {
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith'
+        Alice: 'Alice Smith'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -170,7 +170,7 @@ describe('character-identity-normalize', () => {
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith'
+        Alice: 'Alice Smith'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -193,7 +193,7 @@ describe('character-identity-normalize', () => {
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith'
+        Alice: 'Alice Smith'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -216,7 +216,7 @@ describe('character-identity-normalize', () => {
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith'
+        Alice: 'Alice Smith'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -232,7 +232,7 @@ describe('character-identity-normalize', () => {
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith'
+        Alice: 'Alice Smith'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -251,16 +251,14 @@ describe('character-identity-normalize', () => {
             timeOfDay: 'day',
             characters: ['  Alice  ', 'Bob'],
             description: 'Scene',
-            dialogues: [
-              { character: '  Alice  ', content: 'Hello' }
-            ],
+            dialogues: [{ character: '  Alice  ', content: 'Hello' }],
             actions: []
           }
         ]
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith'
+        Alice: 'Alice Smith'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -280,16 +278,14 @@ describe('character-identity-normalize', () => {
             timeOfDay: 'day',
             characters: ['Alice', 'Unknown'],
             description: 'Scene',
-            dialogues: [
-              { character: 'Unknown', content: 'Hello' }
-            ],
+            dialogues: [{ character: 'Unknown', content: 'Hello' }],
             actions: []
           }
         ]
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith'
+        Alice: 'Alice Smith'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -334,8 +330,8 @@ describe('character-identity-normalize', () => {
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith',
-        'Bob': 'Bob Jones'
+        Alice: 'Alice Smith',
+        Bob: 'Bob Jones'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)
@@ -363,7 +359,7 @@ describe('character-identity-normalize', () => {
       }
 
       const aliasToCanonical = {
-        'Alice': 'Alice Smith'
+        Alice: 'Alice Smith'
       }
 
       const result = normalizeScriptContent(script, aliasToCanonical)

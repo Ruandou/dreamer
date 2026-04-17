@@ -26,55 +26,109 @@ describe('TTS Mapper', () => {
     }> = [
       {
         name: 'should return correct voice for young male warm_solid on aliyun',
-        config: { gender: 'male', age: 'young', tone: 'mid', timbre: 'warm_solid', speed: 'medium' },
+        config: {
+          gender: 'male',
+          age: 'young',
+          tone: 'mid',
+          timbre: 'warm_solid',
+          speed: 'medium'
+        },
         platform: 'aliyun',
         expected: 'zh_male_qingrun'
       },
       {
         name: 'should return correct voice for young male clear_bright on aliyun',
-        config: { gender: 'male', age: 'young', tone: 'mid', timbre: 'clear_bright', speed: 'medium' },
+        config: {
+          gender: 'male',
+          age: 'young',
+          tone: 'mid',
+          timbre: 'clear_bright',
+          speed: 'medium'
+        },
         platform: 'aliyun',
         expected: 'zh_male_qingse'
       },
       {
         name: 'should return default voice for young male with unknown timbre on aliyun',
-        config: { gender: 'male', age: 'young', tone: 'mid', timbre: 'unknown' as any, speed: 'medium' },
+        config: {
+          gender: 'male',
+          age: 'young',
+          tone: 'mid',
+          timbre: 'unknown' as any,
+          speed: 'medium'
+        },
         platform: 'aliyun',
         expected: 'zh_male_shaonian'
       },
       {
         name: 'should return correct voice for young female warm_solid on aliyun',
-        config: { gender: 'female', age: 'young', tone: 'mid', timbre: 'warm_solid', speed: 'medium' },
+        config: {
+          gender: 'female',
+          age: 'young',
+          tone: 'mid',
+          timbre: 'warm_solid',
+          speed: 'medium'
+        },
         platform: 'aliyun',
         expected: 'zh_female_shuangkuai'
       },
       {
         name: 'should return correct voice for young female soft_gentle on aliyun',
-        config: { gender: 'female', age: 'young', tone: 'mid', timbre: 'soft_gentle', speed: 'medium' },
+        config: {
+          gender: 'female',
+          age: 'young',
+          tone: 'mid',
+          timbre: 'soft_gentle',
+          speed: 'medium'
+        },
         platform: 'aliyun',
         expected: 'zh_female_wenrou'
       },
       {
         name: 'should return default voice for middle_aged male on aliyun',
-        config: { gender: 'male', age: 'middle_aged', tone: 'mid', timbre: 'warm_solid', speed: 'medium' },
+        config: {
+          gender: 'male',
+          age: 'middle_aged',
+          tone: 'mid',
+          timbre: 'warm_solid',
+          speed: 'medium'
+        },
         platform: 'aliyun',
         expected: 'zh_male_wenrun'
       },
       {
         name: 'should return correct voice for old female on aliyun',
-        config: { gender: 'female', age: 'old', tone: 'mid', timbre: 'warm_solid', speed: 'medium' },
+        config: {
+          gender: 'female',
+          age: 'old',
+          tone: 'mid',
+          timbre: 'warm_solid',
+          speed: 'medium'
+        },
         platform: 'aliyun',
         expected: 'zh_female_laonian'
       },
       {
         name: 'should return correct voice for young male on volcano',
-        config: { gender: 'male', age: 'young', tone: 'mid', timbre: 'warm_solid', speed: 'medium' },
+        config: {
+          gender: 'male',
+          age: 'young',
+          tone: 'mid',
+          timbre: 'warm_solid',
+          speed: 'medium'
+        },
         platform: 'volcano',
         expected: 'BV700_V2_male_qingrun'
       },
       {
         name: 'should return correct voice for young female on volcano',
-        config: { gender: 'female', age: 'young', tone: 'mid', timbre: 'soft_gentle', speed: 'medium' },
+        config: {
+          gender: 'female',
+          age: 'young',
+          tone: 'mid',
+          timbre: 'soft_gentle',
+          speed: 'medium'
+        },
         platform: 'volcano',
         expected: 'BV700_V2_female_wenrou'
       }
@@ -88,7 +142,13 @@ describe('TTS Mapper', () => {
     })
 
     it('should fallback to default voice when config is invalid', () => {
-      const invalidConfig = { gender: 'unknown' as any, age: 'unknown' as any, tone: 'mid' as any, timbre: 'unknown' as any, speed: 'medium' as any }
+      const invalidConfig = {
+        gender: 'unknown' as any,
+        age: 'unknown' as any,
+        tone: 'mid' as any,
+        timbre: 'unknown' as any,
+        speed: 'medium' as any
+      }
       const result = getVoiceIdFromConfig(invalidConfig, 'aliyun')
       expect(result).toBe('zh_female_qingxin') // default
     })

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { splitIntoEpisodes, calculateEpisodeDuration, calculateTotalDuration } from '../src/services/episode-splitter.js'
+import {
+  splitIntoEpisodes,
+  calculateEpisodeDuration,
+  calculateTotalDuration
+} from '../src/services/episode-splitter.js'
 import type { ScriptContent } from '@dreamer/shared/types'
 
 describe('Episode Splitter Service', () => {
@@ -80,8 +84,22 @@ describe('Episode Splitter Service', () => {
   describe('calculateTotalDuration', () => {
     it('should calculate total duration', () => {
       const episodes = [
-        { episodeNum: 1, title: '第1集', synopsis: '', sceneCount: 3, estimatedDuration: 36, keyMoments: [] },
-        { episodeNum: 2, title: '第2集', synopsis: '', sceneCount: 2, estimatedDuration: 24, keyMoments: [] }
+        {
+          episodeNum: 1,
+          title: '第1集',
+          synopsis: '',
+          sceneCount: 3,
+          estimatedDuration: 36,
+          keyMoments: []
+        },
+        {
+          episodeNum: 2,
+          title: '第2集',
+          synopsis: '',
+          sceneCount: 2,
+          estimatedDuration: 24,
+          keyMoments: []
+        }
       ]
 
       const total = calculateTotalDuration(episodes)

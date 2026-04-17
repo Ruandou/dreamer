@@ -26,7 +26,9 @@ describe('SSE Plugin', () => {
 
     it('should format message correctly', async () => {
       const { sendSSEToUser } = await import('../src/plugins/sse.js')
-      expect(() => sendSSEToUser('test-user', 'task-update', { taskId: '123', status: 'completed' })).not.toThrow()
+      expect(() =>
+        sendSSEToUser('test-user', 'task-update', { taskId: '123', status: 'completed' })
+      ).not.toThrow()
     })
 
     it('should handle closed connections gracefully', async () => {
@@ -51,7 +53,9 @@ describe('SSE Plugin', () => {
 
     it('should not throw when called', async () => {
       const { sendTaskUpdate } = await import('../src/plugins/sse.js')
-      expect(() => sendTaskUpdate('user-123', 'task-456', 'completed', { sceneId: 'scene-789' })).not.toThrow()
+      expect(() =>
+        sendTaskUpdate('user-123', 'task-456', 'completed', { sceneId: 'scene-789' })
+      ).not.toThrow()
     })
 
     it('should include taskId and status in the event data', async () => {
@@ -71,7 +75,9 @@ describe('SSE Plugin', () => {
 
     it('should not throw when called', async () => {
       const { sendProjectUpdate } = await import('../src/plugins/sse.js')
-      expect(() => sendProjectUpdate('user-123', 'project-456', 'created', { name: 'Test Project' })).not.toThrow()
+      expect(() =>
+        sendProjectUpdate('user-123', 'project-456', 'created', { name: 'Test Project' })
+      ).not.toThrow()
     })
   })
 
@@ -146,10 +152,13 @@ describe('SSE Plugin Integration', () => {
 
     await ssePlugin(mockFastify)
 
-    expect(mockFastify.decorate).toHaveBeenCalledWith('sse', expect.objectContaining({
-      subscribe: expect.any(Function),
-      sendToUser: expect.any(Function)
-    }))
+    expect(mockFastify.decorate).toHaveBeenCalledWith(
+      'sse',
+      expect.objectContaining({
+        subscribe: expect.any(Function),
+        sendToUser: expect.any(Function)
+      })
+    )
   })
 
   it('should sendToUser call sendSSEToUser', async () => {

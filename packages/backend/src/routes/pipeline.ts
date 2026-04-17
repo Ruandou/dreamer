@@ -28,11 +28,13 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
       const result = await pipelineRouteService.createAndStartFullPipeline(userId, request.body)
 
       if (!result.ok) {
-        return reply.status(result.status).send(
-          result.status === 500
-            ? { success: false, error: result.error }
-            : { error: result.error }
-        )
+        return reply
+          .status(result.status)
+          .send(
+            result.status === 500
+              ? { success: false, error: result.error }
+              : { error: result.error }
+          )
       }
 
       return {
@@ -95,19 +97,27 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
   )
 
   // 获取流水线步骤列表
-  fastify.get('/steps', {
-    preHandler: [fastify.authenticate]
-  }, async () => {
-    return pipelineRouteService.getStepsCatalog()
-  })
+  fastify.get(
+    '/steps',
+    {
+      preHandler: [fastify.authenticate]
+    },
+    async () => {
+      return pipelineRouteService.getStepsCatalog()
+    }
+  )
 
   // 获取用户所有 Pipeline Jobs
-  fastify.get('/jobs', {
-    preHandler: [fastify.authenticate]
-  }, async (request) => {
-    const userId = (request as any).user.id
-    return pipelineRouteService.listJobsForUser(userId)
-  })
+  fastify.get(
+    '/jobs',
+    {
+      preHandler: [fastify.authenticate]
+    },
+    async (request) => {
+      const userId = (request as any).user.id
+      return pipelineRouteService.listJobsForUser(userId)
+    }
+  )
 
   // 取消 Job
   fastify.delete<{

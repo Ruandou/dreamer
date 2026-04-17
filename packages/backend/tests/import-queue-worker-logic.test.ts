@@ -90,7 +90,7 @@ vi.mock('bullmq', () => {
     close: vi.fn().mockResolvedValue(undefined),
     on: vi.fn()
   }
-  
+
   const MockWorker = vi.fn((name, processor, options) => {
     capturedImportProcessor = processor
     return {
@@ -98,7 +98,7 @@ vi.mock('bullmq', () => {
       close: vi.fn().mockResolvedValue(undefined)
     }
   })
-  
+
   return {
     Queue: vi.fn(() => mockQueue),
     Worker: MockWorker
@@ -120,9 +120,9 @@ describe('Import Queue Worker', () => {
 
   it('should process import job with existing project', async () => {
     await import('../src/queues/import.js')
-    
+
     expect(capturedImportProcessor).toBeDefined()
-    
+
     const mockJob = {
       id: 'import-job-1',
       data: {
@@ -137,16 +137,12 @@ describe('Import Queue Worker', () => {
     const parsedData = {
       projectName: 'Test Project',
       description: 'Test Description',
-      characters: [
-        { name: 'Character 1', description: 'Main character', images: [] }
-      ],
+      characters: [{ name: 'Character 1', description: 'Main character', images: [] }],
       episodes: [
         {
           episodeNum: 1,
           title: 'Episode 1',
-          scenes: [
-            { sceneNumber: 1, stageDirection: 'Interior', content: 'Scene 1' }
-          ]
+          scenes: [{ sceneNumber: 1, stageDirection: 'Interior', content: 'Scene 1' }]
         }
       ]
     }
@@ -181,7 +177,7 @@ describe('Import Queue Worker', () => {
 
   it('should create new project when projectId is not provided', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'import-job-2',
       data: {
@@ -221,7 +217,7 @@ describe('Import Queue Worker', () => {
 
   it('should apply visual enrichment when episodes exist', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'import-job-3',
       data: {
@@ -262,7 +258,7 @@ describe('Import Queue Worker', () => {
 
   it('should skip visual enrichment when no episodes exist', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'import-job-4',
       data: {
@@ -292,7 +288,7 @@ describe('Import Queue Worker', () => {
 
   it('should handle parse failure', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'import-job-5',
       data: {
@@ -307,13 +303,13 @@ describe('Import Queue Worker', () => {
     mockParseScriptDocument.mockRejectedValue(new Error('Invalid script format'))
 
     await expect(capturedImportProcessor(mockJob)).rejects.toThrow('Invalid script format')
-    
+
     expect(mockMarkFailed).toHaveBeenCalledWith('task-5', 'Invalid script format')
   })
 
   it('should handle import failure', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'import-job-6',
       data: {
@@ -336,13 +332,13 @@ describe('Import Queue Worker', () => {
     mockImportParsedData.mockRejectedValue(new Error('Database connection failed'))
 
     await expect(capturedImportProcessor(mockJob)).rejects.toThrow('Database connection failed')
-    
+
     expect(mockMarkFailed).toHaveBeenCalledWith('task-6', 'Database connection failed')
   })
 
   it('should process JSON type import', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'import-job-7',
       data: {
@@ -376,7 +372,7 @@ describe('Import Queue Worker', () => {
 
   it('should handle project creation failure', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'import-job-8',
       data: {
@@ -398,13 +394,13 @@ describe('Import Queue Worker', () => {
     mockCreateProjectForImport.mockRejectedValue(new Error('User not found'))
 
     await expect(capturedImportProcessor(mockJob)).rejects.toThrow('User not found')
-    
+
     expect(mockMarkFailed).toHaveBeenCalledWith('task-8', 'User not found')
   })
 
   it('should use default project name when parsed name is missing', async () => {
     vi.clearAllMocks()
-    
+
     const mockJob = {
       id: 'import-job-9',
       data: {

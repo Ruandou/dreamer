@@ -43,7 +43,6 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     }
   )
 
-
   /** 集详情工作台：episode + scenes 全量树 + project.visualStyle */
   fastify.get<{ Params: { id: string } }>(
     '/:id/detail',
@@ -105,20 +104,16 @@ export async function episodeRoutes(fastify: FastifyInstance) {
   fastify.put<{
     Params: { id: string }
     Body: { title?: string; synopsis?: string | null; script?: unknown }
-  }>(
-    '/:id',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id
-      const episodeId = request.params.id
+  }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const episodeId = request.params.id
 
-      if (!(await verifyEpisodeOwnership(userId, episodeId))) {
-        return reply.status(403).send(permissionDeniedBody)
-      }
-
-      return episodeService.updateEpisode(episodeId, request.body)
+    if (!(await verifyEpisodeOwnership(userId, episodeId))) {
+      return reply.status(403).send(permissionDeniedBody)
     }
-  )
+
+    return episodeService.updateEpisode(episodeId, request.body)
+  })
 
   // Delete episode
   fastify.delete<{ Params: { id: string } }>(

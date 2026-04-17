@@ -185,9 +185,7 @@ describe('scene-asset pure functions', () => {
         actions: []
       }
 
-      const assets = [
-        { type: 'character' as const, description: 'Alice in business suit' }
-      ]
+      const assets = [{ type: 'character' as const, description: 'Alice in business suit' }]
 
       const result = generateCompositePrompt(scene, assets)
 
@@ -205,9 +203,7 @@ describe('scene-asset pure functions', () => {
         actions: []
       }
 
-      const assets = [
-        { type: 'background' as const, description: 'Modern office with desks' }
-      ]
+      const assets = [{ type: 'background' as const, description: 'Modern office with desks' }]
 
       const result = generateCompositePrompt(scene, assets)
 

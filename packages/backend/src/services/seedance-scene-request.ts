@@ -20,7 +20,10 @@ function voiceConfigToShortDesc(v: unknown): string {
   return parts.join('，')
 }
 
-function mergeVisualStyleLabels(scene: { visualStyle: string[] }, project?: { visualStyle: string[] } | null): string {
+function mergeVisualStyleLabels(
+  scene: { visualStyle: string[] },
+  project?: { visualStyle: string[] } | null
+): string {
   const merged = [...(scene.visualStyle || []), ...(project?.visualStyle || [])]
   const seen = new Set<string>()
   const out: string[] = []

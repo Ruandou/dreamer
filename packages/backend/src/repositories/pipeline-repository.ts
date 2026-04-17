@@ -82,7 +82,7 @@ export class PipelineRepository {
       },
       select: { progressMeta: true }
     })
-    return rows.filter(r => {
+    return rows.filter((r) => {
       const m = r.progressMeta as { episodeId?: string } | null
       return m?.episodeId === episodeId
     }).length
@@ -117,7 +117,11 @@ export class PipelineRepository {
     return ids.has(episodeId)
   }
 
-  private static readonly OUTLINE_ASYNC_JOB_TYPES = ['script-batch', 'parse-script', 'script-first'] as const
+  private static readonly OUTLINE_ASYNC_JOB_TYPES = [
+    'script-batch',
+    'parse-script',
+    'script-first'
+  ] as const
 
   countOutlineAsyncJobs(projectId: string) {
     return this.prisma.pipelineJob.count({
@@ -225,7 +229,7 @@ export class PipelineRepository {
     scriptScenes: ScriptScene[]
   ) {
     for (const segment of storyboard) {
-      const episode = episodes.find(e => e.episodeNum === segment.episodeNum)
+      const episode = episodes.find((e) => e.episodeNum === segment.episodeNum)
       if (!episode) continue
 
       const episodeRecord = await this.prisma.episode.findFirst({
@@ -358,7 +362,7 @@ export class PipelineRepository {
             const dialogue = scriptScene.dialogues[voice.order - 1]
             if (dialogue) {
               const characterInSegment = segment.characters.find(
-                c => c.name === dialogue.character
+                (c) => c.name === dialogue.character
               )
               if (characterInSegment) {
                 const character = await this.prisma.character.findFirst({
@@ -372,7 +376,9 @@ export class PipelineRepository {
           }
 
           if (!characterId) {
-            console.warn(`SceneDialogue skipped: no character for scene ${sceneRecord.id}, order ${voice.order}`)
+            console.warn(
+              `SceneDialogue skipped: no character for scene ${sceneRecord.id}, order ${voice.order}`
+            )
             continue
           }
 

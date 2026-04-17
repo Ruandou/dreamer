@@ -47,9 +47,7 @@ describe('parsed-script-types', () => {
         {
           name: 'Charlie',
           description: 'Villain',
-          images: [
-            { name: 'Evil smile', type: 'expression', description: 'Menacing' }
-          ]
+          images: [{ name: 'Evil smile', type: 'expression', description: 'Menacing' }]
         }
       ]
 
@@ -96,9 +94,7 @@ describe('parsed-script-types', () => {
         {
           name: 'Test',
           description: '  Trimmed  ',
-          images: [
-            { name: '  Image Name  ', type: 'outfit', description: '  Desc  ' }
-          ]
+          images: [{ name: '  Image Name  ', type: 'outfit', description: '  Desc  ' }]
         }
       ]
 
@@ -119,9 +115,7 @@ describe('parsed-script-types', () => {
         {
           name: 'Test',
           description: 'Test char',
-          images: [
-            { name: '', type: 'base', description: 'No name' }
-          ]
+          images: [{ name: '', type: 'base', description: 'No name' }]
         }
       ]
 
@@ -235,7 +229,7 @@ describe('parsed-script-types', () => {
       expect(result[0].images).toHaveLength(4)
       expect(result[0].images?.[0].type).toBe('base')
       // Non-base types should come after (order among them doesn't matter)
-      const nonBaseTypes = result[0].images?.slice(1).map(i => i.type)
+      const nonBaseTypes = result[0].images?.slice(1).map((i) => i.type)
       expect(nonBaseTypes).toContain('pose')
       expect(nonBaseTypes).toContain('outfit')
       expect(nonBaseTypes).toContain('expression')

@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  truncateForModelLog,
-  parseModelApiRequestParams
-} from '../src/services/ai/api-logger.js'
+import { truncateForModelLog, parseModelApiRequestParams } from '../src/services/ai/api-logger.js'
 
 describe('api-logger utilities', () => {
   describe('truncateForModelLog', () => {

@@ -257,7 +257,9 @@ describe('Composition Routes', () => {
       })
 
       expect(response.statusCode).toBe(200)
-      expect(mockCompositionSceneDeleteMany).toHaveBeenCalledWith({ where: { compositionId: 'comp-1' } })
+      expect(mockCompositionSceneDeleteMany).toHaveBeenCalledWith({
+        where: { compositionId: 'comp-1' }
+      })
       expect(mockCompositionSceneCreateMany).toHaveBeenCalled()
     })
   })

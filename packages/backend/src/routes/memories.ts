@@ -5,200 +5,177 @@
  * Memories include characters, locations, events, foreshadowings, relationships, etc.
  */
 
-import { FastifyInstance } from "fastify";
-import { verifyProjectOwnership } from "../plugins/auth.js";
-import { permissionDeniedBody } from "../lib/http-errors.js";
-import { getMemoryService } from "../services/memory/index.js";
-import type { MemoryType } from "../repositories/memory-repository.js";
+import { FastifyInstance } from 'fastify'
+import { verifyProjectOwnership } from '../plugins/auth.js'
+import { permissionDeniedBody } from '../lib/http-errors.js'
+import { getMemoryService } from '../services/memory/index.js'
+import type { MemoryType } from '../repositories/memory-repository.js'
 
 export async function memoryRoutes(fastify: FastifyInstance) {
-  const memoryService = getMemoryService();
+  const memoryService = getMemoryService()
 
   // List memories for a project (with optional filters)
   fastify.get<{
-    Params: { projectId: string };
+    Params: { projectId: string }
     Querystring: {
-      type?: MemoryType;
-      isActive?: string;
-      episodeId?: string;
-      tags?: string;
-      minImportance?: string;
-      category?: string;
-      limit?: string;
-      offset?: string;
-    };
-  }>(
-    "/:projectId/memories",
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id;
-      const { projectId } = request.params;
-      const { type, isActive, episodeId, tags, minImportance, category } =
-        request.query;
+      type?: MemoryType
+      isActive?: string
+      episodeId?: string
+      tags?: string
+      minImportance?: string
+      category?: string
+      limit?: string
+      offset?: string
+    }
+  }>('/:projectId/memories', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const { projectId } = request.params
+    const { type, isActive, episodeId, tags, minImportance, category } = request.query
 
-      if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send(permissionDeniedBody);
-      }
+    if (!(await verifyProjectOwnership(userId, projectId))) {
+      return reply.status(403).send(permissionDeniedBody)
+    }
 
-      const filters: any = {};
-      if (type) filters.type = type;
-      if (isActive !== undefined) filters.isActive = isActive === "true";
-      if (episodeId) filters.episodeId = episodeId;
-      if (tags) filters.tags = tags.split(",").map((t) => t.trim());
-      if (minImportance) filters.minImportance = parseInt(minImportance, 10);
-      if (category) filters.category = category;
+    const filters: any = {}
+    if (type) filters.type = type
+    if (isActive !== undefined) filters.isActive = isActive === 'true'
+    if (episodeId) filters.episodeId = episodeId
+    if (tags) filters.tags = tags.split(',').map((t) => t.trim())
+    if (minImportance) filters.minImportance = parseInt(minImportance, 10)
+    if (category) filters.category = category
 
-      const memories = await memoryService.queryMemories(projectId, filters);
+    const memories = await memoryService.queryMemories(projectId, filters)
 
-      return {
-        success: true,
-        count: memories.length,
-        data: memories,
-      };
-    },
-  );
+    return {
+      success: true,
+      count: memories.length,
+      data: memories
+    }
+  })
 
   // Get single memory by ID
   fastify.get<{
-    Params: { projectId: string; memoryId: string };
+    Params: { projectId: string; memoryId: string }
   }>(
-    "/:projectId/memories/:memoryId",
+    '/:projectId/memories/:memoryId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id;
-      const { projectId, memoryId } = request.params;
+      const userId = (request as any).user.id
+      const { projectId, memoryId } = request.params
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send(permissionDeniedBody);
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       const memory = await memoryService
         .queryMemories(projectId, {})
-        .then((memories) => memories.find((m) => m.id === memoryId));
+        .then((memories) => memories.find((m) => m.id === memoryId))
 
       if (!memory) {
         return reply.status(404).send({
           success: false,
-          error: "Memory not found",
-        });
+          error: 'Memory not found'
+        })
       }
 
       return {
         success: true,
-        data: memory,
-      };
-    },
-  );
+        data: memory
+      }
+    }
+  )
 
   // Create memory manually
   fastify.post<{
-    Params: { projectId: string };
+    Params: { projectId: string }
     Body: {
-      type: MemoryType;
-      category?: string;
-      title: string;
-      content: string;
-      tags?: string[];
-      importance?: number;
-      episodeId?: string;
-      metadata?: Record<string, any>;
-    };
-  }>(
-    "/:projectId/memories",
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id;
-      const { projectId } = request.params;
-      const {
+      type: MemoryType
+      category?: string
+      title: string
+      content: string
+      tags?: string[]
+      importance?: number
+      episodeId?: string
+      metadata?: Record<string, any>
+    }
+  }>('/:projectId/memories', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const { projectId } = request.params
+    const { type, category, title, content, tags, importance, episodeId, metadata } = request.body
+
+    if (!(await verifyProjectOwnership(userId, projectId))) {
+      return reply.status(403).send(permissionDeniedBody)
+    }
+
+    // Validate required fields
+    if (!type || !title || !content) {
+      return reply.status(400).send({
+        success: false,
+        error: 'Missing required fields: type, title, content'
+      })
+    }
+
+    // Validate importance range
+    if (importance !== undefined && (importance < 1 || importance > 5)) {
+      return reply.status(400).send({
+        success: false,
+        error: 'Importance must be between 1 and 5'
+      })
+    }
+
+    const memory = await memoryService.queryMemories(projectId, {}).then(() => {
+      // Use repository directly for creation
+      const { MemoryRepository } = require('../repositories/memory-repository.js')
+      const repo = new MemoryRepository()
+      return repo.create({
+        projectId,
         type,
         category,
         title,
         content,
-        tags,
-        importance,
+        tags: tags || [],
+        importance: importance || 3,
         episodeId,
-        metadata,
-      } = request.body;
+        metadata
+      })
+    })
 
-      if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send(permissionDeniedBody);
-      }
-
-      // Validate required fields
-      if (!type || !title || !content) {
-        return reply.status(400).send({
-          success: false,
-          error: "Missing required fields: type, title, content",
-        });
-      }
-
-      // Validate importance range
-      if (importance !== undefined && (importance < 1 || importance > 5)) {
-        return reply.status(400).send({
-          success: false,
-          error: "Importance must be between 1 and 5",
-        });
-      }
-
-      const memory = await memoryService
-        .queryMemories(projectId, {})
-        .then(() => {
-          // Use repository directly for creation
-          const {
-            MemoryRepository,
-          } = require("../repositories/memory-repository.js");
-          const repo = new MemoryRepository();
-          return repo.create({
-            projectId,
-            type,
-            category,
-            title,
-            content,
-            tags: tags || [],
-            importance: importance || 3,
-            episodeId,
-            metadata,
-          });
-        });
-
-      return reply.status(201).send({
-        success: true,
-        data: memory,
-      });
-    },
-  );
+    return reply.status(201).send({
+      success: true,
+      data: memory
+    })
+  })
 
   // Update memory
   fastify.put<{
-    Params: { projectId: string; memoryId: string };
+    Params: { projectId: string; memoryId: string }
     Body: {
-      title?: string;
-      content?: string;
-      tags?: string[];
-      importance?: number;
-      isActive?: boolean;
-      verified?: boolean;
-      category?: string;
-    };
+      title?: string
+      content?: string
+      tags?: string[]
+      importance?: number
+      isActive?: boolean
+      verified?: boolean
+      category?: string
+    }
   }>(
-    "/:projectId/memories/:memoryId",
+    '/:projectId/memories/:memoryId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id;
-      const { projectId, memoryId } = request.params;
-      const { title, content, tags, importance, isActive, verified, category } =
-        request.body;
+      const userId = (request as any).user.id
+      const { projectId, memoryId } = request.params
+      const { title, content, tags, importance, isActive, verified, category } = request.body
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send(permissionDeniedBody);
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       // Validate importance range
       if (importance !== undefined && (importance < 1 || importance > 5)) {
         return reply.status(400).send({
           success: false,
-          error: "Importance must be between 1 and 5",
-        });
+          error: 'Importance must be between 1 and 5'
+        })
       }
 
       try {
@@ -209,170 +186,166 @@ export async function memoryRoutes(fastify: FastifyInstance) {
           importance,
           isActive,
           verified,
-          category,
-        });
+          category
+        })
 
         return {
           success: true,
-          data: updated,
-        };
+          data: updated
+        }
       } catch (error: any) {
-        if (error.code === "P2025") {
+        if (error.code === 'P2025') {
           return reply.status(404).send({
             success: false,
-            error: "Memory not found",
-          });
+            error: 'Memory not found'
+          })
         }
-        throw error;
+        throw error
       }
-    },
-  );
+    }
+  )
 
   // Delete memory
   fastify.delete<{
-    Params: { projectId: string; memoryId: string };
+    Params: { projectId: string; memoryId: string }
   }>(
-    "/:projectId/memories/:memoryId",
+    '/:projectId/memories/:memoryId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id;
-      const { projectId, memoryId } = request.params;
+      const userId = (request as any).user.id
+      const { projectId, memoryId } = request.params
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send(permissionDeniedBody);
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       try {
-        await memoryService.deleteMemory(memoryId);
+        await memoryService.deleteMemory(memoryId)
 
         return {
           success: true,
-          message: "Memory deleted successfully",
-        };
+          message: 'Memory deleted successfully'
+        }
       } catch (error: any) {
-        if (error.code === "P2025") {
+        if (error.code === 'P2025') {
           return reply.status(404).send({
             success: false,
-            error: "Memory not found",
-          });
+            error: 'Memory not found'
+          })
         }
-        throw error;
+        throw error
       }
-    },
-  );
+    }
+  )
 
   // Search memories by text query
   fastify.post<{
-    Params: { projectId: string };
+    Params: { projectId: string }
     Body: {
-      query: string;
-      limit?: number;
-    };
+      query: string
+      limit?: number
+    }
   }>(
-    "/:projectId/memories/search",
+    '/:projectId/memories/search',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id;
-      const { projectId } = request.params;
-      const { query, limit } = request.body;
+      const userId = (request as any).user.id
+      const { projectId } = request.params
+      const { query, limit } = request.body
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send(permissionDeniedBody);
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       if (!query || query.trim().length === 0) {
         return reply.status(400).send({
           success: false,
-          error: "Query parameter is required",
-        });
+          error: 'Query parameter is required'
+        })
       }
 
-      const memories = await memoryService.searchMemories(
-        projectId,
-        query,
-        limit || 10,
-      );
+      const memories = await memoryService.searchMemories(projectId, query, limit || 10)
 
       return {
         success: true,
         count: memories.length,
-        data: memories,
-      };
-    },
-  );
+        data: memories
+      }
+    }
+  )
 
   // Get writing context for episode
   fastify.get<{
-    Params: { projectId: string };
-    Querystring: { episodeNum: string };
+    Params: { projectId: string }
+    Querystring: { episodeNum: string }
   }>(
-    "/:projectId/memories/context",
+    '/:projectId/memories/context',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id;
-      const { projectId } = request.params;
-      const { episodeNum } = request.query;
+      const userId = (request as any).user.id
+      const { projectId } = request.params
+      const { episodeNum } = request.query
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send(permissionDeniedBody);
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       if (!episodeNum) {
         return reply.status(400).send({
           success: false,
-          error: "episodeNum query parameter is required",
-        });
+          error: 'episodeNum query parameter is required'
+        })
       }
 
       const context = await memoryService.getEpisodeWritingContext(
         projectId,
-        parseInt(episodeNum, 10),
-      );
+        parseInt(episodeNum, 10)
+      )
 
       return {
         success: true,
-        data: context,
-      };
-    },
-  );
+        data: context
+      }
+    }
+  )
 
   // Trigger manual memory extraction from episode
   fastify.post<{
-    Params: { projectId: string };
+    Params: { projectId: string }
     Body: {
-      episodeId: string;
-      episodeNum: number;
-    };
+      episodeId: string
+      episodeNum: number
+    }
   }>(
-    "/:projectId/memories/extract",
+    '/:projectId/memories/extract',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id;
-      const { projectId } = request.params;
-      const { episodeId, episodeNum } = request.body;
+      const userId = (request as any).user.id
+      const { projectId } = request.params
+      const { episodeId, episodeNum } = request.body
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send(permissionDeniedBody);
+        return reply.status(403).send(permissionDeniedBody)
       }
 
       if (!episodeId || !episodeNum) {
         return reply.status(400).send({
           success: false,
-          error: "episodeId and episodeNum are required",
-        });
+          error: 'episodeId and episodeNum are required'
+        })
       }
 
       // Fetch episode script
-      const { prisma } = await import("../lib/prisma.js");
+      const { prisma } = await import('../lib/prisma.js')
       const episode = await prisma.episode.findUnique({
-        where: { id: episodeId },
-      });
+        where: { id: episodeId }
+      })
 
       if (!episode || !episode.script) {
         return reply.status(404).send({
           success: false,
-          error: "Episode not found or has no script",
-        });
+          error: 'Episode not found or has no script'
+        })
       }
 
       try {
@@ -381,44 +354,43 @@ export async function memoryRoutes(fastify: FastifyInstance) {
           episodeNum,
           episodeId,
           episode.script as any,
-          { userId, projectId, op: "manual_memory_extraction" },
-        );
+          { userId, projectId, op: 'manual_memory_extraction' }
+        )
 
         return {
           success: true,
           data: result,
-          message: `Extracted ${result.extracted} memories, saved ${result.saved}`,
-        };
+          message: `Extracted ${result.extracted} memories, saved ${result.saved}`
+        }
       } catch (error: any) {
-        console.error("Memory extraction failed:", error);
+        console.error('Memory extraction failed:', error)
         return reply.status(500).send({
           success: false,
-          error: "Memory extraction failed",
-          message: error.message,
-        });
+          error: 'Memory extraction failed',
+          message: error.message
+        })
       }
-    },
-  );
+    }
+  )
 
   // Get memory statistics
   fastify.get<{
-    Params: { projectId: string };
+    Params: { projectId: string }
   }>(
-    "/:projectId/memories/stats",
+    '/:projectId/memories/stats',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id;
-      const { projectId } = request.params;
+      const userId = (request as any).user.id
+      const { projectId } = request.params
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
-        return reply.status(403).send(permissionDeniedBody);
+        return reply.status(403).send(permissionDeniedBody)
       }
 
-      const { MemoryRepository } =
-        await import("../repositories/memory-repository.js");
-      const repo = new MemoryRepository();
+      const { MemoryRepository } = await import('../repositories/memory-repository.js')
+      const repo = new MemoryRepository()
 
-      const memories = await repo.findByProject(projectId);
+      const memories = await repo.findByProject(projectId)
 
       const stats = {
         total: memories.length,
@@ -428,26 +400,25 @@ export async function memoryRoutes(fastify: FastifyInstance) {
         verified: memories.filter((m) => m.verified).length,
         averageImportance:
           memories.length > 0
-            ? memories.reduce((sum, m) => sum + m.importance, 0) /
-              memories.length
-            : 0,
-      };
+            ? memories.reduce((sum, m) => sum + m.importance, 0) / memories.length
+            : 0
+      }
 
       // Count by type
       memories.forEach((m) => {
-        stats.byType[m.type] = (stats.byType[m.type] || 0) + 1;
-      });
+        stats.byType[m.type] = (stats.byType[m.type] || 0) + 1
+      })
 
       // Count by importance
       memories.forEach((m) => {
-        const key = m.importance.toString();
-        stats.byImportance[key] = (stats.byImportance[key] || 0) + 1;
-      });
+        const key = m.importance.toString()
+        stats.byImportance[key] = (stats.byImportance[key] || 0) + 1
+      })
 
       return {
         success: true,
-        data: stats,
-      };
-    },
-  );
+        data: stats
+      }
+    }
+  )
 }

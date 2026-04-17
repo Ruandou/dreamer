@@ -4,7 +4,9 @@ import { takeRepository, type TakeRepository } from '../repositories/take-reposi
 export class TakeService {
   constructor(private readonly repository: TakeRepository) {}
 
-  async selectTakeAsCurrent(takeId: string): Promise<{ ok: true; task: Take } | { ok: false; reason: 'not_found' }> {
+  async selectTakeAsCurrent(
+    takeId: string
+  ): Promise<{ ok: true; task: Take } | { ok: false; reason: 'not_found' }> {
     const existing = await this.repository.findById(takeId)
     if (!existing) {
       return { ok: false, reason: 'not_found' }

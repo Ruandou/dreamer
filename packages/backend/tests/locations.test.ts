@@ -257,8 +257,7 @@ describe('Location routes', () => {
     expect(res.statusCode).toBe(202)
     expect(mockImageQueueAdd).toHaveBeenCalled()
     expect(mockImageQueueAdd.mock.calls[0][1]).toMatchObject({
-      prompt:
-        '街景 establishing shot, empty scene, no people, cinematic lighting. night city'
+      prompt: '街景 establishing shot, empty scene, no people, cinematic lighting. night city'
     })
     expect(mockImageQueueAdd.mock.calls[0][1].prompt).not.toMatch(/^Visual style:/)
   })

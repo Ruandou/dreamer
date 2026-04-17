@@ -47,14 +47,19 @@ async function downloadToTemp(url: string): Promise<string> {
 async function getVideoDuration(filePath: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const ffprobe = spawn('ffprobe', [
-      '-v', 'error',
-      '-show_entries', 'format=duration',
-      '-of', 'default=noprint_wrappers=1:nokey=1',
+      '-v',
+      'error',
+      '-show_entries',
+      'format=duration',
+      '-of',
+      'default=noprint_wrappers=1:nokey=1',
       filePath
     ])
 
     let output = ''
-    ffprobe.stdout.on('data', (data) => { output += data })
+    ffprobe.stdout.on('data', (data) => {
+      output += data
+    })
     ffprobe.on('close', (code) => {
       if (code === 0) {
         resolve(parseFloat(output.trim()) || 0)
@@ -104,10 +109,14 @@ async function mergeSegments(segments: CompositionClip[], outputPath: string): P
   // Concatenate all segments
   await new Promise<void>((resolve, reject) => {
     const ffmpeg = spawn(FFMPEG_PATH, [
-      '-f', 'concat',
-      '-safe', '0',
-      '-i', listFile,
-      '-c', 'copy',
+      '-f',
+      'concat',
+      '-safe',
+      '0',
+      '-i',
+      listFile,
+      '-c',
+      'copy',
       outputPath
     ])
 
@@ -126,14 +135,24 @@ async function mergeSegments(segments: CompositionClip[], outputPath: string): P
 /**
  * Trim a video file
  */
-async function trimVideo(inputPath: string, outputPath: string, start: number, duration: number): Promise<void> {
+async function trimVideo(
+  inputPath: string,
+  outputPath: string,
+  start: number,
+  duration: number
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn(FFMPEG_PATH, [
-      '-i', inputPath,
-      '-ss', start.toString(),
-      '-t', duration.toString(),
-      '-c', 'copy',
-      '-avoid_negative_ts', 'make_zero',
+      '-i',
+      inputPath,
+      '-ss',
+      start.toString(),
+      '-t',
+      duration.toString(),
+      '-c',
+      'copy',
+      '-avoid_negative_ts',
+      'make_zero',
       outputPath
     ])
 
@@ -151,18 +170,30 @@ async function trimVideo(inputPath: string, outputPath: string, start: number, d
 /**
  * Add audio track (voiceover or BGM) to video
  */
-async function addAudio(videoPath: string, audioPath: string, outputPath: string, type: 'voiceover' | 'bgm'): Promise<void> {
+async function addAudio(
+  videoPath: string,
+  audioPath: string,
+  outputPath: string,
+  type: 'voiceover' | 'bgm'
+): Promise<void> {
   const audioVolume = type === 'voiceover' ? '1.0' : '0.3' // BGM at 30% volume
 
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn(FFMPEG_PATH, [
-      '-i', videoPath,
-      '-i', audioPath,
-      '-filter_complex', `[1:a]volume=${audioVolume}[a]`,
-      '-map', '0:v',
-      '-map', '[a]',
-      '-c:v', 'copy',
-      '-c:a', 'aac',
+      '-i',
+      videoPath,
+      '-i',
+      audioPath,
+      '-filter_complex',
+      `[1:a]volume=${audioVolume}[a]`,
+      '-map',
+      '0:v',
+      '-map',
+      '[a]',
+      '-c:v',
+      'copy',
+      '-c:a',
+      'aac',
       outputPath
     ])
 
@@ -180,12 +211,19 @@ async function addAudio(videoPath: string, audioPath: string, outputPath: string
 /**
  * Burn subtitles into video
  */
-async function burnSubtitles(videoPath: string, subtitlePath: string, outputPath: string): Promise<void> {
+async function burnSubtitles(
+  videoPath: string,
+  subtitlePath: string,
+  outputPath: string
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn(FFMPEG_PATH, [
-      '-i', videoPath,
-      '-vf', `subtitles='${subtitlePath}'`,
-      '-c:a', 'copy',
+      '-i',
+      videoPath,
+      '-vf',
+      `subtitles='${subtitlePath}'`,
+      '-c:a',
+      'copy',
       outputPath
     ])
 
@@ -254,9 +292,12 @@ export async function composeVideo(options: CompositionOptions): Promise<Composi
       console.log('Scaling video...')
       await new Promise<void>((resolve, reject) => {
         const ffmpeg = spawn(FFMPEG_PATH, [
-          '-i', currentVideo,
-          '-vf', `scale=${outputWidth}:${outputHeight}`,
-          '-c:a', 'copy',
+          '-i',
+          currentVideo,
+          '-vf',
+          `scale=${outputWidth}:${outputHeight}`,
+          '-c:a',
+          'copy',
           finalOutput
         ])
 

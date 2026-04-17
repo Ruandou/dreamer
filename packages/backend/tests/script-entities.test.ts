@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { isCrowdExtraCharacterName, collectUniqueCharacterNamesFromScript } from '../src/services/script-entities.js'
+import {
+  isCrowdExtraCharacterName,
+  collectUniqueCharacterNamesFromScript
+} from '../src/services/script-entities.js'
 import type { ScriptContent } from '@dreamer/shared/types'
 
 describe('script-entities', () => {
@@ -197,9 +200,7 @@ describe('script-entities', () => {
             timeOfDay: 'day',
             characters: ['  Alice  ', 'Bob'],
             description: 'Scene',
-            dialogues: [
-              { character: '  Charlie  ', content: 'Hi' }
-            ],
+            dialogues: [{ character: '  Charlie  ', content: 'Hi' }],
             actions: []
           }
         ]

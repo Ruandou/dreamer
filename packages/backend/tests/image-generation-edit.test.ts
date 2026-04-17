@@ -57,7 +57,9 @@ describe('image-generation edit & persist helpers', () => {
           })
       })
     )
-    const out = await generateImageEdit('https://ref.example/r.png', '加一顶帽子', { size: '1920x1920' })
+    const out = await generateImageEdit('https://ref.example/r.png', '加一顶帽子', {
+      size: '1920x1920'
+    })
     expect(out.url).toBe('https://ark.example/generated.png')
     expect(out.imageCost).toBe(0.04)
   })

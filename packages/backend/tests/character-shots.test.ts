@@ -1,15 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import Fastify, { FastifyInstance } from 'fastify'
 
-const {
-  mockVerifyCharacterShotOwnership,
-  mockCharacterShotServiceUpdateCharacterImage
-} = vi.hoisted(() => {
-  return {
-    mockVerifyCharacterShotOwnership: vi.fn().mockResolvedValue(true),
-    mockCharacterShotServiceUpdateCharacterImage: vi.fn()
-  }
-})
+const { mockVerifyCharacterShotOwnership, mockCharacterShotServiceUpdateCharacterImage } =
+  vi.hoisted(() => {
+    return {
+      mockVerifyCharacterShotOwnership: vi.fn().mockResolvedValue(true),
+      mockCharacterShotServiceUpdateCharacterImage: vi.fn()
+    }
+  })
 
 vi.mock('../src/plugins/auth.js', () => ({
   verifyCharacterShotOwnership: (...args: unknown[]) => mockVerifyCharacterShotOwnership(...args)
@@ -17,7 +15,8 @@ vi.mock('../src/plugins/auth.js', () => ({
 
 vi.mock('../src/services/character-shot-service.js', () => ({
   characterShotService: {
-    updateCharacterImage: (...args: unknown[]) => mockCharacterShotServiceUpdateCharacterImage(...args)
+    updateCharacterImage: (...args: unknown[]) =>
+      mockCharacterShotServiceUpdateCharacterImage(...args)
   }
 }))
 

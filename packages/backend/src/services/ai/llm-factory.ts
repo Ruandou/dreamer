@@ -18,17 +18,17 @@ export function createLLMProvider(config: LLMProviderConfig): LLMProvider {
   switch (config.provider.toLowerCase()) {
     case 'deepseek':
       return new DeepSeekProvider(config)
-    
+
     case 'openai':
       // TODO: 实现 OpenAI Provider
       // return new OpenAIProvider(config)
       throw new Error('OpenAI provider not yet implemented')
-    
+
     case 'claude':
       // TODO: 实现 Claude Provider
       // return new ClaudeProvider(config)
       throw new Error('Claude provider not yet implemented')
-    
+
     default:
       throw new Error(`Unsupported LLM provider: ${config.provider}`)
   }
@@ -42,8 +42,7 @@ export function getDefaultProvider(): LLMProvider {
   const apiKey = process.env.DEEPSEEK_API_KEY
   if (!apiKey) {
     throw new Error(
-      'DEEPSEEK_API_KEY environment variable is required. ' +
-      'Please set it in your .env file.'
+      'DEEPSEEK_API_KEY environment variable is required. ' + 'Please set it in your .env file.'
     )
   }
 
@@ -58,10 +57,7 @@ export function getDefaultProvider(): LLMProvider {
 /**
  * 创建指定类型的提供者（便捷方法）
  */
-export const createDeepSeekProvider = (
-  apiKey?: string,
-  baseURL?: string
-): LLMProvider => {
+export const createDeepSeekProvider = (apiKey?: string, baseURL?: string): LLMProvider => {
   return createLLMProvider({
     provider: 'deepseek',
     apiKey: apiKey || process.env.DEEPSEEK_API_KEY || '',

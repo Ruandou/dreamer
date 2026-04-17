@@ -9,7 +9,8 @@ import type { PromptTemplate } from './template-engine.js'
 export const CHARACTER_BASE_PROMPT_TEMPLATE: PromptTemplate = {
   id: 'character-base-prompt',
   version: '1.0.0',
-  systemPrompt: '你是短剧角色基础定妆提示词撰写助手。只输出中文提示词正文；须纯色影棚背景、七分身（膝盖以上）、锚定面部与发型与基础服装，句间用句号；除专有名词外不要使用英文。',
+  systemPrompt:
+    '你是短剧角色基础定妆提示词撰写助手。只输出中文提示词正文；须纯色影棚背景、七分身（膝盖以上）、锚定面部与发型与基础服装，句间用句号；除专有名词外不要使用英文。',
   userPromptTemplate: `角色名：{{characterName}}
 {{#characterDescription}}角色设定：{{characterDescription}}
 {{/characterDescription}}
@@ -33,7 +34,8 @@ export const CHARACTER_BASE_PROMPT_TEMPLATE: PromptTemplate = {
 export const CHARACTER_OUTFIT_PROMPT_TEMPLATE: PromptTemplate = {
   id: 'character-outfit-prompt',
   version: '1.0.0',
-  systemPrompt: '你是短剧角色换装提示词撰写助手。只输出中文提示词正文；必须强调面部特征、发型与标志性细节完全不变，仅更换服装与配饰；纯色影棚背景；除专有名词外不要使用英文。',
+  systemPrompt:
+    '你是短剧角色换装提示词撰写助手。只输出中文提示词正文；必须强调面部特征、发型与标志性细节完全不变，仅更换服装与配饰；纯色影棚背景；除专有名词外不要使用英文。',
   userPromptTemplate: `角色名：{{characterName}}
 {{#characterDescription}}角色设定：{{characterDescription}}
 {{/characterDescription}}
@@ -62,7 +64,8 @@ export const CHARACTER_OUTFIT_PROMPT_TEMPLATE: PromptTemplate = {
 export const CHARACTER_EXPRESSION_PROMPT_TEMPLATE: PromptTemplate = {
   id: 'character-expression-prompt',
   version: '1.0.0',
-  systemPrompt: '你是短剧角色定妆提示词撰写助手。只输出中文提示词正文；相对父级基础形象保持人物身份一致，描述表情或体态等「仅变化」部分；除专有名词外不要使用英文。',
+  systemPrompt:
+    '你是短剧角色定妆提示词撰写助手。只输出中文提示词正文；相对父级基础形象保持人物身份一致，描述表情或体态等「仅变化」部分；除专有名词外不要使用英文。',
   userPromptTemplate: `角色名：{{characterName}}
 {{#characterDescription}}角色设定：{{characterDescription}}
 {{/characterDescription}}

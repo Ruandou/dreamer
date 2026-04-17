@@ -24,7 +24,17 @@ describe('hasEpisodeContentForStoryboard', () => {
         script: {
           title: 't',
           summary: '',
-          scenes: [{ sceneNum: 1, location: '', timeOfDay: '日', characters: [], description: '', dialogues: [], actions: [] }]
+          scenes: [
+            {
+              sceneNum: 1,
+              location: '',
+              timeOfDay: '日',
+              characters: [],
+              description: '',
+              dialogues: [],
+              actions: []
+            }
+          ]
         }
       })
     ).toBe(true)

@@ -23,11 +23,13 @@ export interface Wan26StatusResponse {
   error?: string
 }
 
-export async function submitWan26Task(request: Wan26GenerateRequest): Promise<Wan26GenerateResponse> {
+export async function submitWan26Task(
+  request: Wan26GenerateRequest
+): Promise<Wan26GenerateResponse> {
   const response = await fetch(`${ATLAS_API_URL}/v1/video/generate`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${ATLAS_API_KEY}`,
+      Authorization: `Bearer ${ATLAS_API_KEY}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
@@ -50,7 +52,7 @@ export async function pollWan26Status(taskId: string): Promise<Wan26StatusRespon
   const response = await fetch(`${ATLAS_API_URL}/v1/video/status/${taskId}`, {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${ATLAS_API_KEY}`,
+      Authorization: `Bearer ${ATLAS_API_KEY}`,
       'Content-Type': 'application/json'
     }
   })
@@ -63,7 +65,10 @@ export async function pollWan26Status(taskId: string): Promise<Wan26StatusRespon
   return response.json()
 }
 
-export async function waitForWan26Completion(taskId: string, maxWaitMs = 600000): Promise<Wan26StatusResponse> {
+export async function waitForWan26Completion(
+  taskId: string,
+  maxWaitMs = 600000
+): Promise<Wan26StatusResponse> {
   const startTime = Date.now()
 
   while (Date.now() - startTime < maxWaitMs) {
@@ -78,7 +83,7 @@ export async function waitForWan26Completion(taskId: string, maxWaitMs = 600000)
     }
 
     // Wait 5 seconds before next poll
-    await new Promise(resolve => setTimeout(resolve, 5000))
+    await new Promise((resolve) => setTimeout(resolve, 5000))
   }
 
   throw new Error('Wan 2.6 task timeout')

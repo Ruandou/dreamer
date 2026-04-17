@@ -41,46 +41,43 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     }
   )
 
-  fastify.post<{ Body: { episodeId: string; sceneNum: number; description?: string; prompt: string } }>(
-    '/',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id
-      const { episodeId, sceneNum, description, prompt } = request.body
+  fastify.post<{
+    Body: { episodeId: string; sceneNum: number; description?: string; prompt: string }
+  }>('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const { episodeId, sceneNum, description, prompt } = request.body
 
-      if (!(await verifyEpisodeOwnership(userId, episodeId))) {
-        return reply.status(403).send(permissionDeniedBody)
-      }
-
-      const result = await sceneService.createSceneWithFirstShot(
-        episodeId,
-        sceneNum,
-        prompt,
-        description
-      )
-
-      if (!result.ok) {
-        return reply.status(404).send({ error: 'Episode not found' })
-      }
-
-      return reply.status(201).send(result.scene)
+    if (!(await verifyEpisodeOwnership(userId, episodeId))) {
+      return reply.status(403).send(permissionDeniedBody)
     }
-  )
 
-  fastify.put<{ Params: { id: string }; Body: { description?: string; sceneNum?: number; prompt?: string } }>(
-    '/:id',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id
-      const sceneId = request.params.id
+    const result = await sceneService.createSceneWithFirstShot(
+      episodeId,
+      sceneNum,
+      prompt,
+      description
+    )
 
-      if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send(permissionDeniedBody)
-      }
-
-      return sceneService.updateScene(sceneId, request.body)
+    if (!result.ok) {
+      return reply.status(404).send({ error: 'Episode not found' })
     }
-  )
+
+    return reply.status(201).send(result.scene)
+  })
+
+  fastify.put<{
+    Params: { id: string }
+    Body: { description?: string; sceneNum?: number; prompt?: string }
+  }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const sceneId = request.params.id
+
+    if (!(await verifySceneOwnership(userId, sceneId))) {
+      return reply.status(403).send(permissionDeniedBody)
+    }
+
+    return sceneService.updateScene(sceneId, request.body)
+  })
 
   fastify.delete<{ Params: { id: string } }>(
     '/:id',
@@ -101,46 +98,43 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     }
   )
 
-  fastify.post<{ Params: { id: string }; Body: { model: VideoModel; referenceImage?: string; imageUrls?: string[]; duration?: number } }>(
-    '/:id/generate',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id
-      const sceneId = request.params.id
+  fastify.post<{
+    Params: { id: string }
+    Body: { model: VideoModel; referenceImage?: string; imageUrls?: string[]; duration?: number }
+  }>('/:id/generate', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const sceneId = request.params.id
 
-      if (!(await verifySceneOwnership(userId, sceneId))) {
-        return reply.status(403).send(permissionDeniedBody)
-      }
-
-      const result = await sceneService.enqueueVideoGenerate(sceneId, request.body)
-
-      if (!result.ok) {
-        return reply.status(400).send({ error: 'Scene has no prompt: add Shots or description' })
-      }
-
-      return { taskId: result.taskId, sceneId: result.sceneId }
+    if (!(await verifySceneOwnership(userId, sceneId))) {
+      return reply.status(403).send(permissionDeniedBody)
     }
-  )
 
-  fastify.post<{ Body: { sceneIds: string[]; model: VideoModel; referenceImage?: string; imageUrls?: string[] } }>(
-    '/batch-generate',
-    { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
-      const userId = (request as any).user.id
-      const { sceneIds, model, referenceImage, imageUrls } = request.body
+    const result = await sceneService.enqueueVideoGenerate(sceneId, request.body)
 
-      const results = await sceneService.batchEnqueueVideoGenerate(
-        userId,
-        sceneIds,
-        model,
-        referenceImage,
-        imageUrls,
-        verifySceneOwnership
-      )
-
-      return results
+    if (!result.ok) {
+      return reply.status(400).send({ error: 'Scene has no prompt: add Shots or description' })
     }
-  )
+
+    return { taskId: result.taskId, sceneId: result.sceneId }
+  })
+
+  fastify.post<{
+    Body: { sceneIds: string[]; model: VideoModel; referenceImage?: string; imageUrls?: string[] }
+  }>('/batch-generate', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = (request as any).user.id
+    const { sceneIds, model, referenceImage, imageUrls } = request.body
+
+    const results = await sceneService.batchEnqueueVideoGenerate(
+      userId,
+      sceneIds,
+      model,
+      referenceImage,
+      imageUrls,
+      verifySceneOwnership
+    )
+
+    return results
+  })
 
   fastify.post<{ Params: { id: string; taskId: string } }>(
     '/:id/tasks/:taskId/select',

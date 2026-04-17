@@ -30,7 +30,7 @@ export const useCharacterStore = defineStore('character', () => {
 
   async function updateCharacter(id: string, data: Partial<Character>) {
     const res = await api.put<Character>(`/characters/${id}`, data)
-    const index = characters.value.findIndex(c => c.id === id)
+    const index = characters.value.findIndex((c) => c.id === id)
     if (index !== -1) {
       characters.value[index] = res.data
     }
@@ -39,11 +39,18 @@ export const useCharacterStore = defineStore('character', () => {
 
   async function deleteCharacter(id: string) {
     await api.delete(`/characters/${id}`)
-    characters.value = characters.value.filter(c => c.id !== id)
+    characters.value = characters.value.filter((c) => c.id !== id)
   }
 
   // Image management
-  async function addImage(characterId: string, file: File, name: string, parentId?: string, type?: string, description?: string) {
+  async function addImage(
+    characterId: string,
+    file: File,
+    name: string,
+    parentId?: string,
+    type?: string,
+    description?: string
+  ) {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('name', name)
@@ -51,20 +58,18 @@ export const useCharacterStore = defineStore('character', () => {
     if (type) formData.append('type', type)
     if (description) formData.append('description', description)
 
-    const res = await api.post<CharacterImage>(
-      `/characters/${characterId}/images`,
-      formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
-    )
+    const res = await api.post<CharacterImage>(`/characters/${characterId}/images`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
 
     // Refresh character to get updated images
-    await fetchCharacters(characters.value.find(c => c.id === characterId)?.projectId || '')
+    await fetchCharacters(characters.value.find((c) => c.id === characterId)?.projectId || '')
     return res.data
   }
 
   async function updateImage(characterId: string, imageId: string, data: Partial<CharacterImage>) {
     const res = await api.put<CharacterImage>(`/characters/${characterId}/images/${imageId}`, data)
-    await fetchCharacters(characters.value.find(c => c.id === characterId)?.projectId || '')
+    await fetchCharacters(characters.value.find((c) => c.id === characterId)?.projectId || '')
     return res.data
   }
 
@@ -84,12 +89,14 @@ export const useCharacterStore = defineStore('character', () => {
 
   async function deleteImage(characterId: string, imageId: string) {
     await api.delete(`/characters/${characterId}/images/${imageId}`)
-    await fetchCharacters(characters.value.find(c => c.id === characterId)?.projectId || '')
+    await fetchCharacters(characters.value.find((c) => c.id === characterId)?.projectId || '')
   }
 
   async function moveImage(characterId: string, imageId: string, parentId?: string) {
-    const res = await api.put<CharacterImage>(`/characters/${characterId}/images/${imageId}/move`, { parentId })
-    await fetchCharacters(characters.value.find(c => c.id === characterId)?.projectId || '')
+    const res = await api.put<CharacterImage>(`/characters/${characterId}/images/${imageId}/move`, {
+      parentId
+    })
+    await fetchCharacters(characters.value.find((c) => c.id === characterId)?.projectId || '')
     return res.data
   }
 

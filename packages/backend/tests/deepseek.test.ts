@@ -95,7 +95,7 @@ describe('DeepSeek Service', () => {
       expect(balance.isAvailable).toBe(true)
       expect(balance.balanceInfos.length).toBe(1)
       expect(balance.balanceInfos[0].currency).toBe('CNY')
-      expect(balance.balanceInfos[0].totalBalance).toBe(10.50)
+      expect(balance.balanceInfos[0].totalBalance).toBe(10.5)
     })
 
     it('should throw error when response is not ok', async () => {
@@ -120,9 +120,7 @@ describe('DeepSeek Service', () => {
             timeOfDay: 'day',
             characters: ['Alice', 'Bob'],
             description: 'Test scene',
-            dialogues: [
-              { character: 'Alice', content: 'Hello' }
-            ],
+            dialogues: [{ character: 'Alice', content: 'Hello' }],
             actions: ['Action 1', 'Action 2']
           }
         ]
@@ -217,22 +215,26 @@ describe('DeepSeek Service', () => {
       const { expandScript } = await import('../src/services/ai/deepseek.js')
 
       mockCreate.mockResolvedValueOnce({
-        choices: [{
-          message: {
-            content: JSON.stringify({
-              title: 'Expanded Script',
-              summary: 'A great story',
-              scenes: [{
-                sceneNum: 1,
-                location: 'indoor',
-                timeOfDay: 'day',
-                description: 'Scene description',
-                dialogues: [],
-                actions: []
-              }]
-            })
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                title: 'Expanded Script',
+                summary: 'A great story',
+                scenes: [
+                  {
+                    sceneNum: 1,
+                    location: 'indoor',
+                    timeOfDay: 'day',
+                    description: 'Scene description',
+                    dialogues: [],
+                    actions: []
+                  }
+                ]
+              })
+            }
           }
-        }],
+        ],
         usage: { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 }
       })
 
@@ -246,22 +248,26 @@ describe('DeepSeek Service', () => {
       const { expandScript } = await import('../src/services/ai/deepseek.js')
 
       mockCreate.mockResolvedValueOnce({
-        choices: [{
-          message: {
-            content: JSON.stringify({
-              title: 'Expanded Script',
-              summary: 'A great story',
-              scenes: [{
-                sceneNum: 1,
-                location: 'outdoor',
-                timeOfDay: 'night',
-                description: 'Scene description',
-                dialogues: [],
-                actions: []
-              }]
-            })
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                title: 'Expanded Script',
+                summary: 'A great story',
+                scenes: [
+                  {
+                    sceneNum: 1,
+                    location: 'outdoor',
+                    timeOfDay: 'night',
+                    description: 'Scene description',
+                    dialogues: [],
+                    actions: []
+                  }
+                ]
+              })
+            }
           }
-        }],
+        ],
         usage: { prompt_tokens: 50, completion_tokens: 100, total_tokens: 150 }
       })
 
@@ -294,11 +300,14 @@ describe('DeepSeek Service', () => {
       const { optimizePrompt } = await import('../src/services/ai/deepseek.js')
 
       mockCreate.mockResolvedValueOnce({
-        choices: [{
-          message: {
-            content: 'Optimized: A beautiful sunset over the ocean, golden hour lighting, cinematic wide shot'
+        choices: [
+          {
+            message: {
+              content:
+                'Optimized: A beautiful sunset over the ocean, golden hour lighting, cinematic wide shot'
+            }
           }
-        }],
+        ],
         usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80 }
       })
 
@@ -312,11 +321,13 @@ describe('DeepSeek Service', () => {
       const { optimizePrompt } = await import('../src/services/ai/deepseek.js')
 
       mockCreate.mockResolvedValueOnce({
-        choices: [{
-          message: {
-            content: 'Optimized: A person walking in the park, sunny day, tracking shot'
+        choices: [
+          {
+            message: {
+              content: 'Optimized: A person walking in the park, sunny day, tracking shot'
+            }
           }
-        }],
+        ],
         usage: { prompt_tokens: 20, completion_tokens: 25, total_tokens: 45 }
       })
 

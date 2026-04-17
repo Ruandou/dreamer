@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.js'
 
-export type MemoryType = 
+export type MemoryType =
   | 'CHARACTER'
   | 'LOCATION'
   | 'EVENT'
@@ -111,10 +111,7 @@ export class MemoryRepository {
 
     return prisma.memoryItem.findMany({
       where,
-      orderBy: [
-        { importance: 'desc' },
-        { createdAt: 'asc' }
-      ]
+      orderBy: [{ importance: 'desc' }, { createdAt: 'asc' }]
     })
   }
 
@@ -143,7 +140,7 @@ export class MemoryRepository {
     // 简单实现：基于标签和标题的文本匹配
     // TODO: 后续使用向量检索
     const keywords = query.toLowerCase().split(/\s+/)
-    
+
     const memories = await prisma.memoryItem.findMany({
       where: {
         projectId,
@@ -211,7 +208,7 @@ export class MemoryRepository {
     if (items.length === 0) return []
 
     return prisma.memoryItem.createMany({
-      data: items.map(item => ({
+      data: items.map((item) => ({
         projectId: item.projectId,
         type: item.type,
         category: item.category,

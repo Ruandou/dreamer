@@ -4,17 +4,11 @@
  */
 
 import { pipelineRepository } from '../repositories/pipeline-repository.js'
-import {
-  writeScriptFromIdea
-} from './script-writer.js'
+import { writeScriptFromIdea } from './script-writer.js'
 
-import {
-  splitIntoEpisodes
-} from './episode-splitter.js'
+import { splitIntoEpisodes } from './episode-splitter.js'
 
-import {
-  extractActionsFromScenes
-} from './action-extractor.js'
+import { extractActionsFromScenes } from './action-extractor.js'
 
 import {
   matchAssetsForScenes,
@@ -22,9 +16,7 @@ import {
   type ProjectAsset
 } from './scene-asset.js'
 
-import {
-  generateStoryboard
-} from './storyboard-generator.js'
+import { generateStoryboard } from './storyboard-generator.js'
 
 import {
   areEpisodeScriptsComplete,
@@ -54,24 +46,31 @@ interface PipelineJobOptions {
 /**
  * 更新 Job 进度
  */
-async function updateJobProgress(jobId: string, update: {
-  status?: string
-  currentStep?: string
-  progress?: number
-  error?: string
-}) {
+async function updateJobProgress(
+  jobId: string,
+  update: {
+    status?: string
+    currentStep?: string
+    progress?: number
+    error?: string
+  }
+) {
   await pipelineRepository.updateJob(jobId, update)
 }
 
 /**
  * 更新步骤结果
  */
-async function updateStepResult(jobId: string, step: string, update: {
-  status?: string
-  input?: any
-  output?: any
-  error?: string
-}) {
+async function updateStepResult(
+  jobId: string,
+  step: string,
+  update: {
+    status?: string
+    input?: any
+    output?: any
+    error?: string
+  }
+) {
   await pipelineRepository.updateStepResult(jobId, step, update)
 }
 
@@ -79,13 +78,18 @@ async function updateStepResult(jobId: string, step: string, update: {
  * 执行 Pipeline Job
  */
 export async function executePipelineJob(jobId: string, options: PipelineJobOptions) {
-  const { projectId, idea, targetEpisodes, targetDuration, defaultAspectRatio, defaultResolution } = options
+  const { projectId, idea, targetEpisodes, targetDuration, defaultAspectRatio, defaultResolution } =
+    options
 
   console.log(`Starting Pipeline Job ${jobId} for project ${projectId}`)
 
-    try {
+  try {
     // 更新状态为运行中
-    await updateJobProgress(jobId, { status: 'running', currentStep: 'script-writing', progress: 5 })
+    await updateJobProgress(jobId, {
+      status: 'running',
+      currentStep: 'script-writing',
+      progress: 5
+    })
 
     const projectMeta = await pipelineRepository.findProjectUserId(projectId)
 
@@ -180,7 +184,7 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
 
     // 转换素材
     const projectAssets: ProjectAsset[] = []
-    const characterImages = characters.flatMap(c => c.images)
+    const characterImages = characters.flatMap((c) => c.images)
 
     // 生成 storyboard
     const allSegments: StoryboardSegment[] = []
@@ -211,7 +215,6 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
     })
 
     console.log(`Pipeline Job ${jobId} completed successfully`)
-
   } catch (error) {
     console.error(`Pipeline Job ${jobId} failed:`, error)
 

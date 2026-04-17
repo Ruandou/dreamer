@@ -17,7 +17,7 @@ export class CompositionService {
       return null
     }
 
-    const enrichedScenes = composition.scenes.map(row => ({
+    const enrichedScenes = composition.scenes.map((row) => ({
       ...row,
       videoUrl: row.take.videoUrl || null,
       thumbnailUrl: row.take.thumbnailUrl || null
@@ -54,7 +54,7 @@ export class CompositionService {
 
     if (clips.length > 0) {
       await this.repo.createCompositionScenes(
-        clips.map(c => ({
+        clips.map((c) => ({
           compositionId,
           sceneId: c.sceneId,
           takeId: c.takeId,

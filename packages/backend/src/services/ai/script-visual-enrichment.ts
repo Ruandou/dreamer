@@ -91,11 +91,11 @@ export async function fetchScriptVisualEnrichmentJson(
     exactLocationNames?: string[]
   },
   log?: ModelCallLogContext,
-  provider?: LLMProvider  // 新增：可选的自定义提供者
+  provider?: LLMProvider // 新增：可选的自定义提供者
 ): Promise<{ jsonText: string; cost: DeepSeekCost }> {
   const llmProvider = provider || getDefaultProvider()
   const projectVisualStyleLine = (input.projectVisualStyleLine || '').trim() || '（未指定）'
-  
+
   const rendered = PromptRegistry.getInstance().render('visual-enrichment', {
     scriptSummary: input.scriptSummary,
     locationLines: input.locationLines,
@@ -116,7 +116,7 @@ export async function fetchScriptVisualEnrichmentJson(
   }
 
   const template = PromptRegistry.getInstance().getLatest('visual-enrichment')
-  
+
   const options: LLMCallOptions = {
     provider: llmProvider,
     messages,

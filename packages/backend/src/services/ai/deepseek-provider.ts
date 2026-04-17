@@ -20,7 +20,7 @@ import {
 
 export class DeepSeekProvider implements LLMProvider {
   readonly name = 'deepseek'
-  
+
   private client: OpenAI
   private config: LLMProviderConfig
 
@@ -32,16 +32,13 @@ export class DeepSeekProvider implements LLMProvider {
     })
   }
 
-  async complete(
-    messages: LLMMessage[],
-    options?: LLMCompletionOptions
-  ): Promise<LLMCompletion> {
+  async complete(messages: LLMMessage[], options?: LLMCompletionOptions): Promise<LLMCompletion> {
     const model = options?.model || this.config.defaultModel || 'deepseek-chat'
-    
+
     try {
       const completion = await this.client.chat.completions.create({
         model,
-        messages: messages.map(m => ({
+        messages: messages.map((m) => ({
           role: m.role,
           content: m.content
         })),

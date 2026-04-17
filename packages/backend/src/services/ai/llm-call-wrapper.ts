@@ -6,10 +6,7 @@
 
 import type { LLMProvider, LLMMessage, LLMCompletion } from './llm-provider.js'
 import type { DeepSeekCost } from './deepseek-client.js'
-import {
-  DeepSeekAuthError,
-  DeepSeekRateLimitError
-} from './deepseek-client.js'
+import { DeepSeekAuthError, DeepSeekRateLimitError } from './deepseek-client.js'
 import { logDeepSeekChat } from './model-call-log.js'
 import type { ModelCallLogContext } from './api-logger.js'
 import {
@@ -66,7 +63,7 @@ export async function callLLMWithRetry<T>(
   } = options
 
   let lastError: Error | null = null
-  const userPrompt = messages.find(m => m.role === 'user')?.content || ''
+  const userPrompt = messages.find((m) => m.role === 'user')?.content || ''
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -97,19 +94,22 @@ export async function callLLMWithRetry<T>(
       lastError = error
 
       // 认证错误 - 立即抛出，不重试
-      if (error instanceof DeepSeekAuthError || 
-          AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
+      if (error instanceof DeepSeekAuthError || AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
         logDeepSeekChat(modelLog, userPrompt, {
           status: 'failed',
           errorMsg: error?.message || 'auth'
-        }).catch(() => {/* ignore */})
+        }).catch(() => {
+          /* ignore */
+        })
         throw error instanceof DeepSeekAuthError ? error : new DeepSeekAuthError()
       }
 
       // 限流错误 - 重试
-      if (error instanceof DeepSeekRateLimitError ||
-          error?.status === RATE_LIMIT_STATUS_CODE || 
-          error?.message?.includes('rate_limit')) {
+      if (
+        error instanceof DeepSeekRateLimitError ||
+        error?.status === RATE_LIMIT_STATUS_CODE ||
+        error?.message?.includes('rate_limit')
+      ) {
         if (attempt < maxRetries) {
           await sleep(AUTH_RETRY_DELAY_MS * attempt)
           continue
@@ -117,7 +117,9 @@ export async function callLLMWithRetry<T>(
         logDeepSeekChat(modelLog, userPrompt, {
           status: 'failed',
           errorMsg: 'rate_limit'
-        }).catch(() => {/* ignore */})
+        }).catch(() => {
+          /* ignore */
+        })
         throw error instanceof DeepSeekRateLimitError ? error : new DeepSeekRateLimitError()
       }
 
@@ -133,7 +135,9 @@ export async function callLLMWithRetry<T>(
   logDeepSeekChat(modelLog, userPrompt, {
     status: 'failed',
     errorMsg: lastError?.message || 'LLM API 调用失败'
-  }).catch(() => {/* ignore */})
+  }).catch(() => {
+    /* ignore */
+  })
   throw lastError || new Error('LLM API 调用失败')
 }
 
@@ -142,7 +146,10 @@ export async function callLLMWithRetry<T>(
  */
 export function cleanMarkdownCodeBlocks(content: string): string {
   if (content.includes('```json')) {
-    return content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    return content
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim()
   }
   if (content.includes('```')) {
     return content.replace(/```\n?/g, '').trim()
@@ -165,5 +172,5 @@ export function parseJsonResponse<T>(content: string, cleanMarkdown = true): T {
  * 睡眠函数
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

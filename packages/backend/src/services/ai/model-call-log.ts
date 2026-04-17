@@ -1,8 +1,4 @@
-import {
-  recordModelApiCall,
-  truncateForModelLog,
-  type ModelCallLogContext
-} from './api-logger.js'
+import { recordModelApiCall, truncateForModelLog, type ModelCallLogContext } from './api-logger.js'
 
 export type { ModelCallLogContext }
 
@@ -36,8 +32,6 @@ export async function logDeepSeekChat(
     requestParams: { op: log.op, projectId: log.projectId },
     status: result.status,
     cost: result.costCNY ?? null,
-    errorMsg: result.errorMsg
-      ? truncateForModelLog(String(result.errorMsg), 4000)
-      : undefined
+    errorMsg: result.errorMsg ? truncateForModelLog(String(result.errorMsg), 4000) : undefined
   })
 }

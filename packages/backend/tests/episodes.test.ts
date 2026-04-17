@@ -61,7 +61,7 @@ const {
 })
 
 // Mock deepseek（保留 hasEpisodeContentForStoryboard 等真实实现）
-vi.mock('../src/services/ai/deepseek.js', async importOriginal => {
+vi.mock('../src/services/ai/deepseek.js', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../src/services/ai/deepseek.js')>()
   return {
     ...mod,
@@ -223,7 +223,9 @@ describe('Episode Routes', () => {
     })
 
     it('should attach listStats from scene aggregates', async () => {
-      mockEpisodeFindMany.mockResolvedValue([{ id: 'ep-1', episodeNum: 1, title: 'E1', script: null }])
+      mockEpisodeFindMany.mockResolvedValue([
+        { id: 'ep-1', episodeNum: 1, title: 'E1', script: null }
+      ])
       mockSceneGroupBy.mockResolvedValueOnce([{ episodeId: 'ep-1', _count: { _all: 3 } }])
       mockSceneDialogueFindMany.mockResolvedValueOnce([
         { characterId: 'c1', scene: { episodeId: 'ep-1' } },

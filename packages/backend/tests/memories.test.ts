@@ -1,13 +1,5 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  vi,
-  beforeEach,
-} from "vitest";
-import Fastify, { FastifyInstance } from "fastify";
+import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
+import Fastify, { FastifyInstance } from 'fastify'
 
 // Use vi.hoisted to define mocks before module loading
 const {
@@ -21,7 +13,7 @@ const {
   mockMemoryItemUpdateMany,
   mockMemorySnapshotUpsert,
   mockMemorySnapshotFindFirst,
-  mockProjectFindFirst,
+  mockProjectFindFirst
 } = vi.hoisted(() => {
   return {
     mockMemoryItemFindMany: vi.fn(),
@@ -34,20 +26,19 @@ const {
     mockMemoryItemUpdateMany: vi.fn(),
     mockMemorySnapshotUpsert: vi.fn(),
     mockMemorySnapshotFindFirst: vi.fn(),
-    mockProjectFindFirst: vi.fn(),
-  };
-});
+    mockProjectFindFirst: vi.fn()
+  }
+})
 
 // Mock verifyProjectOwnership
-const mockVerifyProjectOwnership = vi.fn().mockResolvedValue(true);
+const mockVerifyProjectOwnership = vi.fn().mockResolvedValue(true)
 
-vi.mock("../src/plugins/auth.js", () => ({
-  verifyProjectOwnership: (...args: any[]) =>
-    mockVerifyProjectOwnership(...args),
-}));
+vi.mock('../src/plugins/auth.js', () => ({
+  verifyProjectOwnership: (...args: any[]) => mockVerifyProjectOwnership(...args)
+}))
 
 // Mock the prisma module
-vi.mock("../src/lib/prisma.js", () => ({
+vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     memoryItem: {
       findMany: mockMemoryItemFindMany,
@@ -57,401 +48,401 @@ vi.mock("../src/lib/prisma.js", () => ({
       delete: mockMemoryItemDelete,
       count: mockMemoryItemCount,
       createMany: mockMemoryItemCreateMany,
-      updateMany: mockMemoryItemUpdateMany,
+      updateMany: mockMemoryItemUpdateMany
     },
     memorySnapshot: {
       upsert: mockMemorySnapshotUpsert,
-      findFirst: mockMemorySnapshotFindFirst,
+      findFirst: mockMemorySnapshotFindFirst
     },
     project: {
-      findFirst: mockProjectFindFirst,
+      findFirst: mockProjectFindFirst
     },
     episode: {
-      findUnique: vi.fn(),
+      findUnique: vi.fn()
     },
     $connect: vi.fn(),
-    $disconnect: vi.fn(),
-  },
-}));
+    $disconnect: vi.fn()
+  }
+}))
 
 // Mock LLM service for extraction to prevent actual API calls
-vi.mock("../src/services/ai/deepseek.js", () => ({
+vi.mock('../src/services/ai/deepseek.js', () => ({
   extractMemoriesWithLLM: vi.fn().mockResolvedValue({
     memories: [],
-    cost: { inputTokens: 0, outputTokens: 0, costCNY: 0 },
-  }),
-}));
+    cost: { inputTokens: 0, outputTokens: 0, costCNY: 0 }
+  })
+}))
 
 // Import routes after all mocks are set up
-import { memoryRoutes } from "../src/routes/memories.js";
-import { expectPermissionDeniedPayload } from "./helpers/expect-http.js";
+import { memoryRoutes } from '../src/routes/memories.js'
+import { expectPermissionDeniedPayload } from './helpers/expect-http.js'
 
-describe("Memory Routes", () => {
-  let app: FastifyInstance;
+describe('Memory Routes', () => {
+  let app: FastifyInstance
 
   beforeAll(async () => {
-    app = Fastify({ logger: false });
+    app = Fastify({ logger: false })
 
     // Mock authenticate
-    app.decorate("authenticate", async (request: any, reply: any) => {
-      request.user = { id: "test-user-id", email: "test@example.com" };
-    });
+    app.decorate('authenticate', async (request: any, reply: any) => {
+      request.user = { id: 'test-user-id', email: 'test@example.com' }
+    })
 
-    await app.register(memoryRoutes, { prefix: "/api/projects" });
-    await app.ready();
-  });
+    await app.register(memoryRoutes, { prefix: '/api/projects' })
+    await app.ready()
+  })
 
   afterAll(async () => {
-    await app.close();
-  });
+    await app.close()
+  })
 
   beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    vi.clearAllMocks()
+  })
 
-  describe("GET /api/projects/:projectId/memories", () => {
-    it("should return memories for a project", async () => {
+  describe('GET /api/projects/:projectId/memories', () => {
+    it('should return memories for a project', async () => {
       const mockMemories = [
         {
-          id: "mem-1",
-          type: "CHARACTER",
-          title: "李明",
-          content: "30岁科学家",
-          projectId: "proj-1",
+          id: 'mem-1',
+          type: 'CHARACTER',
+          title: '李明',
+          content: '30岁科学家',
+          projectId: 'proj-1',
           importance: 5,
           isActive: true,
-          tags: ["主角"],
+          tags: ['主角'],
           createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-      mockMemoryItemFindMany.mockResolvedValue(mockMemories);
+          updatedAt: new Date()
+        }
+      ]
+      mockMemoryItemFindMany.mockResolvedValue(mockMemories)
 
       const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories",
-      });
+        method: 'GET',
+        url: '/api/projects/proj-1/memories'
+      })
 
-      expect(response.statusCode).toBe(200);
-      const data = JSON.parse(response.payload);
-      expect(data.success).toBe(true);
-      expect(data.count).toBe(1);
-      expect(data.data).toHaveLength(1);
-      expect(data.data[0].id).toBe("mem-1");
-    });
+      expect(response.statusCode).toBe(200)
+      const data = JSON.parse(response.payload)
+      expect(data.success).toBe(true)
+      expect(data.count).toBe(1)
+      expect(data.data).toHaveLength(1)
+      expect(data.data[0].id).toBe('mem-1')
+    })
 
-    it("should filter memories by type", async () => {
-      mockMemoryItemFindMany.mockResolvedValue([]);
+    it('should filter memories by type', async () => {
+      mockMemoryItemFindMany.mockResolvedValue([])
 
       const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories?type=CHARACTER",
-      });
+        method: 'GET',
+        url: '/api/projects/proj-1/memories?type=CHARACTER'
+      })
 
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(200)
       expect(mockMemoryItemFindMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            type: "CHARACTER",
-          }),
-        }),
-      );
-    });
+            type: 'CHARACTER'
+          })
+        })
+      )
+    })
 
-    it("should filter memories by isActive", async () => {
-      mockMemoryItemFindMany.mockResolvedValue([]);
+    it('should filter memories by isActive', async () => {
+      mockMemoryItemFindMany.mockResolvedValue([])
 
       const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories?isActive=true",
-      });
+        method: 'GET',
+        url: '/api/projects/proj-1/memories?isActive=true'
+      })
 
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(200)
       expect(mockMemoryItemFindMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            isActive: true,
-          }),
-        }),
-      );
-    });
+            isActive: true
+          })
+        })
+      )
+    })
 
-    it("should filter memories by minImportance", async () => {
-      mockMemoryItemFindMany.mockResolvedValue([]);
+    it('should filter memories by minImportance', async () => {
+      mockMemoryItemFindMany.mockResolvedValue([])
 
       const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories?minImportance=4",
-      });
+        method: 'GET',
+        url: '/api/projects/proj-1/memories?minImportance=4'
+      })
 
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(200)
       expect(mockMemoryItemFindMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            importance: { gte: 4 },
-          }),
-        }),
-      );
-    });
+            importance: { gte: 4 }
+          })
+        })
+      )
+    })
 
-    it("should return 403 when user does not own project", async () => {
-      mockVerifyProjectOwnership.mockResolvedValueOnce(false);
+    it('should return 403 when user does not own project', async () => {
+      mockVerifyProjectOwnership.mockResolvedValueOnce(false)
 
       const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories",
-      });
+        method: 'GET',
+        url: '/api/projects/proj-1/memories'
+      })
 
-      expectPermissionDeniedPayload(response);
-    });
-  });
+      expectPermissionDeniedPayload(response)
+    })
+  })
 
-  describe("GET /api/projects/:projectId/memories/:memoryId", () => {
-    it("should return a single memory", async () => {
+  describe('GET /api/projects/:projectId/memories/:memoryId', () => {
+    it('should return a single memory', async () => {
       const mockMemories = [
         {
-          id: "mem-1",
-          type: "CHARACTER",
-          title: "李明",
-          content: "30岁科学家",
-          projectId: "proj-1",
+          id: 'mem-1',
+          type: 'CHARACTER',
+          title: '李明',
+          content: '30岁科学家',
+          projectId: 'proj-1',
           importance: 5,
           isActive: true,
-          tags: ["主角"],
+          tags: ['主角'],
           createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-      mockMemoryItemFindMany.mockResolvedValue(mockMemories);
+          updatedAt: new Date()
+        }
+      ]
+      mockMemoryItemFindMany.mockResolvedValue(mockMemories)
 
       const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories/mem-1",
-      });
+        method: 'GET',
+        url: '/api/projects/proj-1/memories/mem-1'
+      })
 
-      expect(response.statusCode).toBe(200);
-      const data = JSON.parse(response.payload);
-      expect(data.success).toBe(true);
-      expect(data.data.id).toBe("mem-1");
-    });
+      expect(response.statusCode).toBe(200)
+      const data = JSON.parse(response.payload)
+      expect(data.success).toBe(true)
+      expect(data.data.id).toBe('mem-1')
+    })
 
-    it("should return 404 when memory not found", async () => {
-      mockMemoryItemFindMany.mockResolvedValue([]);
-
-      const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories/nonexistent",
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it("should return 403 when user does not own project", async () => {
-      mockVerifyProjectOwnership.mockResolvedValueOnce(false);
+    it('should return 404 when memory not found', async () => {
+      mockMemoryItemFindMany.mockResolvedValue([])
 
       const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories/mem-1",
-      });
+        method: 'GET',
+        url: '/api/projects/proj-1/memories/nonexistent'
+      })
 
-      expectPermissionDeniedPayload(response);
-    });
-  });
+      expect(response.statusCode).toBe(404)
+    })
 
-  describe("POST /api/projects/:projectId/memories/search", () => {
-    it("should search memories by text", async () => {
+    it('should return 403 when user does not own project', async () => {
+      mockVerifyProjectOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/projects/proj-1/memories/mem-1'
+      })
+
+      expectPermissionDeniedPayload(response)
+    })
+  })
+
+  describe('POST /api/projects/:projectId/memories/search', () => {
+    it('should search memories by text', async () => {
       const mockMemories = [
         {
-          id: "mem-1",
-          type: "CHARACTER",
-          title: "李明",
-          content: "30岁科学家",
-          projectId: "proj-1",
+          id: 'mem-1',
+          type: 'CHARACTER',
+          title: '李明',
+          content: '30岁科学家',
+          projectId: 'proj-1',
           importance: 5,
           isActive: true,
           createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-      mockMemoryItemFindMany.mockResolvedValue(mockMemories);
+          updatedAt: new Date()
+        }
+      ]
+      mockMemoryItemFindMany.mockResolvedValue(mockMemories)
 
       const response = await app.inject({
-        method: "POST",
-        url: "/api/projects/proj-1/memories/search",
+        method: 'POST',
+        url: '/api/projects/proj-1/memories/search',
         payload: {
-          query: "科学家",
-        },
-      });
+          query: '科学家'
+        }
+      })
 
-      expect(response.statusCode).toBe(200);
-      const data = JSON.parse(response.payload);
-      expect(data.success).toBe(true);
-      expect(data.count).toBe(1);
-    });
+      expect(response.statusCode).toBe(200)
+      const data = JSON.parse(response.payload)
+      expect(data.success).toBe(true)
+      expect(data.count).toBe(1)
+    })
 
-    it("should return 400 when query is missing", async () => {
+    it('should return 400 when query is missing', async () => {
       const response = await app.inject({
-        method: "POST",
-        url: "/api/projects/proj-1/memories/search",
-        payload: {},
-      });
+        method: 'POST',
+        url: '/api/projects/proj-1/memories/search',
+        payload: {}
+      })
 
-      expect(response.statusCode).toBe(400);
-    });
+      expect(response.statusCode).toBe(400)
+    })
 
-    it("should return 403 when user does not own project", async () => {
-      mockVerifyProjectOwnership.mockResolvedValueOnce(false);
+    it('should return 403 when user does not own project', async () => {
+      mockVerifyProjectOwnership.mockResolvedValueOnce(false)
 
       const response = await app.inject({
-        method: "POST",
-        url: "/api/projects/proj-1/memories/search",
+        method: 'POST',
+        url: '/api/projects/proj-1/memories/search',
         payload: {
-          query: "测试",
-        },
-      });
+          query: '测试'
+        }
+      })
 
-      expectPermissionDeniedPayload(response);
-    });
-  });
+      expectPermissionDeniedPayload(response)
+    })
+  })
 
-  describe("GET /api/projects/:projectId/memories/context", () => {
-    it("should return writing context for an episode", async () => {
+  describe('GET /api/projects/:projectId/memories/context', () => {
+    it('should return writing context for an episode', async () => {
       const mockMemories = [
         {
-          id: "mem-1",
-          type: "CHARACTER",
-          title: "李明",
-          content: "30岁科学家",
-          projectId: "proj-1",
+          id: 'mem-1',
+          type: 'CHARACTER',
+          title: '李明',
+          content: '30岁科学家',
+          projectId: 'proj-1',
           importance: 5,
           isActive: true,
           createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-      mockMemoryItemFindMany.mockResolvedValue(mockMemories);
+          updatedAt: new Date()
+        }
+      ]
+      mockMemoryItemFindMany.mockResolvedValue(mockMemories)
 
       const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories/context?episodeNum=1",
-      });
+        method: 'GET',
+        url: '/api/projects/proj-1/memories/context?episodeNum=1'
+      })
 
-      expect(response.statusCode).toBe(200);
-      const data = JSON.parse(response.payload);
-      expect(data.success).toBe(true);
-      expect(data.data).toBeDefined();
-    });
+      expect(response.statusCode).toBe(200)
+      const data = JSON.parse(response.payload)
+      expect(data.success).toBe(true)
+      expect(data.data).toBeDefined()
+    })
 
-    it("should return 403 when user does not own project", async () => {
-      mockVerifyProjectOwnership.mockResolvedValueOnce(false);
+    it('should return 403 when user does not own project', async () => {
+      mockVerifyProjectOwnership.mockResolvedValueOnce(false)
 
       const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories/context?episodeNum=1",
-      });
+        method: 'GET',
+        url: '/api/projects/proj-1/memories/context?episodeNum=1'
+      })
 
-      expectPermissionDeniedPayload(response);
-    });
-  });
+      expectPermissionDeniedPayload(response)
+    })
+  })
 
-  describe("GET /api/projects/:projectId/memories/stats", () => {
-    it("should return memory statistics", async () => {
+  describe('GET /api/projects/:projectId/memories/stats', () => {
+    it('should return memory statistics', async () => {
       const mockMemories = [
         {
-          id: "1",
-          type: "CHARACTER",
+          id: '1',
+          type: 'CHARACTER',
           importance: 5,
           isActive: true,
-          verified: true,
+          verified: true
         },
         {
-          id: "2",
-          type: "CHARACTER",
+          id: '2',
+          type: 'CHARACTER',
           importance: 4,
           isActive: true,
-          verified: false,
+          verified: false
         },
         {
-          id: "3",
-          type: "CHARACTER",
+          id: '3',
+          type: 'CHARACTER',
           importance: 3,
           isActive: false,
-          verified: false,
+          verified: false
         },
         {
-          id: "4",
-          type: "LOCATION",
+          id: '4',
+          type: 'LOCATION',
           importance: 5,
           isActive: true,
-          verified: true,
+          verified: true
         },
         {
-          id: "5",
-          type: "LOCATION",
+          id: '5',
+          type: 'LOCATION',
           importance: 2,
           isActive: true,
-          verified: false,
+          verified: false
         },
         {
-          id: "6",
-          type: "EVENT",
+          id: '6',
+          type: 'EVENT',
           importance: 4,
           isActive: true,
-          verified: true,
+          verified: true
         },
         {
-          id: "7",
-          type: "EVENT",
+          id: '7',
+          type: 'EVENT',
           importance: 3,
           isActive: true,
-          verified: false,
+          verified: false
         },
         {
-          id: "8",
-          type: "EVENT",
+          id: '8',
+          type: 'EVENT',
           importance: 5,
           isActive: false,
-          verified: true,
+          verified: true
         },
         {
-          id: "9",
-          type: "EVENT",
+          id: '9',
+          type: 'EVENT',
           importance: 2,
           isActive: true,
-          verified: false,
+          verified: false
         },
         {
-          id: "10",
-          type: "FORESHADOWING",
+          id: '10',
+          type: 'FORESHADOWING',
           importance: 4,
           isActive: true,
-          verified: true,
-        },
-      ];
-      mockMemoryItemFindMany.mockResolvedValue(mockMemories);
+          verified: true
+        }
+      ]
+      mockMemoryItemFindMany.mockResolvedValue(mockMemories)
 
       const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories/stats",
-      });
+        method: 'GET',
+        url: '/api/projects/proj-1/memories/stats'
+      })
 
-      expect(response.statusCode).toBe(200);
-      const data = JSON.parse(response.payload);
-      expect(data.success).toBe(true);
-      expect(data.data.total).toBe(10);
-      expect(data.data.active).toBe(8);
-      expect(data.data.verified).toBe(5);
-    });
+      expect(response.statusCode).toBe(200)
+      const data = JSON.parse(response.payload)
+      expect(data.success).toBe(true)
+      expect(data.data.total).toBe(10)
+      expect(data.data.active).toBe(8)
+      expect(data.data.verified).toBe(5)
+    })
 
-    it("should return 403 when user does not own project", async () => {
-      mockVerifyProjectOwnership.mockResolvedValueOnce(false);
+    it('should return 403 when user does not own project', async () => {
+      mockVerifyProjectOwnership.mockResolvedValueOnce(false)
 
       const response = await app.inject({
-        method: "GET",
-        url: "/api/projects/proj-1/memories/stats",
-      });
+        method: 'GET',
+        url: '/api/projects/proj-1/memories/stats'
+      })
 
-      expectPermissionDeniedPayload(response);
-    });
-  });
-});
+      expectPermissionDeniedPayload(response)
+    })
+  })
+})

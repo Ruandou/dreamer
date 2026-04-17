@@ -102,9 +102,7 @@ describe('pipeline-orchestrator pure functions', () => {
           }
         ]
       }
-      const seedanceConfigs = [
-        { duration: 5, prompt: 'Test prompt' }
-      ]
+      const seedanceConfigs = [{ duration: 5, prompt: 'Test prompt' }]
 
       const cost = estimatePipelineCost(script, seedanceConfigs as any)
 
@@ -191,9 +189,7 @@ describe('pipeline-orchestrator pure functions', () => {
           }
         ]
       }
-      const seedanceConfigs = [
-        { duration: 0, prompt: 'Zero duration' }
-      ]
+      const seedanceConfigs = [{ duration: 0, prompt: 'Zero duration' }]
 
       const cost = estimatePipelineCost(script, seedanceConfigs as any)
 

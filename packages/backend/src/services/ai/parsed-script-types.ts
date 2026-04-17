@@ -55,7 +55,9 @@ export function normalizeParsedCharacterList(characters: ParsedCharacter[]): Par
     return {
       name: c.name,
       description: c.description || '',
-      aliases: Array.isArray(c.aliases) ? c.aliases.map((a) => String(a).trim()).filter(Boolean) : undefined,
+      aliases: Array.isArray(c.aliases)
+        ? c.aliases.map((a) => String(a).trim()).filter(Boolean)
+        : undefined,
       images
     }
   })

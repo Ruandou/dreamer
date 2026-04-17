@@ -118,7 +118,10 @@ describe('ApiLogger Service', () => {
         provider: 'volcengine',
         prompt: 'Test',
         status: 'completed',
-        responseData: JSON.stringify({ videoUrl: apiCallResult.videoUrl, thumbnailUrl: apiCallResult.thumbnailUrl }),
+        responseData: JSON.stringify({
+          videoUrl: apiCallResult.videoUrl,
+          thumbnailUrl: apiCallResult.thumbnailUrl
+        }),
         cost: 0.5,
         duration: 5,
         takeId: null,

@@ -1,4 +1,10 @@
-import type { ScriptContent, Character, ProjectLocation, ScriptScene, ScriptStoryboardShot } from '@dreamer/shared/types'
+import type {
+  ScriptContent,
+  Character,
+  ProjectLocation,
+  ScriptScene,
+  ScriptStoryboardShot
+} from '@dreamer/shared/types'
 
 const emptyDoc = () => ({ type: 'doc', content: [{ type: 'paragraph' }] })
 
@@ -31,18 +37,18 @@ type ContentNode = MentionNode | TextNode | LocationNode
 
 function findCharacterByName(name: string, characters: Character[]): Character | null {
   const lower = name.toLowerCase()
-  return characters.find(c => c.name.toLowerCase() === lower) ?? null
+  return characters.find((c) => c.name.toLowerCase() === lower) ?? null
 }
 
 function findLocationByName(name: string, locations: ProjectLocation[]): ProjectLocation | null {
   const lower = name.toLowerCase()
-  return locations.find(l => l.name.toLowerCase() === lower) ?? null
+  return locations.find((l) => l.name.toLowerCase() === lower) ?? null
 }
 
 function findImageByName(character: Character, imageName: string) {
   if (!character.images?.length) return null
   const lower = imageName.toLowerCase()
-  return character.images.find(img => img.name.toLowerCase() === lower) ?? character.images[0]
+  return character.images.find((img) => img.name.toLowerCase() === lower) ?? character.images[0]
 }
 
 /** 用角色名生成 mention 节点 */
@@ -150,9 +156,12 @@ export function scriptToEditorDoc(
       for (let i = 0; i < s.shots.length; i++) {
         const sh = s.shots[i]
         // 镜头标签行
-        const shotNum = sh.shotNum ?? (i + 1)
+        const shotNum = sh.shotNum ?? i + 1
         const durationSec = sh.duration ? ` [${Math.round(sh.duration / 1000)}s]` : ''
-        paragraphs.push({ type: 'paragraph', content: [{ type: 'text', text: `🎬 镜头${shotNum}${durationSec}` }] })
+        paragraphs.push({
+          type: 'paragraph',
+          content: [{ type: 'text', text: `🎬 镜头${shotNum}${durationSec}` }]
+        })
 
         const shotLine: ContentNode[] = []
 
@@ -236,7 +245,10 @@ export function parseEditorDocToScene(
   }
 
   const parseParagraph = (nodes: ContentNode[]) => {
-    const text = nodes.map(n => n.type === 'text' ? n.text : '').join('').trim()
+    const text = nodes
+      .map((n) => (n.type === 'text' ? n.text : ''))
+      .join('')
+      .trim()
     if (!text) return
 
     // 镜头标签行：🎬 镜头1 [5s]
@@ -252,13 +264,16 @@ export function parseEditorDocToScene(
     }
 
     // 对话行：@角色：对白 或 @角色·形象：对白
-    const mentionNodes = nodes.filter(n => n.type === 'mention')
+    const mentionNodes = nodes.filter((n) => n.type === 'mention')
     if (mentionNodes.length > 0) {
       const mention = mentionNodes[0] as MentionNode
       const mentionLabel = mention.attrs.label || mention.attrs.id || ''
       // 去掉 @ 符号
       const charName = mentionLabel.replace(/^@/, '').split('·')[0].trim()
-      const restText = nodes.filter(n => n.type === 'text').map(n => n.text).join('')
+      const restText = nodes
+        .filter((n) => n.type === 'text')
+        .map((n) => n.text)
+        .join('')
       const dialogueMatch = restText.match(/^[\s：:]+(.+)/)
       if (dialogueMatch && charName) {
         dialogues.push({ character: charName, content: dialogueMatch[1].trim() })

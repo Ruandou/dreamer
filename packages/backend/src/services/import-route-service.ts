@@ -44,14 +44,13 @@ export class ImportRouteService {
           projectName: parsed.projectName ?? '',
           description: parsed.description ?? '',
           characters: parsed.characters,
-          episodes: parsed.episodes.map(ep => ({
+          episodes: parsed.episodes.map((ep) => ({
             episodeNum: ep.episodeNum,
             title: ep.title,
             sceneCount: ep.scenes.length,
-            scenes: ep.scenes.slice(0, 3).map(s => ({
+            scenes: ep.scenes.slice(0, 3).map((s) => ({
               sceneNum: s.sceneNum,
-              description:
-                s.description.slice(0, 100) + (s.description.length > 100 ? '...' : '')
+              description: s.description.slice(0, 100) + (s.description.length > 100 ? '...' : '')
             }))
           }))
         },
@@ -93,11 +92,7 @@ export class ImportRouteService {
     return { taskId: task.id, status: 'pending' as const }
   }
 
-  async enqueueProjectImport(
-    userId: string,
-    content: string,
-    type: 'markdown' | 'json'
-  ) {
+  async enqueueProjectImport(userId: string, content: string, type: 'markdown' | 'json') {
     const task = await this.repo.create({
       userId,
       content,

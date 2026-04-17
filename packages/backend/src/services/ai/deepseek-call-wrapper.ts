@@ -109,7 +109,9 @@ export async function callDeepSeekWithRetry<T>(
         logDeepSeekChat(modelLog, userPrompt, {
           status: 'failed',
           errorMsg: error?.message || 'auth'
-        }).catch(() => {/* ignore */})
+        }).catch(() => {
+          /* ignore */
+        })
         throw new DeepSeekAuthError()
       }
 
@@ -123,7 +125,9 @@ export async function callDeepSeekWithRetry<T>(
         logDeepSeekChat(modelLog, userPrompt, {
           status: 'failed',
           errorMsg: 'rate_limit'
-        }).catch(() => {/* ignore */})
+        }).catch(() => {
+          /* ignore */
+        })
         throw new DeepSeekRateLimitError()
       }
 
@@ -140,7 +144,9 @@ export async function callDeepSeekWithRetry<T>(
   logDeepSeekChat(modelLog, userPrompt, {
     status: 'failed',
     errorMsg: lastError?.message || 'DeepSeek API 调用失败'
-  }).catch(() => {/* ignore */})
+  }).catch(() => {
+    /* ignore */
+  })
   throw lastError || new Error('DeepSeek API 调用失败')
 }
 
@@ -149,7 +155,10 @@ export async function callDeepSeekWithRetry<T>(
  */
 export function cleanMarkdownCodeBlocks(content: string): string {
   if (content.includes('```json')) {
-    return content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    return content
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim()
   }
   if (content.includes('```')) {
     return content.replace(/```\n?/g, '').trim()
@@ -172,5 +181,5 @@ export function parseJsonResponse<T>(content: string, cleanMarkdown = true): T {
  * 睡眠函数
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

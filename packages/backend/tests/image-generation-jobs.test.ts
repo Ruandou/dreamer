@@ -11,11 +11,7 @@ vi.mock('../src/queues/image.js', () => ({
 
 import { imageGenerationJobRoutes } from '../src/routes/image-generation-jobs.js'
 
-function mockJob(
-  id: string,
-  data: Record<string, unknown>,
-  getState: string
-) {
+function mockJob(id: string, data: Record<string, unknown>, getState: string) {
   return {
     id,
     data,

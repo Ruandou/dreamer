@@ -28,7 +28,12 @@ export async function locationRoutes(fastify: FastifyInstance) {
   )
 
   fastify.post<{
-    Body: { projectId?: string; name?: string; timeOfDay?: string | null; description?: string | null }
+    Body: {
+      projectId?: string
+      name?: string
+      timeOfDay?: string | null
+      description?: string | null
+    }
   }>('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const userId = (request as any).user.id
     const projectId = request.body?.projectId
@@ -126,20 +131,24 @@ export async function locationRoutes(fastify: FastifyInstance) {
     return locationService.updateFields(locationId, data as Prisma.LocationUpdateInput)
   })
 
-  fastify.delete<{ Params: { id: string } }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
-    const locationId = request.params.id
+  fastify.delete<{ Params: { id: string } }>(
+    '/:id',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = (request as any).user.id
+      const locationId = request.params.id
 
-    if (!(await verifyLocationOwnership(userId, locationId))) {
-      return reply.status(403).send(permissionDeniedBody)
-    }
+      if (!(await verifyLocationOwnership(userId, locationId))) {
+        return reply.status(403).send(permissionDeniedBody)
+      }
 
-    const deleted = await locationService.deleteLocation(locationId)
-    if (!deleted) {
-      return reply.status(404).send({ error: 'Location not found' })
+      const deleted = await locationService.deleteLocation(locationId)
+      if (!deleted) {
+        return reply.status(404).send({ error: 'Location not found' })
+      }
+      return reply.status(204).send()
     }
-    return reply.status(204).send()
-  })
+  )
 
   /** 本地上传定场图（multipart，字段名 file） */
   fastify.post<{ Params: { id: string } }>(

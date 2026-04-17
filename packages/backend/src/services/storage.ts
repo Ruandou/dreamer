@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand
+} from '@aws-sdk/client-s3'
 import { Readable } from 'stream'
 
 const s3Client = new S3Client({
@@ -28,12 +33,14 @@ export async function uploadFile(
 ): Promise<string> {
   const bucketName = getBucketName(bucket)
 
-  await s3Client.send(new PutObjectCommand({
-    Bucket: bucketName,
-    Key: key,
-    Body: body,
-    ContentType: contentType
-  }))
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: body,
+      ContentType: contentType
+    })
+  )
 
   // Return the URL
   const endpoint = process.env.S3_ENDPOINT || 'http://localhost:9000'
@@ -48,10 +55,12 @@ export async function getFileUrl(bucket: BucketType, key: string): Promise<strin
 
 export async function deleteFile(bucket: BucketType, key: string): Promise<void> {
   const bucketName = getBucketName(bucket)
-  await s3Client.send(new DeleteObjectCommand({
-    Bucket: bucketName,
-    Key: key
-  }))
+  await s3Client.send(
+    new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key
+    })
+  )
 }
 
 export function generateFileKey(bucket: BucketType, filename: string): string {
