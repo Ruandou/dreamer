@@ -1,15 +1,16 @@
 import type { ScriptContent } from '@dreamer/shared/types'
 import type { ModelCallLogContext } from './api-logger.js'
-import { logDeepSeekChat } from './model-call-log.js'
+import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
 import {
-  calculateDeepSeekCost,
-  getDeepSeekClient,
-  DeepSeekAuthError,
-  DeepSeekRateLimitError,
-  type DeepSeekCost
-} from './deepseek-client.js'
+  DEEPSEEK_TEMPERATURE,
+  DEEPSEEK_MAX_TOKENS
+} from './ai.constants.js'
 import type { ParsedCharacter } from './parsed-script-types.js'
 import { normalizeParsedCharacterList } from './parsed-script-types.js'
+import {
+  callDeepSeekWithRetry,
+  type DeepSeekCallOptions
+} from './deepseek-call-wrapper.js'
 interface CharacterIdentityMergeResult {
   characters: ParsedCharacter[]
   /** 非规范称谓 -> 规范名（含与自身相等的映射时可忽略） */
@@ -115,49 +116,27 @@ export async function fetchCharacterIdentityMerge(
   const user = buildMergeUserScript(script, uniqueNames)
   const deepseek = getDeepSeekClient()
 
-  try {
-    const completion = await deepseek.chat.completions.create({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: CHARACTER_IDENTITY_MERGE_SYSTEM },
-        { role: 'user', content: user }
-      ],
-      temperature: 0.25,
-      max_tokens: 6000
-    })
-
-    const cost = calculateDeepSeekCost(completion.usage, false)
-    const text = completion.choices[0]?.message?.content?.trim() || ''
-    if (!text) {
-      await logDeepSeekChat(log, user, { status: 'failed', errorMsg: 'empty' })
-      throw new Error('角色身份合并：DeepSeek 返回为空')
-    }
-
+  // Parser function for the wrapper
+  const parseMergeResult = (text: string): CharacterIdentityMergeResult => {
     const raw = extractJsonObject(text)
-    let parsed: any
-    try {
-      parsed = JSON.parse(raw)
-    } catch (e) {
-      await logDeepSeekChat(log, user, { status: 'failed', errorMsg: 'json_parse' })
-      throw new Error('角色身份合并：返回不是合法 JSON')
-    }
+    const parsed = JSON.parse(raw)
+    return normalizeMergePayload(parsed)
+  }
 
-    const result = normalizeMergePayload(parsed)
-    await logDeepSeekChat(log, user, { status: 'completed', costCNY: cost.costCNY }, {
-      systemMessage: CHARACTER_IDENTITY_MERGE_SYSTEM
-    })
-    return { result, cost }
-  } catch (error: any) {
-    await logDeepSeekChat(log, user, {
-      status: 'failed',
-      errorMsg: error?.message || 'character_identity_merge'
-    })
-    if (error?.status === 401 || error?.status === 403) {
-      throw new DeepSeekAuthError()
-    }
-    if (error?.status === 429 || error?.message?.includes('rate_limit')) {
-      throw new DeepSeekRateLimitError()
-    }
-    throw error
+  const options: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: CHARACTER_IDENTITY_MERGE_SYSTEM,
+    userPrompt: user,
+    temperature: DEEPSEEK_TEMPERATURE.CHARACTER_MERGE,
+    maxTokens: DEEPSEEK_MAX_TOKENS.CHARACTER_MERGE,
+    modelLog: log
+  }
+
+  const result = await callDeepSeekWithRetry(options, parseMergeResult)
+
+  return {
+    result: result.content,
+    cost: result.cost
   }
 }

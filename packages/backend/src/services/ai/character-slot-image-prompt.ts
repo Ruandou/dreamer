@@ -1,12 +1,13 @@
 import type { ModelCallLogContext } from './api-logger.js'
-import { logDeepSeekChat } from './model-call-log.js'
+import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
 import {
-  calculateDeepSeekCost,
-  getDeepSeekClient,
-  DeepSeekAuthError,
-  DeepSeekRateLimitError,
-  type DeepSeekCost
-} from './deepseek-client.js'
+  DEEPSEEK_TEMPERATURE,
+  DEEPSEEK_MAX_TOKENS
+} from './ai.constants.js'
+import {
+  callDeepSeekWithRetry,
+  type DeepSeekCallOptions
+} from './deepseek-call-wrapper.js'
 
 /** 与《DREAMER_AI_PROMPT_GUIDE》3.2 / 3.3 及批量视觉补全对齐的单槽提示词约束 */
 function characterSlotSystemPrompt(slotType: string): string {
@@ -68,39 +69,25 @@ export async function generateCharacterSlotImagePrompt(
     .filter(Boolean)
     .join('\n')
 
-  try {
-    const completion = await deepseek.chat.completions.create({
-      model: 'deepseek-chat',
-      messages: [
-        {
-          role: 'system',
-          content: characterSlotSystemPrompt(input.slotType)
-        },
-        { role: 'user', content: user }
-      ],
-      temperature: 0.6,
-      max_tokens: 400
-    })
+  // Parser function for the wrapper
+  const parsePrompt = (content: string): string => {
+    return content.replace(/^['"]|['"]$/g, '').trim()
+  }
 
-    const cost = calculateDeepSeekCost(completion.usage)
-    const raw = completion.choices[0]?.message?.content?.trim() || ''
-    const prompt = raw.replace(/^["']|["']$/g, '').trim()
-    if (!prompt) {
-      throw new Error('DeepSeek API 返回为空')
-    }
-    await logDeepSeekChat(log, user, { status: 'completed', costCNY: cost.costCNY })
-    return { prompt, cost }
-  } catch (error: any) {
-    await logDeepSeekChat(log, user, {
-      status: 'failed',
-      errorMsg: error?.message || 'character_slot_prompt'
-    })
-    if (error?.status === 401 || error?.status === 403) {
-      throw new DeepSeekAuthError()
-    }
-    if (error?.status === 429 || error?.message?.includes('rate_limit')) {
-      throw new DeepSeekRateLimitError()
-    }
-    throw error
+  const options: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: characterSlotSystemPrompt(input.slotType),
+    userPrompt: user,
+    temperature: DEEPSEEK_TEMPERATURE.CHARACTER_IMAGE_PROMPT,
+    maxTokens: DEEPSEEK_MAX_TOKENS.CHARACTER_IMAGE_PROMPT,
+    modelLog: log
+  }
+
+  const result = await callDeepSeekWithRetry(options, parsePrompt)
+
+  return {
+    prompt: result.content,
+    cost: result.cost
   }
 }

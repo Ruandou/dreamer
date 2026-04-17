@@ -1,14 +1,16 @@
 import type { ScriptContent } from "@dreamer/shared/types";
 import type { ModelCallLogContext } from "./api-logger.js";
-import { logDeepSeekChat } from "./model-call-log.js";
+import { getDeepSeekClient, type DeepSeekCost } from "./deepseek-client.js";
 import {
-  calculateDeepSeekCost,
-  getDeepSeekClient,
-  DeepSeekAuthError,
-  DeepSeekRateLimitError,
-  type DeepSeekCost,
-} from "./deepseek-client.js";
+  DEEPSEEK_TEMPERATURE,
+  DEEPSEEK_MAX_TOKENS
+} from './ai.constants.js'
 import { convertDeepSeekResponse } from "./script-expand.js";
+import {
+  callDeepSeekWithRetry,
+  cleanMarkdownCodeBlocks,
+  type DeepSeekCallOptions
+} from './deepseek-call-wrapper.js';
 
 /** 与 Prisma Episode / shared Episode 兼容，用于分镜生成入参 */
 export interface EpisodeStoryboardInput {
@@ -116,112 +118,33 @@ export async function generateStoryboardScriptFromEpisode(
   const userPrompt = buildStoryboardUserPrompt(episode, projectContext, hint);
   const deepseek = getDeepSeekClient();
 
-  let lastError: Error | null = null;
+  // Parser function for the wrapper
+  const parseStoryboard = (content: string): ScriptContent => {
+    const cleanContent = cleanMarkdownCodeBlocks(content);
+    const parsed = JSON.parse(cleanContent);
+    const script = convertDeepSeekResponse(parsed);
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const completion = await deepseek.chat.completions.create({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: STORYBOARD_SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.65,
-        max_tokens: 6000,
-      });
-
-      const content = completion.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error("DeepSeek API 返回为空");
-      }
-
-      const cost = calculateDeepSeekCost(completion.usage);
-
-      let cleanContent = content;
-      if (content.includes("```json")) {
-        cleanContent = content
-          .replace(/```json\n?/g, "")
-          .replace(/```\n?/g, "")
-          .trim();
-      }
-
-      const parsed = JSON.parse(cleanContent);
-      const script = convertDeepSeekResponse(parsed);
-
-      if (!script.title || !Array.isArray(script.scenes)) {
-        throw new Error("分镜剧本格式不正确");
-      }
-
-      await logDeepSeekChat(
-        log,
-        userPrompt,
-        { status: "completed", costCNY: cost.costCNY },
-        {
-          systemMessage: STORYBOARD_SYSTEM_PROMPT,
-        },
-      );
-      return { script, cost };
-    } catch (error: any) {
-      lastError = error;
-
-      if (error?.status === 401 || error?.status === 403) {
-        await logDeepSeekChat(
-          log,
-          userPrompt,
-          { status: "failed", errorMsg: error?.message || "auth" },
-          {
-            systemMessage: STORYBOARD_SYSTEM_PROMPT,
-          },
-        );
-        throw new DeepSeekAuthError();
-      }
-
-      if (error?.status === 429 || error?.message?.includes("rate_limit")) {
-        if (attempt < 2) {
-          await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
-          continue;
-        }
-        await logDeepSeekChat(
-          log,
-          userPrompt,
-          { status: "failed", errorMsg: "rate_limit" },
-          {
-            systemMessage: STORYBOARD_SYSTEM_PROMPT,
-          },
-        );
-        throw new DeepSeekRateLimitError();
-      }
-
-      if (
-        error.message === "分镜剧本格式不正确" ||
-        error.message === "DeepSeek API 返回为空"
-      ) {
-        await logDeepSeekChat(
-          log,
-          userPrompt,
-          { status: "failed", errorMsg: error.message },
-          {
-            systemMessage: STORYBOARD_SYSTEM_PROMPT,
-          },
-        );
-        throw error;
-      }
-
-      if (attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        continue;
-      }
+    if (!script.title || !Array.isArray(script.scenes)) {
+      throw new Error("分镜剧本格式不正确");
     }
+
+    return script;
   }
 
-  await logDeepSeekChat(
-    log,
+  const options: DeepSeekCallOptions = {
+    client: deepseek,
+    model: "deepseek-chat",
+    systemPrompt: STORYBOARD_SYSTEM_PROMPT,
     userPrompt,
-    {
-      status: "failed",
-      errorMsg: lastError?.message || "分镜剧本生成失败",
-    },
-    { systemMessage: STORYBOARD_SYSTEM_PROMPT },
-  );
-  throw lastError || new Error("分镜剧本生成失败");
+    temperature: DEEPSEEK_TEMPERATURE.STORYBOARD_GENERATE,
+    maxTokens: DEEPSEEK_MAX_TOKENS.STORYBOARD_GENERATE,
+    modelLog: log
+  }
+
+  const result = await callDeepSeekWithRetry(options, parseStoryboard)
+
+  return {
+    script: result.content,
+    cost: result.cost
+  }
 }

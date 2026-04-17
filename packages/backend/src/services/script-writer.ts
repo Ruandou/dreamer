@@ -1,18 +1,17 @@
 import OpenAI from 'openai'
 import type { ScriptContent, ScriptScene, ScriptDialogueLine, Character } from '@dreamer/shared/types'
-import { calculateDeepSeekCost, type DeepSeekCost, DeepSeekAuthError, DeepSeekRateLimitError } from './ai/deepseek.js'
+import type { DeepSeekCost } from './ai/deepseek.js'
 import type { ModelCallLogContext } from './ai/api-logger.js'
-import { logDeepSeekChat } from './ai/model-call-log.js'
 import {
   DEEPSEEK_TEMPERATURE,
-  DEEPSEEK_MAX_TOKENS,
-  DEFAULT_RETRY_ATTEMPTS,
-  AUTH_RETRY_DELAY_MS,
-  RETRY_BASE_DELAY_MS,
-  AUTH_ERROR_STATUS_CODES,
-  RATE_LIMIT_STATUS_CODE
+  DEEPSEEK_MAX_TOKENS
 } from './ai/ai.constants.js'
 import { SCRIPT_WRITER_PROMPT, EPISODE_WRITER_PROMPT } from './prompts/script-prompts.js'
+import {
+  callDeepSeekWithRetry,
+  cleanMarkdownCodeBlocks,
+  type DeepSeekCallOptions
+} from './ai/deepseek-call-wrapper.js'
 
 export interface ScriptWriterOptions {
   characters?: Character[]
@@ -34,73 +33,31 @@ export async function writeScriptFromIdea(
   options?: ScriptWriterOptions
 ): Promise<ScriptWriterResult> {
   const deepseek = getDeepSeekClient()
-
   const userPrompt = buildUserPrompt(idea, options)
 
-  let lastError: Error | null = null
-
-  for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt++) {
-    try {
-      const completion = await deepseek.chat.completions.create({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: SCRIPT_WRITER_PROMPT },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
-        max_tokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING
-      })
-
-      const content = completion.choices[0]?.message?.content
-      if (!content) {
-        throw new Error('DeepSeek API 返回为空')
-      }
-
-      const cost = calculateDeepSeekCost(completion.usage)
-      const script = parseScriptResponse(content)
-
-      validateScript(script)
-
-      await logDeepSeekChat(options?.modelLog, userPrompt, {
-        status: 'completed',
-        costCNY: cost.costCNY
-      })
-      return { script, cost }
-    } catch (error: any) {
-      lastError = error
-
-      if (AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
-        await logDeepSeekChat(options?.modelLog, userPrompt, {
-          status: 'failed',
-          errorMsg: error?.message || 'auth'
-        })
-        throw new DeepSeekAuthError()
-      }
-
-      if (error?.status === RATE_LIMIT_STATUS_CODE || error?.message?.includes('rate_limit')) {
-        if (attempt < DEFAULT_RETRY_ATTEMPTS) {
-          await sleep(AUTH_RETRY_DELAY_MS * attempt)
-          continue
-        }
-        await logDeepSeekChat(options?.modelLog, userPrompt, {
-          status: 'failed',
-          errorMsg: 'rate_limit'
-        })
-        throw new DeepSeekRateLimitError()
-      }
-
-      if (attempt < DEFAULT_RETRY_ATTEMPTS) {
-        await sleep(RETRY_BASE_DELAY_MS)
-        continue
-      }
-    }
+  // Parser function for the wrapper
+  const parseScript = (content: string): ScriptContent => {
+    const script = parseScriptResponse(content)
+    validateScript(script)
+    return script
   }
 
-  await logDeepSeekChat(options?.modelLog, userPrompt, {
-    status: 'failed',
-    errorMsg: lastError?.message || '剧本生成失败'
-  })
-  throw lastError || new Error('剧本生成失败')
+  const options_param: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: SCRIPT_WRITER_PROMPT,
+    userPrompt,
+    temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
+    maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING,
+    modelLog: options?.modelLog
+  }
+
+  const result = await callDeepSeekWithRetry(options_param, parseScript)
+
+  return {
+    script: result.content,
+    cost: result.cost
+  }
 }
 
 /**
@@ -120,50 +77,29 @@ export async function writeEpisodeForProject(
 
 请只写第 ${episodeNum} 集的剧本 JSON。`
 
-  let lastError: Error | null = null
-  for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt++) {
-    try {
-      const completion = await deepseek.chat.completions.create({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: EPISODE_WRITER_PROMPT },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: DEEPSEEK_TEMPERATURE.SCRIPT_IMPROVEMENT,
-        max_tokens: DEEPSEEK_MAX_TOKENS.SCRIPT_IMPROVEMENT
-      })
-      const content = completion.choices[0]?.message?.content
-      if (!content) throw new Error('DeepSeek API 返回为空')
-      const cost = calculateDeepSeekCost(completion.usage)
-      const script = parseScriptResponse(content)
-      validateScript(script)
-      await logDeepSeekChat(modelLog, userPrompt, { status: 'completed', costCNY: cost.costCNY })
-      return { script, cost }
-    } catch (error: any) {
-      lastError = error
-      if (AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
-        await logDeepSeekChat(modelLog, userPrompt, {
-          status: 'failed',
-          errorMsg: error?.message || 'auth'
-        })
-        throw new DeepSeekAuthError()
-      }
-      if (error?.status === RATE_LIMIT_STATUS_CODE || error?.message?.includes('rate_limit')) {
-        if (attempt < DEFAULT_RETRY_ATTEMPTS) {
-          await sleep(AUTH_RETRY_DELAY_MS * attempt)
-          continue
-        }
-        await logDeepSeekChat(modelLog, userPrompt, { status: 'failed', errorMsg: 'rate_limit' })
-        throw new DeepSeekRateLimitError()
-      }
-      if (attempt < DEFAULT_RETRY_ATTEMPTS) await sleep(RETRY_BASE_DELAY_MS)
-    }
+  // Parser function for the wrapper
+  const parseScript = (content: string): ScriptContent => {
+    const script = parseScriptResponse(content)
+    validateScript(script)
+    return script
   }
-  await logDeepSeekChat(modelLog, userPrompt, {
-    status: 'failed',
-    errorMsg: lastError?.message || `第 ${episodeNum} 集剧本生成失败`
-  })
-  throw lastError || new Error(`第 ${episodeNum} 集剧本生成失败`)
+
+  const options: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: EPISODE_WRITER_PROMPT,
+    userPrompt,
+    temperature: DEEPSEEK_TEMPERATURE.SCRIPT_IMPROVEMENT,
+    maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_IMPROVEMENT,
+    modelLog
+  }
+
+  const result = await callDeepSeekWithRetry(options, parseScript)
+
+  return {
+    script: result.content,
+    cost: result.cost
+  }
 }
 
 /**
@@ -190,70 +126,29 @@ ${JSON.stringify(script, null, 2)}
 
 直接返回JSON格式的完整剧本（包括原有场景+新场景）。`
 
-  let lastError: Error | null = null
-
-  for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt++) {
-    try {
-      const completion = await deepseek.chat.completions.create({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: SCRIPT_WRITER_PROMPT },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
-        max_tokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING
-      })
-
-      const content = completion.choices[0]?.message?.content
-      if (!content) {
-        throw new Error('DeepSeek API 返回为空')
-      }
-
-      const cost = calculateDeepSeekCost(completion.usage)
-      const script = parseScriptResponse(content)
-
-      validateScript(script)
-
-      await logDeepSeekChat(options?.modelLog, userPrompt, {
-        status: 'completed',
-        costCNY: cost.costCNY
-      })
-      return { script, cost }
-    } catch (error: any) {
-      lastError = error
-
-      if (AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
-        await logDeepSeekChat(options?.modelLog, userPrompt, {
-          status: 'failed',
-          errorMsg: error?.message || 'auth'
-        })
-        throw new DeepSeekAuthError()
-      }
-
-      if (error?.status === RATE_LIMIT_STATUS_CODE || error?.message?.includes('rate_limit')) {
-        if (attempt < DEFAULT_RETRY_ATTEMPTS) {
-          await sleep(AUTH_RETRY_DELAY_MS * attempt)
-          continue
-        }
-        await logDeepSeekChat(options?.modelLog, userPrompt, {
-          status: 'failed',
-          errorMsg: 'rate_limit'
-        })
-        throw new DeepSeekRateLimitError()
-      }
-
-      if (attempt < DEFAULT_RETRY_ATTEMPTS) {
-        await sleep(RETRY_BASE_DELAY_MS)
-        continue
-      }
-    }
+  // Parser function for the wrapper
+  const parseScript = (content: string): ScriptContent => {
+    const parsed = parseScriptResponse(content)
+    validateScript(parsed)
+    return parsed
   }
 
-  await logDeepSeekChat(options?.modelLog, userPrompt, {
-    status: 'failed',
-    errorMsg: lastError?.message || '剧本扩展失败'
-  })
-  throw lastError || new Error('剧本扩展失败')
+  const options_param: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: SCRIPT_WRITER_PROMPT,
+    userPrompt,
+    temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
+    maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING,
+    modelLog: options?.modelLog
+  }
+
+  const result = await callDeepSeekWithRetry(options_param, parseScript)
+
+  return {
+    script: result.content,
+    cost: result.cost
+  }
 }
 
 /**
@@ -278,70 +173,29 @@ ${feedback}
 
 直接返回JSON格式的完整剧本。`
 
-  let lastError: Error | null = null
-
-  for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt++) {
-    try {
-      const completion = await deepseek.chat.completions.create({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: SCRIPT_WRITER_PROMPT },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
-        max_tokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING
-      })
-
-      const content = completion.choices[0]?.message?.content
-      if (!content) {
-        throw new Error('DeepSeek API 返回为空')
-      }
-
-      const cost = calculateDeepSeekCost(completion.usage)
-      const improvedScript = parseScriptResponse(content)
-
-      validateScript(improvedScript)
-
-      await logDeepSeekChat(options?.modelLog, userPrompt, {
-        status: 'completed',
-        costCNY: cost.costCNY
-      })
-      return { script: improvedScript, cost }
-    } catch (error: any) {
-      lastError = error
-
-      if (AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
-        await logDeepSeekChat(options?.modelLog, userPrompt, {
-          status: 'failed',
-          errorMsg: error?.message || 'auth'
-        })
-        throw new DeepSeekAuthError()
-      }
-
-      if (error?.status === RATE_LIMIT_STATUS_CODE || error?.message?.includes('rate_limit')) {
-        if (attempt < DEFAULT_RETRY_ATTEMPTS) {
-          await sleep(AUTH_RETRY_DELAY_MS * attempt)
-          continue
-        }
-        await logDeepSeekChat(options?.modelLog, userPrompt, {
-          status: 'failed',
-          errorMsg: 'rate_limit'
-        })
-        throw new DeepSeekRateLimitError()
-      }
-
-      if (attempt < DEFAULT_RETRY_ATTEMPTS) {
-        await sleep(RETRY_BASE_DELAY_MS)
-        continue
-      }
-    }
+  // Parser function for the wrapper
+  const parseScript = (content: string): ScriptContent => {
+    const improvedScript = parseScriptResponse(content)
+    validateScript(improvedScript)
+    return improvedScript
   }
 
-  await logDeepSeekChat(options?.modelLog, userPrompt, {
-    status: 'failed',
-    errorMsg: lastError?.message || '剧本改进失败'
-  })
-  throw lastError || new Error('剧本改进失败')
+  const options_param: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: SCRIPT_WRITER_PROMPT,
+    userPrompt,
+    temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
+    maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING,
+    modelLog: options?.modelLog
+  }
+
+  const result = await callDeepSeekWithRetry(options_param, parseScript)
+
+  return {
+    script: result.content,
+    cost: result.cost
+  }
 }
 
 /**
@@ -377,63 +231,22 @@ ${contextStr}
 
 直接返回优化后的描述文字，不要其他内容。`
 
-  let lastError: Error | null = null
+  // Simple parser - just return the content
+  const parseResponse = (content: string): string => content.trim()
 
-  for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt++) {
-    try {
-      const completion = await deepseek.chat.completions.create({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: '你是一个专业的AI视频提示词优化专家。' },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.5,
-        max_tokens: 500
-      })
-
-      const content = completion.choices[0]?.message?.content
-      if (!content) {
-        throw new Error('DeepSeek API 返回为空')
-      }
-
-      const cost = calculateDeepSeekCost(completion.usage)
-      await logDeepSeekChat(modelLog, userPrompt, {
-        status: 'completed',
-        costCNY: cost.costCNY
-      })
-      return content.trim()
-    } catch (error: any) {
-      lastError = error
-
-      if (AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
-        await logDeepSeekChat(modelLog, userPrompt, {
-          status: 'failed',
-          errorMsg: error?.message || 'auth'
-        })
-        throw new DeepSeekAuthError()
-      }
-
-      if (error?.status === RATE_LIMIT_STATUS_CODE || error?.message?.includes('rate_limit')) {
-        if (attempt < DEFAULT_RETRY_ATTEMPTS) {
-          await sleep(AUTH_RETRY_DELAY_MS * attempt)
-          continue
-        }
-        await logDeepSeekChat(modelLog, userPrompt, { status: 'failed', errorMsg: 'rate_limit' })
-        throw new DeepSeekRateLimitError()
-      }
-
-      if (attempt < DEFAULT_RETRY_ATTEMPTS) {
-        await sleep(RETRY_BASE_DELAY_MS)
-        continue
-      }
-    }
+  const options: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: '你是一个专业的AI视频提示词优化专家。',
+    userPrompt,
+    temperature: 0.5,
+    maxTokens: 500,
+    modelLog
   }
 
-  await logDeepSeekChat(modelLog, userPrompt, {
-    status: 'failed',
-    errorMsg: lastError?.message || '场景描述优化失败'
-  })
-  throw lastError || new Error('场景描述优化失败')
+  const result = await callDeepSeekWithRetry(options, parseResponse)
+
+  return result.content
 }
 
 // ==================== Helper Functions ====================

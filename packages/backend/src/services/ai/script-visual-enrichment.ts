@@ -1,12 +1,14 @@
 import type { ModelCallLogContext } from './api-logger.js'
-import { logDeepSeekChat } from './model-call-log.js'
+import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
 import {
-  calculateDeepSeekCost,
-  getDeepSeekClient,
-  DeepSeekAuthError,
-  DeepSeekRateLimitError,
-  type DeepSeekCost
-} from './deepseek-client.js'
+  DEEPSEEK_TEMPERATURE,
+  DEEPSEEK_MAX_TOKENS
+} from './ai.constants.js'
+import {
+  callDeepSeekWithRetry,
+  cleanMarkdownCodeBlocks,
+  type DeepSeekCallOptions
+} from './deepseek-call-wrapper.js'
 
 /** system 过长时模型容易输出非严格 JSON，长规则放在用户消息中 */
 export const SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT = [
@@ -92,49 +94,29 @@ export async function fetchScriptVisualEnrichmentJson(
   log?: ModelCallLogContext
 ): Promise<{ jsonText: string; cost: DeepSeekCost }> {
   const projectVisualStyleLine = (input.projectVisualStyleLine || '').trim() || '（未指定）'
-  /** 构建 user、client、请求、落库 全在同一段 try，避免中途抛错时未写入 ModelApiCall */
-  let user = ''
-  try {
-    user = buildScriptVisualEnrichmentUserContent({ ...input, projectVisualStyleLine })
-    const deepseek = getDeepSeekClient()
-    const completion = await deepseek.chat.completions.create({
-      model: 'deepseek-chat',
-      messages: [
-        {
-          role: 'system',
-          content: SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT
-        },
-        { role: 'user', content: user }
-      ],
-      temperature: 0.4,
-      max_tokens: 4096
-    })
+  const user = buildScriptVisualEnrichmentUserContent({ ...input, projectVisualStyleLine })
+  const deepseek = getDeepSeekClient()
 
-    const cost = calculateDeepSeekCost(completion.usage)
-    const jsonText = completion.choices[0]?.message?.content?.trim() || ''
-    if (!jsonText) {
-      throw new Error('DeepSeek API 返回为空')
-    }
-    await logDeepSeekChat(log, user, { status: 'completed', costCNY: cost.costCNY }, {
-      systemMessage: SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT
-    })
-    return { jsonText, cost }
-  } catch (error: any) {
-    await logDeepSeekChat(
-      log,
-      user || '（未能生成 user 提示词，可能在 buildScriptVisualEnrichmentUserContent 阶段失败）',
-      {
-        status: 'failed',
-        errorMsg: error?.message || 'visual_enrichment'
-      },
-      { systemMessage: SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT }
-    )
-    if (error?.status === 401 || error?.status === 403) {
-      throw new DeepSeekAuthError()
-    }
-    if (error?.status === 429 || error?.message?.includes('rate_limit')) {
-      throw new DeepSeekRateLimitError()
-    }
-    throw error
+  // Parser function for the wrapper
+  const parseJsonText = (content: string): string => {
+    const cleaned = cleanMarkdownCodeBlocks(content)
+    return cleaned.trim()
+  }
+
+  const options: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT,
+    userPrompt: user,
+    temperature: DEEPSEEK_TEMPERATURE.VISUAL_ENRICH,
+    maxTokens: DEEPSEEK_MAX_TOKENS.VISUAL_ENRICH,
+    modelLog: log
+  }
+
+  const result = await callDeepSeekWithRetry(options, parseJsonText)
+
+  return {
+    jsonText: result.content,
+    cost: result.cost
   }
 }
