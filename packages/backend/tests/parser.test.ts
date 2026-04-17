@@ -13,6 +13,15 @@ vi.mock('openai', () => ({
   }))
 }))
 
+// Mock recordModelApiCall to prevent Prisma errors
+vi.mock('../src/services/ai/api-logger.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/services/ai/api-logger.js')>()
+  return {
+    ...actual,
+    recordModelApiCall: vi.fn().mockResolvedValue(undefined)
+  }
+})
+
 describe('Parser Service', () => {
   beforeEach(() => {
     vi.clearAllMocks()

@@ -1,6 +1,20 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { getVoiceIdFromConfig, type TTSPlatform } from '../../src/services/tts/mapper.js'
 import type { VoiceConfig } from '@dreamer/shared/types'
+
+// Suppress console.error/warn for cleaner test output
+const originalConsoleError = console.error
+const originalConsoleWarn = console.warn
+
+beforeEach(() => {
+  console.error = vi.fn()
+  console.warn = vi.fn()
+})
+
+afterEach(() => {
+  console.error = originalConsoleError
+  console.warn = originalConsoleWarn
+})
 
 describe('TTS Mapper', () => {
   describe('getVoiceIdFromConfig', () => {

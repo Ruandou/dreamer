@@ -1,4 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
+// Suppress console.error/warn for cleaner test output
+const originalConsoleError = console.error
+const originalConsoleWarn = console.warn
+
+beforeEach(() => {
+  console.error = vi.fn()
+  console.warn = vi.fn()
+})
+
+afterEach(() => {
+  console.error = originalConsoleError
+  console.warn = originalConsoleWarn
+})
 
 const { mockCompositionFindUnique, mockCompositionUpdate } = vi.hoisted(() => ({
   mockCompositionFindUnique: vi.fn(),

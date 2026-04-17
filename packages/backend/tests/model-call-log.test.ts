@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const recordMock = vi.fn().mockResolvedValue(undefined)
 
@@ -10,12 +10,24 @@ vi.mock('../src/services/ai/api-logger.js', async (importOriginal) => {
   }
 })
 
+// Suppress console.error/warn for cleaner test output
+const originalConsoleError = console.error
+const originalConsoleWarn = console.warn
+
+beforeEach(() => {
+  console.error = vi.fn()
+  console.warn = vi.fn()
+  recordMock.mockClear()
+})
+
+afterEach(() => {
+  console.error = originalConsoleError
+  console.warn = originalConsoleWarn
+})
+
 import { logDeepSeekChat } from '../src/services/ai/model-call-log.js'
 
 describe('model-call-log', () => {
-  beforeEach(() => {
-    recordMock.mockClear()
-  })
 
   it('logDeepSeekChat returns early when log is undefined', async () => {
     await logDeepSeekChat(undefined, 'hello', { status: 'completed' })

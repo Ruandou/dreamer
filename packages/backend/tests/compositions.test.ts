@@ -1,5 +1,19 @@
-import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi, beforeEach, afterEach } from 'vitest'
 import Fastify, { FastifyInstance } from 'fastify'
+
+// Suppress console.error/warn for cleaner test output
+const originalConsoleError = console.error
+const originalConsoleWarn = console.warn
+
+beforeEach(() => {
+  console.error = vi.fn()
+  console.warn = vi.fn()
+})
+
+afterEach(() => {
+  console.error = originalConsoleError
+  console.warn = originalConsoleWarn
+})
 
 const {
   mockCompositionFindMany,

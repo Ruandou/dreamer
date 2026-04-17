@@ -1,5 +1,19 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
 
+// Suppress console.error/warn for cleaner test output
+const originalConsoleError = console.error
+const originalConsoleWarn = console.warn
+
+beforeEach(() => {
+  console.error = vi.fn()
+  console.warn = vi.fn()
+})
+
+afterEach(() => {
+  console.error = originalConsoleError
+  console.warn = originalConsoleWarn
+})
+
 // Mock ioredis before importing queue
 vi.mock('ioredis', () => {
   const mRedis = {

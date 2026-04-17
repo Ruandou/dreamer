@@ -1,4 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
+// Suppress console.error/warn for cleaner test output
+const originalConsoleError = console.error
+const originalConsoleWarn = console.warn
+
+beforeEach(() => {
+  console.error = vi.fn()
+  console.warn = vi.fn()
+})
+
+afterEach(() => {
+  console.error = originalConsoleError
+  console.warn = originalConsoleWarn
+})
 
 const {
   mockLocationFindMany,
@@ -29,6 +43,15 @@ vi.mock('../src/services/ai/deepseek.js', () => ({
   fetchScriptVisualEnrichmentJson: (...args: unknown[]) => mockFetchScriptVisualEnrichmentJson(...args),
   generateCharacterSlotImagePrompt: (...args: unknown[]) => mockGenerateCharacterSlotImagePrompt(...args)
 }))
+
+// Mock recordModelApiCall to prevent Prisma errors
+vi.mock('../src/services/ai/api-logger.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/services/ai/api-logger.js')>()
+  return {
+    ...actual,
+    recordModelApiCall: vi.fn().mockResolvedValue(undefined)
+  }
+})
 
 vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
