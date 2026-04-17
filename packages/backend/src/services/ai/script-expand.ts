@@ -5,7 +5,7 @@ import type {
   ScriptStoryboardShot
 } from '@dreamer/shared/types'
 import type { ModelCallLogContext } from './api-logger.js'
-import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
+import type { DeepSeekCost } from './deepseek-client.js'
 import {
   DEEPSEEK_TEMPERATURE,
   DEEPSEEK_MAX_TOKENS
@@ -16,10 +16,13 @@ import {
   isEpisodesResponse
 } from './deepseek-response-types.js'
 import {
-  callDeepSeekWithRetry,
+  callLLMWithRetry,
   cleanMarkdownCodeBlocks,
-  type DeepSeekCallOptions
-} from './deepseek-call-wrapper.js'
+  type LLMCallOptions
+} from './llm-call-wrapper.js'
+import { getDefaultProvider, type LLMProvider } from './llm-factory.js'
+import { PromptRegistry } from '../prompts/registry.js'
+import type { LLMMessage } from './llm-provider.js'
 
 const SYSTEM_PROMPT = `你是一个专业的短剧剧本作家，擅长创作古装穿越/技术流逆袭类短剧。
 请根据用户提供的故事梗概，扩展为结构化的短剧剧本。
@@ -124,12 +127,21 @@ export function convertDeepSeekResponse(data: DeepSeekScriptData): ScriptContent
 export async function expandScript(
   summary: string,
   projectContext?: string,
-  log?: ModelCallLogContext
+  log?: ModelCallLogContext,
+  provider?: LLMProvider  // 新增：可选的自定义提供者
 ): Promise<{ script: ScriptContent; cost: DeepSeekCost }> {
-  const deepseek = getDeepSeekClient()
-  const userPrompt = projectContext
-    ? `项目背景：${projectContext}\n\n故事梗概：${summary}`
-    : `故事梗概：${summary}`
+  const llmProvider = provider || getDefaultProvider()
+  const template = PromptRegistry.getInstance().getLatest('script-expand')
+  
+  const rendered = PromptRegistry.getInstance().render('script-expand', {
+    summary,
+    projectContext: projectContext || ''
+  })
+
+  const messages: LLMMessage[] = [
+    { role: 'system', content: rendered.systemPrompt },
+    { role: 'user', content: rendered.userPrompt }
+  ]
 
   // Parser function for the wrapper
   const parseScript = (content: string): ScriptContent => {
@@ -150,17 +162,15 @@ export async function expandScript(
     return script
   }
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
-    model: 'deepseek-chat',
-    systemPrompt: SYSTEM_PROMPT,
-    userPrompt,
-    temperature: DEEPSEEK_TEMPERATURE.SCRIPT_EXPAND,
-    maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_EXPAND,
+  const options: LLMCallOptions = {
+    provider: llmProvider,
+    messages,
+    temperature: template.metadata.creativity,
+    maxTokens: template.metadata.maxOutputTokens,
     modelLog: log
   }
 
-  const result = await callDeepSeekWithRetry(options, parseScript)
+  const result = await callLLMWithRetry(options, parseScript)
 
   return {
     script: result.content,

@@ -1,14 +1,13 @@
 import type { ModelCallLogContext } from './api-logger.js'
-import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
+import type { DeepSeekCost } from './deepseek-client.js'
 import {
-  DEEPSEEK_TEMPERATURE,
-  DEEPSEEK_MAX_TOKENS
-} from './ai.constants.js'
-import {
-  callDeepSeekWithRetry,
+  callLLMWithRetry,
   cleanMarkdownCodeBlocks,
-  type DeepSeekCallOptions
-} from './deepseek-call-wrapper.js'
+  type LLMCallOptions
+} from './llm-call-wrapper.js'
+import { getDefaultProvider, type LLMProvider } from './llm-factory.js'
+import { PromptRegistry } from '../prompts/registry.js'
+import type { LLMMessage } from './llm-provider.js'
 
 /** system 过长时模型容易输出非严格 JSON，长规则放在用户消息中 */
 export const SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT = [
@@ -91,11 +90,24 @@ export async function fetchScriptVisualEnrichmentJson(
     /** 当前项目场地库名称，供白名单约束，降低模型改写名导致 imagePrompt 不落库 */
     exactLocationNames?: string[]
   },
-  log?: ModelCallLogContext
+  log?: ModelCallLogContext,
+  provider?: LLMProvider  // 新增：可选的自定义提供者
 ): Promise<{ jsonText: string; cost: DeepSeekCost }> {
+  const llmProvider = provider || getDefaultProvider()
   const projectVisualStyleLine = (input.projectVisualStyleLine || '').trim() || '（未指定）'
-  const user = buildScriptVisualEnrichmentUserContent({ ...input, projectVisualStyleLine })
-  const deepseek = getDeepSeekClient()
+  
+  const rendered = PromptRegistry.getInstance().render('visual-enrichment', {
+    scriptSummary: input.scriptSummary,
+    locationLines: input.locationLines,
+    characterLines: input.characterLines,
+    projectVisualStyleLine,
+    exactLocationNames: input.exactLocationNames || []
+  })
+
+  const messages: LLMMessage[] = [
+    { role: 'system', content: rendered.systemPrompt },
+    { role: 'user', content: rendered.userPrompt }
+  ]
 
   // Parser function for the wrapper
   const parseJsonText = (content: string): string => {
@@ -103,17 +115,17 @@ export async function fetchScriptVisualEnrichmentJson(
     return cleaned.trim()
   }
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
-    model: 'deepseek-chat',
-    systemPrompt: SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT,
-    userPrompt: user,
-    temperature: DEEPSEEK_TEMPERATURE.VISUAL_ENRICH,
-    maxTokens: DEEPSEEK_MAX_TOKENS.VISUAL_ENRICH,
+  const template = PromptRegistry.getInstance().getLatest('visual-enrichment')
+  
+  const options: LLMCallOptions = {
+    provider: llmProvider,
+    messages,
+    temperature: template.metadata.creativity,
+    maxTokens: template.metadata.maxOutputTokens,
     modelLog: log
   }
 
-  const result = await callDeepSeekWithRetry(options, parseJsonText)
+  const result = await callLLMWithRetry(options, parseJsonText)
 
   return {
     jsonText: result.content,

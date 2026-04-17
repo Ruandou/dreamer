@@ -1,13 +1,12 @@
 import type { ModelCallLogContext } from './api-logger.js'
-import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
+import type { DeepSeekCost } from './deepseek-client.js'
 import {
-  DEEPSEEK_TEMPERATURE,
-  DEEPSEEK_MAX_TOKENS
-} from './ai.constants.js'
-import {
-  callDeepSeekWithRetry,
-  type DeepSeekCallOptions
-} from './deepseek-call-wrapper.js'
+  callLLMWithRetry,
+  type LLMCallOptions
+} from './llm-call-wrapper.js'
+import { getDefaultProvider, type LLMProvider } from './llm-factory.js'
+import { PromptRegistry } from '../prompts/registry.js'
+import type { LLMMessage } from './llm-provider.js'
 
 /** 与《DREAMER_AI_PROMPT_GUIDE》3.2 / 3.3 及批量视觉补全对齐的单槽提示词约束 */
 function characterSlotSystemPrompt(slotType: string): string {
@@ -50,41 +49,44 @@ export async function generateCharacterSlotImagePrompt(
     slotDescription?: string | null
     parentSlotSummary?: string | null
   },
-  log?: ModelCallLogContext
+  log?: ModelCallLogContext,
+  provider?: LLMProvider  // 新增：可选的自定义提供者
 ): Promise<{ prompt: string; cost: DeepSeekCost }> {
-  const deepseek = getDeepSeekClient()
-  const extra = characterSlotExtraInstructions(input.slotType)
-  const user = [
-    `角色名：${input.characterName}`,
-    input.characterDescription ? `角色设定：${input.characterDescription}` : '',
-    `形象槽位名称：${input.slotName}`,
-    `槽位类型：${input.slotType}（base 为基础定妆，outfit 为换装需与基础形象一致的人物特征）`,
-    input.slotDescription ? `槽位说明：${input.slotDescription}` : '',
-    input.parentSlotSummary ? `父级基础形象参考：${input.parentSlotSummary}` : '',
-    '',
-    ...extra,
-    '',
-    '请输出一条中文的 AI 绘画提示词（写实或半写实风格、短剧角色定妆），只输出提示词正文，不要引号或解释。'
+  const llmProvider = provider || getDefaultProvider()
+  
+  // 根据槽位类型选择模板
+  const templateId = input.slotType === 'base' 
+    ? 'character-base-prompt'
+    : input.slotType === 'outfit'
+    ? 'character-outfit-prompt'
+    : 'character-expression-prompt'
+  
+  const rendered = PromptRegistry.getInstance().render(templateId, {
+    characterName: input.characterName,
+    characterDescription: input.characterDescription || '',
+    slotName: input.slotName,
+    slotType: input.slotType,
+    slotDescription: input.slotDescription || '',
+    parentSlotSummary: input.parentSlotSummary || ''
+  })
+
+  const messages: LLMMessage[] = [
+    { role: 'system', content: rendered.systemPrompt },
+    { role: 'user', content: rendered.userPrompt }
   ]
-    .filter(Boolean)
-    .join('\n')
 
   // Parser function for the wrapper
   const parsePrompt = (content: string): string => {
     return content.replace(/^['"]|['"]$/g, '').trim()
   }
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
-    model: 'deepseek-chat',
-    systemPrompt: characterSlotSystemPrompt(input.slotType),
-    userPrompt: user,
-    temperature: DEEPSEEK_TEMPERATURE.CHARACTER_IMAGE_PROMPT,
-    maxTokens: DEEPSEEK_MAX_TOKENS.CHARACTER_IMAGE_PROMPT,
+  const options: LLMCallOptions = {
+    provider: llmProvider,
+    messages,
     modelLog: log
   }
 
-  const result = await callDeepSeekWithRetry(options, parsePrompt)
+  const result = await callLLMWithRetry(options, parsePrompt)
 
   return {
     prompt: result.content,
