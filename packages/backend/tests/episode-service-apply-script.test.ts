@@ -121,7 +121,7 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
       ]
     }
 
-    const result = await service.applyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
+    const result = await callApplyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
 
     expect(mockRepo.deleteScenesByEpisode).toHaveBeenCalledWith('ep-1')
     expect(mockRepo.createScene).toHaveBeenCalledTimes(2)
@@ -388,7 +388,7 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
       scenes: []
     }
 
-    const result = await service.applyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
+    const result = await callApplyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
 
     expect(result.scenesCreated).toBe(0)
     expect(mockRepo.deleteScenesByEpisode).not.toHaveBeenCalled()
