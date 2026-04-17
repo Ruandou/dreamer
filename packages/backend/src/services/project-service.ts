@@ -163,6 +163,16 @@ export class ProjectService {
         await runScriptBatchJob(job.id, projectId, targetEpisodes);
       } catch (err) {
         console.error("script-batch job failed", err);
+        // 确保错误状态被更新到数据库
+        try {
+          await pipelineRepository.updateJob(job.id, {
+            status: 'failed',
+            error: err instanceof Error ? err.message : '批量生成失败',
+            progressMeta: { message: err instanceof Error ? err.message : undefined }
+          })
+        } catch (updateErr) {
+          console.error('Failed to update job status to failed', updateErr)
+        }
       }
     });
 
@@ -222,11 +232,21 @@ export class ProjectService {
     // 使用 setImmediate 确保在下一个事件循环执行，立即返回 jobId
     setImmediate(async () => {
       try {
-        await runParseScriptJob(job.id, projectId, targetEpisodes);
+        await runParseScriptJob(job.id, projectId, targetEpisodes)
       } catch (err) {
-        console.error("parse-script job failed", err);
+        console.error('parse-script job failed', err)
+        // 确保错误状态被更新到数据库
+        try {
+          await pipelineRepository.updateJob(job.id, {
+            status: 'failed',
+            error: err instanceof Error ? err.message : '解析失败',
+            progressMeta: { message: err instanceof Error ? err.message : undefined }
+          })
+        } catch (updateErr) {
+          console.error('Failed to update job status to failed', updateErr)
+        }
       }
-    });
+    })
 
     return { ok: true, jobId: job.id };
   }

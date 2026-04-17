@@ -376,7 +376,7 @@ export async function runScriptBatchJob(
           message: `正在生成第 ${n}/${targetEpisodes} 集`,
         },
       });
-      
+
       console.log(`[script-batch] 第 ${n}/${targetEpisodes} 集生成完成`);
     }
 
