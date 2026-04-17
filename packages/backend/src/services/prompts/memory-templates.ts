@@ -5,63 +5,95 @@ import type { PromptTemplate } from '../prompts/template-engine.js'
  */
 export const MEMORY_EXTRACTION_TEMPLATE: PromptTemplate = {
   id: 'memory-extraction',
-  version: '1.0.0',
-  systemPrompt: `你是剧情记忆提取专家。你的任务是从剧本中提取关键剧情元素，并以结构化 JSON 格式返回。
+  version: '1.1.0',
+  systemPrompt: `你是剧情记忆提取专家。你的任务是从剧本中提取关键剧情元素，帮助后续剧集保持连贯性。
 
-需要提取的内容：
-1. **CHARACTER**（角色）：新出场角色的姓名、身份、特征、重要性
-2. **LOCATION**（场地）：新场地的名称、类型、视觉特征
-3. **EVENT**（事件）：关键情节事件、发生了什么、影响
-4. **PLOT_POINT**（情节点）：推动剧情发展的关键转折点
-5. **FORESHADOWING**（伏笔）：暗示未来发展的线索、悬念
-6. **RELATIONSHIP**（关系）：角色之间的关系变化
-7. **VISUAL_STYLE**（视觉风格）：独特的视觉风格描述
+## 提取重点
 
-提取规则：
-- 只提取**新出现**或**有重要变化**的元素
-- 对于已有元素，只在有重大变化时才更新
-- 重要性评分 1-5，5 为最关键
-- 伏笔必须标注是否已解决（isActive）
-- 使用中文描述
-- 返回合法的 JSON 格式
+### 必须提取：
+1. **CHARACTER（角色）**：
+   - 新出场角色的姓名、身份、性格特征
+   - 角色的关键动作或决定
+   - 角色的重要台词或口头禅
 
-输出格式：
+2. **EVENT（事件）**：
+   - 推动主线剧情的关键事件
+   - 角色做出的重要决定
+   - 冲突、转折、高潮
+
+3. **PLOT_POINT（情节点）**：
+   - 故事的重大转折
+   - 主角目标的变化
+   - 重要真相的揭露
+
+4. **FORESHADOWING（伏笔）**：
+   - 未解的悬念
+   - 暗示未来发展的线索
+   - 角色的秘密或隐藏身份
+
+5. **RELATIONSHIP（关系）**：
+   - 角色之间关系的变化
+   - 新的联盟或敌对关系
+   - 感情线的发展
+
+### 选择性提取：
+6. **LOCATION（场地）**：仅当场地有特殊意义时
+7. **VISUAL_STYLE（视觉风格）**：仅当有独特的视觉元素时
+
+## 提取规则
+- **具体而非泛泛**：不要写"主角遇到困难"，要写"主角发现师父是幕后黑手"
+- **可操作**：提取的信息应该能指导后续剧情写作
+- **精炼**：每个记忆 1-3 句话，不要复述整个剧情
+- **只提新内容**：已有记忆不要重复提取
+- **重要性评分**：
+  - 5分：主线剧情的关键转折
+  - 4分：重要角色发展或事件
+  - 3分：有意义的支线情节
+  - 2分：补充细节
+  - 1分：可有可无的信息
+
+## 输出格式
+返回合法 JSON，格式如下：
 \`\`\`json
 {
   "memories": [
     {
-      "type": "CHARACTER|LOCATION|EVENT|PLOT_POINT|FORESHADOWING|RELATIONSHIP|VISUAL_STYLE",
-      "category": "细分类型（可选）",
-      "title": "简短标题",
-      "content": "详细描述",
-      "tags": ["标签1", "标签2"],
+      "type": "CHARACTER|EVENT|PLOT_POINT|FORESHADOWING|RELATIONSHIP|LOCATION|VISUAL_STYLE",
+      "category": "细分类型（如：protagonist, antagonist, revelation, mystery等）",
+      "title": "简短标题（10字以内）",
+      "content": "具体描述（50-150字，包含关键细节）",
+      "tags": ["相关标签"],
       "importance": 3,
       "metadata": {
-        "episodeNum": 1,
-        "characters": ["角色名"],
-        "location": "场地名"
+        "characters": ["涉及的角色名"],
+        "location": "发生地（如有）"
       }
     }
   ]
 }
 \`\`\``,
-  userPromptTemplate: `第 {{episodeNum}} 集剧本：
+  userPromptTemplate: `## 任务
+提取第 {{episodeNum}} 集的关键剧情记忆，用于指导后续剧集创作。
 
+## 剧本内容
 {{script}}
 
 {{#existingMemories}}
-已有记忆（避免重复提取）：
+## 已有记忆（避免重复）
 {{existingMemories}}
 {{/existingMemories}}
 
 {{^existingMemories}}
-（这是首集，无需考虑已有记忆）
+（这是首集，建立基础记忆库）
 {{/existingMemories}}
 
-请提取本集的关键剧情记忆，返回 JSON 格式。`,
+## 要求
+- 提取 3-8 条最有价值的记忆
+- 确保每条记忆都能帮助后续剧集保持连贯
+- 返回 JSON 格式`,
   metadata: {
     category: 'memory',
-    creativity: 0.3, // 低创意，高准确度
+    creativity: 0.4, // 稍微提高创意度，让提取更灵活
     maxOutputTokens: 4000,
     description: '从剧本中提取剧情记忆',
     tags: ['memory', 'extraction', 'analysis']
