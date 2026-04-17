@@ -32,6 +32,16 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
     vi.clearAllMocks()
   })
 
+  // Helper to access private method for testing
+  async function callApplyScriptContentToEpisode(
+    episodeId: string,
+    projectId: string,
+    episodeTitle: string | null | undefined,
+    script: ScriptContent
+  ) {
+    return (service as any).applyScriptContentToEpisode(episodeId, projectId, episodeTitle, script)
+  }
+
   it('updates episode title and script', async () => {
     mockRepo.findProjectForExpandScript.mockResolvedValue(null)
     mockRepo.update.mockResolvedValue({ id: 'ep-1', title: 'New Title' })
@@ -42,7 +52,7 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
       scenes: []
     }
 
-    const result = await service.applyScriptContentToEpisode(
+    const result = await callApplyScriptContentToEpisode(
       'ep-1',
       'proj-1',
       'Old Title',
@@ -67,7 +77,7 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
       scenes: []
     }
 
-    await service.applyScriptContentToEpisode('ep-1', 'proj-1', 'Fallback Title', script)
+    await callApplyScriptContentToEpisode('ep-1', 'proj-1', 'Fallback Title', script)
 
     expect(mockRepo.update).toHaveBeenCalledWith('ep-1', {
       title: 'Fallback Title',
@@ -141,7 +151,7 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
       ]
     }
 
-    await service.applyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
+    await callApplyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
 
     expect(mockRepo.findLocationByProjectAndName).toHaveBeenCalledWith('proj-1', 'Office')
     expect(mockRepo.createScene).toHaveBeenCalledWith(
@@ -191,7 +201,7 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
       ]
     }
 
-    await service.applyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
+    await callApplyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
 
     expect(mockRepo.createScene).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -233,7 +243,7 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
       ]
     }
 
-    await service.applyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
+    await callApplyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
 
     expect(mockRepo.createScene).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -265,7 +275,7 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
       ]
     }
 
-    await service.applyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
+    await callApplyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
 
     expect(mockRepo.createScene).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -318,7 +328,7 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
       ]
     }
 
-    await service.applyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
+    await callApplyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
 
     expect(mockRepo.createShot).toHaveBeenCalledTimes(2)
     expect(mockRepo.createShot).toHaveBeenNthCalledWith(
@@ -358,7 +368,7 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
       ]
     }
 
-    await service.applyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
+    await callApplyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
 
     expect(mockRepo.createScene).toHaveBeenCalledWith(
       expect.objectContaining({
