@@ -19,6 +19,9 @@ packages/*/dist/
 *.swp
 *.swo
 
+# Qoder
+.qoder/repowiki/
+
 # OS
 .DS_Store
 Thumbs.db
