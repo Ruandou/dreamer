@@ -38,11 +38,9 @@ export async function extractMemoriesWithLLM(
   const scriptText = formatScriptForExtraction(script)
 
   const rendered = PromptRegistry.getInstance().render('memory-extraction', {
-    variables: {
-      episodeNum: String(episodeNum),
-      script: scriptText,
-      existingMemories: existingMemories || ''
-    }
+    episodeNum: String(episodeNum),
+    script: scriptText,
+    existingMemories: existingMemories || ''
   })
 
   const messages: LLMMessage[] = [
