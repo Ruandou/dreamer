@@ -15,6 +15,7 @@ import {
 import {
   callLLMWithRetry,
   cleanMarkdownCodeBlocks,
+  parseJsonResponse,
   type LLMCallOptions
 } from './llm-call-wrapper.js'
 import { getDefaultProvider, type LLMProvider } from './llm-factory.js'
@@ -142,23 +143,8 @@ export async function expandScript(
 
   // Parser function for the wrapper
   const parseScript = (content: string): ScriptContent => {
-    // 清理返回内容，移除可能的 markdown 代码块
-    const cleanContent = cleanMarkdownCodeBlocks(content)
-
-    // 尝试JSON
-    let parsed: DeepSeekScriptData
-    try {
-      parsed = JSON.parse(cleanContent) as DeepSeekScriptData
-    } catch (error) {
-      console.error('[script-expand] JSON parse failed')
-      console.error('[script-expand] Raw content (first 500 chars):', content.substring(0, 500))
-      console.error(
-        '[script-expand] Clean content (first 500 chars):',
-        cleanContent.substring(0, 500)
-      )
-      console.error('[script-expand] Error:', error)
-      throw new Error(`剧本JSON格式不正确: ${error instanceof Error ? error.message : '未知错误'}`)
-    }
+    // 使用带自动修复的 JSON 解析
+    const parsed = parseJsonResponse<DeepSeekScriptData>(content)
 
     // 转换格式
     const script = convertDeepSeekResponse(parsed)

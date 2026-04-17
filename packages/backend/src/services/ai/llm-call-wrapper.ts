@@ -158,14 +158,72 @@ export function cleanMarkdownCodeBlocks(content: string): string {
 }
 
 /**
- * 解析 JSON 响应
+ * 尝试修复常见的 JSON 格式问题
+ */
+function tryFixJson(json: string): string {
+  let fixed = json
+
+  // 移除尾部逗号（数组或对象最后一个元素后的逗号）
+  fixed = fixed.replace(/,\s*([}\]])/g, '$1')
+
+  // 修复未闭合的字符串（在行尾添加引号）
+  const lines = fixed.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    // 检查是否有未闭合的字符串
+    const quotes = line.match(/"/g)
+    if (quotes && quotes.length % 2 !== 0) {
+      // 找到最后一个冒号后的位置，添加闭合引号
+      const lastColonIndex = line.lastIndexOf(':')
+      if (lastColonIndex !== -1) {
+        const afterColon = line.substring(lastColonIndex + 1).trim()
+        if (afterColon.startsWith('"') && !afterColon.endsWith('"')) {
+          lines[i] = line + '"'
+        }
+      }
+    }
+  }
+  fixed = lines.join('\n')
+
+  // 尝试找到最后一个完整的对象/数组结束位置
+  const lastBrace = Math.max(fixed.lastIndexOf('}'), fixed.lastIndexOf(']'))
+  if (lastBrace !== -1 && lastBrace < fixed.length - 1) {
+    // 截断到最后一个完整的结构
+    fixed = fixed.substring(0, lastBrace + 1)
+  }
+
+  return fixed
+}
+
+/**
+ * 解析 JSON 响应，带自动修复功能
  */
 export function parseJsonResponse<T>(content: string, cleanMarkdown = true): T {
   let cleanContent = content
   if (cleanMarkdown) {
     cleanContent = cleanMarkdownCodeBlocks(content)
   }
-  return JSON.parse(cleanContent) as T
+
+  // 首先尝试直接解析
+  try {
+    return JSON.parse(cleanContent) as T
+  } catch (firstError) {
+    console.warn('[parseJsonResponse] 直接解析失败，尝试修复 JSON...')
+
+    // 尝试修复
+    const fixed = tryFixJson(cleanContent)
+    try {
+      const result = JSON.parse(fixed) as T
+      console.log('[parseJsonResponse] JSON 修复成功')
+      return result
+    } catch (secondError) {
+      console.error('[parseJsonResponse] JSON 修复失败')
+      console.error('[parseJsonResponse] 原始错误:', firstError)
+      console.error('[parseJsonResponse] 修复后错误:', secondError)
+      console.error('[parseJsonResponse] 内容前 500 字符:', cleanContent.substring(0, 500))
+      throw firstError // 抛出原始错误
+    }
+  }
 }
 
 /**

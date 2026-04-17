@@ -9,6 +9,7 @@ import {
 import {
   callDeepSeekWithRetry,
   cleanMarkdownCodeBlocks,
+  parseJsonResponse,
   type DeepSeekCallOptions
 } from './deepseek-call-wrapper.js'
 
@@ -108,9 +109,8 @@ export async function parseScriptDocument(
 
   // Parser function for the wrapper
   const parseResponse = (response: string): ParsedScript => {
-    // 清理返回内容
-    const cleanContent = cleanMarkdownCodeBlocks(response)
-    const parsed = JSON.parse(cleanContent)
+    // 使用带自动修复的 JSON 解析
+    const parsed = parseJsonResponse(response)
     return normalizeParsedData(parsed)
   }
 
