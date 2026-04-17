@@ -70,7 +70,9 @@ describe('Script Writer Service', () => {
         }
       }))
 
-      const result = await writeScriptFromIdea('一个职场逆袭的故事')
+      const result = await writeScriptFromIdea('一个职场逆袭的故事', {
+        modelLog: { userId: 'test-user', projectId: 'test-project', op: 'test' }
+      })
 
       expect(result.script.title).toBe('测试剧本')
       expect(result.script.scenes.length).toBe(1)
@@ -98,7 +100,11 @@ describe('Script Writer Service', () => {
         }
       }))
 
-      const result = await optimizeSceneDescription('女主角站在窗前')
+      const result = await optimizeSceneDescription('女主角站在窗前', undefined, {
+        userId: 'test-user',
+        projectId: 'test-project',
+        op: 'test'
+      })
 
       expect(result).toContain('优化后的描述')
     })
