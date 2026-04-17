@@ -1,85 +1,91 @@
-import type { Episode as PrismaEpisode, Prisma } from '@prisma/client'
-import type { ScriptContent } from '@dreamer/shared/types'
-import { prisma } from '../lib/prisma.js'
+import type { Episode as PrismaEpisode, Prisma } from "@prisma/client";
+import type { ScriptContent } from "@dreamer/shared/types";
+import { prisma } from "../lib/prisma.js";
 import {
   expandScript,
   generateStoryboardScriptFromEpisode,
-  hasEpisodeContentForStoryboard
-} from './ai/deepseek.js'
-import { runCompositionExport } from './composition-export.js'
-import { episodeRepository, type EpisodeRepository } from '../repositories/episode-repository.js'
-import { pipelineRepository } from '../repositories/pipeline-repository.js'
-import { sceneRepository } from '../repositories/scene-repository.js'
-import { getMemoryService } from './memory/index.js'
+  hasEpisodeContentForStoryboard,
+} from "./ai/deepseek.js";
+import { runCompositionExport } from "./composition-export.js";
+import {
+  episodeRepository,
+  type EpisodeRepository,
+} from "../repositories/episode-repository.js";
+import { pipelineRepository } from "../repositories/pipeline-repository.js";
+import { sceneRepository } from "../repositories/scene-repository.js";
+import { getMemoryService } from "./memory/index.js";
 
 const DEFAULT_VOICE_CONFIG: Prisma.InputJsonValue = {
-  gender: 'male',
-  age: 'young',
-  tone: 'mid',
-  timbre: 'warm_solid',
-  speed: 'medium'
-}
+  gender: "male",
+  age: "young",
+  tone: "mid",
+  timbre: "warm_solid",
+  speed: "medium",
+};
 
 function scriptSceneCharacterCounts(script: unknown): {
-  scriptSceneCount: number
-  scriptCharacterCount: number
+  scriptSceneCount: number;
+  scriptCharacterCount: number;
 } {
-  if (script == null || typeof script !== 'object') {
-    return { scriptSceneCount: 0, scriptCharacterCount: 0 }
+  if (script == null || typeof script !== "object") {
+    return { scriptSceneCount: 0, scriptCharacterCount: 0 };
   }
-  const scenes = (script as ScriptContent).scenes
+  const scenes = (script as ScriptContent).scenes;
   if (!Array.isArray(scenes)) {
-    return { scriptSceneCount: 0, scriptCharacterCount: 0 }
+    return { scriptSceneCount: 0, scriptCharacterCount: 0 };
   }
-  const names = new Set<string>()
+  const names = new Set<string>();
   for (const sc of scenes) {
-    if (sc && typeof sc === 'object' && Array.isArray(sc.characters)) {
+    if (sc && typeof sc === "object" && Array.isArray(sc.characters)) {
       for (const n of sc.characters) {
-        if (typeof n === 'string' && n.trim()) names.add(n.trim())
+        if (typeof n === "string" && n.trim()) names.add(n.trim());
       }
     }
   }
-  return { scriptSceneCount: scenes.length, scriptCharacterCount: names.size }
+  return { scriptSceneCount: scenes.length, scriptCharacterCount: names.size };
 }
 
-function buildScenePrompt(scene: {
-  location?: string
-  timeOfDay?: string
-  description?: string
-  actions?: string[]
-  dialogues?: Array<{ character: string; content: string }>
-}, scriptTitle: string): string {
+function buildScenePrompt(
+  scene: {
+    location?: string;
+    timeOfDay?: string;
+    description?: string;
+    actions?: string[];
+    dialogues?: Array<{ character: string; content: string }>;
+  },
+  scriptTitle: string,
+): string {
   const parts = [
     scriptTitle,
     scene.location,
     scene.timeOfDay,
     scene.description,
-    scene.actions?.join(' ') || '',
-    scene.dialogues?.map(d => `${d.character}: ${d.content}`).join(' ') || ''
-  ].filter(Boolean)
+    scene.actions?.join(" ") || "",
+    scene.dialogues?.map((d) => `${d.character}: ${d.content}`).join(" ") || "",
+  ].filter(Boolean);
 
-  return parts.join(', ')
+  return parts.join(", ");
 }
 
 export type ComposeEpisodeResult =
   | { ok: true; compositionId: string; outputUrl: string; duration: number }
   | { ok: false; status: 400; error: string; details?: string[] }
   | { ok: false; status: 404; error: string }
-  | { ok: false; status: number; error: string; compositionId: string }
+  | { ok: false; status: number; error: string; compositionId: string };
 
 export type ExpandEpisodeResult =
   | {
-      ok: true
-      episode: PrismaEpisode
-      script: unknown
-      scenesCreated: number
-      aiCost: number
+      ok: true;
+      episode: PrismaEpisode;
+      script: unknown;
+      scenesCreated: number;
+      aiCost: number;
     }
   | { ok: false; status: 400; error: string; message: string }
   | { ok: false; status: 404; error: string }
   | { ok: false; status: 401; error: string; message: string }
   | { ok: false; status: 429; error: string; message: string }
-  | { ok: false; status: 500; error: string; message: string }
+  | { ok: false; status: 500; error: string; message: string };
 
 export class EpisodeService {
   constructor(private readonly repo: EpisodeRepository) {}
@@ -89,38 +95,46 @@ export class EpisodeService {
     episodeId: string,
     projectId: string,
     episodeTitle: string | null | undefined,
-    script: ScriptContent
+    script: ScriptContent,
   ): Promise<{ updatedEpisode: PrismaEpisode; scenesCreated: number }> {
-    const project = await this.repo.findProjectForExpandScript(projectId)
+    const project = await this.repo.findProjectForExpandScript(projectId);
 
     const updatedEpisode = await this.repo.update(episodeId, {
       title: script.title || episodeTitle || undefined,
-      script: script as unknown as Prisma.InputJsonValue
-    })
+      script: script as unknown as Prisma.InputJsonValue,
+    });
 
     if (!script.scenes?.length) {
-      return { updatedEpisode, scenesCreated: 0 }
+      return { updatedEpisode, scenesCreated: 0 };
     }
 
-    await this.repo.deleteScenesByEpisode(episodeId)
+    await this.repo.deleteScenesByEpisode(episodeId);
 
-    const projectVisual = project?.visualStyle?.length ? [...project.visualStyle] : []
+    const projectVisual = project?.visualStyle?.length
+      ? [...project.visualStyle]
+      : [];
 
     for (const sc of script.scenes) {
-      let locationId: string | undefined
+      let locationId: string | undefined;
       if (sc.location) {
-        const loc = await this.repo.findLocationByProjectAndName(projectId, sc.location)
-        locationId = loc?.id
+        const loc = await this.repo.findLocationByProjectAndName(
+          projectId,
+          sc.location,
+        );
+        locationId = loc?.id;
       }
 
-      const hasShots = sc.shots && sc.shots.length > 0
-      let sceneDurationMs = 5000
+      const hasShots = sc.shots && sc.shots.length > 0;
+      let sceneDurationMs = 5000;
       if (hasShots) {
-        sceneDurationMs = sc.shots!.reduce((sum, sh) => sum + (sh.duration ?? 5000), 0)
+        sceneDurationMs = sc.shots!.reduce(
+          (sum, sh) => sum + (sh.duration ?? 5000),
+          0,
+        );
       }
       // 每个场次总时长不能超过 15 秒
-      const MAX_SCENE_DURATION_MS = 15000
-      sceneDurationMs = Math.min(sceneDurationMs, MAX_SCENE_DURATION_MS)
+      const MAX_SCENE_DURATION_MS = 15000;
+      sceneDurationMs = Math.min(sceneDurationMs, MAX_SCENE_DURATION_MS);
 
       const scene = await this.repo.createScene({
         episodeId,
@@ -129,48 +143,48 @@ export class EpisodeService {
         timeOfDay: sc.timeOfDay,
         description: sc.description || `${sc.location} - ${sc.timeOfDay}`,
         duration: sceneDurationMs,
-        aspectRatio: project?.aspectRatio ?? '9:16',
+        aspectRatio: project?.aspectRatio ?? "9:16",
         visualStyle: projectVisual,
-        status: 'pending'
-      })
+        status: "pending",
+      });
 
       if (hasShots) {
         const sorted = [...sc.shots!].sort(
-          (a, b) => (a.order ?? a.shotNum ?? 0) - (b.order ?? b.shotNum ?? 0)
-        )
-        let idx = 0
+          (a, b) => (a.order ?? a.shotNum ?? 0) - (b.order ?? b.shotNum ?? 0),
+        );
+        let idx = 0;
         for (const sh of sorted) {
-          idx += 1
+          idx += 1;
           const shot = await this.repo.createShot({
             sceneId: scene.id,
             shotNum: sh.shotNum ?? idx,
             order: sh.order ?? idx,
-            description: sh.description || '',
+            description: sh.description || "",
             duration: sh.duration ?? 5000,
             cameraAngle: sh.cameraAngle || null,
-            cameraMovement: sh.cameraMovement || null
-          })
+            cameraMovement: sh.cameraMovement || null,
+          });
           for (const c of sh.characters || []) {
             const ch = await prisma.character.findFirst({
-              where: { projectId, name: c.characterName }
-            })
-            if (!ch) continue
+              where: { projectId, name: c.characterName },
+            });
+            if (!ch) continue;
             let img = await prisma.characterImage.findFirst({
-              where: { characterId: ch.id, name: c.imageName }
-            })
+              where: { characterId: ch.id, name: c.imageName },
+            });
             if (!img) {
               img = await prisma.characterImage.findFirst({
-                where: { characterId: ch.id, type: 'base' }
-              })
+                where: { characterId: ch.id, type: "base" },
+              });
             }
-            if (!img) continue
+            if (!img) continue;
             await prisma.characterShot.create({
               data: {
                 shotId: shot.id,
                 characterImageId: img.id,
-                action: c.action ?? null
-              }
-            })
+                action: c.action ?? null,
+              },
+            });
           }
         }
       } else {
@@ -178,26 +192,26 @@ export class EpisodeService {
           sceneId: scene.id,
           shotNum: 1,
           order: 1,
-          description: buildScenePrompt(sc, script.title || ''),
-          duration: 5000
-        })
+          description: buildScenePrompt(sc, script.title || ""),
+          duration: 5000,
+        });
       }
 
       if (sc.dialogues?.length) {
-        const n = sc.dialogues.length
-        const slot = Math.max(1000, Math.floor(sceneDurationMs / n))
-        let t = 0
+        const n = sc.dialogues.length;
+        const slot = Math.max(1000, Math.floor(sceneDurationMs / n));
+        let t = 0;
         for (let i = 0; i < sc.dialogues.length; i++) {
-          const d = sc.dialogues[i]
+          const d = sc.dialogues[i];
           const character = await prisma.character.findFirst({
-            where: { projectId, name: d.character }
-          })
-          if (!character) continue
-          const vc = character.voiceConfig
+            where: { projectId, name: d.character },
+          });
+          if (!character) continue;
+          const vc = character.voiceConfig;
           const voiceConfig =
-            vc && typeof vc === 'object' && !Array.isArray(vc)
+            vc && typeof vc === "object" && !Array.isArray(vc)
               ? (vc as Prisma.InputJsonValue)
-              : DEFAULT_VOICE_CONFIG
+              : DEFAULT_VOICE_CONFIG;
           await prisma.sceneDialogue.create({
             data: {
               sceneId: scene.id,
@@ -206,72 +220,77 @@ export class EpisodeService {
               startTimeMs: t,
               durationMs: slot,
               text: d.content,
-              voiceConfig
-            }
-          })
-          t += slot
+              voiceConfig,
+            },
+          });
+          t += slot;
         }
       }
     }
 
-    return { updatedEpisode, scenesCreated: script.scenes.length }
+    return { updatedEpisode, scenesCreated: script.scenes.length };
   }
 
   async listByProject(projectId: string) {
-    const episodes = await this.repo.findManyByProject(projectId)
-    return this.attachEpisodeListStats(episodes)
+    const episodes = await this.repo.findManyByProject(projectId);
+    return this.attachEpisodeListStats(episodes);
   }
 
   private async attachEpisodeListStats(episodes: PrismaEpisode[]) {
-    if (episodes.length === 0) return []
-    const ids = episodes.map((e) => e.id)
-    const projectId = episodes[0].projectId
-    const [sceneGroups, dialogueRows, shotRows, storyboardCompletedIds] = await Promise.all([
-      prisma.scene.groupBy({
-        by: ['episodeId'],
-        where: { episodeId: { in: ids } },
-        _count: { _all: true }
-      }),
-      prisma.sceneDialogue.findMany({
-        where: { scene: { episodeId: { in: ids } } },
-        select: {
-          characterId: true,
-          scene: { select: { episodeId: true } }
-        }
-      }),
-      prisma.characterShot.findMany({
-        where: { shot: { scene: { episodeId: { in: ids } } } },
-        select: {
-          characterImage: { select: { characterId: true } },
-          shot: { select: { scene: { select: { episodeId: true } } } }
-        }
-      }),
-      pipelineRepository.findEpisodeIdsWithCompletedStoryboardScript(projectId)
-    ])
+    if (episodes.length === 0) return [];
+    const ids = episodes.map((e) => e.id);
+    const projectId = episodes[0].projectId;
+    const [sceneGroups, dialogueRows, shotRows, storyboardCompletedIds] =
+      await Promise.all([
+        prisma.scene.groupBy({
+          by: ["episodeId"],
+          where: { episodeId: { in: ids } },
+          _count: { _all: true },
+        }),
+        prisma.sceneDialogue.findMany({
+          where: { scene: { episodeId: { in: ids } } },
+          select: {
+            characterId: true,
+            scene: { select: { episodeId: true } },
+          },
+        }),
+        prisma.characterShot.findMany({
+          where: { shot: { scene: { episodeId: { in: ids } } } },
+          select: {
+            characterImage: { select: { characterId: true } },
+            shot: { select: { scene: { select: { episodeId: true } } } },
+          },
+        }),
+        pipelineRepository.findEpisodeIdsWithCompletedStoryboardScript(
+          projectId,
+        ),
+      ]);
 
-    const storyboardSceneCountByEpisode = new Map<string, number>()
+    const storyboardSceneCountByEpisode = new Map<string, number>();
     for (const row of sceneGroups) {
-      storyboardSceneCountByEpisode.set(row.episodeId, row._count._all)
+      storyboardSceneCountByEpisode.set(row.episodeId, row._count._all);
     }
 
-    const charIdsByEpisode = new Map<string, Set<string>>()
+    const charIdsByEpisode = new Map<string, Set<string>>();
     const addChar = (episodeId: string, characterId: string) => {
-      if (!charIdsByEpisode.has(episodeId)) charIdsByEpisode.set(episodeId, new Set())
-      charIdsByEpisode.get(episodeId)!.add(characterId)
-    }
+      if (!charIdsByEpisode.has(episodeId))
+        charIdsByEpisode.set(episodeId, new Set());
+      charIdsByEpisode.get(episodeId)!.add(characterId);
+    };
     for (const r of dialogueRows) {
-      addChar(r.scene.episodeId, r.characterId)
+      addChar(r.scene.episodeId, r.characterId);
     }
     for (const r of shotRows) {
-      addChar(r.shot.scene.episodeId, r.characterImage.characterId)
+      addChar(r.shot.scene.episodeId, r.characterImage.characterId);
     }
 
     return episodes.map((ep) => {
-      const sc = scriptSceneCharacterCounts(ep.script)
-      const storyboardSceneCount = storyboardSceneCountByEpisode.get(ep.id) ?? 0
-      const storyboardCharacterCount = charIdsByEpisode.get(ep.id)?.size ?? 0
-      const hasStoryboardScenes = storyboardSceneCount > 0
-      const storyboardScriptJobCompleted = storyboardCompletedIds.has(ep.id)
+      const sc = scriptSceneCharacterCounts(ep.script);
+      const storyboardSceneCount =
+        storyboardSceneCountByEpisode.get(ep.id) ?? 0;
+      const storyboardCharacterCount = charIdsByEpisode.get(ep.id)?.size ?? 0;
+      const hasStoryboardScenes = storyboardSceneCount > 0;
+      const storyboardScriptJobCompleted = storyboardCompletedIds.has(ep.id);
       return {
         ...ep,
         listStats: {
@@ -280,188 +299,202 @@ export class EpisodeService {
           storyboardSceneCount,
           storyboardCharacterCount,
           hasStoryboardScenes,
-          storyboardScriptJobCompleted
-        }
-      }
-    })
+          storyboardScriptJobCompleted,
+        },
+      };
+    });
   }
 
   async getById(episodeId: string) {
-    const episode = await this.repo.findUnique(episodeId)
-    if (!episode) return null
-    const [enriched] = await this.attachEpisodeListStats([episode])
-    return enriched
+    const episode = await this.repo.findUnique(episodeId);
+    if (!episode) return null;
+    const [enriched] = await this.attachEpisodeListStats([episode]);
+    return enriched;
   }
 
   /** 集详情页：单请求拉取集元数据 + 全量场景树 + 项目画风 */
   async getEpisodeDetail(episodeId: string) {
-    const episode = await this.getById(episodeId)
-    if (!episode) return null
+    const episode = await this.getById(episodeId);
+    if (!episode) return null;
     const project = await prisma.project.findUnique({
       where: { id: episode.projectId },
-      select: { visualStyle: true }
-    })
-    const scenes = await this.listScenesForEpisode(episodeId)
+      select: { visualStyle: true },
+    });
+    const scenes = await this.listScenesForEpisode(episodeId);
     return {
       episode,
       scenes,
-      project: { visualStyle: project?.visualStyle ?? [] }
-    }
+      project: { visualStyle: project?.visualStyle ?? [] },
+    };
   }
 
   /** 分集管理 Tab：场次 + 定场 + 多镜 + CharacterShot + 台词 + takes */
   listScenesForEpisode(episodeId: string) {
-    return sceneRepository.findManyByEpisodeForEditor(episodeId)
+    return sceneRepository.findManyByEpisodeForEditor(episodeId);
   }
 
   createEpisode(projectId: string, episodeNum: number, title?: string) {
     return this.repo.create({
       projectId,
       episodeNum,
-      ...(title !== undefined ? { title } : {})
-    })
+      ...(title !== undefined ? { title } : {}),
+    });
   }
 
   updateEpisode(
     episodeId: string,
-    body: { title?: string; synopsis?: string | null; script?: unknown }
+    body: { title?: string; synopsis?: string | null; script?: unknown },
   ) {
-    const { title, synopsis, script } = body
+    const { title, synopsis, script } = body;
 
     return this.repo.update(episodeId, {
       title,
       ...(synopsis !== undefined && { synopsis }),
       ...(script !== undefined && {
-        script: script as Prisma.InputJsonValue
-      })
-    })
+        script: script as Prisma.InputJsonValue,
+      }),
+    });
   }
 
   async deleteEpisodeIfExists(episodeId: string): Promise<boolean> {
-    const ep = await this.repo.findUnique(episodeId)
-    if (!ep) return false
-    await this.repo.delete(episodeId)
-    return true
+    const ep = await this.repo.findUnique(episodeId);
+    if (!ep) return false;
+    await this.repo.delete(episodeId);
+    return true;
   }
 
-  async composeEpisode(episodeId: string, titleOverride?: string): Promise<ComposeEpisodeResult> {
-    const episode = await this.repo.findUniqueWithScenesTakesForCompose(episodeId)
+  async composeEpisode(
+    episodeId: string,
+    titleOverride?: string,
+  ): Promise<ComposeEpisodeResult> {
+    const episode =
+      await this.repo.findUniqueWithScenesTakesForCompose(episodeId);
     if (!episode) {
-      return { ok: false, status: 404, error: 'Episode not found' }
+      return { ok: false, status: 404, error: "Episode not found" };
     }
 
-    const issues: string[] = []
-    const clips: { sceneId: string; takeId: string; order: number }[] = []
+    const issues: string[] = [];
+    const clips: { sceneId: string; takeId: string; order: number }[] = [];
 
-    let order = 0
+    let order = 0;
     for (const scene of episode.scenes) {
-      const selected = scene.takes[0]
+      const selected = scene.takes[0];
       if (!selected) {
-        issues.push(`第 ${scene.sceneNum} 场未选择成片 Take`)
-        continue
+        issues.push(`第 ${scene.sceneNum} 场未选择成片 Take`);
+        continue;
       }
-      if (selected.status !== 'completed' || !selected.videoUrl) {
-        issues.push(`第 ${scene.sceneNum} 场所选 Take 尚无成片视频`)
-        continue
+      if (selected.status !== "completed" || !selected.videoUrl) {
+        issues.push(`第 ${scene.sceneNum} 场所选 Take 尚无成片视频`);
+        continue;
       }
-      order += 1
-      clips.push({ sceneId: scene.id, takeId: selected.id, order })
+      order += 1;
+      clips.push({ sceneId: scene.id, takeId: selected.id, order });
     }
 
     if (clips.length === 0) {
       if (episode.scenes.length === 0) {
-        return { ok: false, status: 400, error: '该集暂无场次' }
+        return { ok: false, status: 400, error: "该集暂无场次" };
       }
-      return { ok: false, status: 400, error: '无法合成', details: issues }
+      return { ok: false, status: 400, error: "无法合成", details: issues };
     }
 
-    let composition = await this.repo.findCompositionByEpisode(episodeId)
+    let composition = await this.repo.findCompositionByEpisode(episodeId);
 
     const defaultTitle =
-      titleOverride?.trim() || episode.title || `第${episode.episodeNum}集`
+      titleOverride?.trim() || episode.title || `第${episode.episodeNum}集`;
 
     if (!composition) {
       composition = await this.repo.createComposition({
         projectId: episode.projectId,
         episodeId,
-        title: defaultTitle
-      })
+        title: defaultTitle,
+      });
     } else if (titleOverride?.trim()) {
       composition = await this.repo.updateComposition(composition.id, {
-        title: titleOverride.trim()
-      })
+        title: titleOverride.trim(),
+      });
     }
 
-    await this.repo.deleteCompositionScenesByComposition(composition.id)
+    await this.repo.deleteCompositionScenesByComposition(composition.id);
     await this.repo.createCompositionScenes(
-      clips.map(c => ({
+      clips.map((c) => ({
         compositionId: composition.id,
         sceneId: c.sceneId,
         takeId: c.takeId,
-        order: c.order
-      }))
-    )
+        order: c.order,
+      })),
+    );
 
-    const exportResult = await runCompositionExport(composition.id)
+    const exportResult = await runCompositionExport(composition.id);
     if (!exportResult.ok) {
       return {
         ok: false,
         status: exportResult.httpStatus,
         error: exportResult.error,
-        compositionId: composition.id
-      }
+        compositionId: composition.id,
+      };
     }
 
     return {
       ok: true,
       compositionId: composition.id,
       outputUrl: exportResult.outputUrl,
-      duration: exportResult.duration
-    }
+      duration: exportResult.duration,
+    };
   }
 
   async expandEpisodeScript(
     userId: string,
     episodeId: string,
-    summary: string
+    summary: string,
   ): Promise<ExpandEpisodeResult> {
-    const episode = await this.repo.findUnique(episodeId)
+    const episode = await this.repo.findUnique(episodeId);
     if (!episode) {
-      return { ok: false, status: 404, error: 'Episode not found' }
+      return { ok: false, status: 404, error: "Episode not found" };
     }
 
     try {
-      const project = await this.repo.findProjectForExpandScript(episode.projectId)
+      const project = await this.repo.findProjectForExpandScript(
+        episode.projectId,
+      );
 
       const projectContext = project
-        ? `项目名称: ${project.name}\n已有角色: ${project.characters.map(c => c.name).join(', ') || '暂无'}\n已有集数: ${project.episodes.length}集`
-        : undefined
+        ? `项目名称: ${project.name}\n已有角色: ${project.characters.map((c) => c.name).join(", ") || "暂无"}\n已有集数: ${project.episodes.length}集`
+        : undefined;
 
       const { script, cost } = await expandScript(summary, projectContext, {
         userId,
         projectId: episode.projectId,
-        op: 'episode_expand_script'
-      })
+        op: "episode_expand_script",
+      });
 
-      const { updatedEpisode, scenesCreated } = await this.applyScriptContentToEpisode(
-        episodeId,
-        episode.projectId,
-        episode.title,
-        script
-      )
-      
+      const { updatedEpisode, scenesCreated } =
+        await this.applyScriptContentToEpisode(
+          episodeId,
+          episode.projectId,
+          episode.title,
+          script,
+        );
+
       // 提取扩展剧本的记忆
       try {
-        const memoryService = getMemoryService()
+        const memoryService = getMemoryService();
         await memoryService.extractAndSaveMemories(
           episode.projectId,
           episode.episodeNum,
           episodeId,
           script,
-          { userId, projectId: episode.projectId, op: 'extract_expanded_script_memories' }
-        )
+          {
+            userId,
+            projectId: episode.projectId,
+            op: "extract_expanded_script_memories",
+          },
+        );
       } catch (error) {
-        console.error('Failed to extract memories after script expansion:', error)
+        console.error(
+          "Failed to extract memories after script expansion:",
+          error,
+        );
         // 不阻断流程
       }
 
@@ -470,63 +503,65 @@ export class EpisodeService {
         episode: updatedEpisode,
         script,
         scenesCreated,
-        aiCost: cost.costCNY
-      }
+        aiCost: cost.costCNY,
+      };
     } catch (error) {
-      console.error('Script expansion failed:', error)
+      console.error("Script expansion failed:", error);
 
-      if (error instanceof Error && error.name === 'DeepSeekAuthError') {
+      if (error instanceof Error && error.name === "DeepSeekAuthError") {
         return {
           ok: false,
           status: 401,
-          error: 'AI 服务认证失败',
-          message: error.message
-        }
+          error: "AI 服务认证失败",
+          message: error.message,
+        };
       }
 
-      if (error instanceof Error && error.name === 'DeepSeekRateLimitError') {
+      if (error instanceof Error && error.name === "DeepSeekRateLimitError") {
         return {
           ok: false,
           status: 429,
-          error: 'AI 服务请求受限',
-          message: error.message
-        }
+          error: "AI 服务请求受限",
+          message: error.message,
+        };
       }
 
       return {
         ok: false,
         status: 500,
-        error: '剧本生成失败',
-        message: error instanceof Error ? error.message : '未知错误'
-      }
+        error: "剧本生成失败",
+        message: error instanceof Error ? error.message : "未知错误",
+      };
     }
   }
 
   async generateEpisodeStoryboardScript(
     userId: string,
     episodeId: string,
-    hint?: string | null
+    hint?: string | null,
   ): Promise<ExpandEpisodeResult> {
-    const episode = await this.repo.findUnique(episodeId)
+    const episode = await this.repo.findUnique(episodeId);
     if (!episode) {
-      return { ok: false, status: 404, error: 'Episode not found' }
+      return { ok: false, status: 404, error: "Episode not found" };
     }
 
     if (!hasEpisodeContentForStoryboard(episode)) {
       return {
         ok: false,
         status: 400,
-        error: '内容不足',
-        message: '请先填写本集梗概，或导入/保存含场次或梗概字段的剧本'
-      }
+        error: "内容不足",
+        message: "请先填写本集梗概，或导入/保存含场次或梗概字段的剧本",
+      };
     }
 
     try {
-      const project = await this.repo.findProjectForExpandScript(episode.projectId)
+      const project = await this.repo.findProjectForExpandScript(
+        episode.projectId,
+      );
 
       const projectContext = project
-        ? `项目名称: ${project.name}\n已有角色: ${project.characters.map(c => c.name).join(', ') || '暂无'}\n已有集数: ${project.episodes.length}集`
-        : undefined
+        ? `项目名称: ${project.name}\n已有角色: ${project.characters.map((c) => c.name).join(", ") || "暂无"}\n已有集数: ${project.episodes.length}集`
+        : undefined;
 
       const { script, cost } = await generateStoryboardScriptFromEpisode(
         episode,
@@ -534,54 +569,55 @@ export class EpisodeService {
         {
           userId,
           projectId: episode.projectId,
-          op: 'episode_generate_storyboard_script'
+          op: "episode_generate_storyboard_script",
         },
-        hint
-      )
+        hint,
+      );
 
-      const { updatedEpisode, scenesCreated } = await this.applyScriptContentToEpisode(
-        episodeId,
-        episode.projectId,
-        episode.title,
-        script
-      )
+      const { updatedEpisode, scenesCreated } =
+        await this.applyScriptContentToEpisode(
+          episodeId,
+          episode.projectId,
+          episode.title,
+          script,
+        );
 
       return {
         ok: true,
         episode: updatedEpisode,
         script,
         scenesCreated,
-        aiCost: cost.costCNY
-      }
+        aiCost: cost.costCNY,
+      };
     } catch (error) {
-      console.error('Storyboard script generation failed:', error)
+      console.error("Storyboard script generation failed:", error);
 
-      if (error instanceof Error && error.name === 'DeepSeekAuthError') {
+      if (error instanceof Error && error.name === "DeepSeekAuthError") {
         return {
           ok: false,
           status: 401,
-          error: 'AI 服务认证失败',
-          message: error.message
-        }
+          error: "AI 服务认证失败",
+          message: error.message,
+        };
       }
 
-      if (error instanceof Error && error.name === 'DeepSeekRateLimitError') {
+      if (error instanceof Error && error.name === "DeepSeekRateLimitError") {
         return {
           ok: false,
           status: 429,
-          error: 'AI 服务请求受限',
-          message: error.message
-        }
+          error: "AI 服务请求受限",
+          message: error.message,
+        };
       }
 
       return {
         ok: false,
         status: 500,
-        error: '分镜剧本生成失败',
-        message: error instanceof Error ? error.message : '未知错误'
-      }
+        error: "分镜剧本生成失败",
+        message: error instanceof Error ? error.message : "未知错误",
+      };
     }
   }
 }
 
-export const episodeService = new EpisodeService(episodeRepository)
+export const episodeService = new EpisodeService(episodeRepository);
