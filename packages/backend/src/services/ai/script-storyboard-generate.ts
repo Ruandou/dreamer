@@ -1,13 +1,14 @@
 import type { ScriptContent } from '@dreamer/shared/types'
 import type { ModelCallLogContext } from './api-logger.js'
-import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
+import { type DeepSeekCost } from './deepseek-client.js'
 import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
 import { convertDeepSeekResponse } from './script-expand.js'
 import {
-  callDeepSeekWithRetry,
+  callLLMWithRetry,
   cleanMarkdownCodeBlocks,
-  type DeepSeekCallOptions
-} from './deepseek-call-wrapper.js'
+  type LLMCallOptions
+} from './llm-call-wrapper.js'
+import { getDefaultProvider } from './llm-factory.js'
 
 /** 与 Prisma Episode / shared Episode 兼容，用于分镜生成入参 */
 export interface EpisodeStoryboardInput {
@@ -111,7 +112,7 @@ export async function generateStoryboardScriptFromEpisode(
   hint?: string | null
 ): Promise<{ script: ScriptContent; cost: DeepSeekCost }> {
   const userPrompt = buildStoryboardUserPrompt(episode, projectContext, hint)
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
 
   // Parser function for the wrapper
   const parseStoryboard = (content: string): ScriptContent => {
@@ -126,17 +127,19 @@ export async function generateStoryboardScriptFromEpisode(
     return script
   }
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: STORYBOARD_SYSTEM_PROMPT,
-    userPrompt,
+    messages: [
+      { role: 'system', content: STORYBOARD_SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt }
+    ],
     temperature: DEEPSEEK_TEMPERATURE.STORYBOARD_GENERATE,
     maxTokens: DEEPSEEK_MAX_TOKENS.STORYBOARD_GENERATE,
     modelLog: log
   }
 
-  const result = await callDeepSeekWithRetry(options, parseStoryboard)
+  const result = await callLLMWithRetry(callOptions, parseStoryboard)
 
   return {
     script: result.content,

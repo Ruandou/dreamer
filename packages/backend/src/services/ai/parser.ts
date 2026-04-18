@@ -1,17 +1,13 @@
 import type { ModelCallLogContext } from './api-logger.js'
-import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
+import { type DeepSeekCost } from './deepseek-client.js'
 import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
 import {
   type ParsedCharacter,
   type ParsedCharacterImage,
   normalizeParsedCharacterList
 } from './parsed-script-types.js'
-import {
-  callDeepSeekWithRetry,
-  cleanMarkdownCodeBlocks,
-  parseJsonResponse,
-  type DeepSeekCallOptions
-} from './deepseek-call-wrapper.js'
+import { callLLMWithRetry, parseJsonResponse, type LLMCallOptions } from './llm-call-wrapper.js'
+import { getDefaultProvider } from './llm-factory.js'
 
 export type { ParsedCharacter }
 export { DeepSeekAuthError, DeepSeekRateLimitError } from './deepseek-client.js'
@@ -105,7 +101,7 @@ export async function parseScriptDocument(
 
   // Markdown 格式，调用 AI 解析
   const userMessage = `请解析以下剧本文档：\n\n${content}`
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
 
   // Parser function for the wrapper
   const parseResponse = (response: string): ParsedScript => {
@@ -114,17 +110,19 @@ export async function parseScriptDocument(
     return normalizeParsedData(parsed)
   }
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: PARSER_SYSTEM_PROMPT,
-    userPrompt: userMessage,
+    messages: [
+      { role: 'system', content: PARSER_SYSTEM_PROMPT },
+      { role: 'user', content: userMessage }
+    ],
     temperature: DEEPSEEK_TEMPERATURE.PARSER,
     maxTokens: DEEPSEEK_MAX_TOKENS.PARSER,
     modelLog: log
   }
 
-  const result = await callDeepSeekWithRetry(options, parseResponse)
+  const result = await callLLMWithRetry(callOptions, parseResponse)
 
   return {
     parsed: result.content,

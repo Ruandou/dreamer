@@ -248,6 +248,11 @@ export type RunScriptBatchJobOptions = {
   useThreePhase?: boolean
 }
 
+// 超时保护常量
+const OUTLINE_GENERATION_TIMEOUT_MS = 30 * 60 * 1000 // 30分钟
+const SHOWRUNNER_REVIEW_TIMEOUT_MS = 15 * 60 * 1000 // 15分钟
+const VISUAL_ENRICHMENT_TIMEOUT_MS = 20 * 60 * 1000 // 20分钟
+
 /**
  * 阶段 1：并行生成所有集的大纲
  */
@@ -261,12 +266,19 @@ async function generateAllOutlines(
 ): Promise<Map<number, string>> {
   const outlines = new Map<number, string>()
   const MAX_RETRIES = 2
+  const BASE_DELAY_MS = 2000
+  const totalBatches = Math.ceil(targetEpisodes / concurrency)
+  let completedBatches = 0
 
   // 分批并行生成
   for (let batchStart = 1; batchStart <= targetEpisodes; batchStart += concurrency) {
     const batchEnd = Math.min(batchStart + concurrency - 1, targetEpisodes)
+    completedBatches++
+    const batchProgress = Math.round((completedBatches / totalBatches) * 100)
 
-    console.log(`[outline-generation] 生成第 ${batchStart}-${batchEnd} 集大纲...`)
+    console.log(
+      `[outline-generation] 生成第 ${batchStart}-${batchEnd} 集大纲... (批次 ${completedBatches}/${totalBatches}, ${batchProgress}%)`
+    )
 
     await Promise.all(
       Array.from({ length: batchEnd - batchStart + 1 }, async (_, i) => {
@@ -294,11 +306,22 @@ async function generateAllOutlines(
             retries++
             if (retries >= MAX_RETRIES) {
               console.error(
-                `[outline-generation] 第 ${epNum} 集大纲生成失败（已重试 ${MAX_RETRIES} 次）`
+                `[outline-generation] 第 ${epNum} 集大纲生成失败（已重试 ${MAX_RETRIES} 次）`,
+                {
+                  projectId,
+                  episodeNum: epNum,
+                  error: error instanceof Error ? error.message : 'Unknown error',
+                  stack: error instanceof Error ? error.stack : undefined
+                }
               )
               throw error
             }
-            await new Promise((resolve) => setTimeout(resolve, 1000 * retries))
+            // 指数退避策略
+            const delay = BASE_DELAY_MS * Math.pow(2, retries - 1)
+            console.log(
+              `[outline-generation] 第 ${epNum} 集大纲生成失败，${delay / 1000}秒后重试 (${retries}/${MAX_RETRIES})...`
+            )
+            await new Promise((resolve) => setTimeout(resolve, delay))
           }
         }
       })
@@ -470,14 +493,28 @@ export async function runScriptBatchJob(
         progressMeta: { message: '正在生成所有集的大纲...' }
       })
 
-      let allOutlines = await generateAllOutlines(
-        projectId,
-        targetEpisodes,
-        project.name,
-        synopsis,
-        5, // 并发数
-        modelLogCtx
-      )
+      console.log('[script-batch] 阶段 1：开始生成大纲（30分钟超时保护）')
+      let allOutlines = await Promise.race([
+        generateAllOutlines(
+          projectId,
+          targetEpisodes,
+          project.name,
+          synopsis,
+          5, // 并发数
+          modelLogCtx
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `大纲生成超时（${OUTLINE_GENERATION_TIMEOUT_MS / 1000 / 60}分钟），请检查API连接或减少集数`
+                )
+              ),
+            OUTLINE_GENERATION_TIMEOUT_MS
+          )
+        )
+      ])
 
       console.log(`[script-batch] 阶段 1 完成：已生成 ${allOutlines.size} 集大纲`)
 
@@ -488,8 +525,21 @@ export async function runScriptBatchJob(
         progressMeta: { message: 'AI 总编剧审核大纲一致性...' }
       })
 
-      console.log('[script-batch] 阶段 2：开始 AI 总编剧审核...')
-      let review = await showrunnerReviewOutlines(synopsis, allOutlines, modelLogCtx)
+      console.log('[script-batch] 阶段 2：开始 AI 总编剧审核（15分钟超时保护）...')
+      let review = await Promise.race([
+        showrunnerReviewOutlines(synopsis, allOutlines, modelLogCtx),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `总编剧审核超时（${SHOWRUNNER_REVIEW_TIMEOUT_MS / 1000 / 60}分钟），请检查API连接`
+                )
+              ),
+            SHOWRUNNER_REVIEW_TIMEOUT_MS
+          )
+        )
+      ])
 
       const MAX_REVISION_ROUNDS = 2
       let revisionRound = 0
@@ -844,8 +894,21 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
       progressMeta: { message: '生成形象与场地提示词…' }
     })
 
-    console.log('[parse-script] 开始应用视觉增强')
-    await applyScriptVisualEnrichment(projectId, merged)
+    console.log('[parse-script] 开始应用视觉增强（20分钟超时保护）')
+    await Promise.race([
+      applyScriptVisualEnrichment(projectId, merged),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `视觉增强超时（${VISUAL_ENRICHMENT_TIMEOUT_MS / 1000 / 60}分钟），请检查API连接`
+              )
+            ),
+          VISUAL_ENRICHMENT_TIMEOUT_MS
+        )
+      )
+    ])
 
     console.log('[parse-script] 填充分集简介')
     await fillEpisodeSynopses(projectId)

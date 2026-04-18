@@ -1,5 +1,3 @@
-import OpenAI from 'openai'
-
 // DeepSeek pricing (per 1M tokens) - 人民币定价
 // 来源：https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
 const DEEPSEEK_INPUT_COST_PER_1M_CACHE_HIT = 0.2
@@ -53,11 +51,4 @@ export function calculateDeepSeekCost(usage: unknown, cacheHit: boolean = false)
     costCNY,
     cacheHit
   }
-}
-
-export function getDeepSeekClient(): OpenAI {
-  return new OpenAI({
-    apiKey: process.env.DEEPSEEK_API_KEY,
-    baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1'
-  })
 }

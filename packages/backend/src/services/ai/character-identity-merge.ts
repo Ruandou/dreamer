@@ -1,10 +1,11 @@
 import type { ScriptContent } from '@dreamer/shared/types'
 import type { ModelCallLogContext } from './api-logger.js'
-import { getDeepSeekClient, type DeepSeekCost } from './deepseek-client.js'
+import { type DeepSeekCost } from './deepseek-client.js'
 import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
 import type { ParsedCharacter } from './parsed-script-types.js'
 import { normalizeParsedCharacterList } from './parsed-script-types.js'
-import { callDeepSeekWithRetry, type DeepSeekCallOptions } from './deepseek-call-wrapper.js'
+import { callLLMWithRetry, type LLMCallOptions } from './llm-call-wrapper.js'
+import { getDefaultProvider } from './llm-factory.js'
 interface CharacterIdentityMergeResult {
   characters: ParsedCharacter[]
   /** 非规范称谓 -> 规范名（含与自身相等的映射时可忽略） */
@@ -106,7 +107,7 @@ export async function fetchCharacterIdentityMerge(
   log?: ModelCallLogContext
 ): Promise<{ result: CharacterIdentityMergeResult; cost: DeepSeekCost }> {
   const user = buildMergeUserScript(script, uniqueNames)
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
 
   // Parser function for the wrapper
   const parseMergeResult = (text: string): CharacterIdentityMergeResult => {
@@ -115,17 +116,19 @@ export async function fetchCharacterIdentityMerge(
     return normalizeMergePayload(parsed)
   }
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: CHARACTER_IDENTITY_MERGE_SYSTEM,
-    userPrompt: user,
+    messages: [
+      { role: 'system', content: CHARACTER_IDENTITY_MERGE_SYSTEM },
+      { role: 'user', content: user }
+    ],
     temperature: DEEPSEEK_TEMPERATURE.CHARACTER_MERGE,
     maxTokens: DEEPSEEK_MAX_TOKENS.CHARACTER_MERGE,
     modelLog: log
   }
 
-  const result = await callDeepSeekWithRetry(options, parseMergeResult)
+  const result = await callLLMWithRetry(callOptions, parseMergeResult)
 
   return {
     result: result.content,

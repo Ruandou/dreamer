@@ -1,4 +1,3 @@
-import OpenAI from 'openai'
 import type {
   ScriptContent,
   ScriptScene,
@@ -10,10 +9,11 @@ import type { ModelCallLogContext } from './ai/api-logger.js'
 import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai/ai.constants.js'
 import { SCRIPT_WRITER_PROMPT, EPISODE_WRITER_PROMPT } from './prompts/script-prompts.js'
 import {
-  callDeepSeekWithRetry,
+  callLLMWithRetry,
   cleanMarkdownCodeBlocks,
-  type DeepSeekCallOptions
-} from './ai/deepseek-call-wrapper.js'
+  type LLMCallOptions
+} from './ai/llm-call-wrapper.js'
+import { getDefaultProvider } from './ai/llm-factory.js'
 import { PromptRegistry } from './prompts/registry.js'
 
 export interface ScriptWriterOptions {
@@ -35,7 +35,7 @@ export async function writeScriptFromIdea(
   idea: string,
   options?: ScriptWriterOptions
 ): Promise<ScriptWriterResult> {
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
   const userPrompt = buildUserPrompt(idea, options)
 
   // Parser function for the wrapper
@@ -45,17 +45,19 @@ export async function writeScriptFromIdea(
     return script
   }
 
-  const options_param: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: SCRIPT_WRITER_PROMPT,
-    userPrompt,
+    messages: [
+      { role: 'system', content: SCRIPT_WRITER_PROMPT },
+      { role: 'user', content: userPrompt }
+    ],
     temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
     maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING,
     modelLog: options?.modelLog
   }
 
-  const result = await callDeepSeekWithRetry(options_param, parseScript)
+  const result = await callLLMWithRetry(callOptions, parseScript)
 
   return {
     script: result.content,
@@ -73,7 +75,7 @@ export async function writeEpisodeForProject(
   seriesTitle: string,
   modelLog?: ModelCallLogContext
 ): Promise<ScriptWriterResult> {
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
   const userPrompt = `剧名：${seriesTitle}
 全剧梗概：${seriesSynopsis}
 前情与已发生剧情摘要：${rollingContext || '（首集后的连续剧情）'}
@@ -87,17 +89,19 @@ export async function writeEpisodeForProject(
     return script
   }
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: EPISODE_WRITER_PROMPT,
-    userPrompt,
+    messages: [
+      { role: 'system', content: EPISODE_WRITER_PROMPT },
+      { role: 'user', content: userPrompt }
+    ],
     temperature: DEEPSEEK_TEMPERATURE.SCRIPT_IMPROVEMENT,
     maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_IMPROVEMENT,
     modelLog
   }
 
-  const result = await callDeepSeekWithRetry(options, parseScript)
+  const result = await callLLMWithRetry(callOptions, parseScript)
 
   return {
     script: result.content,
@@ -113,7 +117,7 @@ export async function expandScript(
   additionalScenes: number = 3,
   options?: ScriptWriterOptions
 ): Promise<ScriptWriterResult> {
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
 
   const userPrompt = `请为以下剧本扩展${additionalScenes}个新场景：
 
@@ -136,17 +140,19 @@ ${JSON.stringify(script, null, 2)}
     return parsed
   }
 
-  const options_param: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: SCRIPT_WRITER_PROMPT,
-    userPrompt,
+    messages: [
+      { role: 'system', content: SCRIPT_WRITER_PROMPT },
+      { role: 'user', content: userPrompt }
+    ],
     temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
     maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING,
     modelLog: options?.modelLog
   }
 
-  const result = await callDeepSeekWithRetry(options_param, parseScript)
+  const result = await callLLMWithRetry(callOptions, parseScript)
 
   return {
     script: result.content,
@@ -162,7 +168,7 @@ export async function improveScript(
   feedback: string,
   options?: ScriptWriterOptions
 ): Promise<ScriptWriterResult> {
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
 
   const userPrompt = `请根据以下反馈改进剧本：
 
@@ -183,17 +189,19 @@ ${feedback}
     return improvedScript
   }
 
-  const options_param: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: SCRIPT_WRITER_PROMPT,
-    userPrompt,
+    messages: [
+      { role: 'system', content: SCRIPT_WRITER_PROMPT },
+      { role: 'user', content: userPrompt }
+    ],
     temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
     maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING,
     modelLog: options?.modelLog
   }
 
-  const result = await callDeepSeekWithRetry(options_param, parseScript)
+  const result = await callLLMWithRetry(callOptions, parseScript)
 
   return {
     script: result.content,
@@ -213,7 +221,7 @@ export async function optimizeSceneDescription(
   },
   modelLog?: ModelCallLogContext
 ): Promise<string> {
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
 
   const contextStr = sceneContext
     ? `场景上下文：\n- 地点：${sceneContext.location || '未指定'}\n- 时间：${sceneContext.timeOfDay || '未指定'}\n- 角色：${sceneContext.characters?.join(', ') || '未指定'}`
@@ -237,28 +245,21 @@ ${contextStr}
   // Simple parser - just return the content
   const parseResponse = (content: string): string => content.trim()
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: '你是一个专业的AI视频提示词优化专家。',
-    userPrompt,
+    messages: [
+      { role: 'system', content: '你是一个专业的AI视频提示词优化专家。' },
+      { role: 'user', content: userPrompt }
+    ],
     temperature: 0.5,
     maxTokens: 500,
     modelLog
   }
 
-  const result = await callDeepSeekWithRetry(options, parseResponse)
+  const result = await callLLMWithRetry(callOptions, parseResponse)
 
   return result.content
-}
-
-// ==================== Helper Functions ====================
-
-function getDeepSeekClient(): OpenAI {
-  return new OpenAI({
-    apiKey: process.env.DEEPSEEK_API_KEY,
-    baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1'
-  })
 }
 
 function buildUserPrompt(idea: string, options?: ScriptWriterOptions): string {
@@ -427,7 +428,7 @@ export async function generateEpisodeOutline(
   seriesSynopsis: string,
   modelLog?: ModelCallLogContext
 ): Promise<string> {
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
   const rendered = registry.render('episode-outline', {
@@ -436,18 +437,20 @@ export async function generateEpisodeOutline(
     episodeNum: String(episodeNum)
   })
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: rendered.systemPrompt,
-    userPrompt: rendered.userPrompt,
+    messages: [
+      { role: 'system', content: rendered.systemPrompt },
+      { role: 'user', content: rendered.userPrompt }
+    ],
     temperature: 0.5,
     maxTokens: 400,
     modelLog
   }
 
   // 大纲生成不需要复杂的解析，直接返回文本
-  const result = await callDeepSeekWithRetry(options, (content: string) => content.trim())
+  const result = await callLLMWithRetry(callOptions, (content: string) => content.trim())
 
   return result.content
 }
@@ -461,7 +464,7 @@ export async function showrunnerReviewOutlines(
   outlines: Map<number, string>,
   modelLog?: ModelCallLogContext
 ): Promise<{ approved: boolean; feedback: string }> {
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
   // 格式化大纲列表
@@ -476,17 +479,19 @@ export async function showrunnerReviewOutlines(
     outlinesList
   })
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: rendered.systemPrompt,
-    userPrompt: rendered.userPrompt,
+    messages: [
+      { role: 'system', content: rendered.systemPrompt },
+      { role: 'user', content: rendered.userPrompt }
+    ],
     temperature: 0.3,
     maxTokens: 2000,
     modelLog
   }
 
-  const result = await callDeepSeekWithRetry(options, (content: string) => content.trim())
+  const result = await callLLMWithRetry(callOptions, (content: string) => content.trim())
   const feedback = result.content
 
   // 检查是否通过审核
@@ -504,24 +509,26 @@ export async function formatScriptToJSON(
   originalScript: string,
   modelLog?: ModelCallLogContext
 ): Promise<ScriptContent> {
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
   const rendered = registry.render('script-formatter', {
     originalScript
   })
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: rendered.systemPrompt,
-    userPrompt: rendered.userPrompt,
+    messages: [
+      { role: 'system', content: rendered.systemPrompt },
+      { role: 'user', content: rendered.userPrompt }
+    ],
     temperature: 0.1,
     maxTokens: 8000,
     modelLog
   }
 
-  const result = await callDeepSeekWithRetry(options, (content: string) => {
+  const result = await callLLMWithRetry(callOptions, (content: string) => {
     const cleaned = cleanMarkdownCodeBlocks(content)
     return JSON.parse(cleaned) as ScriptContent
   })
@@ -544,7 +551,7 @@ export async function expandEpisodeFromOutline(
   outlineContent: string,
   modelLog?: ModelCallLogContext
 ): Promise<ScriptContent> {
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
   const rendered = registry.render('episode-expand', {
@@ -553,17 +560,19 @@ export async function expandEpisodeFromOutline(
     outlineContent
   })
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: rendered.systemPrompt,
-    userPrompt: rendered.userPrompt,
+    messages: [
+      { role: 'system', content: rendered.systemPrompt },
+      { role: 'user', content: rendered.userPrompt }
+    ],
     temperature: 0.6,
     maxTokens: 6000,
     modelLog
   }
 
-  const result = await callDeepSeekWithRetry(options, (content: string) => {
+  const result = await callLLMWithRetry(callOptions, (content: string) => {
     const cleaned = cleanMarkdownCodeBlocks(content)
     return JSON.parse(cleaned) as ScriptContent
   })
@@ -585,7 +594,7 @@ export async function reviseOutlinesBasedOnFeedback(
   reviewFeedback: string,
   modelLog?: ModelCallLogContext
 ): Promise<Map<number, string>> {
-  const deepseek = getDeepSeekClient()
+  const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
   // 格式化大纲列表
@@ -601,17 +610,19 @@ export async function reviseOutlinesBasedOnFeedback(
     reviewFeedback
   })
 
-  const options: DeepSeekCallOptions = {
-    client: deepseek,
+  const callOptions: LLMCallOptions = {
+    provider,
     model: 'deepseek-chat',
-    systemPrompt: rendered.systemPrompt,
-    userPrompt: rendered.userPrompt,
+    messages: [
+      { role: 'system', content: rendered.systemPrompt },
+      { role: 'user', content: rendered.userPrompt }
+    ],
     temperature: 0.4,
     maxTokens: 4000,
     modelLog
   }
 
-  const result = await callDeepSeekWithRetry(options, (content: string) => content.trim())
+  const result = await callLLMWithRetry(callOptions, (content: string) => content.trim())
   const revisedText = result.content
 
   // 解析修正后的大纲文本，转换为 Map

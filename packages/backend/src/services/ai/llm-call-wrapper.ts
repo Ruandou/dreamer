@@ -11,10 +11,10 @@ import { logDeepSeekChat } from './model-call-log.js'
 import type { ModelCallLogContext } from './api-logger.js'
 import {
   DEFAULT_RETRY_ATTEMPTS,
-  AUTH_RETRY_DELAY_MS,
   RETRY_BASE_DELAY_MS,
   AUTH_ERROR_STATUS_CODES,
-  RATE_LIMIT_STATUS_CODE
+  RATE_LIMIT_STATUS_CODE,
+  API_CALL_TIMEOUT_MS
 } from './ai.constants.js'
 
 export interface LLMCallOptions {
@@ -67,11 +67,24 @@ export async function callLLMWithRetry<T>(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const completion = await provider.complete(messages, {
-        temperature,
-        maxTokens,
-        model
-      })
+      console.log(
+        `[llm-call] 调用 LLM, attempt ${attempt}/${maxRetries}, op=${modelLog?.op || 'unknown'}`
+      )
+
+      // 添加超时保护
+      const completion = await Promise.race([
+        provider.complete(messages, {
+          temperature,
+          maxTokens,
+          model
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`LLM API 调用超时 (${API_CALL_TIMEOUT_MS / 1000 / 60}分钟)`)),
+            API_CALL_TIMEOUT_MS
+          )
+        )
+      ])
 
       const parsedContent = parser(completion.content)
 
@@ -104,14 +117,16 @@ export async function callLLMWithRetry<T>(
         throw error instanceof DeepSeekAuthError ? error : new DeepSeekAuthError()
       }
 
-      // 限流错误 - 重试
+      // 限流错误 - 使用指数退避重试
       if (
         error instanceof DeepSeekRateLimitError ||
         error?.status === RATE_LIMIT_STATUS_CODE ||
         error?.message?.includes('rate_limit')
       ) {
         if (attempt < maxRetries) {
-          await sleep(AUTH_RETRY_DELAY_MS * attempt)
+          const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1) // 指数退避：1s, 2s, 4s
+          console.log(`[llm-call] 遇到限流, ${delay / 1000}秒后重试...`)
+          await sleep(delay)
           continue
         }
         logDeepSeekChat(modelLog, userPrompt, {
@@ -123,15 +138,24 @@ export async function callLLMWithRetry<T>(
         throw error instanceof DeepSeekRateLimitError ? error : new DeepSeekRateLimitError()
       }
 
-      // 其他错误 - 重试一次
+      // 其他错误 - 使用指数退避重试
       if (attempt < maxRetries) {
-        await sleep(RETRY_BASE_DELAY_MS)
+        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1) // 指数退避：1s, 2s, 4s
+        console.log(
+          `[llm-call] 其他错误 (${error?.status || error?.message}), ${delay / 1000}秒后重试...`
+        )
+        await sleep(delay)
         continue
       }
     }
   }
 
   // 所有重试都失败了
+  console.error(`[llm-call] 所有重试失败, op=${modelLog?.op || 'unknown'}`, {
+    error: lastError?.message,
+    attempts: maxRetries
+  })
+
   logDeepSeekChat(modelLog, userPrompt, {
     status: 'failed',
     errorMsg: lastError?.message || 'LLM API 调用失败'
