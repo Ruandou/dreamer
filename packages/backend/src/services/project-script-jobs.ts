@@ -5,6 +5,7 @@
 import { Prisma } from '@prisma/client'
 import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import { projectRepository } from '../repositories/project-repository.js'
+import { recordModelApiCall } from './ai/api-logger.js'
 import {
   writeScriptFromIdea,
   writeEpisodeForProject,
@@ -370,6 +371,54 @@ export async function runScriptBatchJob(
     console.log(`[script-batch] 开始检测剧本模式, projectId=${projectId}`)
     const detectionResult = detectScriptMode(synopsis)
     console.log(`[script-batch] 检测结果: ${detectionResult.mode}`)
+
+    // 记录决策结果到 Job progressMeta
+    const decisionDetails: Record<string, unknown> = {
+      mode: detectionResult.mode,
+      detectedAt: new Date().toISOString(),
+      synopsisLength: synopsis.length
+    }
+
+    // 如果是逐集检测，添加详细信息
+    if (detectionResult.episodes) {
+      decisionDetails.episodeCount = detectionResult.episodes.length
+      decisionDetails.episodeModes = detectionResult.episodes.map((ep) => ({
+        episodeNum: ep.episodeNum,
+        mode: ep.mode,
+        confidence: ep.confidence
+      }))
+
+      // 统计各模式数量
+      const modeCounts: Record<string, number> = {}
+      detectionResult.episodes.forEach((ep) => {
+        modeCounts[ep.mode] = (modeCounts[ep.mode] || 0) + 1
+      })
+      decisionDetails.modeDistribution = modeCounts
+    }
+
+    await updateJob(jobId, {
+      progressMeta: {
+        message: `检测到剧本模式: ${detectionResult.mode}`,
+        scriptModeDecision: decisionDetails
+      }
+    })
+
+    console.log('[script-batch] 决策详情:', JSON.stringify(decisionDetails, null, 2))
+
+    // 记录决策到 ModelApiCall（审计追溯）
+    try {
+      await recordModelApiCall({
+        userId: project.userId,
+        model: 'script-mode-detector',
+        provider: 'heuristic',
+        prompt: `剧本长度: ${synopsis.length} 字符`,
+        requestParams: { op: 'script_mode_detection', projectId },
+        responseData: decisionDetails,
+        status: 'completed'
+      })
+    } catch (error) {
+      console.error('[script-batch] 记录决策失败:', error)
+    }
 
     // ====== 模式 A：忠实解析完整剧本 ======
     if (detectionResult.mode === 'faithful-parse') {
