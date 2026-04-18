@@ -5,7 +5,9 @@ import {
   SCRIPT_WRITER_TEMPLATE,
   EPISODE_WRITER_TEMPLATE,
   SCRIPT_EXPAND_TEMPLATE,
-  STORYBOARD_GENERATE_TEMPLATE
+  STORYBOARD_GENERATE_TEMPLATE,
+  EPISODE_OUTLINE_TEMPLATE,
+  SHOWRUNNER_REVIEW_TEMPLATE
 } from '../../src/services/prompts/script-templates.js'
 
 describe('Script Templates', () => {
@@ -15,11 +17,13 @@ describe('Script Templates', () => {
 
   describe('template registration', () => {
     it('exports all script templates', () => {
-      expect(SCRIPT_TEMPLATES).toHaveLength(4)
+      expect(SCRIPT_TEMPLATES).toHaveLength(6)
       expect(SCRIPT_TEMPLATES).toContain(SCRIPT_WRITER_TEMPLATE)
       expect(SCRIPT_TEMPLATES).toContain(EPISODE_WRITER_TEMPLATE)
       expect(SCRIPT_TEMPLATES).toContain(SCRIPT_EXPAND_TEMPLATE)
       expect(SCRIPT_TEMPLATES).toContain(STORYBOARD_GENERATE_TEMPLATE)
+      expect(SCRIPT_TEMPLATES).toContain(EPISODE_OUTLINE_TEMPLATE)
+      expect(SCRIPT_TEMPLATES).toContain(SHOWRUNNER_REVIEW_TEMPLATE)
     })
 
     it('each template has required fields', () => {
@@ -29,8 +33,10 @@ describe('Script Templates', () => {
         expect(template.systemPrompt).toBeDefined()
         expect(template.userPromptTemplate).toBeDefined()
         expect(template.metadata).toBeDefined()
-        // storyboard template has different category
-        if (template.id !== 'storyboard-generate') {
+        // storyboard, outline, and review templates have different categories
+        if (
+          !['storyboard-generate', 'episode-outline', 'showrunner-review'].includes(template.id)
+        ) {
           expect(template.metadata.category).toBe('script')
         }
         expect(template.metadata.creativity).toBeGreaterThanOrEqual(0)

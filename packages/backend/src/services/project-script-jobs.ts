@@ -5,7 +5,12 @@
 import { Prisma } from '@prisma/client'
 import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import { projectRepository } from '../repositories/project-repository.js'
-import { writeScriptFromIdea, writeEpisodeForProject } from './script-writer.js'
+import {
+  writeScriptFromIdea,
+  writeEpisodeForProject,
+  generateEpisodeOutline,
+  showrunnerReviewOutlines
+} from './script-writer.js'
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
 import { runParseScriptEntityPipeline } from './parse-script-entity-pipeline.js'
 import { getMemoryService } from './memory/index.js'
@@ -218,6 +223,84 @@ export async function runGenerateFirstEpisodePipelineJob(jobId: string, projectI
 export type RunScriptBatchJobOptions = {
   /** 嵌入「解析剧本」任务：不另建 script-batch，进度写在同一 job 上，且结束时保持 running 供后续解析步骤 */
   embeddedInParse?: boolean
+  /** 是否使用三阶段生成（大纲→审核→剧本），默认 true */
+  useThreePhase?: boolean
+}
+
+/**
+ * 阶段 1：并行生成所有集的大纲
+ */
+async function generateAllOutlines(
+  projectId: string,
+  targetEpisodes: number,
+  seriesTitle: string,
+  seriesSynopsis: string,
+  concurrency: number = 5,
+  modelLogCtx?: { userId: string; projectId: string; op: string }
+): Promise<Map<number, string>> {
+  const outlines = new Map<number, string>()
+
+  // 分批并行生成
+  for (let batchStart = 1; batchStart <= targetEpisodes; batchStart += concurrency) {
+    const batchEnd = Math.min(batchStart + concurrency - 1, targetEpisodes)
+
+    console.log(`[outline-generation] 生成第 ${batchStart}-${batchEnd} 集大纲...`)
+
+    await Promise.all(
+      Array.from({ length: batchEnd - batchStart + 1 }, async (_, i) => {
+        const epNum = batchStart + i
+        try {
+          const outline = await generateEpisodeOutline(
+            epNum,
+            seriesTitle,
+            seriesSynopsis,
+            modelLogCtx
+          )
+          outlines.set(epNum, outline)
+          console.log(`[outline-generation] 第 ${epNum} 集大纲生成完成`)
+        } catch (error) {
+          console.error(`[outline-generation] 第 ${epNum} 集大纲生成失败:`, error)
+          throw error
+        }
+      })
+    )
+  }
+
+  return outlines
+}
+
+/**
+ * 构建增强上下文：记忆 + 未来大纲参考
+ */
+function buildEnhancedContext(memoryContext: string, futureOutlines: string[]): string {
+  const parts = [memoryContext]
+
+  if (futureOutlines.length > 0) {
+    parts.push('\n【后续剧情走向参考】')
+    parts.push(futureOutlines.join('\n\n'))
+    parts.push('\n注意：请确保本集剧情与后续发展自然衔接，埋下必要的伏笔。')
+  }
+
+  return parts.join('\n')
+}
+
+/**
+ * 获取未来 N 集的大纲
+ */
+function getFutureOutlines(
+  allOutlines: Map<number, string>,
+  currentEpisode: number,
+  lookahead: number = 2
+): string[] {
+  const futures: string[] = []
+  for (let i = 1; i <= lookahead; i++) {
+    const epNum = currentEpisode + i
+    const outline = allOutlines.get(epNum)
+    if (outline) {
+      futures.push(`第${epNum}集大纲：${outline}`)
+    }
+  }
+  return futures
 }
 
 export async function runScriptBatchJob(
@@ -227,6 +310,8 @@ export async function runScriptBatchJob(
   opts?: RunScriptBatchJobOptions
 ) {
   const embedded = Boolean(opts?.embeddedInParse)
+  const useThreePhase = opts?.useThreePhase !== false // 默认启用三阶段
+
   if (embedded) {
     await updateJob(jobId, {
       status: 'running',
@@ -237,7 +322,7 @@ export async function runScriptBatchJob(
   } else {
     await updateJob(jobId, {
       status: 'running',
-      currentStep: 'script-batch',
+      currentStep: 'outline-generation',
       progress: 0
     })
   }
@@ -249,16 +334,191 @@ export async function runScriptBatchJob(
   }
 
   const synopsis = project.synopsis || ''
-  let rolling = project.storyContext || synopsis
   const memoryService = getMemoryService()
+  const modelLogCtx = {
+    userId: project.userId,
+    projectId,
+    op: 'script_batch_generation'
+  }
 
   const mapBatchProgressToParseRange = (batchPct: number) =>
     Math.min(28, 8 + Math.round((Math.min(100, batchPct) / 100) * 20))
 
   try {
-    for (let n = 2; n <= targetEpisodes; n++) {
-      const existing = await projectRepository.findEpisodeByProjectNum(projectId, n)
-      if (existing && scriptFromJson(existing.script)) {
+    // ====== 三阶段生成 ======
+    if (useThreePhase) {
+      console.log('[script-batch] 开始三阶段生成：大纲 → 审核 → 剧本')
+
+      // 阶段 1：并行生成所有大纲
+      await updateJob(jobId, {
+        currentStep: 'outline-generation',
+        progress: 5,
+        progressMeta: { message: '正在生成所有集的大纲...' }
+      })
+
+      const allOutlines = await generateAllOutlines(
+        projectId,
+        targetEpisodes,
+        project.name,
+        synopsis,
+        5, // 并发数
+        modelLogCtx
+      )
+
+      console.log(`[script-batch] 阶段 1 完成：已生成 ${allOutlines.size} 集大纲`)
+
+      // 阶段 2：AI 总编剧审核大纲
+      await updateJob(jobId, {
+        currentStep: 'showrunner-review',
+        progress: 15,
+        progressMeta: { message: 'AI 总编剧审核大纲一致性...' }
+      })
+
+      console.log('[script-batch] 阶段 2：开始 AI 总编剧审核...')
+      const review = await showrunnerReviewOutlines(synopsis, allOutlines, modelLogCtx)
+
+      if (review.approved) {
+        console.log('[script-batch] 大纲审核通过 ✅')
+      } else {
+        console.log(
+          '[script-batch] 大纲审核发现问题，但仍继续生成：',
+          review.feedback.substring(0, 200)
+        )
+      }
+
+      // 阶段 3：基于大纲串行生成完整剧本
+      await updateJob(jobId, {
+        currentStep: 'script-generation',
+        progress: 20,
+        progressMeta: { message: '基于审核通过的大纲生成完整剧本...' }
+      })
+
+      let rolling = project.storyContext || synopsis
+
+      for (let n = 1; n <= targetEpisodes; n++) {
+        // 检查是否已存在
+        const existing = await projectRepository.findEpisodeByProjectNum(projectId, n)
+        if (existing && scriptFromJson(existing.script)) {
+          const pct = Math.round(((n - 1) / Math.max(1, targetEpisodes - 1)) * 100)
+          const progress = embedded
+            ? mapBatchProgressToParseRange(pct)
+            : 20 + Math.round((pct / 100) * 75)
+          await updateJob(jobId, {
+            progress,
+            progressMeta: {
+              current: n,
+              total: targetEpisodes,
+              message: `第 ${n} 集已存在，跳过`
+            }
+          })
+          continue
+        }
+
+        console.log(`[script-batch] 开始生成第 ${n}/${targetEpisodes} 集剧本...`)
+
+        // 构建增强上下文：记忆 + 未来大纲
+        let episodeContext = rolling
+        try {
+          const memoryContext = await memoryService.getEpisodeWritingContext(projectId, n)
+          if (memoryContext.fullContext && !memoryContext.fullContext.includes('（暂无）')) {
+            const futureOutlines = getFutureOutlines(allOutlines, n, 2)
+            episodeContext = buildEnhancedContext(memoryContext.fullContext, futureOutlines)
+          }
+        } catch (error) {
+          console.error('Failed to build memory context, falling back to rolling context:', error)
+        }
+
+        const { script } = await writeEpisodeForProject(n, synopsis, episodeContext, project.name, {
+          userId: project.userId,
+          projectId,
+          op: 'script_batch_write_episode'
+        })
+
+        const episode = await projectRepository.upsertEpisodeBatchFromScript(projectId, n, script)
+
+        rolling = [rolling, `第${n}集：${script.summary}`].join('\n').slice(-12000)
+        await projectRepository.update(projectId, { storyContext: rolling })
+
+        // 提取记忆
+        try {
+          await memoryService.extractAndSaveMemories(projectId, n, episode.id, script, {
+            userId: project.userId,
+            projectId,
+            op: 'extract_episode_memories'
+          })
+        } catch (error) {
+          console.error(`Failed to extract memories for episode ${n}:`, error)
+        }
+
+        const pct = Math.round(((n - 1) / Math.max(1, targetEpisodes - 1)) * 100)
+        const progress = embedded
+          ? mapBatchProgressToParseRange(pct)
+          : 20 + Math.round((pct / 100) * 75)
+        await updateJob(jobId, {
+          progress,
+          progressMeta: {
+            current: n,
+            total: targetEpisodes,
+            message: `正在生成第 ${n}/${targetEpisodes} 集`
+          }
+        })
+
+        console.log(`[script-batch] 第 ${n}/${targetEpisodes} 集生成完成`)
+      }
+    } else {
+      // ====== 旧版串行生成（兼容模式） ======
+      console.log('[script-batch] 使用旧版串行生成模式')
+      let rolling = project.storyContext || synopsis
+
+      for (let n = 2; n <= targetEpisodes; n++) {
+        const existing = await projectRepository.findEpisodeByProjectNum(projectId, n)
+        if (existing && scriptFromJson(existing.script)) {
+          const pct = Math.round(((n - 1) / Math.max(1, targetEpisodes - 1)) * 100)
+          const progress = embedded ? mapBatchProgressToParseRange(pct) : Math.min(99, pct)
+          await updateJob(jobId, {
+            progress,
+            progressMeta: {
+              current: n,
+              total: targetEpisodes,
+              message: `第 ${n} 集已存在，跳过`
+            }
+          })
+          continue
+        }
+
+        console.log(`[script-batch] 开始生成第 ${n}/${targetEpisodes} 集...`)
+
+        let episodeContext = rolling
+        try {
+          const memoryContext = await memoryService.getEpisodeWritingContext(projectId, n)
+          if (memoryContext.fullContext && !memoryContext.fullContext.includes('（暂无）')) {
+            episodeContext = memoryContext.fullContext
+          }
+        } catch (error) {
+          console.error('Failed to build memory context, falling back to rolling context:', error)
+        }
+
+        const { script } = await writeEpisodeForProject(n, synopsis, episodeContext, project.name, {
+          userId: project.userId,
+          projectId,
+          op: 'script_batch_write_episode'
+        })
+
+        const episode = await projectRepository.upsertEpisodeBatchFromScript(projectId, n, script)
+
+        rolling = [rolling, `第${n}集：${script.summary}`].join('\n').slice(-12000)
+        await projectRepository.update(projectId, { storyContext: rolling })
+
+        try {
+          await memoryService.extractAndSaveMemories(projectId, n, episode.id, script, {
+            userId: project.userId,
+            projectId,
+            op: 'extract_episode_memories'
+          })
+        } catch (error) {
+          console.error(`Failed to extract memories for episode ${n}:`, error)
+        }
+
         const pct = Math.round(((n - 1) / Math.max(1, targetEpisodes - 1)) * 100)
         const progress = embedded ? mapBatchProgressToParseRange(pct) : Math.min(99, pct)
         await updateJob(jobId, {
@@ -266,60 +526,12 @@ export async function runScriptBatchJob(
           progressMeta: {
             current: n,
             total: targetEpisodes,
-            message: `第 ${n} 集已存在，跳过`
+            message: `正在生成第 ${n}/${targetEpisodes} 集`
           }
         })
-        continue
+
+        console.log(`[script-batch] 第 ${n}/${targetEpisodes} 集生成完成`)
       }
-
-      console.log(`[script-batch] 开始生成第 ${n}/${targetEpisodes} 集...`)
-
-      // 使用记忆系统构建上下文（如果有记忆）
-      let episodeContext = rolling
-      try {
-        const memoryContext = await memoryService.getEpisodeWritingContext(projectId, n)
-        // 如果记忆上下文不为空，使用它；否则使用原来的 rolling context
-        if (memoryContext.fullContext && !memoryContext.fullContext.includes('（暂无）')) {
-          episodeContext = memoryContext.fullContext
-        }
-      } catch (error) {
-        console.error('Failed to build memory context, falling back to rolling context:', error)
-      }
-
-      const { script } = await writeEpisodeForProject(n, synopsis, episodeContext, project.name, {
-        userId: project.userId,
-        projectId,
-        op: 'script_batch_write_episode'
-      })
-
-      const episode = await projectRepository.upsertEpisodeBatchFromScript(projectId, n, script)
-
-      rolling = [rolling, `第${n}集：${script.summary}`].join('\n').slice(-12000)
-      await projectRepository.update(projectId, { storyContext: rolling })
-
-      // 提取本集的记忆
-      try {
-        await memoryService.extractAndSaveMemories(projectId, n, episode.id, script, {
-          userId: project.userId,
-          projectId,
-          op: 'extract_episode_memories'
-        })
-      } catch (error) {
-        console.error(`Failed to extract memories for episode ${n}:`, error)
-      }
-
-      const pct = Math.round(((n - 1) / Math.max(1, targetEpisodes - 1)) * 100)
-      const progress = embedded ? mapBatchProgressToParseRange(pct) : Math.min(99, pct)
-      await updateJob(jobId, {
-        progress,
-        progressMeta: {
-          current: n,
-          total: targetEpisodes,
-          message: `正在生成第 ${n}/${targetEpisodes} 集`
-        }
-      })
-
-      console.log(`[script-batch] 第 ${n}/${targetEpisodes} 集生成完成`)
     }
 
     if (embedded) {

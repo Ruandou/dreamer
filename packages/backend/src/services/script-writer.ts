@@ -14,6 +14,7 @@ import {
   cleanMarkdownCodeBlocks,
   type DeepSeekCallOptions
 } from './ai/deepseek-call-wrapper.js'
+import { PromptRegistry } from './prompts/registry.js'
 
 export interface ScriptWriterOptions {
   characters?: Character[]
@@ -405,4 +406,82 @@ function validateScript(script: ScriptContent): void {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * 生成单集核心剧情大纲（100-200字）
+ * 用于三阶段生成的第一阶段：并行生成所有集的大纲
+ */
+export async function generateEpisodeOutline(
+  episodeNum: number,
+  seriesTitle: string,
+  seriesSynopsis: string,
+  modelLog?: ModelCallLogContext
+): Promise<string> {
+  const deepseek = getDeepSeekClient()
+  const registry = PromptRegistry.getInstance()
+
+  const rendered = registry.render('episode-outline', {
+    seriesTitle,
+    seriesSynopsis,
+    episodeNum: String(episodeNum)
+  })
+
+  const options: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: rendered.systemPrompt,
+    userPrompt: rendered.userPrompt,
+    temperature: 0.5,
+    maxTokens: 400,
+    modelLog
+  }
+
+  // 大纲生成不需要复杂的解析，直接返回文本
+  const result = await callDeepSeekWithRetry(options, (content: string) => content.trim())
+
+  return result.content
+}
+
+/**
+ * AI 总编剧审核所有大纲的一致性
+ * 用于三阶段生成的第二阶段：质量门控
+ */
+export async function showrunnerReviewOutlines(
+  seriesSynopsis: string,
+  outlines: Map<number, string>,
+  modelLog?: ModelCallLogContext
+): Promise<{ approved: boolean; feedback: string }> {
+  const deepseek = getDeepSeekClient()
+  const registry = PromptRegistry.getInstance()
+
+  // 格式化大纲列表
+  const outlinesList = Array.from(outlines.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([num, outline]) => `第${num}集：${outline}`)
+    .join('\n\n')
+
+  const rendered = registry.render('showrunner-review', {
+    seriesSynopsis,
+    totalEpisodes: String(outlines.size),
+    outlinesList
+  })
+
+  const options: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: rendered.systemPrompt,
+    userPrompt: rendered.userPrompt,
+    temperature: 0.3,
+    maxTokens: 2000,
+    modelLog
+  }
+
+  const result = await callDeepSeekWithRetry(options, (content: string) => content.trim())
+  const feedback = result.content
+
+  // 检查是否通过审核
+  const approved = feedback.includes('APPROVED')
+
+  return { approved, feedback }
 }

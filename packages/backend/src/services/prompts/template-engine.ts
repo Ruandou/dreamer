@@ -15,7 +15,15 @@ export interface PromptTemplate {
   /** 模板元数据 */
   metadata: {
     /** 提示词分类 */
-    category: 'script' | 'character' | 'location' | 'storyboard' | 'visual' | 'memory'
+    category:
+      | 'script'
+      | 'character'
+      | 'location'
+      | 'storyboard'
+      | 'visual'
+      | 'memory'
+      | 'outline'
+      | 'review'
     /** 创造性程度 0-1，对应 temperature */
     creativity: number
     /** 最大输出 token 数 */

@@ -251,10 +251,93 @@ export const STORYBOARD_GENERATE_TEMPLATE: PromptTemplate = {
   }
 }
 
+/** 分集大纲生成模板 - 用于并行生成简要大纲 */
+export const EPISODE_OUTLINE_TEMPLATE: PromptTemplate = {
+  id: 'episode-outline',
+  version: '1.0.0',
+  systemPrompt: `你是专业的剧集规划师（Episode Planner），擅长为短剧系列规划每集的核心剧情大纲。
+
+你的任务是为指定集数生成 100-200 字的核心剧情大纲，确保：
+1. 包含 1-2 个核心事件
+2. 描述角色的关键行动
+3. 标注情节转折或悬念
+4. 说明与前后集的关联点
+
+输出格式：纯文本，简洁明了，不要 JSON。`,
+  userPromptTemplate: `剧名：{{seriesTitle}}
+全剧梗概：{{seriesSynopsis}}
+
+请生成第 {{episodeNum}} 集的核心剧情大纲。
+
+要求：
+- 长度：100-200 字
+- 包含核心事件、角色行动、情节转折
+- 说明与前后集的关联
+- 保持与全剧梗概的一致性
+
+第 {{episodeNum}} 集大纲：`,
+  metadata: {
+    category: 'outline',
+    creativity: 0.5,
+    maxOutputTokens: 400,
+    description: '生成单集核心剧情大纲（100-200字）',
+    tags: ['outline', 'planning', 'brief', 'parallel']
+  }
+}
+
+/** AI 总编剧审核模板 - 审核所有大纲的一致性 */
+export const SHOWRUNNER_REVIEW_TEMPLATE: PromptTemplate = {
+  id: 'showrunner-review',
+  version: '1.0.0',
+  systemPrompt: `你是本剧的总编剧（Showrunner），负责审核整个剧集系列的叙事质量和一致性。
+
+你的职责：
+1. 检查整体故事弧是否完整（起因-发展-高潮-结局）
+2. 验证角色发展是否合理且一致
+3. 确保节奏张弛有度（紧张-缓和交替）
+4. 检查伏笔是否有呼应
+5. 发现逻辑矛盾或时间线问题
+
+审核标准：
+- 每集必须有明确的功能（推进剧情/深化角色/制造悬念）
+- 角色行为必须符合其性格和动机
+- 剧情转折必须有铺垫，不能突兀
+- 高潮集数应该合理分布，不能集中在某一段
+
+输出格式：
+如果通过审核，第一行必须包含 "APPROVED"
+如果有问题，列出具体集数和修改建议。`,
+  userPromptTemplate: `【全剧梗概】
+{{seriesSynopsis}}
+
+【各集大纲】（共 {{totalEpisodes}} 集）
+
+{{outlinesList}}
+
+请以总编剧身份审核以上大纲，检查：
+1. 整体故事弧是否完整
+2. 角色发展是否合理
+3. 节奏是否张弛有度
+4. 伏笔是否有呼应
+5. 是否有逻辑矛盾
+
+如果通过审核，请在回复开头包含 "APPROVED"。
+如果有问题，请列出需要修改的集数和具体建议。`,
+  metadata: {
+    category: 'review',
+    creativity: 0.3,
+    maxOutputTokens: 2000,
+    description: 'AI 总编剧审核所有大纲的叙事一致性',
+    tags: ['review', 'consistency', 'quality-gate', 'showrunner']
+  }
+}
+
 /** 导出所有模板 */
 export const SCRIPT_TEMPLATES: PromptTemplate[] = [
   SCRIPT_WRITER_TEMPLATE,
   EPISODE_WRITER_TEMPLATE,
   SCRIPT_EXPAND_TEMPLATE,
-  STORYBOARD_GENERATE_TEMPLATE
+  STORYBOARD_GENERATE_TEMPLATE,
+  EPISODE_OUTLINE_TEMPLATE,
+  SHOWRUNNER_REVIEW_TEMPLATE
 ]
