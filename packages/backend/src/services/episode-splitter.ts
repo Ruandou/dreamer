@@ -110,7 +110,7 @@ function distributeScenesToEpisodes(
     const isMiddleEpisode = !isFirstEpisode && !isLastEpisode
 
     // 计算这集应该有多少场景
-    let targetSceneCount = scenesPerEpisode
+    const targetSceneCount = scenesPerEpisode
 
     // 动态调整（只有多场景时才添加额外开场/结尾）
     if (scenes.length > 1) {

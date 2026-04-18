@@ -28,7 +28,7 @@ export class VolcanoTTSProvider implements TTSProvider {
       volume: options?.volume ?? 50
     }
 
-    const response = await fetch('https://openspeech.bytedance.com/api/v1/tts', {
+    const response = await globalThis.fetch('https://openspeech.bytedance.com/api/v1/tts', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -43,7 +43,7 @@ export class VolcanoTTSProvider implements TTSProvider {
     }
 
     // 火山引擎返回音频数据
-    const audioData = await response.arrayBuffer()
+    const _audioData = await response.arrayBuffer()
 
     // 这里应该上传到存储并返回 URL
     // 暂时返回空字符串，实际使用时需要实现存储逻辑

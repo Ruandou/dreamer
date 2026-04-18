@@ -5,7 +5,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import multipart from '@fastify/multipart'
-import staticFiles from '@fastify/static'
+import _staticFiles from '@fastify/static' // TODO: 未使用，待删除
 import swagger from '@fastify/swagger'
 import swaggerUI from '@fastify/swagger-ui'
 import { authPlugin } from './plugins/auth.js'

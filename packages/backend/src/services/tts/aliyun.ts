@@ -31,7 +31,7 @@ export class AliyunTTSProvider implements TTSProvider {
       }
     }
 
-    const response = await fetch(`${ARK_API_URL}/audio/tts`, {
+    const response = await globalThis.fetch(`${ARK_API_URL}/audio/tts`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -47,7 +47,7 @@ export class AliyunTTSProvider implements TTSProvider {
 
     // 阿里云 TTS 返回音频数据，需要处理
     // 实际实现可能需要根据 API 响应格式调整
-    const audioData = await response.arrayBuffer()
+    const _audioData = await response.arrayBuffer()
 
     // 这里应该上传到存储并返回 URL
     // 暂时返回空字符串，实际使用时需要实现存储逻辑

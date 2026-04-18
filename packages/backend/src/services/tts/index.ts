@@ -6,7 +6,7 @@ import type { TTSProvider } from './base.js'
 import type { VoiceConfig } from '@dreamer/shared/types'
 import { AliyunTTSProvider } from './aliyun.js'
 import { VolcanoTTSProvider } from './volcano.js'
-import { getVoiceIdFromConfig, type TTSPlatform } from './mapper.js'
+import { type TTSPlatform } from './mapper.js'
 
 export type { TTSOptions, TTSProvider } from './base.js'
 export { getVoiceIdFromConfig, type TTSPlatform } from './mapper.js'
