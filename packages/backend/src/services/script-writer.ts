@@ -485,3 +485,148 @@ export async function showrunnerReviewOutlines(
 
   return { approved, feedback }
 }
+
+/**
+ * 将原始剧本格式化为标准 JSON（忠实解析，不改变内容）
+ * @param originalScript 原始剧本文本
+ * @param modelLog 模型调用日志上下文
+ */
+export async function formatScriptToJSON(
+  originalScript: string,
+  modelLog?: ModelCallLogContext
+): Promise<ScriptContent> {
+  const deepseek = getDeepSeekClient()
+  const registry = PromptRegistry.getInstance()
+
+  const rendered = registry.render('script-formatter', {
+    originalScript
+  })
+
+  const options: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: rendered.systemPrompt,
+    userPrompt: rendered.userPrompt,
+    temperature: 0.1,
+    maxTokens: 8000,
+    modelLog
+  }
+
+  const result = await callDeepSeekWithRetry(options, (content: string) => {
+    const cleaned = cleanMarkdownCodeBlocks(content)
+    return JSON.parse(cleaned) as ScriptContent
+  })
+
+  return result.content
+}
+
+/**
+ * 基于大纲/片段扩展为完整剧本
+ * @param episodeNum 集数
+ * @param seriesTitle 剧名
+ * @param seriesSynopsis 全剧梗概
+ * @param outlineContent 用户提供的大纲/片段
+ * @param modelLog 模型调用日志上下文
+ */
+export async function expandEpisodeFromOutline(
+  episodeNum: number,
+  seriesTitle: string,
+  seriesSynopsis: string,
+  outlineContent: string,
+  modelLog?: ModelCallLogContext
+): Promise<ScriptContent> {
+  const deepseek = getDeepSeekClient()
+  const registry = PromptRegistry.getInstance()
+
+  const rendered = registry.render('episode-expand', {
+    seriesTitle,
+    seriesSynopsis,
+    outlineContent
+  })
+
+  const options: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: rendered.systemPrompt,
+    userPrompt: rendered.userPrompt,
+    temperature: 0.6,
+    maxTokens: 6000,
+    modelLog
+  }
+
+  const result = await callDeepSeekWithRetry(options, (content: string) => {
+    const cleaned = cleanMarkdownCodeBlocks(content)
+    return JSON.parse(cleaned) as ScriptContent
+  })
+
+  return result.content
+}
+
+/**
+ * 根据审核意见修正大纲
+ * @param seriesSynopsis 全剧梗概
+ * @param outlines 当前大纲
+ * @param reviewFeedback 审核意见
+ * @param modelLog 模型调用日志上下文
+ * @returns 修正后的大纲
+ */
+export async function reviseOutlinesBasedOnFeedback(
+  seriesSynopsis: string,
+  outlines: Map<number, string>,
+  reviewFeedback: string,
+  modelLog?: ModelCallLogContext
+): Promise<Map<number, string>> {
+  const deepseek = getDeepSeekClient()
+  const registry = PromptRegistry.getInstance()
+
+  // 格式化大纲列表
+  const outlinesList = Array.from(outlines.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([num, outline]) => `第${num}集：${outline}`)
+    .join('\n\n')
+
+  const rendered = registry.render('outline-revision', {
+    seriesSynopsis,
+    totalEpisodes: String(outlines.size),
+    outlinesList,
+    reviewFeedback
+  })
+
+  const options: DeepSeekCallOptions = {
+    client: deepseek,
+    model: 'deepseek-chat',
+    systemPrompt: rendered.systemPrompt,
+    userPrompt: rendered.userPrompt,
+    temperature: 0.4,
+    maxTokens: 4000,
+    modelLog
+  }
+
+  const result = await callDeepSeekWithRetry(options, (content: string) => content.trim())
+  const revisedText = result.content
+
+  // 解析修正后的大纲文本，转换为 Map
+  return parseOutlinesFromText(revisedText, outlines.size)
+}
+
+/**
+ * 从文本中解析大纲列表
+ * 期望格式：第1集：...\n第2集：...\n...
+ */
+function parseOutlinesFromText(text: string, expectedCount: number): Map<number, string> {
+  const outlines = new Map<number, string>()
+
+  // 匹配 "第N集：..." 格式
+  const regex = /第(\d+)集[：:]\s*([\s\S]*?)(?=第\d+集[：:]|$)/g
+  let match
+
+  while ((match = regex.exec(text)) !== null) {
+    const episodeNum = parseInt(match[1], 10)
+    const outline = match[2].trim()
+    if (episodeNum >= 1 && episodeNum <= expectedCount && outline) {
+      outlines.set(episodeNum, outline)
+    }
+  }
+
+  return outlines
+}

@@ -332,6 +332,169 @@ export const SHOWRUNNER_REVIEW_TEMPLATE: PromptTemplate = {
   }
 }
 
+/** 剧本格式化模板 - 将原始剧本转为标准 JSON 格式（不改变内容） */
+export const SCRIPT_FORMATTER_TEMPLATE: PromptTemplate = {
+  id: 'script-formatter',
+  version: '1.0.0',
+  systemPrompt: `你是专业的剧本格式转换专家。你的任务是将用户提供的原始剧本转换为标准 JSON 格式。
+
+**重要原则：**
+1. **保持内容 100% 不变** - 不要修改任何对话、场景描述、角色名
+2. **只转换格式** - 将文本转为结构化 JSON
+3. **不要创作新内容** - 你不是编剧，只是格式化工具
+4. **不要删除内容** - 保留所有原始内容
+
+**输出格式（严格遵循）：**
+{
+  "title": "剧集标题",
+  "summary": "本集一句话梗概",
+  "metadata": {
+    "genre": "古装/现代/科幻/都市/校园",
+    "style": "穿越/逆袭/甜宠/搞笑/虐心/热血/悬疑",
+    "tone": "幽默/严肃/悬疑/感人/浪漫"
+  },
+  "scenes": [
+    {
+      "sceneNum": 1,
+      "location": "场景地点",
+      "timeOfDay": "日/夜/晨/昏",
+      "characters": ["角色1", "角色2"],
+      "description": "场景描述（保持原文）",
+      "dialogues": [
+        {"character": "角色名", "content": "对话内容（保持原文）"}
+      ],
+      "actions": ["动作描述（保持原文）"]
+    }
+  ]
+}
+
+**处理规则：**
+- 从原文提取场景地点、时间
+- 从原文提取角色名
+- 对话保持原文，不要改写
+- 场景描述保持原文，不要重写
+- 如果某些信息原文没有，可以留空或使用默认值
+
+直接返回 JSON 格式，不要包含 markdown 代码块标记。`,
+  userPromptTemplate: `请将以下原始剧本转换为标准 JSON 格式。
+
+**重要：保持所有内容 100% 不变，只转换格式！**
+
+【原始剧本】
+
+{{originalScript}}
+
+请返回标准 JSON 格式。`,
+  metadata: {
+    category: 'formatter',
+    creativity: 0.1,
+    maxOutputTokens: 8000,
+    description: '将原始剧本转为标准 JSON 格式（不改变内容）',
+    tags: ['format', 'conversion', 'faithful', 'no-rewrite']
+  }
+}
+
+/** 剧本扩展模板 - 基于简要大纲扩展为完整剧本 */
+export const EPISODE_EXPAND_TEMPLATE: PromptTemplate = {
+  id: 'episode-expand',
+  version: '1.0.0',
+  systemPrompt: `你是专业的短剧编剧，擅长将简要大纲扩展为完整剧本。
+
+你的任务：
+1. 基于用户提供的大纲/片段，扩展为完整剧本
+2. **保持用户已有内容 100% 不变**
+3. 只补充缺失的部分（场景细节、对话、动作）
+4. 保持与全剧梗概的一致性
+
+**重要原则：**
+- 如果用户已提供对话，不要修改
+- 如果用户已提供场景描述，不要重写
+- 只在不完整的地方补充内容
+- 保持风格、角色名字、剧情与原文一致
+
+**输出格式（严格遵循）：**
+{
+  "title": "剧集标题",
+  "summary": "本集一句话梗概",
+  "metadata": {},
+  "scenes": [
+    {
+      "sceneNum": 1,
+      "location": "地点",
+      "timeOfDay": "日",
+      "characters": ["角色"],
+      "description": "画面与动作",
+      "dialogues": [{"character":"名","content":"台词"}],
+      "actions": ["动作"]
+    }
+  ]
+}
+
+直接返回 JSON 格式，不要包含 markdown 代码块标记。`,
+  userPromptTemplate: `剧名：{{seriesTitle}}
+全剧梗概：{{seriesSynopsis}}
+
+【用户提供的大纲/片段】
+
+{{outlineContent}}
+
+请将上述大纲扩展为完整剧本。
+
+**重要：**
+- 保持用户已有内容不变
+- 只补充缺失的部分
+- 保持与全剧梗概一致
+
+请返回完整剧本 JSON。`,
+  metadata: {
+    category: 'script',
+    creativity: 0.6,
+    maxOutputTokens: 6000,
+    description: '基于简要大纲扩展为完整剧本',
+    tags: ['expand', 'outline-to-script', 'partial-content']
+  }
+}
+
+/** 大纲修正模板 - 根据审核意见修正大纲 */
+export const OUTLINE_REVISION_TEMPLATE: PromptTemplate = {
+  id: 'outline-revision',
+  version: '1.0.0',
+  systemPrompt: `你是专业的剧集规划师，擅长根据审核意见修正剧情大纲。
+
+你的任务：
+1. 仔细阅读总编剧的审核意见
+2. 只修正有问题的集数，保持通过审核的集数不变
+3. 确保修正后的大纲解决所有指出的问题
+4. 保持与全剧梗概的一致性
+5. 每集大纲仍保持 100-200 字
+
+输出格式：
+返回修正后的完整大纲列表，格式为：
+第1集：[大纲内容]
+第2集：[大纲内容]
+...`,
+  userPromptTemplate: `【全剧梗概】
+{{seriesSynopsis}}
+
+【原始大纲】（共 {{totalEpisodes}} 集）
+
+{{outlinesList}}
+
+【总编剧审核意见】
+
+{{reviewFeedback}}
+
+请根据以上审核意见，修正有问题的大纲。只修改需要修正的集数，保持其他集数不变。
+返回修正后的完整大纲列表。`,
+  metadata: {
+    category: 'outline',
+    creativity: 0.4,
+    maxOutputTokens: 4000,
+    description: '根据审核意见修正大纲',
+    tags: ['outline', 'revision', 'fix', 'showrunner-feedback']
+  }
+}
+
 /** 导出所有模板 */
 export const SCRIPT_TEMPLATES: PromptTemplate[] = [
   SCRIPT_WRITER_TEMPLATE,
@@ -339,5 +502,8 @@ export const SCRIPT_TEMPLATES: PromptTemplate[] = [
   SCRIPT_EXPAND_TEMPLATE,
   STORYBOARD_GENERATE_TEMPLATE,
   EPISODE_OUTLINE_TEMPLATE,
-  SHOWRUNNER_REVIEW_TEMPLATE
+  SHOWRUNNER_REVIEW_TEMPLATE,
+  SCRIPT_FORMATTER_TEMPLATE,
+  EPISODE_EXPAND_TEMPLATE,
+  OUTLINE_REVISION_TEMPLATE
 ]

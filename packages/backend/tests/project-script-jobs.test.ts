@@ -3,7 +3,10 @@ import {
   mergeEpisodesToScriptContent,
   areEpisodeScriptsComplete,
   buildEpisodePlansFromDbEpisodes,
-  DEFAULT_TARGET_EPISODES
+  DEFAULT_TARGET_EPISODES,
+  calculateOverallScore,
+  detectEpisodesMode,
+  detectScriptMode
 } from '../src/services/project-script-jobs.js'
 
 const mkScript = (title: string, summary: string, sceneNums: number[]) => ({
@@ -77,5 +80,55 @@ describe('project-script-jobs helpers', () => {
 
   it('DEFAULT_TARGET_EPISODES is 36', () => {
     expect(DEFAULT_TARGET_EPISODES).toBe(36)
+  })
+})
+
+describe('智能模式检测', () => {
+  it('calculateOverallScore scores complete script high', () => {
+    const script = `第1集
+第1场 日 内 皇宫
+角色：李明（皇帝）
+李明："今天天气不错"`
+    const score = calculateOverallScore(script)
+    expect(score).toBeGreaterThanOrEqual(6)
+  })
+
+  it('calculateOverallScore scores idea low', () => {
+    const score = calculateOverallScore('写一个穿越故事')
+    expect(score).toBeLessThan(6)
+  })
+
+  it('detectEpisodesMode detects mixed modes', () => {
+    const script = `第1集
+第1场 日 内 皇宫
+角色：李明（皇帝）、王芳（皇后）
+
+李明："今天天气不错，朕心情很好。"
+王芳："陛下英明。"
+
+第2集：李明遇到王芳，两人产生了感情。
+
+第3集`
+    const result = detectEpisodesMode(script)
+    expect(result.length).toBe(3)
+  })
+
+  it('detectScriptMode returns ai-create for simple idea', () => {
+    const result = detectScriptMode('写个故事')
+    expect(result.mode).toBe('ai-create')
+  })
+
+  it('detectScriptMode returns mixed for partial script', () => {
+    const script = `第1集
+第1场 日 内 皇宫
+角色：李明
+李明："你好"
+
+第2集：简要大纲
+
+第3集`
+    const result = detectScriptMode(script)
+    expect(result.mode).toBe('mixed')
+    expect(result.episodes).toBeDefined()
   })
 })

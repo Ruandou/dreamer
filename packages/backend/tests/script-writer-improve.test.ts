@@ -24,7 +24,10 @@ import {
   optimizeSceneDescription,
   writeScriptFromIdea,
   writeEpisodeForProject,
-  expandScript
+  expandScript,
+  formatScriptToJSON,
+  expandEpisodeFromOutline,
+  reviseOutlinesBasedOnFeedback
 } from '../src/services/script-writer.js'
 
 describe('improveScript', () => {
@@ -185,5 +188,109 @@ describe('writeScriptFromIdea / writeEpisodeForProject / expandScript', () => {
     }
     const r = await expandScript(base, 1, {})
     expect(r.script.scenes.length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe('formatScriptToJSON', () => {
+  beforeEach(() => {
+    mockCreate.mockReset()
+  })
+
+  it('formats raw script to JSON', async () => {
+    const scriptContent = {
+      title: '测试剧集',
+      summary: '测试梗概',
+      scenes: [
+        {
+          sceneNum: 1,
+          location: '皇宫',
+          timeOfDay: '日',
+          characters: ['皇帝'],
+          description: '皇帝上朝',
+          dialogues: [{ character: '皇帝', content: '众爱卿平身' }],
+          actions: []
+        }
+      ]
+    }
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify(scriptContent) } }],
+      usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }
+    })
+
+    const result = await formatScriptToJSON('第1场 皇帝上朝...', {
+      userId: 'u',
+      projectId: 'p',
+      op: 'test'
+    })
+    expect(result.title).toBe('测试剧集')
+    expect(result.scenes[0].location).toBe('皇宫')
+  })
+})
+
+describe('expandEpisodeFromOutline', () => {
+  beforeEach(() => {
+    mockCreate.mockReset()
+  })
+
+  it('expands outline to full script', async () => {
+    const scriptContent = {
+      title: '第2集',
+      summary: '扩展后的梗概',
+      scenes: [
+        {
+          sceneNum: 1,
+          location: '花园',
+          timeOfDay: '夜',
+          characters: ['李明', '王芳'],
+          description: '两人在花园相遇',
+          dialogues: [{ character: '李明', content: '你好' }],
+          actions: []
+        }
+      ]
+    }
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify(scriptContent) } }],
+      usage: { prompt_tokens: 15, completion_tokens: 25, total_tokens: 40 }
+    })
+
+    const result = await expandEpisodeFromOutline(2, '测试剧', '全剧梗概', '第2集：李明遇到王芳', {
+      userId: 'u',
+      projectId: 'p',
+      op: 'test'
+    })
+    expect(result.title).toBe('第2集')
+    expect(result.scenes[0].characters).toContain('李明')
+  })
+})
+
+describe('reviseOutlinesBasedOnFeedback', () => {
+  beforeEach(() => {
+    mockCreate.mockReset()
+  })
+
+  it('revises outlines based on feedback', async () => {
+    const revisedText = `第1集：李明穿越到古代，成为皇帝。
+第2集：李明与王芳相遇，产生感情。
+第3集：敌国入侵，李明出征。`
+
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: revisedText } }],
+      usage: { prompt_tokens: 20, completion_tokens: 30, total_tokens: 50 }
+    })
+
+    const outlines = new Map([
+      [1, '原始大纲1'],
+      [2, '原始大纲2'],
+      [3, '原始大纲3']
+    ])
+
+    const result = await reviseOutlinesBasedOnFeedback('全剧梗概', outlines, '第2集需要增加冲突', {
+      userId: 'u',
+      projectId: 'p',
+      op: 'test'
+    })
+    expect(result.size).toBe(3)
+    expect(result.get(1)).toContain('穿越')
+    expect(result.get(2)).toContain('感情')
   })
 })

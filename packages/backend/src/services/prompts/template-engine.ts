@@ -24,6 +24,7 @@ export interface PromptTemplate {
       | 'memory'
       | 'outline'
       | 'review'
+      | 'formatter'
     /** 创造性程度 0-1，对应 temperature */
     creativity: number
     /** 最大输出 token 数 */
