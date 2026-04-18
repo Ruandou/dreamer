@@ -27,7 +27,9 @@ import {
   expandScript,
   formatScriptToJSON,
   expandEpisodeFromOutline,
-  reviseOutlinesBasedOnFeedback
+  reviseOutlinesBasedOnFeedback,
+  generateEpisodeOutline,
+  showrunnerReviewOutlines
 } from '../src/services/script-writer.js'
 
 describe('improveScript', () => {
@@ -292,5 +294,289 @@ describe('reviseOutlinesBasedOnFeedback', () => {
     expect(result.size).toBe(3)
     expect(result.get(1)).toContain('穿越')
     expect(result.get(2)).toContain('感情')
+  })
+})
+
+describe('error boundary tests', () => {
+  beforeEach(() => {
+    mockCreate.mockReset()
+  })
+
+  it('improveScript throws on malformed JSON after retries', async () => {
+    // Wrapper retries 3 times, so mock needs to resolve each time
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: '这不是JSON' } }],
+      usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 }
+    })
+
+    const baseScript: ScriptContent = {
+      title: '测试',
+      summary: '梗概',
+      scenes: [
+        {
+          sceneNum: 1,
+          location: '室内',
+          timeOfDay: '日',
+          characters: [],
+          description: '场景',
+          dialogues: [],
+          actions: []
+        }
+      ]
+    }
+
+    await expect(improveScript(baseScript, '修改')).rejects.toThrow('剧本格式不正确')
+  })
+
+  it('improveScript uses fallback title when missing', async () => {
+    const invalidJson = {
+      summary: '只有梗概',
+      scenes: [
+        {
+          sceneNum: 1,
+          location: '室内',
+          timeOfDay: '日',
+          characters: [],
+          description: '场景',
+          dialogues: [],
+          actions: []
+        }
+      ]
+    }
+
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify(invalidJson) } }],
+      usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 }
+    })
+
+    const baseScript: ScriptContent = {
+      title: '原标题',
+      summary: '原梗概',
+      scenes: [
+        {
+          sceneNum: 1,
+          location: '室内',
+          timeOfDay: '日',
+          characters: [],
+          description: '场景',
+          dialogues: [],
+          actions: []
+        }
+      ]
+    }
+
+    const result = await improveScript(baseScript, '修改')
+    expect(result.script.title).toBe('未命名剧本')
+  })
+
+  it('improveScript throws on empty scenes after retries', async () => {
+    const invalidJson = {
+      title: '有标题但无场景',
+      summary: '梗概',
+      scenes: []
+    }
+
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify(invalidJson) } }],
+      usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 }
+    })
+
+    const baseScript: ScriptContent = {
+      title: '原标题',
+      summary: '原梗概',
+      scenes: [
+        {
+          sceneNum: 1,
+          location: '室内',
+          timeOfDay: '日',
+          characters: [],
+          description: '场景',
+          dialogues: [],
+          actions: []
+        }
+      ]
+    }
+
+    await expect(improveScript(baseScript, '修改')).rejects.toThrow('剧本缺少场景')
+  })
+
+  it('improveScript throws on missing scene location after retries', async () => {
+    const invalidJson = {
+      title: '标题',
+      summary: '梗概',
+      scenes: [
+        {
+          sceneNum: 1,
+          location: '',
+          timeOfDay: '日',
+          characters: [],
+          description: '场景描述',
+          dialogues: [],
+          actions: []
+        }
+      ]
+    }
+
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify(invalidJson) } }],
+      usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 }
+    })
+
+    const baseScript: ScriptContent = {
+      title: '原标题',
+      summary: '原梗概',
+      scenes: [
+        {
+          sceneNum: 1,
+          location: '室内',
+          timeOfDay: '日',
+          characters: [],
+          description: '场景',
+          dialogues: [],
+          actions: []
+        }
+      ]
+    }
+
+    await expect(improveScript(baseScript, '修改')).rejects.toThrow('场景1缺少地点描述')
+  })
+
+  it('writeScriptFromIdea handles markdown-wrapped JSON', async () => {
+    const jsonContent = JSON.stringify(sampleJsonScript('Markdown测试'))
+    const markdownWrapped = `\`\`\`json\n${jsonContent}\n\`\`\``
+
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: markdownWrapped } }],
+      usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }
+    })
+
+    const r = await writeScriptFromIdea('都市爱情', {})
+    expect(r.script.title).toBe('Markdown测试')
+  })
+
+  it('expandScript handles nested episodes structure', async () => {
+    const nestedJson = {
+      title: '嵌套结构',
+      summary: '梗概',
+      episodes: [
+        {
+          scenes: [
+            {
+              sceneNum: 1,
+              location: '河边',
+              timeOfDay: '夜',
+              characters: [],
+              description: '水面',
+              dialogues: [],
+              actions: []
+            }
+          ]
+        }
+      ]
+    }
+
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify(nestedJson) } }],
+      usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }
+    })
+
+    const base: ScriptContent = {
+      title: '原标题',
+      summary: 'S',
+      scenes: [
+        {
+          sceneNum: 1,
+          location: '室内',
+          timeOfDay: '日',
+          characters: [],
+          description: '起点',
+          dialogues: [],
+          actions: []
+        }
+      ]
+    }
+
+    const r = await expandScript(base, 1, {})
+    expect(r.script.scenes.length).toBe(1)
+    expect(r.script.scenes[0].location).toBe('河边')
+  })
+})
+
+describe('generateEpisodeOutline', () => {
+  beforeEach(() => {
+    mockCreate.mockReset()
+  })
+
+  it('returns episode outline text', async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: '第1集：主角穿越到古代' } }],
+      usage: { prompt_tokens: 15, completion_tokens: 25, total_tokens: 40 }
+    })
+
+    const result = await generateEpisodeOutline(1, '测试剧', '全剧梗概', {
+      userId: 'u',
+      projectId: 'p',
+      op: 'test'
+    })
+
+    expect(result).toContain('穿越')
+  })
+
+  it('trims whitespace from result', async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: '  第2集：感情线发展  ' } }],
+      usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }
+    })
+
+    const result = await generateEpisodeOutline(2, '测试剧', '全剧梗概')
+    expect(result).toBe('第2集：感情线发展')
+  })
+})
+
+describe('showrunnerReviewOutlines', () => {
+  beforeEach(() => {
+    mockCreate.mockReset()
+  })
+
+  it('returns approved when feedback contains APPROVED', async () => {
+    const feedback = 'APPROVED\n整体结构合理，节奏得当。'
+
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: feedback } }],
+      usage: { prompt_tokens: 20, completion_tokens: 40, total_tokens: 60 }
+    })
+
+    const outlines = new Map([
+      [1, '第1集大纲'],
+      [2, '第2集大纲']
+    ])
+
+    const result = await showrunnerReviewOutlines('全剧梗概', outlines, {
+      userId: 'u',
+      projectId: 'p',
+      op: 'test'
+    })
+
+    expect(result.approved).toBe(true)
+    expect(result.feedback).toContain('整体结构')
+  })
+
+  it('returns not approved when feedback lacks APPROVED', async () => {
+    const feedback = '需要修改：第2集冲突不够，请加强。'
+
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: feedback } }],
+      usage: { prompt_tokens: 20, completion_tokens: 30, total_tokens: 50 }
+    })
+
+    const outlines = new Map([
+      [1, '第1集大纲'],
+      [2, '第2集大纲']
+    ])
+
+    const result = await showrunnerReviewOutlines('全剧梗概', outlines)
+
+    expect(result.approved).toBe(false)
+    expect(result.feedback).toContain('冲突不够')
   })
 })
