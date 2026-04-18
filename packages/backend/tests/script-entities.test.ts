@@ -1,9 +1,31 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   isCrowdExtraCharacterName,
-  collectUniqueCharacterNamesFromScript
+  collectUniqueCharacterNamesFromScript,
+  saveCharacters,
+  saveLocations
 } from '../src/services/script-entities.js'
 import type { ScriptContent } from '@dreamer/shared/types'
+
+// Mock repositories
+vi.mock('../src/repositories/character-repository.js', () => ({
+  characterRepository: {
+    upsertPlaceholderByProjectName: vi.fn().mockResolvedValue({ id: 'char-1' })
+  }
+}))
+
+vi.mock('../src/repositories/location-repository.js', () => ({
+  locationRepository: {
+    upsertFromScriptScene: vi.fn().mockResolvedValue({ id: 'loc-1' })
+  }
+}))
+
+const mockCharacterRepository = vi.mocked(
+  (await import('../src/repositories/character-repository.js')).characterRepository
+)
+const mockLocationRepository = vi.mocked(
+  (await import('../src/repositories/location-repository.js')).locationRepository
+)
 
 describe('script-entities', () => {
   describe('isCrowdExtraCharacterName', () => {
@@ -209,6 +231,220 @@ describe('script-entities', () => {
       const result = collectUniqueCharacterNamesFromScript(script)
 
       expect(result).toEqual(['Alice', 'Bob', 'Charlie'])
+    })
+  })
+
+  describe('saveCharacters', () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it('saves characters from script scenes', async () => {
+      const script: ScriptContent = {
+        title: 'Test',
+        summary: 'Test',
+        scenes: [
+          {
+            sceneNum: 1,
+            location: 'Office',
+            timeOfDay: 'day',
+            characters: ['Alice', 'Bob'],
+            description: 'Scene',
+            dialogues: [],
+            actions: []
+          }
+        ]
+      }
+
+      await saveCharacters('proj-1', script)
+
+      expect(mockCharacterRepository.upsertPlaceholderByProjectName).toHaveBeenCalledTimes(2)
+      expect(mockCharacterRepository.upsertPlaceholderByProjectName).toHaveBeenCalledWith(
+        'proj-1',
+        'Alice'
+      )
+      expect(mockCharacterRepository.upsertPlaceholderByProjectName).toHaveBeenCalledWith(
+        'proj-1',
+        'Bob'
+      )
+    })
+
+    it('handles undefined scenes gracefully', async () => {
+      const script: ScriptContent = {
+        title: 'Test',
+        summary: 'Test',
+        scenes: undefined as any
+      }
+
+      await saveCharacters('proj-1', script)
+
+      expect(mockCharacterRepository.upsertPlaceholderByProjectName).not.toHaveBeenCalled()
+    })
+
+    it('handles empty scenes array', async () => {
+      const script: ScriptContent = {
+        title: 'Test',
+        summary: 'Test',
+        scenes: []
+      }
+
+      await saveCharacters('proj-1', script)
+
+      expect(mockCharacterRepository.upsertPlaceholderByProjectName).not.toHaveBeenCalled()
+    })
+
+    it('excludes crowd extra characters', async () => {
+      const script: ScriptContent = {
+        title: 'Test',
+        summary: 'Test',
+        scenes: [
+          {
+            sceneNum: 1,
+            location: 'Street',
+            timeOfDay: 'day',
+            characters: ['Alice', '群演', '路人甲'],
+            description: 'Scene',
+            dialogues: [],
+            actions: []
+          }
+        ]
+      }
+
+      await saveCharacters('proj-1', script)
+
+      expect(mockCharacterRepository.upsertPlaceholderByProjectName).toHaveBeenCalledTimes(1)
+      expect(mockCharacterRepository.upsertPlaceholderByProjectName).toHaveBeenCalledWith(
+        'proj-1',
+        'Alice'
+      )
+    })
+  })
+
+  describe('saveLocations', () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it('saves locations from script scenes', async () => {
+      const script: ScriptContent = {
+        title: 'Test',
+        summary: 'Test',
+        scenes: [
+          {
+            sceneNum: 1,
+            location: '咖啡厅',
+            timeOfDay: '日',
+            characters: ['Alice'],
+            description: '内景',
+            dialogues: [],
+            actions: []
+          },
+          {
+            sceneNum: 2,
+            location: '花园',
+            timeOfDay: '夜',
+            characters: ['Bob'],
+            description: '外景',
+            dialogues: [],
+            actions: []
+          }
+        ]
+      }
+
+      await saveLocations('proj-1', script)
+
+      expect(mockLocationRepository.upsertFromScriptScene).toHaveBeenCalledTimes(2)
+      expect(mockLocationRepository.upsertFromScriptScene).toHaveBeenCalledWith(
+        'proj-1',
+        '咖啡厅',
+        { timeOfDay: '日', description: '内景' }
+      )
+      expect(mockLocationRepository.upsertFromScriptScene).toHaveBeenCalledWith('proj-1', '花园', {
+        timeOfDay: '夜',
+        description: '外景'
+      })
+    })
+
+    it('handles undefined scenes gracefully', async () => {
+      const script: ScriptContent = {
+        title: 'Test',
+        summary: 'Test',
+        scenes: undefined as any
+      }
+
+      await saveLocations('proj-1', script)
+
+      expect(mockLocationRepository.upsertFromScriptScene).not.toHaveBeenCalled()
+    })
+
+    it('handles empty scenes array', async () => {
+      const script: ScriptContent = {
+        title: 'Test',
+        summary: 'Test',
+        scenes: []
+      }
+
+      await saveLocations('proj-1', script)
+
+      expect(mockLocationRepository.upsertFromScriptScene).not.toHaveBeenCalled()
+    })
+
+    it('deduplicates locations with same name', async () => {
+      const script: ScriptContent = {
+        title: 'Test',
+        summary: 'Test',
+        scenes: [
+          {
+            sceneNum: 1,
+            location: '咖啡厅',
+            timeOfDay: '日',
+            characters: ['Alice'],
+            description: '第一次出现',
+            dialogues: [],
+            actions: []
+          },
+          {
+            sceneNum: 2,
+            location: '咖啡厅',
+            timeOfDay: '夜',
+            characters: ['Bob'],
+            description: '第二次出现',
+            dialogues: [],
+            actions: []
+          }
+        ]
+      }
+
+      await saveLocations('proj-1', script)
+
+      expect(mockLocationRepository.upsertFromScriptScene).toHaveBeenCalledTimes(1)
+      expect(mockLocationRepository.upsertFromScriptScene).toHaveBeenCalledWith(
+        'proj-1',
+        '咖啡厅',
+        { timeOfDay: '日', description: '第一次出现' }
+      )
+    })
+
+    it('skips scenes without location', async () => {
+      const script: ScriptContent = {
+        title: 'Test',
+        summary: 'Test',
+        scenes: [
+          {
+            sceneNum: 1,
+            location: '',
+            timeOfDay: '日',
+            characters: ['Alice'],
+            description: '无场地',
+            dialogues: [],
+            actions: []
+          }
+        ]
+      }
+
+      await saveLocations('proj-1', script)
+
+      expect(mockLocationRepository.upsertFromScriptScene).not.toHaveBeenCalled()
     })
   })
 })

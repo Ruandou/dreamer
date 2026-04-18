@@ -47,7 +47,7 @@ export function collectUniqueCharacterNamesFromScript(script: ScriptContent): st
 export async function saveCharacters(projectId: string, script: ScriptContent) {
   const characterNames = new Set<string>()
 
-  for (const scene of script.scenes) {
+  for (const scene of script.scenes || []) {
     for (const character of scene.characters || []) {
       if (isCrowdExtraCharacterName(character)) continue
       characterNames.add(character)
@@ -62,7 +62,7 @@ export async function saveCharacters(projectId: string, script: ScriptContent) {
 export async function saveLocations(projectId: string, script: ScriptContent) {
   const locationMap = new Map<string, { timeOfDay?: string; description?: string }>()
 
-  for (const scene of script.scenes) {
+  for (const scene of script.scenes || []) {
     if (scene.location) {
       if (!locationMap.has(scene.location)) {
         locationMap.set(scene.location, {

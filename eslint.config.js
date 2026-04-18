@@ -16,6 +16,11 @@ export default [
         sourceType: 'module'
         // 移除 project 配置，因为这是 monorepo，tsconfig 在不同子目录
         // 如果需要类型检查，应该在每个包下单独配置 ESLint
+      },
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        setTimeout: 'readonly'
       }
     },
     plugins: {
@@ -30,7 +35,8 @@ export default [
       'prettier/prettier': 'error',
 
       // 自定义规则
-      'no-console': 'warn',
+      // 后端服务允许 console（用于日志和错误追踪）
+      'no-console': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {

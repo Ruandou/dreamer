@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify'
 import { projectService } from '../services/project-service.js'
+import { generateVisualStyleConfig } from '../services/ai/visual-style-generator.js'
 
 export async function projectRoutes(fastify: FastifyInstance) {
   // List projects
@@ -47,6 +48,50 @@ export async function projectRoutes(fastify: FastifyInstance) {
       return {
         episode: result.episode,
         synopsis: result.synopsis
+      }
+    }
+  )
+
+  // AI 自动生成视觉风格配置
+  fastify.post<{
+    Params: { id: string }
+  }>(
+    '/:id/generate-visual-style',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const user = (request as any).user
+      const projectId = request.params.id
+
+      const project = await projectService.getProjectDetail(user.id, projectId)
+      if (!project) {
+        return reply.status(404).send({ error: '项目不存在' })
+      }
+
+      const visualLog = {
+        userId: user.id,
+        projectId,
+        op: 'generate_visual_style'
+      }
+
+      try {
+        const config = await generateVisualStyleConfig(
+          {
+            name: project.name,
+            description: project.description,
+            synopsis: project.synopsis
+          },
+          visualLog
+        )
+
+        // 自动保存到项目
+        await projectService.updateProject(user.id, projectId, {
+          visualStyleConfig: config
+        })
+
+        return { visualStyleConfig: config }
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e)
+        return reply.status(500).send({ error: `生成视觉风格失败：${message}` })
       }
     }
   )
@@ -144,19 +189,22 @@ export async function projectRoutes(fastify: FastifyInstance) {
     reply: import('fastify').FastifyReply
   ) {
     const user = (request as any).user as { id: string }
-    const { name, description, synopsis, visualStyle, aspectRatio } = request.body as {
-      name?: string
-      description?: string
-      synopsis?: string | null
-      visualStyle?: string[]
-      aspectRatio?: string
-    }
+    const { name, description, synopsis, visualStyle, visualStyleConfig, aspectRatio } =
+      request.body as {
+        name?: string
+        description?: string
+        synopsis?: string | null
+        visualStyle?: string[]
+        visualStyleConfig?: Record<string, unknown> | null
+        aspectRatio?: string
+      }
 
     const result = await projectService.updateProject(user.id, request.params.id, {
       name,
       description,
       synopsis,
       visualStyle,
+      visualStyleConfig: visualStyleConfig as any,
       aspectRatio
     })
 
@@ -175,6 +223,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
       description?: string
       synopsis?: string | null
       visualStyle?: string[]
+      visualStyleConfig?: Record<string, unknown> | null
       aspectRatio?: string
     }
   }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) =>
@@ -188,6 +237,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
       description?: string
       synopsis?: string | null
       visualStyle?: string[]
+      visualStyleConfig?: Record<string, unknown> | null
       aspectRatio?: string
     }
   }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) =>

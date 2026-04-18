@@ -308,22 +308,24 @@ function parseScriptResponse(content: string): ScriptContent {
       } catch (innerError) {
         console.error('[script-writer] JSON extract failed')
         console.error(
-          '[script-writer] Raw content (first 500 chars):',
-          cleanContent.substring(0, 500)
+          '[script-writer] Raw content (first 1000 chars):',
+          cleanContent.substring(0, 1000)
         )
         console.error(
-          '[script-writer] Extracted JSON (first 500 chars):',
-          jsonMatch[0].substring(0, 500)
+          '[script-writer] Extracted JSON (first 1000 chars):',
+          jsonMatch[0].substring(0, 1000)
         )
+        console.error('[script-writer] Error position:', (innerError as any)?.message)
         console.error('[script-writer] Error:', innerError)
         throw new Error(
-          `剧本JSON格式不正确: ${innerError instanceof Error ? innerError.message : '未知错误'}`
+          `剧本JSON格式不正确: ${innerError instanceof Error ? innerError.message : '未知错误'}`,
+          { cause: innerError }
         )
       }
     }
     console.error('[script-writer] No JSON found in response')
     console.error('[script-writer] Content (first 500 chars):', cleanContent.substring(0, 500))
-    throw new Error('剧本格式不正确，无法解析')
+    throw new Error('剧本格式不正确，无法解析', { cause: error })
   }
 }
 

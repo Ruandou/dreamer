@@ -3,6 +3,7 @@
  */
 
 import type { ScriptContent } from '@dreamer/shared/types'
+import type { VisualStyleConfig } from '@dreamer/shared'
 import { projectRepository } from '../repositories/project-repository.js'
 import { locationRepository } from '../repositories/location-repository.js'
 import { characterRepository } from '../repositories/character-repository.js'
@@ -249,6 +250,8 @@ export async function applyScriptVisualEnrichment(
     (projectRow.visualStyle || []).filter(Boolean).join('、') ||
     '（未指定，定场图第4段可写通用电影级画质词）'
 
+  const visualStyleConfig = projectRow.visualStyleConfig as VisualStyleConfig | null
+
   const locationLines = locations
     .map((l) => {
       const time = (l.timeOfDay || '').trim() || '未指定'
@@ -269,6 +272,7 @@ export async function applyScriptVisualEnrichment(
       locationLines,
       characterLines,
       projectVisualStyleLine,
+      visualStyleConfig,
       exactLocationNames: locations.map((l) => l.name)
     },
     visualLog

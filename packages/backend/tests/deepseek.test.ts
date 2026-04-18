@@ -420,10 +420,10 @@ describe('DeepSeek Service', () => {
       expect(call.messages[1].content as string).toMatch(/保持该角色面部特征/)
     })
 
-    it('uses base slot system prompt with 七分身 for base type', async () => {
+    it('uses base slot system prompt with 正面全身 for base type', async () => {
       const { generateCharacterSlotImagePrompt } = await import('../src/services/ai/deepseek.js')
       mockCreate.mockResolvedValueOnce({
-        choices: [{ message: { content: '七分身，中灰背景，写实' } }],
+        choices: [{ message: { content: '正面全身，中灰背景，写实' } }],
         usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 }
       })
       await generateCharacterSlotImagePrompt({
@@ -435,7 +435,7 @@ describe('DeepSeek Service', () => {
         parentSlotSummary: null
       })
       const call = mockCreate.mock.calls[mockCreate.mock.calls.length - 1][0]
-      expect(call.messages[0].content as string).toMatch(/七分身/)
+      expect(call.messages[0].content as string).toMatch(/正面全身/)
       expect(call.messages[1].content as string).toMatch(/纯色影棚/)
     })
   })
@@ -495,7 +495,7 @@ describe('DeepSeek Service', () => {
       expect(built).toContain('【场地名白名单】')
       expect(built).toContain('- 咖啡馆A')
       expect(built).toContain('- 天台')
-      expect(built).toMatch(/七分身/)
+      expect(built).toMatch(/正面全身/)
       expect(built).toMatch(/纯色影棚/)
       expect(built).toMatch(/保持该角色面部特征/)
     })

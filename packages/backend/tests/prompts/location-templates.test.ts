@@ -21,7 +21,7 @@ describe('Location Templates', () => {
     it('each template has required fields', () => {
       LOCATION_TEMPLATES.forEach((template) => {
         expect(template.id).toBeDefined()
-        expect(template.version).toBe('1.0.0')
+        expect(template.version).toMatch(/\d+\.\d+\.\d+/)
         expect(template.systemPrompt).toBeDefined()
         expect(template.userPromptTemplate).toBeDefined()
         expect(template.metadata).toBeDefined()
@@ -130,7 +130,7 @@ describe('Location Templates', () => {
       expect(result.userPrompt).toContain('outfit')
       expect(result.userPrompt).toContain('expression')
       expect(result.userPrompt).toContain('pose')
-      expect(result.userPrompt).toContain('七分身构图')
+      expect(result.userPrompt).toContain('正面全身')
       expect(result.userPrompt).toContain('纯色影棚背景')
     })
 
@@ -173,7 +173,7 @@ describe('Location Templates', () => {
           locationName: '古庙',
           locationDescription: '破旧的寺庙，香火已断',
           timeOfDay: '夜',
-          visualStyle: '古风，写实'
+          visualStylePrompt: '古风，写实'
         }
       })
 
@@ -182,7 +182,7 @@ describe('Location Templates', () => {
       expect(result.userPrompt).toContain('场地名称：古庙')
       expect(result.userPrompt).toContain('场地描述：破旧的寺庙，香火已断')
       expect(result.userPrompt).toContain('时间：夜')
-      expect(result.userPrompt).toContain('视觉风格：古风，写实')
+      expect(result.userPrompt).toContain('古风，写实')
     })
 
     it('system prompt contains core iron rules', () => {
@@ -201,7 +201,7 @@ describe('Location Templates', () => {
           locationName: '测试场地',
           locationDescription: '描述',
           timeOfDay: '日',
-          visualStyle: '风格'
+          visualStylePrompt: '风格'
         }
       })
 

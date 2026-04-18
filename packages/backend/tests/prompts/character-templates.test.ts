@@ -23,7 +23,7 @@ describe('Character Templates', () => {
     it('each template has required fields', () => {
       CHARACTER_TEMPLATES.forEach((template) => {
         expect(template.id).toBeDefined()
-        expect(template.version).toBe('1.0.0')
+        expect(template.version).toMatch(/\d+\.\d+\.\d+/)
         expect(template.systemPrompt).toBeDefined()
         expect(template.userPromptTemplate).toBeDefined()
         expect(template.metadata).toBeDefined()
@@ -70,8 +70,8 @@ describe('Character Templates', () => {
 
     it('system prompt contains key requirements', () => {
       expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain('纯色影棚背景')
-      expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain('七分身')
-      expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain('面部')
+      expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain('正面全身')
+      expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain('面部特征')
       expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain('不要使用英文')
     })
 
@@ -88,8 +88,8 @@ describe('Character Templates', () => {
 
       expect(result.userPrompt).toContain('【基础定妆】')
       expect(result.userPrompt).toContain('四段意合为一段')
-      expect(result.userPrompt).toContain('主体与外貌')
-      expect(result.userPrompt).toContain('发型与标志')
+      expect(result.userPrompt).toContain('面部特征')
+      expect(result.userPrompt).toContain('整体外貌与发型')
       expect(result.userPrompt).toContain('服装与姿态')
       expect(result.userPrompt).toContain('构图与背景')
       expect(result.userPrompt).toContain('禁止只写剧情动作')

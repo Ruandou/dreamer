@@ -16,6 +16,8 @@ export interface Project {
   /** 项目画幅（如 9:16）；未设置时应用层按 9:16 处理 */
   aspectRatio?: string | null
   visualStyle?: string[]
+  /** 结构化视觉风格配置（4 维度：时代 + 艺术 + 色调 + 画质） */
+  visualStyleConfig?: Record<string, unknown> | null
   storyContext?: string | null
   episodes?: Episode[]
   /** 列表接口可能只带一条，用于判断「是否已解析出角色」 */

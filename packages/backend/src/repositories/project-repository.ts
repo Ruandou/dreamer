@@ -151,7 +151,7 @@ export class ProjectRepository {
   findUserIdAndVisualStyle(projectId: string) {
     return this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { userId: true, visualStyle: true }
+      select: { userId: true, visualStyle: true, visualStyleConfig: true }
     })
   }
 }

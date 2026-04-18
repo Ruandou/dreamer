@@ -36,6 +36,8 @@ model Project {
   userId       String
   user         User     @relation(fields: [userId], references: [id])
   visualStyle  String[] @default([])
+  /// 结构化视觉风格配置（4 维度：时代 + 艺术 + 色调 + 画质）
+  visualStyleConfig Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

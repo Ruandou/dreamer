@@ -8,16 +8,19 @@ import type { PromptTemplate } from './template-engine.js'
 /** 基础定妆提示词模板 */
 export const CHARACTER_BASE_PROMPT_TEMPLATE: PromptTemplate = {
   id: 'character-base-prompt',
-  version: '1.0.0',
+  version: '2.0.0',
   systemPrompt:
-    '你是短剧角色基础定妆提示词撰写助手。只输出中文提示词正文；须纯色影棚背景、七分身（膝盖以上）、锚定面部与发型与基础服装，句间用句号；除专有名词外不要使用英文。',
+    '你是短剧角色基础定妆提示词撰写助手。只输出中文提示词正文；须纯色影棚背景、正面全身构图（头顶到脚底）、锚定面部特征与发型与基础服装，句间用句号；除专有名词外不要使用英文。',
   userPromptTemplate: `角色名：{{characterName}}
 {{#characterDescription}}角色设定：{{characterDescription}}
 {{/characterDescription}}
 形象槽位名称：{{slotName}}
 槽位类型：base（基础定妆）
+{{#visualStylePrompt}}
+项目视觉风格：{{visualStylePrompt}}
+{{/visualStylePrompt}}
 
-【基础定妆】站立于纯色影棚背景（如中灰色）；七分身构图（膝盖以上）；四段意合为一段：（1）主体与外貌（2）发型与标志（3）服装与姿态（4）构图与背景须点明七分身与纯色底，并含画质词；整体不超过约120字。
+【基础定妆】站立于纯色影棚背景（如中灰色）；正面全身构图（头顶到脚底完整可见）；四段意合为一段：（1）面部特征（脸型、眼睛、眉毛、鼻子、嘴唇）（2）整体外貌与发型（3）服装与姿态（4）构图与背景须点明正面全身与纯色底，并融入项目视觉风格与画质词；整体不超过约150字。
 禁止只写剧情动作，须写「长什么样、穿什么」。
 
 请输出一条中文的 AI 绘画提示词（写实或半写实风格、短剧角色定妆），只输出提示词正文，不要引号或解释。`,
@@ -33,7 +36,7 @@ export const CHARACTER_BASE_PROMPT_TEMPLATE: PromptTemplate = {
 /** 换装提示词模板 */
 export const CHARACTER_OUTFIT_PROMPT_TEMPLATE: PromptTemplate = {
   id: 'character-outfit-prompt',
-  version: '1.0.0',
+  version: '2.0.0',
   systemPrompt:
     '你是短剧角色换装提示词撰写助手。只输出中文提示词正文；必须强调面部特征、发型与标志性细节完全不变，仅更换服装与配饰；纯色影棚背景；除专有名词外不要使用英文。',
   userPromptTemplate: `角色名：{{characterName}}
@@ -45,9 +48,12 @@ export const CHARACTER_OUTFIT_PROMPT_TEMPLATE: PromptTemplate = {
 {{/slotDescription}}{{#parentSlotSummary}}
 
 父级基础形象参考：{{parentSlotSummary}}
-{{/parentSlotSummary}}
+{{/parentSlotSummary}}{{#visualStylePrompt}}
 
-【换装】采用：保持该角色面部特征、发型与标志性细节完全不变，仅将服装更换为：……（结合槽位说明）。纯色影棚背景。整体不超过约100字。
+项目视觉风格：{{visualStylePrompt}}
+{{/visualStylePrompt}}
+
+【换装】采用：保持该角色面部特征、发型与标志性细节完全不变，仅将服装更换为：……（结合槽位说明）。纯色影棚背景。整体不超过约120字。
 若已提供父级基础形象参考，须与之为同一人，勿写成新角色。
 
 请输出一条中文的 AI 绘画提示词（写实或半写实风格、角色换装定妆），只输出提示词正文，不要引号或解释。`,

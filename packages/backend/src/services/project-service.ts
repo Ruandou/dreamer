@@ -10,6 +10,7 @@ import {
   hasConcurrentOutlinePipelineJob,
   getActiveOutlinePipelineJob
 } from './project-script-jobs.js'
+import type { VisualStyleConfig } from '@dreamer/shared'
 
 export type CreateProjectInput = {
   name: string
@@ -22,6 +23,7 @@ export type UpdateProjectBody = {
   description?: string
   synopsis?: string | null
   visualStyle?: string[]
+  visualStyleConfig?: VisualStyleConfig | null
   aspectRatio?: string
 }
 
@@ -276,7 +278,7 @@ export class ProjectService {
     projectId: string,
     body: UpdateProjectBody
   ): Promise<UpdateProjectResult> {
-    const { name, description, synopsis, visualStyle, aspectRatio } = body
+    const { name, description, synopsis, visualStyle, visualStyleConfig, aspectRatio } = body
 
     const project = await this.repo.findFirstOwned(projectId, userId)
     if (!project) {
@@ -292,6 +294,12 @@ export class ProjectService {
         return { ok: false, status: 400, error: 'visualStyle 须为字符串数组' }
       }
       data.visualStyle = visualStyle
+    }
+    if (visualStyleConfig !== undefined) {
+      if (visualStyleConfig !== null && typeof visualStyleConfig !== 'object') {
+        return { ok: false, status: 400, error: 'visualStyleConfig 须为对象或 null' }
+      }
+      data.visualStyleConfig = visualStyleConfig
     }
     if (aspectRatio !== undefined) {
       if (typeof aspectRatio !== 'string') {
