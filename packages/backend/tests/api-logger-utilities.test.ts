@@ -12,15 +12,15 @@ describe('api-logger utilities', () => {
     it('truncates string when over limit', () => {
       const text = 'A'.repeat(200)
       const result = truncateForModelLog(text, 100)
-      expect(result.length).toBe(100 + '\n…[truncated]'.length)
-      expect(result).toContain('…[truncated]')
+      expect(result.length).toBe(100 + '\n…[truncated, total 200 chars]'.length)
+      expect(result).toContain('…[truncated')
       expect(result.startsWith('A'.repeat(100))).toBe(true)
     })
 
     it('uses default max length', () => {
       const text = 'A'.repeat(20000)
       const result = truncateForModelLog(text)
-      expect(result.length).toBe(12000 + '\n…[truncated]'.length) // Default MODEL_LOG_PROMPT_MAX is 12000
+      expect(result.length).toBe(12000 + '\n…[truncated, total 20000 chars]'.length)
     })
 
     it('handles empty string', () => {

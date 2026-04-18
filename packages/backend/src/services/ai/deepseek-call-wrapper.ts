@@ -17,7 +17,8 @@ import {
   AUTH_RETRY_DELAY_MS,
   RETRY_BASE_DELAY_MS,
   AUTH_ERROR_STATUS_CODES,
-  RATE_LIMIT_STATUS_CODE
+  RATE_LIMIT_STATUS_CODE,
+  API_CALL_TIMEOUT_MS
 } from './ai.constants.js'
 
 export interface DeepSeekCallOptions {
@@ -72,28 +73,71 @@ export async function callDeepSeekWithRetry<T>(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const completion = await client.chat.completions.create({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature,
-        max_tokens: maxTokens
-      })
+      console.log(
+        `[deepseek-call] 调用 ${model}, attempt ${attempt}/${maxRetries}, op=${modelLog?.op || 'unknown'}`
+      )
+
+      // 添加超时保护
+      const completion = await Promise.race([
+        client.chat.completions.create({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature,
+          max_tokens: maxTokens
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`API 调用超时 (${API_CALL_TIMEOUT_MS / 1000}秒)`)),
+            API_CALL_TIMEOUT_MS
+          )
+        )
+      ])
 
       const content = completion.choices[0]?.message?.content
       if (!content) {
         throw new Error('DeepSeek API 返回为空')
       }
 
-      const cost = calculateDeepSeekCost(completion.usage)
-      const parsedContent = parser(content)
+      console.log(`[deepseek-call] API 调用成功, 内容长度: ${content.length} chars`)
 
-      await logDeepSeekChat(modelLog, userPrompt, {
-        status: 'completed',
-        costCNY: cost.costCNY
-      })
+      const cost = calculateDeepSeekCost(completion.usage)
+
+      // 增强parser错误处理
+      let parsedContent: T
+      try {
+        parsedContent = parser(content)
+        console.log(`[deepseek-call] Parser 解析成功, op=${modelLog?.op || 'unknown'}`)
+      } catch (parseError: any) {
+        console.error(`[deepseek-call] Parser 解析失败, op=${modelLog?.op || 'unknown'}`, {
+          error: parseError.message,
+          contentLength: content.length,
+          contentPreview: content.substring(0, 500)
+        })
+        throw new Error(`内容解析失败: ${parseError.message}`, { cause: parseError })
+      }
+
+      // 记录完整日志 - 包含system prompt和完整响应
+      await logDeepSeekChat(
+        modelLog,
+        userPrompt,
+        {
+          status: 'completed',
+          costCNY: cost.costCNY,
+          rawContent: content // 完整输出内容
+        },
+        {
+          systemMessage: systemPrompt, // 完整system prompt
+          responseMetadata: {
+            model: completion.model,
+            usage: completion.usage,
+            finishReason: completion.choices[0]?.finish_reason,
+            contentLength: content.length
+          }
+        }
+      )
 
       return {
         content: parsedContent,
@@ -103,13 +147,35 @@ export async function callDeepSeekWithRetry<T>(
     } catch (error: any) {
       lastError = error
 
+      console.error(
+        `[deepseek-call] 调用失败, attempt ${attempt}/${maxRetries}, op=${modelLog?.op || 'unknown'}`,
+        {
+          error: error.message,
+          status: error?.status,
+          type: error?.constructor?.name
+        }
+      )
+
       // 认证错误 - 立即抛出，不重试
       if (AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
         // Fire and forget - don't wait for logging
-        logDeepSeekChat(modelLog, userPrompt, {
-          status: 'failed',
-          errorMsg: error?.message || 'auth'
-        }).catch(() => {
+        logDeepSeekChat(
+          modelLog,
+          userPrompt,
+          {
+            status: 'failed',
+            errorMsg: error?.message || 'auth',
+            rawContent: undefined
+          },
+          {
+            systemMessage: systemPrompt,
+            responseMetadata: {
+              errorStatus: error?.status,
+              errorType: error?.constructor?.name,
+              attempt
+            }
+          }
+        ).catch(() => {
           /* ignore */
         })
         throw new DeepSeekAuthError()
@@ -118,14 +184,29 @@ export async function callDeepSeekWithRetry<T>(
       // 限流错误 - 重试
       if (error?.status === RATE_LIMIT_STATUS_CODE || error?.message?.includes('rate_limit')) {
         if (attempt < maxRetries) {
-          await sleep(AUTH_RETRY_DELAY_MS * attempt)
+          const delay = AUTH_RETRY_DELAY_MS * attempt
+          console.log(`[deepseek-call] 遇到限流, ${delay}ms 后重试...`)
+          await sleep(delay)
           continue
         }
         // Fire and forget
-        logDeepSeekChat(modelLog, userPrompt, {
-          status: 'failed',
-          errorMsg: 'rate_limit'
-        }).catch(() => {
+        logDeepSeekChat(
+          modelLog,
+          userPrompt,
+          {
+            status: 'failed',
+            errorMsg: 'rate_limit',
+            rawContent: undefined
+          },
+          {
+            systemMessage: systemPrompt,
+            responseMetadata: {
+              errorStatus: error?.status,
+              errorType: error?.constructor?.name,
+              attempts: attempt
+            }
+          }
+        ).catch(() => {
           /* ignore */
         })
         throw new DeepSeekRateLimitError()
@@ -133,18 +214,41 @@ export async function callDeepSeekWithRetry<T>(
 
       // 其他错误 - 重试一次
       if (attempt < maxRetries) {
-        await sleep(RETRY_BASE_DELAY_MS)
+        const delay = RETRY_BASE_DELAY_MS * attempt
+        console.log(`[deepseek-call] 其他错误, ${delay}ms 后重试...`)
+        await sleep(delay)
         continue
       }
     }
   }
 
   // 所有重试都失败了
-  // Fire and forget
-  logDeepSeekChat(modelLog, userPrompt, {
-    status: 'failed',
-    errorMsg: lastError?.message || 'DeepSeek API 调用失败'
-  }).catch(() => {
+  console.error(`[deepseek-call] 所有重试失败, op=${modelLog?.op || 'unknown'}`, {
+    error: lastError?.message,
+    attempts: maxRetries
+  })
+
+  // Fire and forget - 记录完整错误信息
+  const lastErrorAny = lastError as any
+  logDeepSeekChat(
+    modelLog,
+    userPrompt,
+    {
+      status: 'failed',
+      errorMsg: lastError?.message || 'DeepSeek API 调用失败',
+      rawContent: undefined
+    },
+    {
+      systemMessage: systemPrompt,
+      responseMetadata: {
+        error: lastError?.message,
+        errorStack: lastError?.stack,
+        errorType: lastError?.constructor?.name,
+        errorStatus: lastErrorAny?.status,
+        attempts: maxRetries
+      }
+    }
+  ).catch(() => {
     /* ignore */
   })
   throw lastError || new Error('DeepSeek API 调用失败')

@@ -13,10 +13,16 @@ export interface ModelCallLogContext {
 /** prompt 单条上限，避免 Prisma 字段过大 */
 export const MODEL_LOG_PROMPT_MAX = 12000
 
+/** 响应内容上限 */
+export const MODEL_LOG_RESPONSE_MAX = 12000
+
+/** 错误信息上限 */
+export const MODEL_LOG_ERROR_MAX = 4000
+
 export function truncateForModelLog(s: string, max = MODEL_LOG_PROMPT_MAX): string {
   if (!s) return ''
   if (s.length <= max) return s
-  return `${s.slice(0, max)}\n…[truncated]`
+  return `${s.slice(0, max)}\n…[truncated, total ${s.length} chars]`
 }
 
 export interface RecordModelApiCallInput {
@@ -39,9 +45,17 @@ export async function recordModelApiCall(input: RecordModelApiCallInput): Promis
       input.requestParams && typeof input.requestParams.op === 'string'
         ? input.requestParams.op
         : ''
+
+    // 终端摘要日志 - 包含关键信息
+    const costStr = input.cost ? ` ¥${input.cost.toFixed(4)}` : ''
+    const promptLen = input.prompt?.length || 0
+    const responseLen = input.responseData ? JSON.stringify(input.responseData).length : 0
+    const errorPreview = input.errorMsg ? ` ERROR: ${input.errorMsg.substring(0, 100)}` : ''
+
     console.log(
-      `[model-api] ${input.provider} ${input.model} ${input.status}${op ? ` op=${op}` : ''}`
+      `[model-api] ${input.provider} ${input.model} ${input.status}${op ? ` op=${op}` : ''}${costStr} | prompt: ${promptLen} chars, response: ${responseLen} chars${errorPreview}`
     )
+
     await modelApiCallRepository.create({
       userId: input.userId,
       model: input.model,
@@ -52,7 +66,7 @@ export async function recordModelApiCall(input: RecordModelApiCallInput): Promis
       status: input.status,
       responseData: input.responseData ? JSON.stringify(input.responseData) : null,
       cost: input.cost ?? undefined,
-      errorMsg: input.errorMsg ?? null,
+      errorMsg: input.errorMsg ? truncateForModelLog(input.errorMsg, MODEL_LOG_ERROR_MAX) : null,
       takeId: input.takeId ?? null
     })
   } catch (e) {

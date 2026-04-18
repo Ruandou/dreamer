@@ -233,6 +233,8 @@ export async function applyScriptVisualEnrichment(
   projectId: string,
   script: ScriptContent
 ): Promise<void> {
+  console.log(`[visual-enrich] 开始视觉增强, projectId=${projectId}`)
+
   const projectRow = await projectRepository.findUserIdAndVisualStyle(projectId)
   if (!projectRow) {
     throw new Error('视觉补全失败：项目不存在，无法写入模型审计日志与定场/定妆提示词')
@@ -246,11 +248,13 @@ export async function applyScriptVisualEnrichment(
   const locations = await locationRepository.findManyByProjectOrdered(projectId)
   const characters = await characterRepository.findManyByProjectNameAscWithImages(projectId)
 
+  console.log(`[visual-enrich] 场地数: ${locations.length}, 角色数: ${characters.length}`)
+
   const projectVisualStyleLine =
     (projectRow.visualStyle || []).filter(Boolean).join('、') ||
     '（未指定，定场图第4段可写通用电影级画质词）'
 
-  const visualStyleConfig = projectRow.visualStyleConfig as VisualStyleConfig | null
+  const visualStyleConfig = (projectRow as any).visualStyleConfig as VisualStyleConfig | null
 
   const locationLines = locations
     .map((l) => {
@@ -264,28 +268,48 @@ export async function applyScriptVisualEnrichment(
     .join('\n')
 
   console.log(
-    `[script_visual_enrichment] 即将请求 DeepSeek（落库 op=script_visual_enrichment） projectId=${projectId}`
+    `[visual-enrich] 即将请求 DeepSeek（落库 op=script_visual_enrichment） projectId=${projectId}`
   )
-  const { jsonText } = await fetchScriptVisualEnrichmentJson(
-    {
-      scriptSummary: `${script.title}\n${script.summary}`,
-      locationLines,
-      characterLines,
-      projectVisualStyleLine,
-      visualStyleConfig,
-      exactLocationNames: locations.map((l) => l.name)
-    },
-    visualLog
-  )
+
+  let jsonText: string
+  try {
+    const result = await fetchScriptVisualEnrichmentJson(
+      {
+        scriptSummary: `${script.title}\n${script.summary}`,
+        locationLines,
+        characterLines,
+        projectVisualStyleLine,
+        visualStyleConfig,
+        exactLocationNames: locations.map((l) => l.name)
+      },
+      visualLog
+    )
+    jsonText = result.jsonText
+    console.log(`[visual-enrich] DeepSeek 返回成功, 内容长度: ${jsonText.length} chars`)
+  } catch (error: any) {
+    console.error('[visual-enrich] DeepSeek 调用失败:', {
+      error: error.message,
+      projectId
+    })
+    throw new Error(`视觉增强失败：DeepSeek 调用异常 - ${error.message}`, { cause: error })
+  }
 
   let payload: VisualPayload
   try {
     const raw = extractJsonObject(jsonText)
     payload = JSON.parse(raw) as VisualPayload
+    console.log(
+      `[visual-enrich] JSON 解析成功, locations: ${payload.locations?.length || 0}, characters: ${payload.characters?.length || 0}`
+    )
   } catch (e) {
     const err = e as Error
-    console.warn('[applyScriptVisualEnrichment] 模型返回内容无法解析为 JSON:', err?.message || err)
-    throw new Error(`视觉补全失败：DeepSeek 返回不是合法 JSON（${err?.message || String(err)}）`)
+    console.error('[visual-enrich] 模型返回内容无法解析为 JSON:', {
+      error: err?.message || err,
+      jsonTextPreview: jsonText.substring(0, 500)
+    })
+    throw new Error(`视觉补全失败：DeepSeek 返回不是合法 JSON（${err?.message || String(err)}）`, {
+      cause: e
+    })
   }
 
   const dbLocationNames = locations.map((l) => l.name)

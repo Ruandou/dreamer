@@ -351,7 +351,7 @@ export async function runScriptBatchJob(
   const project = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
   if (!project) {
     await updateJob(jobId, { status: 'failed', error: '项目不存在' })
-    return
+    throw new Error('项目不存在')
   }
 
   const synopsis = project.synopsis || ''
@@ -367,6 +367,7 @@ export async function runScriptBatchJob(
 
   try {
     // ====== 智能模式检测 ======
+    console.log(`[script-batch] 开始检测剧本模式, projectId=${projectId}`)
     const detectionResult = detectScriptMode(synopsis)
     console.log(`[script-batch] 检测结果: ${detectionResult.mode}`)
 
@@ -474,6 +475,7 @@ export async function runScriptBatchJob(
 
       let rolling = project.storyContext || synopsis
 
+      // 串行生成每一集，确保上下文连贯性和质量
       for (let n = 1; n <= targetEpisodes; n++) {
         // 检查是否已存在
         const existing = await projectRepository.findEpisodeByProjectNum(projectId, n)
@@ -518,7 +520,7 @@ export async function runScriptBatchJob(
         rolling = [rolling, `第${n}集：${script.summary}`].join('\n').slice(-12000)
         await projectRepository.update(projectId, { storyContext: rolling })
 
-        // 提取记忆
+        // 提取记忆（同步等待，确保质量）
         try {
           await memoryService.extractAndSaveMemories(projectId, n, episode.id, script, {
             userId: project.userId,
@@ -637,6 +639,13 @@ export async function runScriptBatchJob(
       })
     }
   } catch (e: any) {
+    console.error('[script-batch] 任务执行失败:', {
+      jobId,
+      projectId,
+      error: e.message,
+      stack: e.stack
+    })
+
     await updateJob(jobId, {
       status: 'failed',
       error: e?.message || '批量生成失败',
@@ -712,18 +721,22 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
   })
 
   try {
+    console.log(
+      `[parse-script] 开始解析剧本, projectId=${projectId}, targetEpisodes=${targetEpisodes}`
+    )
+
     await ensureAllEpisodeScripts(projectId, targetEpisodes, jobId)
 
     const project = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
     if (!project) {
       await updateJob(jobId, { status: 'failed', error: '项目不存在' })
-      return
+      throw new Error('项目不存在')
     }
 
     const ep1 = project.episodes.find((e) => e.episodeNum === 1)
     if (!scriptFromJson(ep1?.script)) {
       await updateJob(jobId, { status: 'failed', error: '第一集剧本不存在' })
-      return
+      throw new Error('第一集剧本不存在')
     }
 
     await updateJob(jobId, {
@@ -731,12 +744,18 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
       progressMeta: { message: '提取角色与场景…' }
     })
 
+    console.log('[parse-script] 开始执行实体提取Pipeline')
     const merged = await runParseScriptEntityPipeline(projectId, project.userId, targetEpisodes)
+
     await updateJob(jobId, {
       progress: 60,
       progressMeta: { message: '生成形象与场地提示词…' }
     })
+
+    console.log('[parse-script] 开始应用视觉增强')
     await applyScriptVisualEnrichment(projectId, merged)
+
+    console.log('[parse-script] 填充分集简介')
     await fillEpisodeSynopses(projectId)
 
     await updateJob(jobId, {
@@ -745,12 +764,23 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
       currentStep: 'completed',
       progressMeta: { message: '解析完成' }
     })
+
+    console.log('[parse-script] 解析任务完成')
   } catch (e: any) {
+    console.error('[parse-script] 解析任务失败:', {
+      jobId,
+      projectId,
+      error: e.message,
+      stack: e.stack
+    })
+
     await updateJob(jobId, {
       status: 'failed',
       error: e?.message || '解析失败',
       progressMeta: { message: e?.message }
     })
+
+    throw e
   }
 }
 

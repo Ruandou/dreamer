@@ -288,6 +288,8 @@ function parseScriptResponse(content: string): ScriptContent {
       .replace(/```json\n?/g, '')
       .replace(/```\n?/g, '')
       .trim()
+  } else if (content.includes('```')) {
+    cleanContent = content.replace(/```\n?/g, '').trim()
   }
 
   // 移除可能的引号包裹
@@ -300,10 +302,13 @@ function parseScriptResponse(content: string): ScriptContent {
     const parsed = JSON.parse(cleanContent)
     return convertToScriptContent(parsed)
   } catch (error) {
+    console.warn('[script-writer] 直接JSON解析失败，尝试提取和修复...')
+
     // 如果直接解析失败，尝试提取 JSON 部分
     const jsonMatch = cleanContent.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
       try {
+        console.log('[script-writer] 成功提取JSON块，尝试解析')
         return convertToScriptContent(JSON.parse(jsonMatch[0]))
       } catch (innerError) {
         console.error('[script-writer] JSON extract failed')
@@ -323,6 +328,7 @@ function parseScriptResponse(content: string): ScriptContent {
         )
       }
     }
+
     console.error('[script-writer] No JSON found in response')
     console.error('[script-writer] Content (first 500 chars):', cleanContent.substring(0, 500))
     throw new Error('剧本格式不正确，无法解析', { cause: error })
@@ -377,8 +383,8 @@ function convertToScriptContent(data: any): ScriptContent {
     }
   })
 
-  // 处理 metadata
-  const metadata = data.metadata || {}
+  // 处理 metadata (保留供未来使用)
+  // const metadata = data.metadata || {}
 
   return {
     title: data.title || data.episode_title || '未命名剧本',
@@ -406,9 +412,10 @@ function validateScript(script: ScriptContent): void {
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
+// 睡眠函数 (保留供未来使用)
+// function sleep(ms: number): Promise<void> {
+//   return new Promise((resolve) => setTimeout(resolve, ms))
+// }
 
 /**
  * 生成单集核心剧情大纲（100-200字）

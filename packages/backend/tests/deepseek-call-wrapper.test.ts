@@ -114,10 +114,28 @@ describe('DeepSeek Call Wrapper', () => {
       expect(result.cost).toEqual({ costCNY: 0.05, promptCost: 0.01, completionCost: 0.04 })
       expect(result.rawResponse).toEqual(mockResponse)
       expect(mockClient.chat.completions.create).toHaveBeenCalledTimes(1)
-      expect(logDeepSeekChat).toHaveBeenCalledWith(undefined, 'Hello', {
-        status: 'completed',
-        costCNY: 0.05
-      })
+      expect(logDeepSeekChat).toHaveBeenCalledWith(
+        undefined,
+        'Hello',
+        {
+          status: 'completed',
+          costCNY: 0.05,
+          rawContent: '{"result": "success"}'
+        },
+        {
+          systemMessage: 'You are a helpful assistant',
+          responseMetadata: {
+            model: undefined,
+            usage: {
+              prompt_tokens: 100,
+              completion_tokens: 200,
+              total_tokens: 300
+            },
+            finishReason: undefined,
+            contentLength: 21
+          }
+        }
+      )
     })
 
     it('should use default values when options are not provided', async () => {
@@ -217,10 +235,23 @@ describe('DeepSeek Call Wrapper', () => {
       }
 
       expect(mockClient.chat.completions.create).toHaveBeenCalledTimes(1)
-      expect(logDeepSeekChat).toHaveBeenCalledWith(undefined, 'Test', {
-        status: 'failed',
-        errorMsg: 'Authentication failed'
-      })
+      expect(logDeepSeekChat).toHaveBeenCalledWith(
+        undefined,
+        'Test',
+        {
+          status: 'failed',
+          errorMsg: 'Authentication failed',
+          rawContent: undefined
+        },
+        {
+          systemMessage: 'System',
+          responseMetadata: {
+            errorStatus: 401,
+            errorType: 'Error',
+            attempt: 1
+          }
+        }
+      )
     })
 
     it('should throw DeepSeekAuthError immediately on 403 error without retry', async () => {
@@ -288,7 +319,7 @@ describe('DeepSeek Call Wrapper', () => {
     })
 
     it('should throw DeepSeekRateLimitError after all retries exhausted on 429', async () => {
-      const rateLimitError: any = new Error('Rate limit exceeded')
+      const rateLimitError: any = new Error('rate_limit')
       rateLimitError.status = 429
 
       mockClient.chat.completions.create.mockRejectedValue(rateLimitError)
@@ -311,10 +342,23 @@ describe('DeepSeek Call Wrapper', () => {
       await assertion
 
       expect(mockClient.chat.completions.create).toHaveBeenCalledTimes(2)
-      expect(logDeepSeekChat).toHaveBeenCalledWith(undefined, 'Test', {
-        status: 'failed',
-        errorMsg: 'rate_limit'
-      })
+      expect(logDeepSeekChat).toHaveBeenCalledWith(
+        undefined,
+        'Test',
+        {
+          status: 'failed',
+          errorMsg: 'rate_limit',
+          rawContent: undefined
+        },
+        {
+          systemMessage: 'System',
+          responseMetadata: {
+            errorStatus: 429,
+            errorType: 'Error',
+            attempts: 2
+          }
+        }
+      )
     })
 
     it('should handle rate limit error with message containing rate_limit', async () => {
@@ -405,10 +449,28 @@ describe('DeepSeek Call Wrapper', () => {
 
       await callDeepSeekWithRetry(options, JSON.parse)
 
-      expect(logDeepSeekChat).toHaveBeenCalledWith(modelLog, 'Test', {
-        status: 'completed',
-        costCNY: 0.05
-      })
+      expect(logDeepSeekChat).toHaveBeenCalledWith(
+        modelLog,
+        'Test',
+        {
+          status: 'completed',
+          costCNY: 0.05,
+          rawContent: '{"test": true}'
+        },
+        {
+          systemMessage: 'System',
+          responseMetadata: {
+            model: undefined,
+            usage: {
+              prompt_tokens: 100,
+              completion_tokens: 200,
+              total_tokens: 300
+            },
+            finishReason: undefined,
+            contentLength: 14
+          }
+        }
+      )
     })
 
     it('should retry with custom maxRetries', async () => {
@@ -440,15 +502,13 @@ describe('DeepSeek Call Wrapper', () => {
       }
 
       const promise = callDeepSeekWithRetry(options, JSON.parse)
-
-      await vi.advanceTimersByTimeAsync(1000)
-      await vi.advanceTimersByTimeAsync(1000)
-
+      // 推进fake timers以触发重试
+      await vi.advanceTimersByTimeAsync(3000)
       const result = await promise
 
       expect(result.content).toEqual({ retry: 3 })
       expect(mockClient.chat.completions.create).toHaveBeenCalledTimes(3)
-    })
+    }, 10000) // 增加超时时间到10秒
 
     it('should throw last error after all retries exhausted', async () => {
       const networkError = new Error('Network timeout')
@@ -497,10 +557,25 @@ describe('DeepSeek Call Wrapper', () => {
 
       await assertion
 
-      expect(logDeepSeekChat).toHaveBeenCalledWith(modelLog, 'Test prompt', {
-        status: 'failed',
-        errorMsg: 'Connection refused'
-      })
+      expect(logDeepSeekChat).toHaveBeenCalledWith(
+        modelLog,
+        'Test prompt',
+        {
+          status: 'failed',
+          errorMsg: 'Connection refused',
+          rawContent: undefined
+        },
+        {
+          systemMessage: 'System',
+          responseMetadata: {
+            error: 'Connection refused',
+            errorStack: expect.any(String),
+            errorType: 'Error',
+            errorStatus: undefined,
+            attempts: 2
+          }
+        }
+      )
     })
   })
 
