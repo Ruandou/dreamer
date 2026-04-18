@@ -8,7 +8,7 @@ import {
   selectBestCharacterImage,
   generateFirstFramePrompt,
   evaluatePromptQuality
-} from '../src/services/seedance-optimizer.js'
+} from '../src/services/ai/seedance-optimizer.js'
 import type { StoryboardSegment, CharacterImage, SceneAsset } from '@dreamer/shared/types'
 
 function baseSegment(over: Partial<StoryboardSegment> = {}): StoryboardSegment {

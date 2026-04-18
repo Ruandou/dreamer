@@ -3,7 +3,7 @@ import { videoQueue } from '../queues/video.js'
 import { optimizePrompt } from './ai/deepseek.js'
 import { stitchScenePrompt } from './scene-prompt.js'
 import { sceneRepository, type SceneRepository } from '../repositories/scene-repository.js'
-import { buildSeedanceScenePayload } from './seedance-scene-request.js'
+import { buildSeedanceScenePayload } from './ai/seedance-scene-request.js'
 
 export interface VideoQueueLike {
   add(name: string, data: VideoJobData): Promise<unknown>

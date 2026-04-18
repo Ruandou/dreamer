@@ -10,7 +10,7 @@ vi.mock('../src/lib/prisma.js', () => ({
   }
 }))
 
-import { buildSeedanceAudio, getSceneVoiceSegments } from '../src/services/seedance-audio.js'
+import { buildSeedanceAudio, getSceneVoiceSegments } from '../src/services/ai/seedance-audio.js'
 
 const vc = {
   gender: 'male' as const,

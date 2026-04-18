@@ -2,7 +2,7 @@
  * 从数据库读取 SceneDialogue，组装成 Seedance 音频参数
  */
 
-import { sceneRepository } from '../repositories/scene-repository.js'
+import { sceneRepository } from '../../repositories/scene-repository.js'
 import type {
   VoiceSegment as VoiceSegmentType,
   Character,

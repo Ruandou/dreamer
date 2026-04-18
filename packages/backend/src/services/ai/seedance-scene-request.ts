@@ -2,8 +2,8 @@
  * 从 Scene + Shot + CharacterShot + Location + SceneDialogue 组装 Seedance 提示词与参考图 URL（方舟「图片1」序号与 image_url 顺序一致）
  */
 
-import { stitchScenePrompt } from './scene-prompt.js'
-import { sceneRepository } from '../repositories/scene-repository.js'
+import { stitchScenePrompt } from '../scene-prompt.js'
+import { sceneRepository } from '../../repositories/scene-repository.js'
 
 const MAX_REF_IMAGES = 9
 const MIN_DUR = 4

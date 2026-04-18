@@ -8,7 +8,7 @@ describe('seedance-scene-request utilities', () => {
     it('escapes special regex characters', async () => {
       // Test by importing and using indirectly
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       // We can't test escapeRegExp directly (it's not exported)
       // But we can verify it works through buildSeedancePayloadFromScene
@@ -45,7 +45,7 @@ describe('seedance-scene-request utilities', () => {
 
     it('handles character names with special regex characters', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -77,7 +77,7 @@ describe('seedance-scene-request utilities', () => {
   describe('voiceConfigToShortDesc (internal)', () => {
     it('converts voice config to short description', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -149,7 +149,7 @@ describe('seedance-scene-request utilities', () => {
 
     it('handles missing voice config', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -217,7 +217,7 @@ describe('seedance-scene-request utilities', () => {
   describe('mergeVisualStyleLabels (internal)', () => {
     it('merges scene and project visual styles', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -250,7 +250,7 @@ describe('seedance-scene-request utilities', () => {
 
     it('removes duplicate styles', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -283,7 +283,7 @@ describe('seedance-scene-request utilities', () => {
 
     it('handles empty visual styles', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -315,7 +315,7 @@ describe('seedance-scene-request utilities', () => {
   describe('duration clamping', () => {
     it('clamps duration to minimum 4 seconds', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -355,7 +355,7 @@ describe('seedance-scene-request utilities', () => {
 
     it('clamps duration to maximum 15 seconds', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -384,7 +384,7 @@ describe('seedance-scene-request utilities', () => {
 
     it('uses shot durations when scene duration is invalid', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -436,7 +436,7 @@ describe('seedance-scene-request utilities', () => {
   describe('aspect ratio validation', () => {
     it('uses scene aspect ratio when valid', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -465,7 +465,7 @@ describe('seedance-scene-request utilities', () => {
 
     it('falls back to project aspect ratio', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -494,7 +494,7 @@ describe('seedance-scene-request utilities', () => {
 
     it('defaults to 9:16 when invalid', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const mockScene = {
         id: 'scene-1',
@@ -525,7 +525,7 @@ describe('seedance-scene-request utilities', () => {
   describe('image URL capping', () => {
     it('limits reference images to 9', async () => {
       const { buildSeedancePayloadFromScene } =
-        await import('../src/services/seedance-scene-request.js')
+        await import('../src/services/ai/seedance-scene-request.js')
 
       const characterShots = Array.from({ length: 15 }, (_, i) => ({
         id: `cs-${i}`,

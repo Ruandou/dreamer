@@ -30,7 +30,7 @@ import {
 
 import { generateStoryboard } from './storyboard-generator.js'
 
-import { buildSeedanceConfigs, validateSeedanceConfig } from './seedance-optimizer.js'
+import { buildSeedanceConfigs, validateSeedanceConfig } from './ai/seedance-optimizer.js'
 
 export interface PipelineContext {
   projectId: string
