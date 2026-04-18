@@ -121,8 +121,10 @@ describe('Import Routes', () => {
   })
 
   describe('POST /api/import/script', () => {
-    it.skip('should create import task for existing project', async () => {
-      // Skip this test due to mock complexity with verifyProjectOwnership
+    it('should create import task for existing project', async () => {
+      const { verifyProjectOwnership } = await import('../src/plugins/auth.js')
+      vi.mocked(verifyProjectOwnership).mockResolvedValueOnce(true)
+
       mockProjectFindFirst.mockResolvedValue({ id: 'proj-1', userId: 'test-user-id' })
       mockImportTaskCreate.mockResolvedValue({
         id: 'task-1',
