@@ -32,17 +32,9 @@ const DEFAULT_TARGET_EPISODES = 36
 const isLoading = ref(true)
 const generatingStatus = ref('')
 const isGeneratingFirst = ref(false)
-const selectedStyles = ref<string[]>([])
 const error = ref<string | null>(null)
 
 const projectId = computed(() => (route.query.projectId as string) || '')
-
-const styleOptions = [
-  { label: '真人写实', value: 'realistic' },
-  { label: '电影风格', value: 'cinematic' },
-  { label: '动漫风格', value: 'anime' },
-  { label: '复古调色', value: 'vintage' }
-]
 
 const project = computed(() => projectStore.currentProject as any)
 
@@ -64,9 +56,7 @@ function scenesFromRaw(raw: unknown): any[] {
   return Array.isArray(s) ? s : []
 }
 
-const episode1 = computed(() =>
-  project.value?.episodes?.find((e: any) => epNum(e) === 1)
-)
+const episode1 = computed(() => project.value?.episodes?.find((e: any) => epNum(e) === 1))
 
 const batchProgress = ref<PipelineJob | null>(null)
 const isBatching = ref(false)
@@ -108,9 +98,7 @@ const episode1HasScript = computed(
 )
 
 /** 目标 2..N 集是否已全部就绪（批量按钮应显示完成态，不再强调「去生成」） */
-const batchAllTargetReady = computed(
-  () => needsBatchEpisodes.value && allEpisodesReady.value
-)
+const batchAllTargetReady = computed(() => needsBatchEpisodes.value && allEpisodesReady.value)
 
 const batchActionLabel = computed(() => {
   if (!needsBatchEpisodes.value) return '仅 1 集无需批量'
@@ -134,10 +122,7 @@ const EPISODE_PRESETS = [1, 24, 60, 80, 100] as const
 
 function normalizeTargetInput(v: number | null | undefined): number {
   const n = Math.floor(Number(v) || 1)
-  return Math.max(
-    MIN_TARGET_EPISODES,
-    Math.min(MAX_TARGET_EPISODES, n)
-  )
+  return Math.max(MIN_TARGET_EPISODES, Math.min(MAX_TARGET_EPISODES, n))
 }
 
 /** 当前项目中已有场次剧本的最高集号；无则 0 */
@@ -203,21 +188,9 @@ function selectPreviewEpisode(n: number) {
   previewEpisodeNum.value = n
 }
 
-function toggleStyle(val: string) {
-  const i = selectedStyles.value.indexOf(val)
-  if (i === -1) selectedStyles.value = [...selectedStyles.value, val]
-  else selectedStyles.value = selectedStyles.value.filter((v) => v !== val)
-}
-
-function styleActive(val: string) {
-  return selectedStyles.value.includes(val)
-}
-
 async function loadProject(id: string) {
   await projectStore.getProject(id)
   const p = projectStore.currentProject as any
-  if (p?.visualStyle?.length) selectedStyles.value = [...p.visualStyle]
-  else selectedStyles.value = []
   // 项目详情接口偶发只带部分 episodes；列表接口保证拉全部分集与 script
   try {
     const { data } = await api.get<any[]>(`/episodes?projectId=${id}`)
@@ -251,6 +224,12 @@ async function runGenerateFirstEpisode() {
     await loadProject(id)
     message.success('第一集剧本已生成')
   } catch (e: any) {
+    // 处理完整剧本检测
+    if (e?.message?.includes('SHOULD_PARSE_SCRIPT_INSTEAD')) {
+      message.warning('检测到完整剧本，正在跳转到项目详情页...')
+      setTimeout(() => router.push(`/project/${id}`), 1500)
+      return
+    }
     message.error(e?.message || '生成第一集失败')
   } finally {
     isGeneratingFirst.value = false
@@ -263,8 +242,7 @@ async function saveDraft() {
   if (!id) return
   await api.put(`/projects/${id}`, {
     description: (project.value as any)?.description,
-    synopsis: (project.value as any)?.synopsis,
-    visualStyle: selectedStyles.value
+    synopsis: (project.value as any)?.synopsis
   })
   message.success('已保存')
   await loadProject(id)
@@ -298,9 +276,12 @@ async function runBatchRemaining() {
   isBatching.value = true
   batchProgress.value = null
   try {
-    const { data } = await api.post<{ jobId: string }>(`/projects/${id}/episodes/generate-remaining`, {
-      targetEpisodes: te
-    })
+    const { data } = await api.post<{ jobId: string }>(
+      `/projects/${id}/episodes/generate-remaining`,
+      {
+        targetEpisodes: te
+      }
+    )
     await pollPipelineJob(
       data.jobId,
       (j) => {
@@ -400,16 +381,11 @@ async function runParse() {
     message.warning('批量生成进行中，请完成后再解析')
     return
   }
-  if (!selectedStyles.value.length) {
-    message.warning('请至少选择一种视觉风格')
-    return
-  }
   const ep = episode1.value as any
   if (!ep?.script || scenesFromRaw(ep.script).length === 0) {
     message.warning('请先生成第一集剧本')
     return
   }
-  await api.put(`/projects/${id}`, { visualStyle: selectedStyles.value })
   isParsing.value = true
   try {
     const te = Math.max(
@@ -446,9 +422,7 @@ onMounted(async () => {
     // 须在长轮询 resumeOutlineActiveJob 之前结束骨架屏，否则批量进行中刷新会一直看不到创意/梗概
     isLoading.value = false
     await resumeOutlineActiveJob(pid)
-    const autoGen =
-      route.query.autogen === '1' ||
-      route.query.autogen === 'true'
+    const autoGen = route.query.autogen === '1' || route.query.autogen === 'true'
     if (autoGen) {
       await runGenerateFirstEpisode()
       await router.replace({ path: '/generate', query: { projectId: pid } })
@@ -471,10 +445,7 @@ function reloadPage() {
 watch(targetEpisodeCount, (v) => {
   const id = projectId.value
   if (!id) return
-  const n = Math.max(
-    MIN_TARGET_EPISODES,
-    Math.min(MAX_TARGET_EPISODES, Math.floor(Number(v) || 1))
-  )
+  const n = Math.max(MIN_TARGET_EPISODES, Math.min(MAX_TARGET_EPISODES, Math.floor(Number(v) || 1)))
   localStorage.setItem(`dreamer.generate.targetEpisodes.${id}`, String(n))
 })
 </script>
@@ -520,219 +491,207 @@ watch(targetEpisodeCount, (v) => {
       </template>
 
       <template v-else>
-      <div class="two-col">
-        <NCard title="故事创意">
-          <NInput
-            type="textarea"
-            :rows="6"
-            :value="(project as any)?.description || ''"
-            placeholder="一句话描述你的故事"
-            @update:value="(v) => ((projectStore.currentProject as any).description = v)"
-          />
-        </NCard>
-        <NCard title="故事梗概">
-          <NInput
-            type="textarea"
-            :rows="6"
-            :value="(project as any)?.synopsis || ''"
-            placeholder="梗概"
-            @update:value="(v) => ((projectStore.currentProject as any).synopsis = v)"
-          />
-        </NCard>
-      </div>
-
-      <NCard class="mt preview-script-card" title="剧本预览">
-        <template #header-extra>
-          <NButton
-            v-if="activePreviewEpisode && scenesFromRaw(activePreviewEpisode.script).length"
-            size="tiny"
-            quaternary
-            @click="showFullEpisode1 = !showFullEpisode1"
-          >
-            {{ showFullEpisode1 ? '收起' : '展开' }}
-          </NButton>
-        </template>
-        <p
-          v-if="episodesWithScript.length > 1 && needsBatchEpisodes && allEpisodesReady"
-          class="episode-picker episode-picker--ok"
-        >
-          目标 {{ effectiveTarget }} 集均已就绪，可前往下方「解析剧本」。
-        </p>
-        <p
-          v-else-if="episodesWithScript.length > 1 && !allEpisodesReady"
-          class="muted episode-picker"
-        >
-          当前已生成 {{ episodesWithScript.length }} 集有场次；凑满目标 {{ effectiveTarget }} 集后再解析更稳妥。
-        </p>
-        <div v-if="!activePreviewEpisode || !scenesFromRaw(activePreviewEpisode.script).length" class="muted">
-          <p>暂无第一集剧本。从列表进入不会自动生成，请确认创意与梗概后点击下方按钮。</p>
-          <NButton
-            type="primary"
-            class="mt-sm"
-            :loading="isGeneratingFirst"
-            :disabled="isGeneratingFirst || isBatching || isParseOutlineRunning"
-            @click="runGenerateFirstEpisode"
-          >
-            生成第一集剧本
-          </NButton>
+        <div class="two-col">
+          <NCard title="故事创意">
+            <NInput
+              type="textarea"
+              :rows="6"
+              :value="(project as any)?.description || ''"
+              placeholder="一句话描述你的故事"
+              @update:value="(v) => ((projectStore.currentProject as any).description = v)"
+            />
+          </NCard>
+          <NCard title="故事梗概">
+            <NInput
+              type="textarea"
+              :rows="6"
+              :value="(project as any)?.synopsis || ''"
+              placeholder="梗概"
+              @update:value="(v) => ((projectStore.currentProject as any).synopsis = v)"
+            />
+          </NCard>
         </div>
-        <div v-else class="script-preview-outer">
-          <div class="preview-split">
-            <div class="preview-ep-tablist-wrap">
-              <NScrollbar class="preview-tab-scroll" trigger="hover">
-                <nav
-                  class="preview-ep-tablist-inner"
-                  role="tablist"
-                  aria-label="选择预览集数"
-                >
-                  <button
-                    v-for="ep in episodesWithScript"
-                    :key="ep.id"
-                    type="button"
-                    role="tab"
-                    class="preview-ep-tab"
-                    :class="{ 'preview-ep-tab--active': epNum(ep) === previewEpisodeNum }"
-                    :aria-selected="epNum(ep) === previewEpisodeNum"
-                    @click="selectPreviewEpisode(epNum(ep))"
-                  >
-                    第 {{ epNum(ep) }} 集
-                  </button>
-                </nav>
-              </NScrollbar>
-            </div>
-            <div class="preview-ep-panel">
-              <p v-if="(activePreviewEpisode as any)?.title" class="preview-ep-title">
-                {{ (activePreviewEpisode as any).title }}
-              </p>
-              <div class="preview-scroll-wrap">
-                <div class="script-preview">
-                  <div v-for="(sc, idx) in previewScenes" :key="idx" class="scene-block">
-                    <div class="scene-head">
-                      Scene {{ sc.sceneNum }}. {{ sc.location }} - {{ sc.timeOfDay }}
+
+        <NCard class="mt preview-script-card" title="剧本预览">
+          <template #header-extra>
+            <NButton
+              v-if="activePreviewEpisode && scenesFromRaw(activePreviewEpisode.script).length"
+              size="tiny"
+              quaternary
+              @click="showFullEpisode1 = !showFullEpisode1"
+            >
+              {{ showFullEpisode1 ? '收起' : '展开' }}
+            </NButton>
+          </template>
+          <p
+            v-if="episodesWithScript.length > 1 && needsBatchEpisodes && allEpisodesReady"
+            class="episode-picker episode-picker--ok"
+          >
+            目标 {{ effectiveTarget }} 集均已就绪，可前往下方「解析剧本」。
+          </p>
+          <p
+            v-else-if="episodesWithScript.length > 1 && !allEpisodesReady"
+            class="muted episode-picker"
+          >
+            当前已生成 {{ episodesWithScript.length }} 集有场次；凑满目标
+            {{ effectiveTarget }} 集后再解析更稳妥。
+          </p>
+          <div
+            v-if="!activePreviewEpisode || !scenesFromRaw(activePreviewEpisode.script).length"
+            class="muted"
+          >
+            <p>暂无第一集剧本。从列表进入不会自动生成，请确认创意与梗概后点击下方按钮。</p>
+            <NButton
+              type="primary"
+              class="mt-sm"
+              :loading="isGeneratingFirst"
+              :disabled="isGeneratingFirst || isBatching || isParseOutlineRunning"
+              @click="runGenerateFirstEpisode"
+            >
+              生成第一集剧本
+            </NButton>
+          </div>
+          <div v-else class="script-preview-outer">
+            <div class="preview-split">
+              <div class="preview-ep-tablist-wrap">
+                <NScrollbar class="preview-tab-scroll" trigger="hover">
+                  <nav class="preview-ep-tablist-inner" role="tablist" aria-label="选择预览集数">
+                    <button
+                      v-for="ep in episodesWithScript"
+                      :key="ep.id"
+                      type="button"
+                      role="tab"
+                      class="preview-ep-tab"
+                      :class="{ 'preview-ep-tab--active': epNum(ep) === previewEpisodeNum }"
+                      :aria-selected="epNum(ep) === previewEpisodeNum"
+                      @click="selectPreviewEpisode(epNum(ep))"
+                    >
+                      第 {{ epNum(ep) }} 集
+                    </button>
+                  </nav>
+                </NScrollbar>
+              </div>
+              <div class="preview-ep-panel">
+                <p v-if="(activePreviewEpisode as any)?.title" class="preview-ep-title">
+                  {{ (activePreviewEpisode as any).title }}
+                </p>
+                <div class="preview-scroll-wrap">
+                  <div class="script-preview">
+                    <div v-for="(sc, idx) in previewScenes" :key="idx" class="scene-block">
+                      <div class="scene-head">
+                        Scene {{ sc.sceneNum }}. {{ sc.location }} - {{ sc.timeOfDay }}
+                      </div>
+                      <p class="scene-desc">{{ sc.description }}</p>
                     </div>
-                    <p class="scene-desc">{{ sc.description }}</p>
+                    <p
+                      v-if="
+                        !showFullEpisode1 && scenesFromRaw(activePreviewEpisode.script).length > 2
+                      "
+                      class="expand-hint muted"
+                    >
+                      共 {{ scenesFromRaw(activePreviewEpisode.script).length }} 场，
+                      <NButton text type="primary" size="tiny" @click="showFullEpisode1 = true">
+                        展开查看全部
+                      </NButton>
+                    </p>
                   </div>
-                  <p
-                    v-if="!showFullEpisode1 && scenesFromRaw(activePreviewEpisode.script).length > 2"
-                    class="expand-hint muted"
-                  >
-                    共 {{ scenesFromRaw(activePreviewEpisode.script).length }} 场，
-                    <NButton text type="primary" size="tiny" @click="showFullEpisode1 = true">
-                      展开查看全部
-                    </NButton>
-                  </p>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </NCard>
+        </NCard>
 
-      <NCard class="mt script-gen-card" title="剧本生成">
-        <div class="episode-count-row">
-          <div class="episode-count-inline">
-            <NTooltip placement="top-start" :delay="200">
-              <template #trigger>
-                <span class="episode-count-label">总集数</span>
-              </template>
-              范围 {{ MIN_TARGET_EPISODES }}–{{ MAX_TARGET_EPISODES }}。解析与批量补全均按此数值；仅 1 集时无需批量。
-            </NTooltip>
-            <NInputNumber
-              :value="targetEpisodeCount"
-              :min="MIN_TARGET_EPISODES"
-              :max="MAX_TARGET_EPISODES"
-              :step="1"
-              size="small"
-              class="episode-count-input"
-              @update:value="onTargetEpisodeUpdate"
-            />
-            <span class="episode-count-unit">集</span>
+        <NCard class="mt script-gen-card" title="剧本生成">
+          <div class="episode-count-row">
+            <div class="episode-count-inline">
+              <NTooltip placement="top-start" :delay="200">
+                <template #trigger>
+                  <span class="episode-count-label">总集数</span>
+                </template>
+                范围 {{ MIN_TARGET_EPISODES }}–{{
+                  MAX_TARGET_EPISODES
+                }}。解析与批量补全均按此数值；仅 1 集时无需批量。
+              </NTooltip>
+              <NInputNumber
+                :value="targetEpisodeCount"
+                :min="MIN_TARGET_EPISODES"
+                :max="MAX_TARGET_EPISODES"
+                :step="1"
+                size="small"
+                class="episode-count-input"
+                @update:value="onTargetEpisodeUpdate"
+              />
+              <span class="episode-count-unit">集</span>
+            </div>
           </div>
-        </div>
-        <div class="episode-presets">
-          <span class="episode-presets-label">快捷</span>
-          <NButton
-            v-for="n in EPISODE_PRESETS"
-            :key="n"
-            size="tiny"
-            :type="effectiveTarget === n ? 'primary' : 'default'"
-            quaternary
-            @click="onTargetEpisodeUpdate(n)"
-          >
-            {{ n }}
-          </NButton>
-        </div>
-        <p
-          v-if="episode1HasScript && !isBatching && !isParseOutlineRunning && !isGeneratingFirst"
-          class="ok-line"
-        >
-          <template v-if="batchAllTargetReady">
-            目标 {{ effectiveTarget }} 集剧本已全部生成，可直接解析或微调总集数后再次补全。
-          </template>
-          <template v-else-if="episodesWithScript.length > 1">
-            已生成 {{ episodesWithScript.length }}/{{ effectiveTarget }} 集，点击⬇️可批量补全
-          </template>
-          <template v-else>
-            第一集已生成；目标 {{ effectiveTarget }} 集{{ needsBatchEpisodes ? '，其余集请点下方批量。' : '。' }}
-          </template>
-        </p>
-        <p v-if="isBatching && batchProgress?.progressMeta?.message" class="muted">
-          {{ batchProgress.progressMeta.message }}
-        </p>
-        <div class="mt-sm">
-          <NButton
-            :type="batchAllTargetReady ? 'success' : 'primary'"
-            :loading="isBatching"
-            :disabled="batchButtonDisabled"
-            @click="runBatchRemaining"
-          >
-            {{ batchActionLabel }}
-          </NButton>
-        </div>
-        <p
-          v-if="needsBatchEpisodes && episode1HasScript && !batchAllTargetReady"
-          class="hint"
-        >
-          批量生成较耗时，后台执行；可离开，稍后在任务中心看进度。
-        </p>
-      </NCard>
-
-      <NCard class="mt" title="选择视觉风格（解析剧本前必选，可多选）">
-        <div class="style-list">
-          <div
-            v-for="opt in styleOptions"
-            :key="opt.value"
-            class="style-item"
-            :class="{ active: styleActive(opt.value) }"
-            @click="toggleStyle(opt.value)"
-          >
-            {{ opt.label }}
+          <div class="episode-presets">
+            <span class="episode-presets-label">快捷</span>
+            <NButton
+              v-for="n in EPISODE_PRESETS"
+              :key="n"
+              size="tiny"
+              :type="effectiveTarget === n ? 'primary' : 'default'"
+              quaternary
+              @click="onTargetEpisodeUpdate(n)"
+            >
+              {{ n }}
+            </NButton>
           </div>
-        </div>
-      </NCard>
+          <p
+            v-if="episode1HasScript && !isBatching && !isParseOutlineRunning && !isGeneratingFirst"
+            class="ok-line"
+          >
+            <template v-if="batchAllTargetReady">
+              目标 {{ effectiveTarget }} 集剧本已全部生成，可直接解析或微调总集数后再次补全。
+            </template>
+            <template v-else-if="episodesWithScript.length > 1">
+              已生成 {{ episodesWithScript.length }}/{{ effectiveTarget }} 集，点击⬇️可批量补全
+            </template>
+            <template v-else>
+              第一集已生成；目标 {{ effectiveTarget }} 集{{
+                needsBatchEpisodes ? '，其余集请点下方批量。' : '。'
+              }}
+            </template>
+          </p>
+          <p v-if="isBatching && batchProgress?.progressMeta?.message" class="muted">
+            {{ batchProgress.progressMeta.message }}
+          </p>
+          <div class="mt-sm">
+            <NButton
+              :type="batchAllTargetReady ? 'success' : 'primary'"
+              :loading="isBatching"
+              :disabled="batchButtonDisabled"
+              @click="runBatchRemaining"
+            >
+              {{ batchActionLabel }}
+            </NButton>
+          </div>
+          <p v-if="needsBatchEpisodes && episode1HasScript && !batchAllTargetReady" class="hint">
+            批量生成较耗时，后台执行；可离开，稍后在任务中心看进度。
+          </p>
+        </NCard>
 
-      <div class="footer-parse mt">
-        <NButton
-          type="primary"
-          size="large"
-          :loading="isParsing || isParseOutlineRunning"
-          :disabled="isBatching || isParseOutlineRunning || isGeneratingFirst"
-          @click="runParse"
-        >
-          解析剧本 →
-        </NButton>
-        <p class="footer-parse-sub">
-          <template v-if="isBatching">批量生成进行中，请完成后再解析。</template>
-          <template v-else-if="isGeneratingFirst">第一集生成进行中，请完成后再解析。</template>
-          <template v-else-if="isParseOutlineRunning">解析任务进行中，请稍候。</template>
-          <template v-else>
-            将按当前总集数处理前 {{ effectiveTarget }} 集（含自动补全缺失剧本）；须先选视觉风格。
-          </template>
-        </p>
-      </div>
-      <p class="hint center">
-        提取角色、场景与形象槽位，完成后进入项目详情。
-      </p>
+        <div class="footer-parse mt">
+          <NButton
+            type="primary"
+            size="large"
+            :loading="isParsing || isParseOutlineRunning"
+            :disabled="isBatching || isParseOutlineRunning || isGeneratingFirst"
+            @click="runParse"
+          >
+            解析剧本 →
+          </NButton>
+          <p class="footer-parse-sub">
+            <template v-if="isBatching">批量生成进行中，请完成后再解析。</template>
+            <template v-else-if="isGeneratingFirst">第一集生成进行中，请完成后再解析。</template>
+            <template v-else-if="isParseOutlineRunning">解析任务进行中，请稍候。</template>
+            <template v-else>
+              将按当前总集数处理前
+              {{ effectiveTarget }} 集（含自动补全缺失剧本）；视觉风格将自动生成。
+            </template>
+          </p>
+        </div>
+        <p class="hint center">提取角色、场景与形象槽位，完成后进入项目详情。</p>
       </template>
     </template>
 
@@ -866,7 +825,9 @@ watch(targetEpisodeCount, (v) => {
   font-size: 13px;
   line-height: 1.3;
   color: #6b7280;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
   font-family: inherit;
 }
 

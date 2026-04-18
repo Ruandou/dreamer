@@ -99,7 +99,18 @@ describe('sanitizeLocationImagePromptForImageApi', () => {
 describe('applyScriptVisualEnrichment', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockProjectFindUnique.mockResolvedValue({ userId: 'u1', visualStyle: ['电影感'] })
+    mockProjectFindUnique.mockResolvedValue({
+      userId: 'u1',
+      visualStyle: [], // visualStyle已废弃
+      visualStyleConfig: {
+        preset: null,
+        era: 'modern',
+        artStyle: ['cinematic'],
+        colorMood: ['warm'],
+        quality: 'cinema',
+        customKeywords: []
+      }
+    })
     mockLocationFindMany.mockResolvedValue([
       { id: 'L1', projectId: 'p1', name: '咖啡厅', description: '室内', timeOfDay: '日' }
     ])
@@ -155,7 +166,11 @@ describe('applyScriptVisualEnrichment', () => {
 
     expect(mockFetchScriptVisualEnrichmentJson).toHaveBeenCalledWith(
       expect.objectContaining({
-        projectVisualStyleLine: '电影感',
+        projectVisualStyleLine: '', // visualStyle已废弃
+        visualStyleConfig: expect.objectContaining({
+          era: 'modern',
+          artStyle: ['cinematic']
+        }),
         locationLines: expect.stringContaining('时间：日'),
         exactLocationNames: ['咖啡厅']
       }),

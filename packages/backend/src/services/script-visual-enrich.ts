@@ -8,6 +8,7 @@ import { projectRepository } from '../repositories/project-repository.js'
 import { locationRepository } from '../repositories/location-repository.js'
 import { characterRepository } from '../repositories/character-repository.js'
 import { fetchScriptVisualEnrichmentJson, generateCharacterSlotImagePrompt } from './ai/deepseek.js'
+import { repairJsonWithAI } from './ai/json-repair.js'
 import type { ModelCallLogContext } from './ai/api-logger.js'
 
 interface ParsedLocation {
@@ -250,10 +251,7 @@ export async function applyScriptVisualEnrichment(
 
   console.log(`[visual-enrich] 场地数: ${locations.length}, 角色数: ${characters.length}`)
 
-  const projectVisualStyleLine =
-    (projectRow.visualStyle || []).filter(Boolean).join('、') ||
-    '（未指定，定场图第4段可写通用电影级画质词）'
-
+  // visualStyle 已废弃，只使用 visualStyleConfig
   const visualStyleConfig = (projectRow as any).visualStyleConfig as VisualStyleConfig | null
 
   const locationLines = locations
@@ -278,7 +276,7 @@ export async function applyScriptVisualEnrichment(
         scriptSummary: `${script.title}\n${script.summary}`,
         locationLines,
         characterLines,
-        projectVisualStyleLine,
+        projectVisualStyleLine: '', // visualStyle已废弃
         visualStyleConfig,
         exactLocationNames: locations.map((l) => l.name)
       },
@@ -302,14 +300,28 @@ export async function applyScriptVisualEnrichment(
       `[visual-enrich] JSON 解析成功, locations: ${payload.locations?.length || 0}, characters: ${payload.characters?.length || 0}`
     )
   } catch (e) {
-    const err = e as Error
-    console.error('[visual-enrich] 模型返回内容无法解析为 JSON:', {
-      error: err?.message || err,
-      jsonTextPreview: jsonText.substring(0, 500)
-    })
-    throw new Error(`视觉补全失败：DeepSeek 返回不是合法 JSON（${err?.message || String(err)}）`, {
-      cause: e
-    })
+    // 尝试 AI 修复 JSON
+    console.warn('[visual-enrich] JSON 解析失败，尝试 AI 自动修复...')
+    try {
+      const fixedJson = await repairJsonWithAI(jsonText, {
+        userId: projectRow.userId,
+        projectId,
+        op: 'visual_enrich_json_repair'
+      })
+      const raw = extractJsonObject(fixedJson)
+      payload = JSON.parse(raw) as VisualPayload
+      console.log('[visual-enrich] JSON 修复成功')
+    } catch {
+      const err = e as Error
+      console.error('[visual-enrich] JSON 解析和修复均失败:', {
+        error: err?.message || err,
+        jsonTextPreview: jsonText.substring(0, 500)
+      })
+      throw new Error(
+        `视觉补全失败：DeepSeek 返回不是合法 JSON（${err?.message || String(err)}）`,
+        { cause: e }
+      )
+    }
   }
 
   const dbLocationNames = locations.map((l) => l.name)

@@ -239,14 +239,33 @@ describe('Project Routes', () => {
         url: '/api/projects/proj-1',
         payload: {
           synopsis: '梗概',
-          visualStyle: ['cinematic']
+          visualStyle: ['cinematic'], // visualStyle已废弃，应被忽略
+          visualStyleConfig: {
+            preset: null,
+            era: 'modern',
+            artStyle: ['cinematic'],
+            colorMood: ['warm'],
+            quality: 'cinema',
+            customKeywords: []
+          }
         }
       })
 
       expect(response.statusCode).toBe(200)
+      // visualStyle不再处理，只保存visualStyleConfig
       expect(mockProjectUpdate).toHaveBeenCalledWith({
         where: { id: 'proj-1' },
-        data: { synopsis: '梗概', visualStyle: ['cinematic'] }
+        data: {
+          synopsis: '梗概',
+          visualStyleConfig: {
+            preset: null,
+            era: 'modern',
+            artStyle: ['cinematic'],
+            colorMood: ['warm'],
+            quality: 'cinema',
+            customKeywords: []
+          }
+        }
       })
     })
 

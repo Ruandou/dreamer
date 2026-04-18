@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client'
 import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import { projectRepository } from '../repositories/project-repository.js'
 import { recordModelApiCall } from './ai/api-logger.js'
+import { generateVisualStyleConfig } from './ai/visual-style-generator.js'
 import {
   writeScriptFromIdea,
   writeEpisodeForProject,
@@ -162,6 +163,22 @@ export async function runGenerateFirstEpisode(projectId: string) {
   if (!project) throw new Error('PROJECT_NOT_FOUND')
 
   const idea = project.description?.trim() || project.name
+
+  // 检测是否为完整剧本
+  const detectionResult = detectScriptMode(project.description || '')
+
+  if (detectionResult.mode === 'faithful-parse' || detectionResult.mode === 'mixed') {
+    // 完整剧本 → 存 synopsis，引导解析
+    console.log('[generate-first] 检测到完整剧本，保存到 synopsis 并引导解析')
+    await projectRepository.update(projectId, {
+      synopsis: project.description,
+      storyContext: (project.description || '').slice(0, 12000)
+    })
+
+    throw new Error('SHOULD_PARSE_SCRIPT_INSTEAD')
+  }
+
+  // 创意 → 正常AI生成
   const { script } = await writeScriptFromIdea(idea, {
     modelLog: {
       userId: project.userId,
@@ -782,6 +799,32 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
       throw new Error('项目不存在')
     }
 
+    // 自动生成 visualStyleConfig（如果没有）
+    const projectWithVisual = project as any
+    if (!projectWithVisual.visualStyleConfig) {
+      console.log('[parse-script] 基于完整梗概自动生成 visualStyleConfig')
+      try {
+        const config = await generateVisualStyleConfig(
+          {
+            name: project.name,
+            description: project.description,
+            synopsis: project.synopsis
+          },
+          {
+            userId: project.userId,
+            projectId,
+            op: 'auto_generate_visual_style'
+          }
+        )
+
+        await projectRepository.update(projectId, { visualStyleConfig: config } as any)
+        console.log('[parse-script] visualStyleConfig 已生成并保存')
+      } catch (error) {
+        console.error('[parse-script] 自动生成 visualStyleConfig 失败:', error)
+        // 不阻断流程，继续解析
+      }
+    }
+
     const ep1 = project.episodes.find((e) => e.episodeNum === 1)
     if (!scriptFromJson(ep1?.script)) {
       await updateJob(jobId, { status: 'failed', error: '第一集剧本不存在' })
@@ -1088,20 +1131,22 @@ function splitScriptByEpisodes(script: string): Array<{ num: number; content: st
 export function calculateOverallScore(script: string): number {
   let score = 0
 
-  // 指标 1：场景标记 - 2分
+  // 指标 1：分集标记 - 3分（最重要指标）
+  const episodeMatches = script.match(/第\s*\d+\s*集/gi) || []
+  if (episodeMatches.length >= 3) score += 3
+  else if (episodeMatches.length >= 1) score += 2
+
+  // 指标 2：场景标记 - 2分
   if (/第?\d+[场景场]|scene\s*\d*/i.test(script)) score += 2
 
-  // 指标 2：对话格式 - 2分
+  // 指标 3：对话格式 - 2分
   if (/[""「"]|[\u4e00-\u9fa5]+[：:]\s*[""「"]/.test(script)) score += 2
 
-  // 指标 3：角色说明 - 1分
-  if (/角色[：:]|人物[：:]|character/i.test(script)) score += 1
+  // 指标 4：字数 - 1分（阈值提高到5000）
+  if (script.length > 5000) score += 1
 
-  // 指标 4：字数 - 1分
-  if (script.length > 3000) score += 1
-
-  // 指标 5：分集标记 - 2分
-  if (/第?\d+集|episode\s*\d*/i.test(script)) score += 2
+  // 指标 5：角色说明 - 2分
+  if (/角色[：:]|人物[：:]|character/i.test(script)) score += 2
 
   return score
 }
@@ -1164,7 +1209,7 @@ export function detectScriptMode(
   | { mode: 'ai-create'; episodes?: never } {
   const overallScore = calculateOverallScore(script)
 
-  if (overallScore >= 6) {
+  if (overallScore >= 5) {
     // 可能是完整剧本，逐集验证
     const episodesMode = detectEpisodesMode(script)
 

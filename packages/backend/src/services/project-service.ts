@@ -190,9 +190,7 @@ export class ProjectService {
       return { ok: false, status: 404, error: '项目不存在' }
     }
 
-    if (!project.visualStyle?.length) {
-      return { ok: false, status: 400, error: '请至少选择一种视觉风格' }
-    }
+    // visualStyleConfig 会在 runParseScriptJob 中自动生成，不需要前置检查
 
     const ep1 = project.episodes[0]
     const raw = ep1?.script
@@ -278,7 +276,14 @@ export class ProjectService {
     projectId: string,
     body: UpdateProjectBody
   ): Promise<UpdateProjectResult> {
-    const { name, description, synopsis, visualStyle, visualStyleConfig, aspectRatio } = body
+    const {
+      name,
+      description,
+      synopsis,
+      visualStyle: _visualStyle,
+      visualStyleConfig,
+      aspectRatio
+    } = body
 
     const project = await this.repo.findFirstOwned(projectId, userId)
     if (!project) {
@@ -289,12 +294,7 @@ export class ProjectService {
     if (name !== undefined) data.name = name
     if (description !== undefined) data.description = description
     if (synopsis !== undefined) data.synopsis = synopsis
-    if (visualStyle !== undefined) {
-      if (!Array.isArray(visualStyle)) {
-        return { ok: false, status: 400, error: 'visualStyle 须为字符串数组' }
-      }
-      data.visualStyle = visualStyle
-    }
+    // visualStyle 已废弃，不再处理
     if (visualStyleConfig !== undefined) {
       if (visualStyleConfig !== null && typeof visualStyleConfig !== 'object') {
         return { ok: false, status: 400, error: 'visualStyleConfig 须为对象或 null' }

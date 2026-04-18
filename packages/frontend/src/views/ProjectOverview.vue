@@ -9,8 +9,6 @@ import {
   NButton,
   NSpace,
   useMessage,
-  NCheckboxGroup,
-  NCheckbox,
   NSelect,
   NTabs,
   NTabPane,
@@ -37,7 +35,6 @@ const projectId = computed(() => route.params.id as string)
 const name = ref('')
 const description = ref('')
 const synopsis = ref('')
-const visualStyle = ref<string[]>([])
 const visualStyleConfig = ref<VisualStyleConfig | null>(null)
 const aspectRatio = ref<string>('9:16')
 
@@ -48,13 +45,6 @@ const aspectRatioOptions = [
   { label: '4:3', value: '4:3' },
   { label: '3:4', value: '3:4' },
   { label: '21:9 超宽', value: '21:9' }
-]
-
-const styleOptions = [
-  { label: '真人写实', value: 'realistic' },
-  { label: '电影风格', value: 'cinematic' },
-  { label: '动漫风格', value: 'anime' },
-  { label: '复古调色', value: 'vintage' }
 ]
 
 const eraLabels: Record<string, string> = {
@@ -117,7 +107,7 @@ function hydrate() {
   name.value = p.name || ''
   description.value = p.description || ''
   synopsis.value = p.synopsis || ''
-  visualStyle.value = [...(p.visualStyle || [])]
+  // visualStyle 已废弃
   visualStyleConfig.value = (p.visualStyleConfig as VisualStyleConfig | null) || null
   aspectRatio.value = p.aspectRatio || '9:16'
 }
@@ -170,7 +160,7 @@ async function saveProject() {
       name: name.value,
       description: description.value || undefined,
       synopsis: synopsis.value || undefined,
-      visualStyle: visualStyle.value,
+      // visualStyle 已废弃
       visualStyleConfig: visualStyleConfig.value,
       aspectRatio: aspectRatio.value
     })
@@ -204,15 +194,6 @@ async function saveProject() {
             placeholder="选择画幅"
             style="max-width: 360px"
           />
-        </NFormItem>
-        <NFormItem label="视觉风格（解析剧本前须至少选一项）">
-          <NCheckboxGroup v-model:value="visualStyle">
-            <NSpace vertical>
-              <NCheckbox v-for="opt in styleOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </NCheckbox>
-            </NSpace>
-          </NCheckboxGroup>
         </NFormItem>
         <NFormItem label="视觉风格配置（结构化 4 维度：时代 + 艺术 + 色调 + 画质）">
           <NSpace vertical :size="12">

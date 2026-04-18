@@ -340,7 +340,15 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
     mockRepo.findProjectForExpandScript.mockResolvedValue({
       id: 'proj-1',
       aspectRatio: '16:9',
-      visualStyle: ['cinematic', 'dramatic']
+      visualStyle: [], // visualStyle已废弃
+      visualStyleConfig: {
+        preset: null,
+        era: 'modern',
+        artStyle: ['cinematic'],
+        colorMood: ['warm'],
+        quality: 'cinema',
+        customKeywords: []
+      }
     })
     mockRepo.update.mockResolvedValue({ id: 'ep-1' })
     mockRepo.deleteScenesByEpisode.mockResolvedValue(undefined)
@@ -365,10 +373,11 @@ describe('EpisodeService.applyScriptContentToEpisode', () => {
 
     await callApplyScriptContentToEpisode('ep-1', 'proj-1', 'Title', script)
 
+    // visualStyle已废弃，应该为空数组
     expect(mockRepo.createScene).toHaveBeenCalledWith(
       expect.objectContaining({
         aspectRatio: '16:9',
-        visualStyle: ['cinematic', 'dramatic']
+        visualStyle: []
       })
     )
   })

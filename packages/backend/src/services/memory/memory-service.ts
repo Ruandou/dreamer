@@ -5,7 +5,7 @@ import {
 import { extractMemoriesWithLLM, formatExistingMemories } from './extractor.js'
 import { buildEpisodeWritingContext, buildStoryboardContext } from './context-builder.js'
 import type { ScriptContent } from '@dreamer/shared/types'
-import type { ModelCallLogContext } from '../../types/index.js'
+import type { ModelCallLogContext } from '../ai/model-call-log.js'
 
 export class MemoryService {
   constructor(private repo: MemoryRepository) {}

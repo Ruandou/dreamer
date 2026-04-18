@@ -107,8 +107,6 @@ export class EpisodeService {
 
     await this.repo.deleteScenesByEpisode(episodeId)
 
-    const projectVisual = project?.visualStyle?.length ? [...project.visualStyle] : []
-
     for (const sc of script.scenes) {
       let locationId: string | undefined
       if (sc.location) {
@@ -133,7 +131,7 @@ export class EpisodeService {
         description: sc.description || `${sc.location} - ${sc.timeOfDay}`,
         duration: sceneDurationMs,
         aspectRatio: project?.aspectRatio ?? '9:16',
-        visualStyle: projectVisual,
+        visualStyle: [], // visualStyle已废弃，使用visualStyleConfig
         status: 'pending'
       })
 
