@@ -158,7 +158,7 @@ async function fillEpisodeSynopses(projectId: string) {
   }
 }
 
-export async function runGenerateFirstEpisode(projectId: string) {
+export async function runGenerateFirstEpisode(projectId: string, targetEpisodes?: number) {
   const project = await projectRepository.findUniqueById(projectId)
   if (!project) throw new Error('PROJECT_NOT_FOUND')
 
@@ -167,15 +167,105 @@ export async function runGenerateFirstEpisode(projectId: string) {
   // 检测是否为完整剧本
   const detectionResult = detectScriptMode(project.description || '')
 
-  if (detectionResult.mode === 'faithful-parse' || detectionResult.mode === 'mixed') {
-    // 完整剧本 → 存 synopsis，引导解析
-    console.log('[generate-first] 检测到完整剧本，保存到 synopsis 并引导解析')
+  if (detectionResult.mode === 'faithful-parse') {
+    // 完整剧本 → 解析所有集
+    console.log('[generate-first] 检测到完整剧本，解析所有集')
     await projectRepository.update(projectId, {
       synopsis: project.description,
       storyContext: (project.description || '').slice(0, 12000)
     })
 
-    throw new Error('SHOULD_PARSE_SCRIPT_INSTEAD')
+    const allEpisodes = detectionResult.episodes || []
+    // 尊重 targetEpisodes 限制
+    const maxEp = targetEpisodes ?? allEpisodes.length
+    const episodesToParse = allEpisodes.filter((ep) => ep.episodeNum <= maxEp)
+
+    console.log(
+      `[generate-first] 将解析 ${episodesToParse.length}/${allEpisodes.length} 集（目标：${maxEp}）`
+    )
+
+    let parsedCount = 0
+    let failedCount = 0
+
+    for (const ep of episodesToParse) {
+      if (!ep.content) continue
+
+      try {
+        console.log(`[generate-first] 解析第 ${ep.episodeNum} 集...`)
+        const script = await formatScriptToJSON(ep.content, {
+          userId: project.userId,
+          projectId,
+          op: 'parse_all_episodes_from_complete_script'
+        })
+
+        const episode = await projectRepository.upsertEpisodeBatchFromScript(
+          projectId,
+          ep.episodeNum,
+          script
+        )
+
+        // 提取记忆
+        try {
+          const memoryService = getMemoryService()
+          await memoryService.extractAndSaveMemories(projectId, ep.episodeNum, episode.id, script, {
+            userId: project.userId,
+            projectId,
+            op: 'extract_complete_script_memories'
+          })
+        } catch (error) {
+          console.error(`[generate-first] 第 ${ep.episodeNum} 集记忆提取失败:`, error)
+        }
+
+        parsedCount++
+        console.log(
+          `[generate-first] 第 ${ep.episodeNum} 集解析完成 (${parsedCount}/${episodesToParse.length})`
+        )
+      } catch (error) {
+        failedCount++
+        console.error(`[generate-first] 第 ${ep.episodeNum} 集解析失败:`, error)
+        // 继续处理下一集，不因单集失败而中断
+      }
+    }
+
+    console.log(
+      `[generate-first] 完整剧本解析完成：成功 ${parsedCount} 集，失败 ${failedCount} 集，共 ${episodesToParse.length} 集`
+    )
+
+    if (parsedCount === 0) {
+      throw new Error('完整剧本解析失败，未能成功解析任何集')
+    }
+
+    return
+  }
+
+  if (detectionResult.mode === 'mixed') {
+    // 混合模式 → 只创建第一集，其余交给 script-batch
+    console.log('[generate-first] 检测到混合模式，创建第一集')
+    await projectRepository.update(projectId, {
+      synopsis: project.description,
+      storyContext: (project.description || '').slice(0, 12000)
+    })
+
+    const episodes = detectionResult.episodes
+    if (!episodes) {
+      console.log('[generate-first] 混合模式缺少 episodes 数据')
+      return
+    }
+
+    const ep1 = episodes.find((e) => e.episodeNum === 1)
+    if (ep1?.content) {
+      const script = await formatScriptToJSON(ep1.content, {
+        userId: project.userId,
+        projectId,
+        op: 'parse_first_episode_mixed'
+      })
+      const episode = await projectRepository.upsertEpisodeFirstFromScript(projectId, script)
+      console.log(`[generate-first] 混合模式第一集已创建: episodeId=${episode.id}`)
+    } else {
+      // 第一集内容缺失，由后续 script-batch 的 AI 创作流程处理
+      console.log('[generate-first] 混合模式第一集内容缺失，将由 script-batch 处理')
+    }
+    return
   }
 
   // 创意 → 正常AI生成
@@ -208,7 +298,7 @@ export async function runGenerateFirstEpisode(projectId: string) {
       op: 'extract_first_episode_memories'
     })
   } catch (error) {
-    console.error('Failed to extract memories for first episode:', error)
+    console.error('[generate-first] 第一集记忆提取失败:', error)
     // 不阻断流程，继续执行
   }
 }
@@ -217,14 +307,18 @@ export async function runGenerateFirstEpisode(projectId: string) {
  * 将「生成第一集」绑定到 PipelineJob（互斥与刷新恢复）。
  * 仅由 `POST .../episodes/generate-first` 调用；`ensureAllEpisodeScripts` 内请直接调 `runGenerateFirstEpisode`。
  */
-export async function runGenerateFirstEpisodePipelineJob(jobId: string, projectId: string) {
+export async function runGenerateFirstEpisodePipelineJob(
+  jobId: string,
+  projectId: string,
+  targetEpisodes?: number
+) {
   await updateJob(jobId, {
     status: 'running',
     currentStep: 'script-first',
     progress: 5
   })
   try {
-    await runGenerateFirstEpisode(projectId)
+    await runGenerateFirstEpisode(projectId, targetEpisodes)
     await updateJob(jobId, {
       status: 'completed',
       progress: 100,
@@ -786,12 +880,26 @@ export async function ensureAllEpisodeScripts(
 ) {
   const ep1 = await projectRepository.findEpisodeByProjectNum(projectId, 1)
   if (!ep1 || !scriptFromJson(ep1.script)) {
-    await runGenerateFirstEpisode(projectId)
+    await runGenerateFirstEpisode(projectId, targetEpisodes)
     if (reusePipelineJobId) {
       await updateJob(reusePipelineJobId, {
         progress: 7,
         progressMeta: { message: '已补全第一集，检查其余剧集…' }
       })
+    }
+  }
+
+  // 检查是否已经解析了所有集（完整剧本场景）
+  const project = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
+  if (project) {
+    const existingEpisodes = project.episodes.filter(
+      (ep) => ep.episodeNum >= 1 && ep.episodeNum <= targetEpisodes && scriptFromJson(ep.script)
+    )
+    if (existingEpisodes.length >= targetEpisodes) {
+      console.log(
+        `[ensureAllEpisodeScripts] 已存在 ${existingEpisodes.length}/${targetEpisodes} 集剧本，跳过批量生成`
+      )
+      return
     }
   }
 

@@ -222,14 +222,13 @@ async function runGenerateFirstEpisode() {
   try {
     await api.post(`/projects/${id}/episodes/generate-first`, {})
     await loadProject(id)
-    message.success('第一集剧本已生成')
-  } catch (e: any) {
-    // 处理完整剧本检测
-    if (e?.message?.includes('SHOULD_PARSE_SCRIPT_INSTEAD')) {
-      message.warning('检测到完整剧本，正在跳转到项目详情页...')
-      setTimeout(() => router.push(`/project/${id}`), 1500)
-      return
+
+    // 检查是否为完整剧本解析
+    const updatedEp = episode1.value as any
+    if (updatedEp?.script && scenesFromRaw(updatedEp.script).length > 0) {
+      message.success('第一集剧本已生成')
     }
+  } catch (e: any) {
     message.error(e?.message || '生成第一集失败')
   } finally {
     isGeneratingFirst.value = false

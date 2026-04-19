@@ -57,7 +57,7 @@ export default [
       // 强制禁止 any（规范第4节）- 必须添加注释说明原因才允许使用
       '@typescript-eslint/no-explicit-any': 'error',
       // 禁止使用非空断言，改用可选链或类型守卫
-      '@typescript-eslint/no-non-null-assertion': 'warn',
+      '@typescript-eslint/no-non-null-assertion': 'error',
       // 强制使用 const（优先不可变）
       'prefer-const': 'error',
       'no-var': 'error',
