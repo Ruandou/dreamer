@@ -314,5 +314,58 @@ describe('Parser Service', () => {
         })
       ).rejects.toThrow('剧本解析失败')
     })
+
+    it('should normalize project name by removing markdown markers', async () => {
+      const jsonContent = JSON.stringify({
+        projectName: '# 《天工开物之匠魂》**短剧改造方案**',
+        characters: [],
+        episodes: []
+      })
+
+      const result = await parseScriptDocument(jsonContent, 'json')
+
+      expect(result.parsed.projectName).toBe('天工开物之匠魂短剧改造方案')
+    })
+
+    it('should truncate long project names to 40 characters', async () => {
+      const longName =
+        '这是一个非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常长的项目名称'
+      const jsonContent = JSON.stringify({
+        projectName: longName,
+        characters: [],
+        episodes: []
+      })
+
+      const result = await parseScriptDocument(jsonContent, 'json')
+
+      // 应该被截断到 40 个字符（包括省略号）
+      expect(result.parsed.projectName!.length).toBeGreaterThan(37)
+      expect(result.parsed.projectName!.length).toBeLessThanOrEqual(40)
+      expect(result.parsed.projectName!.endsWith('…')).toBe(true)
+    })
+
+    it('should handle empty project name', async () => {
+      const jsonContent = JSON.stringify({
+        projectName: '',
+        characters: [],
+        episodes: []
+      })
+
+      const result = await parseScriptDocument(jsonContent, 'json')
+
+      expect(result.parsed.projectName).toBe('未命名项目')
+    })
+
+    it('should take only first part before pipe or newline', async () => {
+      const jsonContent = JSON.stringify({
+        projectName: '天工开物\n第二行内容',
+        characters: [],
+        episodes: []
+      })
+
+      const result = await parseScriptDocument(jsonContent, 'json')
+
+      expect(result.parsed.projectName).toBe('天工开物')
+    })
   })
 })

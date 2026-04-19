@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { NCard, NButton, NSpace, NInput, NDropdown, useMessage, useDialog } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
 import type { Project } from '@dreamer/shared/types'
+import { normalizeProjectName } from '@dreamer/shared'
 import { api } from '@/api'
 import type { PipelineJob } from '@/api'
 import EmptyState from '@/components/EmptyState.vue'
@@ -110,7 +111,7 @@ const handleQuickCreate = async () => {
   isCreating.value = true
   try {
     const idea = quickIdea.value.trim()
-    const name = idea.length <= 40 ? idea : `${idea.slice(0, 37)}…`
+    const name = normalizeProjectName(idea)
     const project = await projectStore.createProject({
       name,
       description: idea
