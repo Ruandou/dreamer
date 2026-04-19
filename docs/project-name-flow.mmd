@@ -1,0 +1,79 @@
+graph TB
+    Start[用户创建项目] --> Input{输入类型}
+    
+    Input -->|方式1: 快速创意| QuickCreate[前端输入简短创意]
+    Input -->|方式2: 导入剧本文件| ImportFile[上传 Markdown/TXT 文件]
+    Input -->|方式3: 粘贴完整剧本| PasteScript[粘贴完整剧本]
+    
+    QuickCreate --> Normalize1[normalizeProjectName 前端清洗]
+    Normalize1 --> CreateProject1[POST api/projects 创建项目]
+    
+    ImportFile --> PreviewImport[预览导入 parseScriptDocument]
+    PasteScript --> CreateProject2[POST api/projects 创建项目]
+    
+    PreviewImport --> Normalize2[normalizeProjectName 后端清洗]
+    Normalize2 --> CreateProject3[创建项目并导入]
+    
+    CreateProject1 --> GenerateFirst[生成第一集 POST generate-first]
+    CreateProject2 --> GenerateFirst
+    CreateProject3 --> GenerateFirst
+    
+    GenerateFirst --> DetectMode[detectScriptMode 检测剧本模式]
+    
+    DetectMode -->|模式A: 创意输入| AICreate[AI 创作模式]
+    DetectMode -->|模式B: 完整剧本| FaithfulParse[忠实解析模式]
+    DetectMode -->|模式C: 混合内容| MixedMode[混合模式]
+    
+    AICreate --> WriteScript[writeScriptFromIdea AI 生成第一集]
+    WriteScript --> UpdateSynopsis[更新 synopsis]
+    UpdateSynopsis --> SaveEpisode1[保存第一集]
+    
+    FaithfulParse --> ExtractProjectName[parseScriptDocument AI 提取项目名]
+    ExtractProjectName --> Normalize3[normalizeProjectName 清洗项目名]
+    Normalize3 --> UpdateProjectName[更新 project.name 字段]
+    UpdateProjectName --> FormatEpisodes[formatScriptToJSON 格式化所有集]
+    FormatEpisodes --> SaveAllEpisodes[保存所有集]
+    
+    MixedMode --> ParseFirstEp[解析第一集内容]
+    ParseFirstEp --> SaveFirstEp[保存第一集]
+    
+    SaveEpisode1 --> UserAction{用户后续操作}
+    SaveAllEpisodes --> Completed[完成]
+    SaveFirstEp --> UserAction
+    
+    UserAction -->|批量生成剩余| BatchGen[POST generate-remaining script-batch job]
+    UserAction -->|解析剧本| ParseScript[POST parse parse-script job]
+    
+    BatchGen --> BatchDetect[detectScriptMode 再次检测模式]
+    ParseScript --> RunParse[runParseScriptJob]
+    
+    BatchDetect -->|完整剧本| FaithfulParse2[runFaithfulParse 也会提取项目名]
+    BatchDetect -->|混合模式| MixedParse[runMixedMode 分组处理]
+    BatchDetect -->|AI创作| ThreePhase[三阶段生成 大纲 审核 剧本]
+    
+    FaithfulParse2 --> ExtractProjectName2[parseScriptDocument 提取项目名]
+    ExtractProjectName2 --> Normalize4[normalizeProjectName]
+    Normalize4 --> UpdateProjectName2[更新项目名]
+    UpdateProjectName2 --> FormatAll[格式化所有集]
+    FormatAll --> Completed
+    
+    MixedParse --> GroupEpisodes[按模式分组]
+    GroupEpisodes --> ProcessGroups[忠实解析 扩展 AI创作]
+    ProcessGroups --> Completed
+    
+    ThreePhase --> GenOutlines[并行生成大纲]
+    GenOutlines --> Review[总编剧审核]
+    Review --> Revise{需要修改}
+    Revise -->|是| ReviseOutlines[修正大纲]
+    Revise -->|否| GenScripts[生成剧本]
+    ReviseOutlines --> GenScripts
+    GenScripts --> Completed
+    
+    RunParse --> ParseDetect[detectScriptMode]
+    ParseDetect --> ParseFaithful[忠实解析]
+    ParseDetect --> ParseExpand[扩展生成]
+    ParseDetect --> ParseAICreate[AI创作]
+    ParseFaithful --> Completed
+    ParseExpand --> Completed
+    ParseAICreate --> Completed
+
