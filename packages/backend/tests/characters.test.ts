@@ -60,7 +60,9 @@ const mockVerifyProjectOwnership = vi.fn().mockResolvedValue(true)
 
 vi.mock('../src/plugins/auth.js', () => ({
   verifyCharacterOwnership: (...args: any[]) => mockVerifyCharacterOwnership(...args),
-  verifyProjectOwnership: (...args: any[]) => mockVerifyProjectOwnership(...args)
+  verifyProjectOwnership: (...args: any[]) => mockVerifyProjectOwnership(...args),
+  getRequestUser: (request: any) => request.user,
+  getRequestUserId: (request: any) => request.user?.id
 }))
 
 // Mock the index.js module

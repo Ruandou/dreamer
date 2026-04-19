@@ -49,7 +49,7 @@ export interface RenderedPrompt {
 
 export interface TemplateRenderOptions {
   /** 变量映射 */
-  variables: Record<string, any>
+  variables: Record<string, unknown>
   /** 可选：指定模板版本，默认使用最新版本 */
   version?: string
 }
@@ -141,7 +141,7 @@ export class PromptTemplateEngine {
    */
   static render(
     templateId: string,
-    variables: Record<string, any>,
+    variables: Record<string, unknown>,
     version?: string
   ): RenderedPrompt {
     return this.getInstance().render(templateId, { variables, version })
@@ -182,7 +182,7 @@ export class PromptTemplateEngine {
    * 支持条件块：{{#variable}}...{{/variable}}（仅当 variable 有值时渲染）
    * 支持数组迭代：{{#array}}...{{.}}...{{/array}}
    */
-  private interpolate(template: string, variables: Record<string, any>): string {
+  private interpolate(template: string, variables: Record<string, unknown>): string {
     // 先处理条件块和数组迭代
     let result = this.processSections(template, variables)
     // 再处理简单变量
@@ -193,7 +193,7 @@ export class PromptTemplateEngine {
   /**
    * 处理条件块和数组迭代（{{#...}}...{{/...}} 和 {{^...}}...{{/...}}）
    */
-  private processSections(template: string, variables: Record<string, any>): string {
+  private processSections(template: string, variables: Record<string, unknown>): string {
     // 匹配 {{#section}}...{{/section}}
     const sectionRegex = /\{\{#([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g
 
@@ -237,9 +237,9 @@ export class PromptTemplateEngine {
           .join('')
       }
 
-      // 如果是普通值，渲染内容块（支持嵌套变量）
-      if (typeof value === 'object') {
-        return this.replaceVariables(content, value)
+      // 如枟是普通值，渲染内容块（支持嵌套变量）
+      if (typeof value === 'object' && value !== null) {
+        return this.replaceVariables(content, value as Record<string, unknown>)
       }
 
       return content
@@ -251,7 +251,7 @@ export class PromptTemplateEngine {
   /**
    * 替换简单变量
    */
-  private replaceVariables(template: string, variables: Record<string, any>): string {
+  private replaceVariables(template: string, variables: Record<string, unknown>): string {
     return template.replace(/\{\{([^#/}][^}]*)\}\}/g, (match, path) => {
       const value = this.resolvePath(variables, path.trim())
       if (value === undefined || value === null) {
@@ -265,15 +265,15 @@ export class PromptTemplateEngine {
   /**
    * 解析嵌套路径（如 "user.name"）
    */
-  private resolvePath(obj: Record<string, any>, path: string): any {
+  private resolvePath(obj: Record<string, unknown>, path: string): unknown {
     const parts = path.split('.')
-    let current: any = obj
+    let current: unknown = obj
 
     for (const part of parts) {
       if (current === undefined || current === null) {
         return undefined
       }
-      current = current[part]
+      current = (current as Record<string, unknown>)[part]
     }
 
     return current

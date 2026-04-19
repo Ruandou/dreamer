@@ -23,7 +23,10 @@ export function subscribeProjectUpdates(
   if (!listeners.has(projectId)) {
     listeners.set(projectId, new Set())
   }
-  listeners.get(projectId)!.add(handler)
+  const projectListeners = listeners.get(projectId)
+  if (projectListeners) {
+    projectListeners.add(handler)
+  }
   return () => {
     const set = listeners.get(projectId)
     if (!set) return

@@ -6,10 +6,11 @@
  */
 
 import { FastifyInstance } from 'fastify'
-import { verifyProjectOwnership } from '../plugins/auth.js'
+import { verifyProjectOwnership, getRequestUserId } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { getMemoryService } from '../services/memory/index.js'
 import type { MemoryType } from '../repositories/memory-repository.js'
+import type { ScriptContent } from '@dreamer/shared'
 
 export async function memoryRoutes(fastify: FastifyInstance) {
   const memoryService = getMemoryService()
@@ -28,7 +29,7 @@ export async function memoryRoutes(fastify: FastifyInstance) {
       offset?: string
     }
   }>('/:projectId/memories', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const { projectId } = request.params
     const { type, isActive, episodeId, tags, minImportance, category } = request.query
 
@@ -36,7 +37,7 @@ export async function memoryRoutes(fastify: FastifyInstance) {
       return reply.status(403).send(permissionDeniedBody)
     }
 
-    const filters: any = {}
+    const filters: Record<string, unknown> = {}
     if (type) filters.type = type
     if (isActive !== undefined) filters.isActive = isActive === 'true'
     if (episodeId) filters.episodeId = episodeId
@@ -44,7 +45,10 @@ export async function memoryRoutes(fastify: FastifyInstance) {
     if (minImportance) filters.minImportance = parseInt(minImportance, 10)
     if (category) filters.category = category
 
-    const memories = await memoryService.queryMemories(projectId, filters)
+    const memories = await memoryService.queryMemories(
+      projectId,
+      filters as Parameters<typeof memoryService.queryMemories>[1]
+    )
 
     return {
       success: true,
@@ -60,7 +64,7 @@ export async function memoryRoutes(fastify: FastifyInstance) {
     '/:projectId/memories/:memoryId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { projectId, memoryId } = request.params
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
@@ -96,10 +100,10 @@ export async function memoryRoutes(fastify: FastifyInstance) {
       tags?: string[]
       importance?: number
       episodeId?: string
-      metadata?: Record<string, any>
+      metadata?: Record<string, unknown>
     }
   }>('/:projectId/memories', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const { projectId } = request.params
     const { type, category, title, content, tags, importance, episodeId, metadata } = request.body
 
@@ -123,9 +127,9 @@ export async function memoryRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const memory = await memoryService.queryMemories(projectId, {}).then(() => {
+    const memory = await memoryService.queryMemories(projectId, {}).then(async () => {
       // Use repository directly for creation
-      const { MemoryRepository } = require('../repositories/memory-repository.js')
+      const { MemoryRepository } = await import('../repositories/memory-repository.js')
       const repo = new MemoryRepository()
       return repo.create({
         projectId,
@@ -162,7 +166,7 @@ export async function memoryRoutes(fastify: FastifyInstance) {
     '/:projectId/memories/:memoryId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { projectId, memoryId } = request.params
       const { title, content, tags, importance, isActive, verified, category } = request.body
 
@@ -193,8 +197,8 @@ export async function memoryRoutes(fastify: FastifyInstance) {
           success: true,
           data: updated
         }
-      } catch (error: any) {
-        if (error.code === 'P2025') {
+      } catch (error: unknown) {
+        if (error instanceof Error && (error as { code?: string }).code === 'P2025') {
           return reply.status(404).send({
             success: false,
             error: 'Memory not found'
@@ -212,7 +216,7 @@ export async function memoryRoutes(fastify: FastifyInstance) {
     '/:projectId/memories/:memoryId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { projectId, memoryId } = request.params
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
@@ -226,8 +230,8 @@ export async function memoryRoutes(fastify: FastifyInstance) {
           success: true,
           message: 'Memory deleted successfully'
         }
-      } catch (error: any) {
-        if (error.code === 'P2025') {
+      } catch (error: unknown) {
+        if (error instanceof Error && (error as { code?: string }).code === 'P2025') {
           return reply.status(404).send({
             success: false,
             error: 'Memory not found'
@@ -249,7 +253,7 @@ export async function memoryRoutes(fastify: FastifyInstance) {
     '/:projectId/memories/search',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { projectId } = request.params
       const { query, limit } = request.body
 
@@ -282,7 +286,7 @@ export async function memoryRoutes(fastify: FastifyInstance) {
     '/:projectId/memories/context',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { projectId } = request.params
       const { episodeNum } = request.query
 
@@ -320,7 +324,7 @@ export async function memoryRoutes(fastify: FastifyInstance) {
     '/:projectId/memories/extract',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { projectId } = request.params
       const { episodeId, episodeNum } = request.body
 
@@ -353,7 +357,7 @@ export async function memoryRoutes(fastify: FastifyInstance) {
           projectId,
           episodeNum,
           episodeId,
-          episode.script as any,
+          episode.script as unknown as ScriptContent,
           { userId, projectId, op: 'manual_memory_extraction' }
         )
 
@@ -362,12 +366,12 @@ export async function memoryRoutes(fastify: FastifyInstance) {
           data: result,
           message: `Extracted ${result.extracted} memories, saved ${result.saved}`
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Memory extraction failed:', error)
         return reply.status(500).send({
           success: false,
           error: 'Memory extraction failed',
-          message: error.message
+          message: error instanceof Error ? error.message : 'Unknown error'
         })
       }
     }
@@ -380,7 +384,7 @@ export async function memoryRoutes(fastify: FastifyInstance) {
     '/:projectId/memories/stats',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { projectId } = request.params
 
       if (!(await verifyProjectOwnership(userId, projectId))) {

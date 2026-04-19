@@ -64,8 +64,9 @@ function buildMergeUserScript(script: ScriptContent, uniqueNames: string[]): str
   return lines.join('\n\n')
 }
 
-function normalizeMergePayload(data: any): CharacterIdentityMergeResult {
-  const aliasRaw = data?.aliasToCanonical
+function normalizeMergePayload(data: unknown): CharacterIdentityMergeResult {
+  const d = data as Record<string, unknown>
+  const aliasRaw = d?.aliasToCanonical
   const aliasToCanonical: Record<string, string> = {}
   if (aliasRaw && typeof aliasRaw === 'object' && !Array.isArray(aliasRaw)) {
     for (const [k, v] of Object.entries(aliasRaw)) {
@@ -76,17 +77,17 @@ function normalizeMergePayload(data: any): CharacterIdentityMergeResult {
   }
 
   let characters: ParsedCharacter[] = []
-  if (Array.isArray(data?.characters)) {
-    characters = data.characters.map((c: any) => {
+  if (Array.isArray(d?.characters)) {
+    characters = (d.characters as Record<string, unknown>[]).map((c) => {
       const images = Array.isArray(c.images)
-        ? c.images.map((img: any) => ({
+        ? (c.images as Record<string, unknown>[]).map((img) => ({
             name: String(img?.name || '').trim() || '基础形象',
             type: String(img?.type || 'base').toLowerCase(),
             description: String(img?.description || '').trim()
           }))
         : undefined
       const aliases = Array.isArray(c.aliases)
-        ? c.aliases.map((a: any) => String(a).trim()).filter(Boolean)
+        ? (c.aliases as unknown[]).map((a) => String(a).trim()).filter(Boolean)
         : undefined
       return {
         name: String(c.name || '').trim(),

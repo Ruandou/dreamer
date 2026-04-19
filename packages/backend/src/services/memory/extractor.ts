@@ -13,7 +13,7 @@ export interface ExtractedMemory {
   content: string
   tags: string[]
   importance: number
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface MemoryExtractionResult {
@@ -55,20 +55,20 @@ export async function extractMemoriesWithLLM(
       .replace(/```\s*/g, '')
       .trim()
 
-    const parsed = JSON.parse(cleanContent)
+    const parsed = JSON.parse(cleanContent) as { memories?: unknown[] }
 
     if (!parsed.memories || !Array.isArray(parsed.memories)) {
       throw new Error('Invalid memory extraction response: missing memories array')
     }
 
-    const memories: ExtractedMemory[] = parsed.memories.map((m: any) => ({
+    const memories: ExtractedMemory[] = (parsed.memories as Record<string, unknown>[]).map((m) => ({
       type: m.type as MemoryType,
-      category: m.category,
-      title: m.title,
-      content: m.content,
-      tags: m.tags || [],
-      importance: m.importance || 3,
-      metadata: m.metadata || {}
+      category: String(m.category ?? ''),
+      title: String(m.title ?? ''),
+      content: String(m.content ?? ''),
+      tags: (Array.isArray(m.tags) ? m.tags : []) as string[],
+      importance: (m.importance as number) || 3,
+      metadata: (m.metadata as Record<string, unknown>) || {}
     }))
 
     return {

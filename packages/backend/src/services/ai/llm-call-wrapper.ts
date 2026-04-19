@@ -4,7 +4,7 @@
  * 封装通用的重试逻辑、错误处理和日志记录
  */
 
-import type { LLMProvider, LLMMessage, LLMCompletion } from './llm-provider.js'
+import type { LLMProvider, LLMMessage } from './llm-provider.js'
 import type { DeepSeekCost } from './deepseek-client.js'
 import { DeepSeekAuthError, DeepSeekRateLimitError } from './deepseek-client.js'
 import { logDeepSeekChat } from './model-call-log.js'
@@ -103,14 +103,19 @@ export async function callLLMWithRetry<T>(
         },
         rawResponse: completion.rawResponse
       }
-    } catch (error: any) {
-      lastError = error
+    } catch (error: unknown) {
+      lastError = error instanceof Error ? error : null
 
       // 认证错误 - 立即抛出，不重试
-      if (error instanceof DeepSeekAuthError || AUTH_ERROR_STATUS_CODES.includes(error?.status)) {
+      const errStatus = (error as { status?: number })?.status
+      if (
+        error instanceof DeepSeekAuthError ||
+        (errStatus !== undefined &&
+          (AUTH_ERROR_STATUS_CODES as readonly number[]).includes(errStatus))
+      ) {
         logDeepSeekChat(modelLog, userPrompt, {
           status: 'failed',
-          errorMsg: error?.message || 'auth'
+          errorMsg: lastError?.message || 'auth'
         }).catch(() => {
           /* ignore */
         })
@@ -118,10 +123,11 @@ export async function callLLMWithRetry<T>(
       }
 
       // 限流错误 - 使用指数退避重试
+      const errMsg = lastError?.message || ''
       if (
         error instanceof DeepSeekRateLimitError ||
-        error?.status === RATE_LIMIT_STATUS_CODE ||
-        error?.message?.includes('rate_limit')
+        errStatus === RATE_LIMIT_STATUS_CODE ||
+        errMsg.includes('rate_limit')
       ) {
         if (attempt < maxRetries) {
           const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1) // 指数退避：1s, 2s, 4s
@@ -141,9 +147,7 @@ export async function callLLMWithRetry<T>(
       // 其他错误 - 使用指数退避重试
       if (attempt < maxRetries) {
         const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1) // 指数退避：1s, 2s, 4s
-        console.log(
-          `[llm-call] 其他错误 (${error?.status || error?.message}), ${delay / 1000}秒后重试...`
-        )
+        console.log(`[llm-call] 其他错误 (${errStatus || errMsg}), ${delay / 1000}秒后重试...`)
         await sleep(delay)
         continue
       }

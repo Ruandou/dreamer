@@ -281,7 +281,7 @@ export function estimateSeedanceCost(duration: number): number {
 export function selectBestCharacterImage(
   characterName: string,
   characterImages: CharacterImage[],
-  context?: string
+  _context?: string
 ): string | undefined {
   // 筛选该角色的图片
   const relevantImages = characterImages.filter(

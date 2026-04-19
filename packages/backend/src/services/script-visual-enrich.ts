@@ -252,7 +252,8 @@ export async function applyScriptVisualEnrichment(
   console.log(`[visual-enrich] 场地数: ${locations.length}, 角色数: ${characters.length}`)
 
   // visualStyle 已废弃，只使用 visualStyleConfig
-  const visualStyleConfig = (projectRow as any).visualStyleConfig as VisualStyleConfig | null
+  const projectRowWithConfig = projectRow as { visualStyleConfig?: unknown }
+  const visualStyleConfig = projectRowWithConfig.visualStyleConfig as VisualStyleConfig | null
 
   const locationLines = locations
     .map((l) => {
@@ -284,12 +285,13 @@ export async function applyScriptVisualEnrichment(
     )
     jsonText = result.jsonText
     console.log(`[visual-enrich] DeepSeek 返回成功, 内容长度: ${jsonText.length} chars`)
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '未知错误'
     console.error('[visual-enrich] DeepSeek 调用失败:', {
-      error: error.message,
+      error: message,
       projectId
     })
-    throw new Error(`视觉增强失败：DeepSeek 调用异常 - ${error.message}`, { cause: error })
+    throw new Error(`视觉增强失败：DeepSeek 调用异常 - ${message}`, { cause: error })
   }
 
   let payload: VisualPayload

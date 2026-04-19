@@ -203,7 +203,11 @@ export class StatsService {
       if (!dailyCosts.has(date)) {
         dailyCosts.set(date, { date, wanCost: 0, seedanceCost: 0, imageCost: 0, total: 0 })
       }
-      return dailyCosts.get(date)!
+      const dailyCost = dailyCosts.get(date)
+      if (!dailyCost) {
+        throw new Error(`Failed to get daily cost for date: ${date}`)
+      }
+      return dailyCost
     }
 
     tasks.forEach((task) => {

@@ -61,7 +61,7 @@ export class PromptRegistry {
   /**
    * 渲染模板
    */
-  render(templateId: string, variables: Record<string, any>, version?: string) {
+  render(templateId: string, variables: Record<string, unknown>, version?: string) {
     this.ensureInitialized()
     return PromptTemplateEngine.getInstance().render(templateId, {
       variables,

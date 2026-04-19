@@ -22,7 +22,9 @@ const {
 vi.mock('../src/plugins/auth.js', () => ({
   verifyCharacterImageOwnership: (...args: unknown[]) => mockVerifyCharacterImageOwnership(...args),
   verifyProjectOwnership: (...args: unknown[]) => mockVerifyProjectOwnership(...args),
-  verifyCharacterOwnership: (...args: unknown[]) => mockVerifyCharacterOwnership(...args)
+  verifyCharacterOwnership: (...args: unknown[]) => mockVerifyCharacterOwnership(...args),
+  getRequestUser: (request: any) => request.user,
+  getRequestUserId: (request: any) => request.user?.id
 }))
 
 vi.mock('../src/lib/prisma.js', () => ({

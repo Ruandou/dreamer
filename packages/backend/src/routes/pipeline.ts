@@ -5,6 +5,7 @@
 
 import { FastifyInstance } from 'fastify'
 import { pipelineRouteService } from '../services/pipeline-route-service.js'
+import { getRequestUserId } from '../plugins/auth.js'
 
 export async function pipelineRoutes(fastify: FastifyInstance) {
   // 创建 Pipeline Job
@@ -23,7 +24,7 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate]
     },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
 
       const result = await pipelineRouteService.createAndStartFullPipeline(userId, request.body)
 
@@ -57,7 +58,7 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate]
     },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { jobId } = request.params
 
       const result = await pipelineRouteService.getJobDetail(userId, jobId)
@@ -81,7 +82,7 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate]
     },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { projectId } = request.params
 
       const result = await pipelineRouteService.getProjectPipelineStatus(userId, projectId)
@@ -114,7 +115,7 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate]
     },
     async (request) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       return pipelineRouteService.listJobsForUser(userId)
     }
   )
@@ -128,7 +129,7 @@ export async function pipelineRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate]
     },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { jobId } = request.params
 
       const result = await pipelineRouteService.cancelJob(userId, jobId)

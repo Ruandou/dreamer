@@ -321,7 +321,7 @@ function parseScriptResponse(content: string): ScriptContent {
           '[script-writer] Extracted JSON (first 1000 chars):',
           jsonMatch[0].substring(0, 1000)
         )
-        console.error('[script-writer] Error position:', (innerError as any)?.message)
+        console.error('[script-writer] Error position:', (innerError as Error)?.message)
         console.error('[script-writer] Error:', innerError)
         throw new Error(
           `剧本JSON格式不正确: ${innerError instanceof Error ? innerError.message : '未知错误'}`,
@@ -336,49 +336,56 @@ function parseScriptResponse(content: string): ScriptContent {
   }
 }
 
-function convertToScriptContent(data: any): ScriptContent {
+function convertToScriptContent(data: unknown): ScriptContent {
+  const d = data as Record<string, unknown>
   // 处理可能的嵌套结构
-  let scenesArray: any[] = []
+  let scenesArray: Record<string, unknown>[] = []
 
   // 支持 scenes 或 segments（segment 是新的命名）
-  if (Array.isArray(data.scenes)) {
-    scenesArray = data.scenes
-  } else if (Array.isArray(data.segments)) {
-    scenesArray = data.segments
-  } else if (Array.isArray(data.episodes) && data.episodes.length > 0) {
+  if (Array.isArray(d.scenes)) {
+    scenesArray = d.scenes as Record<string, unknown>[]
+  } else if (Array.isArray(d.segments)) {
+    scenesArray = d.segments as Record<string, unknown>[]
+  } else if (Array.isArray(d.episodes) && d.episodes.length > 0) {
     // 兼容嵌套 episodes 结构
-    scenesArray = data.episodes[0].scenes || data.episodes[0].segments || []
+    const firstEp = (d.episodes as Record<string, unknown>[])[0]
+    scenesArray =
+      (firstEp?.scenes as Record<string, unknown>[]) ||
+      (firstEp?.segments as Record<string, unknown>[]) ||
+      []
   }
 
-  const scenes: ScriptScene[] = scenesArray.map((s: any, index: number) => {
+  const scenes: ScriptScene[] = scenesArray.map((s, index: number) => {
     // 处理 dialogues
     let dialogues: ScriptDialogueLine[] = []
     if (Array.isArray(s.dialogues)) {
-      dialogues = s.dialogues.map((d: any) => ({
-        character: d.character || d.name || '',
-        content: d.content || d.line || ''
+      dialogues = (s.dialogues as Record<string, unknown>[]).map((d) => ({
+        character: String(d.character || d.name || ''),
+        content: String(d.content || d.line || '')
       }))
     } else if (s.dialogue && typeof s.dialogue === 'object') {
-      dialogues = Object.entries(s.dialogue).map(([character, content]) => ({
-        character,
-        content: content as string
-      }))
+      dialogues = Object.entries(s.dialogue as Record<string, unknown>).map(
+        ([character, content]) => ({
+          character,
+          content: content as string
+        })
+      )
     }
 
     // 处理 actions
     let actions: string[] = []
     if (Array.isArray(s.actions)) {
-      actions = s.actions
+      actions = s.actions as string[]
     } else if (typeof s.action === 'string') {
-      actions = s.action.split(/(?<=[。！？；.!?;])/).filter(Boolean)
+      actions = (s.action as string).split(/(?<=[。！？；.!?;])/).filter(Boolean)
     }
 
     return {
-      sceneNum: s.segmentNum || s.sceneNum || s.scene_number || index + 1,
-      location: s.location || '',
-      timeOfDay: s.timeOfDay || s.time || '日',
-      characters: Array.isArray(s.characters) ? s.characters : [],
-      description: s.description || '',
+      sceneNum: (s.segmentNum || s.sceneNum || s.scene_number || index + 1) as number,
+      location: String(s.location || ''),
+      timeOfDay: String(s.timeOfDay || s.time || '日'),
+      characters: Array.isArray(s.characters) ? (s.characters as string[]) : [],
+      description: String(s.description || ''),
       dialogues,
       actions
     }
@@ -388,8 +395,8 @@ function convertToScriptContent(data: any): ScriptContent {
   // const metadata = data.metadata || {}
 
   return {
-    title: data.title || data.episode_title || '未命名剧本',
-    summary: data.summary || '',
+    title: String(d.title || d.episode_title || '未命名剧本'),
+    summary: String(d.summary || ''),
     scenes
   }
 }

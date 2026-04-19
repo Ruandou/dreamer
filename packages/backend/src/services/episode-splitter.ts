@@ -99,15 +99,11 @@ function distributeScenesToEpisodes(
   const endingScenes = sceneTypes.filter((s) => s.type === 'ending')
   const middleScenes = sceneTypes.filter((s) => s.type === 'middle')
 
-  // 打乱场景顺序以增加多样性（但保持结构）
-  const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => Math.random() - 0.5)
-
   // 分配每集的场景
   for (let i = 0; i < episodeCount; i++) {
     const episode: ScriptScene[] = []
     const isFirstEpisode = i === 0
     const isLastEpisode = i === episodeCount - 1
-    const isMiddleEpisode = !isFirstEpisode && !isLastEpisode
 
     // 计算这集应该有多少场景
     const targetSceneCount = scenesPerEpisode
@@ -141,7 +137,10 @@ function distributeScenesToEpisodes(
 
     // 如果还不够，从 climax 和剩余场景补充
     if (episode.length < minScenes && climaxScenes.length > 0) {
-      episode.push(climaxScenes.shift()!.scene)
+      const climaxScene = climaxScenes.shift()
+      if (climaxScene) {
+        episode.push(climaxScene.scene)
+      }
     }
 
     // 排序按原始顺序
@@ -261,7 +260,7 @@ function hasClimaxIndicators(scene: ScriptScene): boolean {
 /**
  * 生成本集梗概
  */
-function generateEpisodeSynopsis(scenes: ScriptScene[], episodeNum: number): string {
+function generateEpisodeSynopsis(scenes: ScriptScene[], _episodeNum: number): string {
   if (scenes.length === 0) return ''
 
   // 提取主要角色
@@ -355,12 +354,12 @@ export function optimizeEpisodePlan(
   return episodes
 }
 
-function expandEpisodes(episodes: EpisodePlan[], ratio: number): EpisodePlan[] {
+function expandEpisodes(episodes: EpisodePlan[], _ratio: number): EpisodePlan[] {
   // 简化处理：返回原计划
   return episodes
 }
 
-function compressEpisodes(episodes: EpisodePlan[], ratio: number): EpisodePlan[] {
+function compressEpisodes(episodes: EpisodePlan[], _ratio: number): EpisodePlan[] {
   // 简化处理：返回原计划
   return episodes
 }

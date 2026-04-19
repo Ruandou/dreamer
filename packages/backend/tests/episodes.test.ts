@@ -106,7 +106,9 @@ vi.mock('../src/services/episode-storyboard-job.js', () => ({
 // Mock verifyEpisodeOwnership and verifyProjectOwnership
 vi.mock('../src/plugins/auth.js', () => ({
   verifyEpisodeOwnership: (...args: unknown[]) => mockVerifyEpisodeOwnership(...args),
-  verifyProjectOwnership: (...args: unknown[]) => mockVerifyProjectOwnership(...args)
+  verifyProjectOwnership: (...args: unknown[]) => mockVerifyProjectOwnership(...args),
+  getRequestUser: (request: any) => request.user,
+  getRequestUserId: (request: any) => request.user?.id
 }))
 
 // Mock the index.js module

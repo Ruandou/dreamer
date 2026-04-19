@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { verifySceneOwnership, verifyEpisodeOwnership } from '../plugins/auth.js'
+import { verifySceneOwnership, verifyEpisodeOwnership, getRequestUserId } from '../plugins/auth.js'
 import type { VideoModel } from '@dreamer/shared/types'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { sceneService } from '../services/scene-service.js'
@@ -9,7 +9,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { episodeId } = request.query
 
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
@@ -24,7 +24,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const sceneId = request.params.id
 
       if (!(await verifySceneOwnership(userId, sceneId))) {
@@ -44,7 +44,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: { episodeId: string; sceneNum: number; description?: string; prompt: string }
   }>('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const { episodeId, sceneNum, description, prompt } = request.body
 
     if (!(await verifyEpisodeOwnership(userId, episodeId))) {
@@ -69,7 +69,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     Params: { id: string }
     Body: { description?: string; sceneNum?: number; prompt?: string }
   }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const sceneId = request.params.id
 
     if (!(await verifySceneOwnership(userId, sceneId))) {
@@ -83,7 +83,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const sceneId = request.params.id
 
       if (!(await verifySceneOwnership(userId, sceneId))) {
@@ -102,7 +102,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     Params: { id: string }
     Body: { model: VideoModel; referenceImage?: string; imageUrls?: string[]; duration?: number }
   }>('/:id/generate', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const sceneId = request.params.id
 
     if (!(await verifySceneOwnership(userId, sceneId))) {
@@ -120,8 +120,8 @@ export async function sceneRoutes(fastify: FastifyInstance) {
 
   fastify.post<{
     Body: { sceneIds: string[]; model: VideoModel; referenceImage?: string; imageUrls?: string[] }
-  }>('/batch-generate', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+  }>('/batch-generate', { preHandler: [fastify.authenticate] }, async (request, _reply) => {
+    const userId = getRequestUserId(request)
     const { sceneIds, model, referenceImage, imageUrls } = request.body
 
     const results = await sceneService.batchEnqueueVideoGenerate(
@@ -140,7 +140,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     '/:id/tasks/:taskId/select',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { id: sceneId, taskId } = request.params
 
       if (!(await verifySceneOwnership(userId, sceneId))) {
@@ -155,7 +155,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     '/:id/tasks',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const sceneId = request.params.id
 
       if (!(await verifySceneOwnership(userId, sceneId))) {
@@ -170,7 +170,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
     '/:id/optimize-prompt',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const sceneId = request.params.id
 
       if (!(await verifySceneOwnership(userId, sceneId))) {

@@ -23,7 +23,7 @@ export async function getDeepSeekBalance(): Promise<DeepSeekBalance> {
 
   return {
     isAvailable: data.is_available,
-    balanceInfos: (data.balance_infos || []).map((info: any) => ({
+    balanceInfos: ((data.balance_infos || []) as Record<string, string>[]).map((info) => ({
       currency: info.currency,
       totalBalance: parseFloat(info.total_balance),
       grantedBalance: parseFloat(info.granted_balance),

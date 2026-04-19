@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { verifyCharacterShotOwnership } from '../plugins/auth.js'
+import { verifyCharacterShotOwnership, getRequestUser } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { characterShotService } from '../services/character-shot-service.js'
 
@@ -8,7 +8,7 @@ export async function characterShotsRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const id = request.params.id
       const { characterImageId } = request.body
 

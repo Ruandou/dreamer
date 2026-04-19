@@ -10,7 +10,9 @@ const { mockVerifyTaskOwnership, mockTakeFindUnique, mockTakeUpdateMany, mockTak
   }))
 
 vi.mock('../src/plugins/auth.js', () => ({
-  verifyTaskOwnership: (...args: unknown[]) => mockVerifyTaskOwnership(...args)
+  verifyTaskOwnership: (...args: unknown[]) => mockVerifyTaskOwnership(...args),
+  getRequestUser: (request: any) => request.user,
+  getRequestUserId: (request: any) => request.user?.id
 }))
 
 vi.mock('../src/lib/prisma.js', () => ({

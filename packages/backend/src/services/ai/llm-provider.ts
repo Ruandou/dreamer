@@ -59,7 +59,7 @@ export interface LLMCompletionOptions {
   /** 顶部采样 */
   topP?: number
   /** 其他提供商特定选项 */
-  extra?: Record<string, any>
+  extra?: Record<string, unknown>
 }
 
 /** LLM 提供者接口 */

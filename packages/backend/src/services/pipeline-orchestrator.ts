@@ -16,11 +16,11 @@ import type {
   CharacterImage
 } from '@dreamer/shared/types'
 
-import { writeScriptFromIdea, improveScript, optimizeSceneDescription } from './script-writer.js'
+import { writeScriptFromIdea } from './script-writer.js'
 
 import { splitIntoEpisodes } from './episode-splitter.js'
 
-import { extractActionsFromScenes, extractActionsFromScene } from './action-extractor.js'
+import { extractActionsFromScenes } from './action-extractor.js'
 
 import {
   matchAssetsForScenes,
@@ -196,7 +196,7 @@ export async function executePipeline(
  */
 async function executeStep(
   step: PipelineStep,
-  fn: () => Promise<any>
+  fn: () => Promise<unknown>
 ): Promise<PipelineStepResult> {
   const startTime = Date.now()
 
@@ -245,24 +245,28 @@ export async function executeSingleStep(
         error: 'script-writing 步骤需要原始 idea，无法单独执行'
       }
 
-    case 'episode-splitting':
-      if (!previousResults.script) {
+    case 'episode-splitting': {
+      const script = previousResults.script
+      if (!script) {
         return { step, status: 'failed', error: '缺少 script 数据' }
       }
-      return executeStep(step, () => Promise.resolve(splitIntoEpisodes(previousResults.script!)))
+      return executeStep(step, () => Promise.resolve(splitIntoEpisodes(script)))
+    }
 
-    case 'action-extraction':
-      if (!previousResults.script) {
+    case 'action-extraction': {
+      const script = previousResults.script
+      if (!script) {
         return { step, status: 'failed', error: '缺少 script 数据' }
       }
       return executeStep(step, () =>
-        Promise.resolve(
-          extractActionsFromScenes(previousResults.script!.scenes, context.characters)
-        )
+        Promise.resolve(extractActionsFromScenes(script.scenes, context.characters))
       )
+    }
 
-    case 'asset-matching':
-      if (!previousResults.script || !previousResults.sceneActions) {
+    case 'asset-matching': {
+      const script = previousResults.script
+      const sceneActions = previousResults.sceneActions
+      if (!script || !sceneActions) {
         return { step, status: 'failed', error: '缺少必要数据' }
       }
       const projectAssets = [
@@ -270,14 +274,9 @@ export async function executeSingleStep(
         ...context.projectAssets
       ]
       return executeStep(step, () =>
-        Promise.resolve(
-          matchAssetsForScenes(
-            previousResults.script!.scenes,
-            projectAssets,
-            previousResults.sceneActions
-          )
-        )
+        Promise.resolve(matchAssetsForScenes(script.scenes, projectAssets, sceneActions))
       )
+    }
 
     case 'storyboard-generation':
       if (!previousResults.episodes || !previousResults.assetRecommendations) {
@@ -285,10 +284,15 @@ export async function executeSingleStep(
       }
       return executeStep(step, () => {
         const allSegments: StoryboardSegment[] = []
-        for (const episode of previousResults.episodes!) {
+        const episodes = previousResults.episodes
+        const script = previousResults.script
+        if (!episodes || !script) {
+          return Promise.resolve([])
+        }
+        for (const episode of episodes) {
           const segments = generateStoryboard(
             episode,
-            previousResults.script!.scenes,
+            script.scenes,
             previousResults.assetRecommendations,
             {
               defaultAspectRatio: options?.customOptions?.defaultAspectRatio || '9:16'
@@ -299,13 +303,13 @@ export async function executeSingleStep(
         return Promise.resolve(allSegments)
       })
 
-    case 'seedance-parametrization':
-      if (!previousResults.storyboard) {
+    case 'seedance-parametrization': {
+      const storyboard = previousResults.storyboard
+      if (!storyboard) {
         return { step, status: 'failed', error: '缺少 storyboard 数据' }
       }
-      return executeStep(step, () =>
-        Promise.resolve(buildSeedanceConfigs(previousResults.storyboard!))
-      )
+      return executeStep(step, () => Promise.resolve(buildSeedanceConfigs(storyboard)))
+    }
 
     default:
       return { step, status: 'failed', error: `未知步骤: ${step}` }

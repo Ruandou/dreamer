@@ -3,8 +3,21 @@ import ts from '@typescript-eslint/eslint-plugin'
 import tsParser from '@typescript-eslint/parser'
 import prettier from 'eslint-plugin-prettier'
 import prettierConfig from 'eslint-config-prettier'
+import globals from 'globals'
 
 export default [
+  // Global ignores
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/*.test.ts',
+      '**/*.spec.ts',
+      '**/*.vue',
+      'packages/backend/prisma/**'
+    ]
+  },
   js.configs.recommended,
   prettierConfig,
   {
@@ -14,13 +27,9 @@ export default [
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module'
-        // 移除 project 配置，因为这是 monorepo，tsconfig 在不同子目录
-        // 如果需要类型检查，应该在每个包下单独配置 ESLint
       },
       globals: {
-        console: 'readonly',
-        process: 'readonly',
-        setTimeout: 'readonly'
+        ...globals.node
       }
     },
     plugins: {
@@ -45,18 +54,26 @@ export default [
         }
       ],
       '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // 强制禁止 any（规范第4节）- 必须添加注释说明原因才允许使用
+      '@typescript-eslint/no-explicit-any': 'error',
+      // 禁止使用非空断言，改用可选链或类型守卫
       '@typescript-eslint/no-non-null-assertion': 'warn',
+      // 强制使用 const（优先不可变）
       'prefer-const': 'error',
-      'no-var': 'error'
-    },
-    ignores: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/build/**',
-      '**/*.test.ts',
-      '**/*.spec.ts',
-      'packages/backend/prisma/**'
-    ]
+      'no-var': 'error',
+      // 禁止空 catch 块（必须处理或记录错误）
+      'no-empty': ['error', { allowEmptyCatch: false }],
+      // 禁止不必要的 async 函数
+      'no-return-await': 'error'
+    }
+  },
+  // Frontend-specific overrides: browser globals
+  {
+    files: ['packages/frontend/**/*.ts', 'packages/frontend/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.browser
+      }
+    }
   }
 ]

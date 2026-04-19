@@ -30,9 +30,21 @@ export const authPlugin = fp(async (fastify: FastifyInstance) => {
       })
     }
 
-    ;(request as any).user = dbUser
+    ;(request as unknown as { user: AuthUser }).user = dbUser
   })
 })
+
+export type AuthUser = { id: string; email: string; name: string | null }
+
+/** Extract authenticated user ID from request (set by authenticate preHandler) */
+export function getRequestUserId(request: FastifyRequest): string {
+  return (request as unknown as { user: AuthUser }).user.id
+}
+
+/** Extract authenticated user object from request (set by authenticate preHandler) */
+export function getRequestUser(request: FastifyRequest): AuthUser {
+  return (request as unknown as { user: AuthUser }).user
+}
 
 // Helper to verify user owns the project
 export async function verifyProjectOwnership(userId: string, projectId: string): Promise<boolean> {

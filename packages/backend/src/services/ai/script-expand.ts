@@ -6,45 +6,15 @@ import type {
 } from '@dreamer/shared/types'
 import type { ModelCallLogContext } from './api-logger.js'
 import type { DeepSeekCost } from './deepseek-client.js'
-import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
 import {
   type DeepSeekScriptData,
   type DeepSeekScene,
   isEpisodesResponse
 } from './deepseek-response-types.js'
-import {
-  callLLMWithRetry,
-  cleanMarkdownCodeBlocks,
-  parseJsonResponse,
-  type LLMCallOptions
-} from './llm-call-wrapper.js'
+import { callLLMWithRetry, parseJsonResponse, type LLMCallOptions } from './llm-call-wrapper.js'
 import { getDefaultProvider, type LLMProvider } from './llm-factory.js'
 import { PromptRegistry } from '../prompts/registry.js'
 import type { LLMMessage } from './llm-provider.js'
-
-const SYSTEM_PROMPT = `你是一个专业的短剧剧本作家，擅长创作古装穿越/技术流逆袭类短剧。
-请根据用户提供的故事梗概，扩展为结构化的短剧剧本。
-
-剧本格式要求（必须严格遵循）：
-{
-  "title": "剧集标题",
-  "summary": "故事梗概",
-  "scenes": [
-    {
-      "sceneNum": 1,
-      "location": "场景地点",
-      "timeOfDay": "日/夜/晨/昏",
-      "characters": ["角色1", "角色2"],
-      "description": "场景描述",
-      "dialogues": [
-        {"character": "角色名", "content": "对话内容"}
-      ],
-      "actions": ["动作1", "动作2"]
-    }
-  ]
-}
-
-请直接返回JSON格式，不要包含其他文字。`
 
 // 转换 DeepSeek 返回的格式到内部格式
 export function convertDeepSeekResponse(data: DeepSeekScriptData): ScriptContent {

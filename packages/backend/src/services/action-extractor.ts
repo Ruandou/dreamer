@@ -298,7 +298,10 @@ function groupActionsByCharacter(
     if (!grouped.has(action.characterName)) {
       grouped.set(action.characterName, [])
     }
-    grouped.get(action.characterName)!.push(action)
+    const charActions = grouped.get(action.characterName)
+    if (charActions) {
+      charActions.push(action)
+    }
   }
 
   // 限制每个角色的动作数量

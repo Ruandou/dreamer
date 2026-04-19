@@ -5,19 +5,9 @@
 
 import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import { writeScriptFromIdea } from './script-writer.js'
-
 import { splitIntoEpisodes } from './episode-splitter.js'
-
 import { extractActionsFromScenes } from './action-extractor.js'
-
-import {
-  matchAssetsForScenes,
-  convertCharacterImagesToAssets,
-  type ProjectAsset
-} from './scene-asset.js'
-
 import { generateStoryboard } from './storyboard-generator.js'
-
 import {
   areEpisodeScriptsComplete,
   buildEpisodePlansFromDbEpisodes,
@@ -26,13 +16,7 @@ import {
 import { runParseScriptEntityPipeline } from './parse-script-entity-pipeline.js'
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
 
-import type {
-  ScriptContent,
-  EpisodePlan,
-  SceneActions,
-  SceneAssetRecommendation,
-  StoryboardSegment
-} from '@dreamer/shared/types'
+import type { ScriptContent, EpisodePlan, StoryboardSegment } from '@dreamer/shared/types'
 
 interface PipelineJobOptions {
   projectId: string
@@ -66,8 +50,8 @@ async function updateStepResult(
   step: string,
   update: {
     status?: string
-    input?: any
-    output?: any
+    input?: unknown
+    output?: unknown
     error?: string
   }
 ) {
@@ -78,8 +62,7 @@ async function updateStepResult(
  * 执行 Pipeline Job
  */
 export async function executePipelineJob(jobId: string, options: PipelineJobOptions) {
-  const { projectId, idea, targetEpisodes, targetDuration, defaultAspectRatio, defaultResolution } =
-    options
+  const { projectId, idea, targetEpisodes, targetDuration, defaultAspectRatio } = options
 
   console.log(`Starting Pipeline Job ${jobId} for project ${projectId}`)
 
@@ -177,14 +160,7 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
     // ========== 步骤 4: 分镜生成 ==========
     await updateStepResult(jobId, 'storyboard', { status: 'processing' })
 
-    // 获取项目角色和场地
-    const characters = await pipelineRepository.findCharactersWithImages(projectId)
-
-    const locations = await pipelineRepository.findLocationsActive(projectId)
-
-    // 转换素材
-    const projectAssets: ProjectAsset[] = []
-    const characterImages = characters.flatMap((c) => c.images)
+    await pipelineRepository.findLocationsActive(projectId)
 
     // 生成 storyboard
     const allSegments: StoryboardSegment[] = []

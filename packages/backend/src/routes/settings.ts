@@ -1,10 +1,11 @@
 import { FastifyInstance } from 'fastify'
 import { settingsService } from '../services/settings-service.js'
+import { getRequestUser } from '../plugins/auth.js'
 
 export async function settingsRoutes(fastify: FastifyInstance) {
   // Get user settings
   fastify.get('/me', { preHandler: [fastify.authenticate] }, async (request) => {
-    const user = (request as any).user
+    const user = getRequestUser(request)
     return settingsService.getMePayload(user.id)
   })
 
@@ -22,7 +23,7 @@ export async function settingsRoutes(fastify: FastifyInstance) {
       }
     }
   }>('/me', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const user = (request as any).user
+    const user = getRequestUser(request)
 
     try {
       return await settingsService.updateMe(user.id, request.body)

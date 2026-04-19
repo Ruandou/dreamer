@@ -28,7 +28,9 @@ const {
 
 vi.mock('../src/plugins/auth.js', () => ({
   verifyProjectOwnership: (...args: unknown[]) => mockVerifyProjectOwnership(...args),
-  verifyLocationOwnership: (...args: unknown[]) => mockVerifyLocationOwnership(...args)
+  verifyLocationOwnership: (...args: unknown[]) => mockVerifyLocationOwnership(...args),
+  getRequestUser: (request: any) => request.user,
+  getRequestUserId: (request: any) => request.user?.id
 }))
 
 vi.mock('../src/lib/prisma.js', () => ({
@@ -198,6 +200,7 @@ describe('Location routes', () => {
     expect(res.statusCode).toBe(202)
     const data = JSON.parse(res.payload) as {
       enqueued: number
+      enqueuedLocationIds: string[]
       jobIds: string[]
       skipped: { reason: string }[]
     }

@@ -524,7 +524,7 @@ export interface PipelineStatus {
   currentStep: PipelineStep
   status: 'pending' | 'running' | 'completed' | 'failed'
   progress: number // 0-100
-  results?: Record<PipelineStep, any>
+  results?: Record<PipelineStep, unknown>
   error?: string
 }
 

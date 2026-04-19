@@ -45,11 +45,10 @@ export class AliyunTTSProvider implements TTSProvider {
       throw new Error(`Aliyun TTS API error: ${response.status} - ${error}`)
     }
 
-    // 阿里云 TTS 返回音频数据，需要处理
-    // 实际实现可能需要根据 API 响应格式调整
-    const _audioData = await response.arrayBuffer()
+    // 阿里云 TTS 返回音频数据
+    // TODO: 实现音频存储逻辑，将 arrayBuffer 上传到 OSS/S3 并返回 URL
+    await response.arrayBuffer() // 消费响应流
 
-    // 这里应该上传到存储并返回 URL
     // 暂时返回空字符串，实际使用时需要实现存储逻辑
     console.warn('Aliyun TTS audio storage not implemented, returning empty URL')
     return ''

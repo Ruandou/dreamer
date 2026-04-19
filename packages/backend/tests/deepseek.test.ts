@@ -279,7 +279,7 @@ describe('DeepSeek Service', () => {
     it('should throw DeepSeekAuthError on 401', async () => {
       const { expandScript } = await import('../src/services/ai/deepseek.js')
 
-      const authError = new Error('Unauthorized')
+      const authError: Error & { status?: number } = new Error('Unauthorized')
       authError.status = 401
       mockCreate.mockRejectedValueOnce(authError)
 
@@ -339,7 +339,7 @@ describe('DeepSeek Service', () => {
     it('should throw DeepSeekAuthError on 401', async () => {
       const { optimizePrompt } = await import('../src/services/ai/deepseek.js')
 
-      const authError = new Error('Unauthorized')
+      const authError: Error & { status?: number } = new Error('Unauthorized')
       authError.status = 401
       mockCreate.mockRejectedValueOnce(authError)
 

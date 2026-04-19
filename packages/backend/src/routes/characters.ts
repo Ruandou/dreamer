@@ -1,5 +1,9 @@
 import { FastifyInstance } from 'fastify'
-import { verifyCharacterOwnership, verifyProjectOwnership } from '../plugins/auth.js'
+import {
+  verifyCharacterOwnership,
+  verifyProjectOwnership,
+  getRequestUser
+} from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { characterService } from '../services/character-service.js'
 
@@ -9,7 +13,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const { projectId } = request.query
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
@@ -25,7 +29,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const characterId = request.params.id
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
@@ -47,7 +51,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const { projectId, name, description } = request.body
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
@@ -65,7 +69,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const characterId = request.params.id
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
@@ -83,7 +87,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const characterId = request.params.id
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
@@ -102,15 +106,16 @@ export async function characterRoutes(fastify: FastifyInstance) {
     Params: { id: string }
     Body?: { name?: string; type?: string; description?: string; parentId?: string }
   }>('/:id/images', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUser(request).id
     const characterId = request.params.id
 
     if (!(await verifyCharacterOwnership(userId, characterId))) {
       return reply.status(403).send(permissionDeniedBody)
     }
 
+    const reqWithMultipart = request as { isMultipart?: () => boolean }
     const isMultipart =
-      typeof (request as any).isMultipart === 'function' && (request as any).isMultipart()
+      typeof reqWithMultipart.isMultipart === 'function' && reqWithMultipart.isMultipart()
     if (!isMultipart) {
       const { name, type, description, parentId } = (request.body || {}) as {
         name?: string
@@ -223,7 +228,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
       prompt?: string | null
     }
   }>('/:id/images/:imageId', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUser(request).id
     const { id: characterId, imageId } = request.params
 
     if (!(await verifyCharacterOwnership(userId, characterId))) {
@@ -246,7 +251,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/:id/images/:imageId/avatar',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const { id: characterId, imageId } = request.params
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
@@ -298,7 +303,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/:id/images/:imageId',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const { id: characterId, imageId } = request.params
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {
@@ -323,7 +328,7 @@ export async function characterRoutes(fastify: FastifyInstance) {
     '/:id/images/:imageId/move',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const { id: characterId, imageId } = request.params
 
       if (!(await verifyCharacterOwnership(userId, characterId))) {

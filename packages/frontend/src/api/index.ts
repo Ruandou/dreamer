@@ -55,7 +55,11 @@ api.interceptors.response.use(
 )
 
 // Helper for form data requests (file uploads)
-;(api as any).postFormData = async <T>(
+interface ExtendedApiInstance extends AxiosInstance {
+  postFormData: <T>(url: string, formData: FormData) => Promise<AxiosResponse<T>>
+}
+
+;(api as unknown as ExtendedApiInstance).postFormData = async <T>(
   url: string,
   formData: FormData
 ): Promise<AxiosResponse<T>> => {
@@ -227,8 +231,8 @@ export interface PipelineJob {
 export interface PipelineStepResult {
   step: string
   status: 'pending' | 'processing' | 'completed' | 'failed'
-  input?: any
-  output?: any
+  input?: unknown
+  output?: unknown
   error?: string
 }
 

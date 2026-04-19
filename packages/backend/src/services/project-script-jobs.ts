@@ -43,7 +43,7 @@ export async function getActiveOutlinePipelineJob(projectId: string) {
 export function scriptFromJson(raw: unknown): ScriptContent | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
-  if (!Array.isArray((o as any).scenes)) return null
+  if (!Array.isArray(o.scenes)) return null
   return raw as ScriptContent
 }
 
@@ -231,11 +231,12 @@ export async function runGenerateFirstEpisodePipelineJob(jobId: string, projectI
       currentStep: 'completed',
       progressMeta: { message: '第一集已生成' }
     })
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : '生成第一集失败'
     await updateJob(jobId, {
       status: 'failed',
-      error: e?.message || '生成第一集失败',
-      progressMeta: { message: e?.message }
+      error: message,
+      progressMeta: { message }
     })
     throw e
   }
@@ -463,21 +464,22 @@ export async function runScriptBatchJob(
     // ====== 模式 A：忠实解析完整剧本 ======
     if (detectionResult.mode === 'faithful-parse') {
       console.log('[script-batch] 使用忠实解析模式')
-      await runFaithfulParse(jobId, projectId, targetEpisodes, detectionResult.episodes!, embedded)
+      const episodes = detectionResult.episodes
+      if (!episodes) {
+        throw new Error('忠实解析模式缺少 episodes 数据')
+      }
+      await runFaithfulParse(jobId, projectId, targetEpisodes, episodes, embedded)
       return
     }
 
     // ====== 模式 B：混合模式 ======
     if (detectionResult.mode === 'mixed') {
       console.log('[script-batch] 使用混合模式')
-      await runMixedMode(
-        jobId,
-        projectId,
-        targetEpisodes,
-        detectionResult.episodes!,
-        embedded,
-        modelLogCtx
-      )
+      const episodes = detectionResult.episodes
+      if (!episodes) {
+        throw new Error('混合模式缺少 episodes 数据')
+      }
+      await runMixedMode(jobId, projectId, targetEpisodes, episodes, embedded, modelLogCtx)
       return
     }
 
@@ -754,18 +756,19 @@ export async function runScriptBatchJob(
         }
       })
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : '批量生成失败'
     console.error('[script-batch] 任务执行失败:', {
       jobId,
       projectId,
-      error: e.message,
-      stack: e.stack
+      error: message,
+      stack: e instanceof Error ? e.stack : undefined
     })
 
     await updateJob(jobId, {
       status: 'failed',
-      error: e?.message || '批量生成失败',
-      progressMeta: { message: e?.message }
+      error: message,
+      progressMeta: { message }
     })
     // 重新抛出错误，让调用方知道失败了
     throw e
@@ -850,8 +853,8 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
     }
 
     // 自动生成 visualStyleConfig（如果没有）
-    const projectWithVisual = project as any
-    if (!projectWithVisual.visualStyleConfig) {
+    const projectResult = project as { visualStyleConfig?: unknown }
+    if (!projectResult.visualStyleConfig) {
       console.log('[parse-script] 基于完整梗概自动生成 visualStyleConfig')
       try {
         const config = await generateVisualStyleConfig(
@@ -867,7 +870,9 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
           }
         )
 
-        await projectRepository.update(projectId, { visualStyleConfig: config } as any)
+        await projectRepository.update(projectId, {
+          visualStyleConfig: config as unknown as Prisma.InputJsonValue
+        })
         console.log('[parse-script] visualStyleConfig 已生成并保存')
       } catch (error) {
         console.error('[parse-script] 自动生成 visualStyleConfig 失败:', error)
@@ -921,18 +926,19 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
     })
 
     console.log('[parse-script] 解析任务完成')
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : '解析失败'
     console.error('[parse-script] 解析任务失败:', {
       jobId,
       projectId,
-      error: e.message,
-      stack: e.stack
+      error: message,
+      stack: e instanceof Error ? e.stack : undefined
     })
 
     await updateJob(jobId, {
       status: 'failed',
-      error: e?.message || '解析失败',
-      progressMeta: { message: e?.message }
+      error: message,
+      progressMeta: { message }
     })
 
     throw e

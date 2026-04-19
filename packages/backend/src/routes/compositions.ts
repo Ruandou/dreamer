@@ -1,5 +1,9 @@
 import { FastifyInstance } from 'fastify'
-import { verifyCompositionOwnership, verifyProjectOwnership } from '../plugins/auth.js'
+import {
+  verifyCompositionOwnership,
+  verifyProjectOwnership,
+  getRequestUser
+} from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { compositionService } from '../services/composition-service.js'
 
@@ -8,7 +12,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const { projectId } = request.query
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
@@ -23,7 +27,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const compositionId = request.params.id
 
       if (!(await verifyCompositionOwnership(userId, compositionId))) {
@@ -44,7 +48,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const { projectId, episodeId, title } = request.body
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
@@ -61,7 +65,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const compositionId = request.params.id
 
       if (!(await verifyCompositionOwnership(userId, compositionId))) {
@@ -78,7 +82,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const compositionId = request.params.id
 
       if (!(await verifyCompositionOwnership(userId, compositionId))) {
@@ -98,7 +102,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
     Params: { id: string }
     Body: { clips: Array<{ sceneId: string; takeId: string; order: number }> }
   }>('/:id/timeline', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUser(request).id
     const compositionId = request.params.id
 
     if (!(await verifyCompositionOwnership(userId, compositionId))) {
@@ -114,7 +118,7 @@ export async function compositionRoutes(fastify: FastifyInstance) {
     '/:id/export',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const compositionId = request.params.id
 
       if (!(await verifyCompositionOwnership(userId, compositionId))) {

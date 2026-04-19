@@ -1,6 +1,8 @@
 // Seedance 2.0 API integration (火山方舟/ByteDance)
 // 使用 Seedance 2.0-fast 模型，默认 720p 分辨率
 
+import type { VoiceConfig } from '@dreamer/shared'
+
 const ARK_API_KEY = process.env.ARK_API_KEY || ''
 const ARK_API_URL = process.env.ARK_API_URL || 'https://ark.cn-beijing.volces.com/api/v3'
 // 锁定模型：Seedance 2.0-fast
@@ -43,7 +45,7 @@ export interface SeedanceGenerateRequest {
     segments: Array<{
       character_tag: string
       text: string
-      voice_config: Record<string, any>
+      voice_config: VoiceConfig
       start_time: number
       duration: number
     }>
@@ -64,7 +66,7 @@ export interface SeedanceStatusResponse {
 }
 
 // 构建火山方舟格式的请求体
-function buildArkRequest(request: SeedanceGenerateRequest): any {
+function buildArkRequest(request: SeedanceGenerateRequest): Record<string, unknown> {
   const content = []
 
   // 添加文本提示

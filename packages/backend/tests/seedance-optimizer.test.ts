@@ -9,7 +9,12 @@ import {
   generateFirstFramePrompt,
   evaluatePromptQuality
 } from '../src/services/ai/seedance-optimizer.js'
-import type { StoryboardSegment, CharacterImage, SceneAsset } from '@dreamer/shared/types'
+import type {
+  StoryboardSegment,
+  CharacterImage,
+  SceneAsset,
+  SeedanceSegmentConfig
+} from '@dreamer/shared/types'
 
 function baseSegment(over: Partial<StoryboardSegment> = {}): StoryboardSegment {
   return {
@@ -115,12 +120,12 @@ describe('Seedance Optimizer Service', () => {
 
   describe('validateSeedanceConfig', () => {
     it('should validate valid config', () => {
-      const config = {
+      const config: SeedanceSegmentConfig = {
         prompt: '这是一个测试提示词用于验证配置有效性',
         imageUrls: ['https://example.com/1.png'],
         duration: 10,
-        aspectRatio: '9:16' as const,
-        resolution: '720p' as const,
+        aspectRatio: '9:16',
+        resolution: '720p',
         generateAudio: true
       }
 
@@ -130,12 +135,12 @@ describe('Seedance Optimizer Service', () => {
     })
 
     it('should detect short prompt', () => {
-      const config = {
+      const config: SeedanceSegmentConfig = {
         prompt: '短',
         imageUrls: [],
         duration: 10,
-        aspectRatio: '9:16' as const,
-        resolution: '720p' as const,
+        aspectRatio: '9:16',
+        resolution: '720p',
         generateAudio: true
       }
 
@@ -145,12 +150,12 @@ describe('Seedance Optimizer Service', () => {
     })
 
     it('should detect too many images', () => {
-      const config = {
+      const config: SeedanceSegmentConfig = {
         prompt: '测试提示词',
-        imageUrls: Array(10).fill('https://example.com/img.png'),
+        imageUrls: Array(10).fill('https://example.com/img.png') as string[],
         duration: 10,
-        aspectRatio: '9:16' as const,
-        resolution: '720p' as const,
+        aspectRatio: '9:16',
+        resolution: '720p',
         generateAudio: true
       }
 
@@ -160,12 +165,12 @@ describe('Seedance Optimizer Service', () => {
     })
 
     it('should detect prompt that is too long', () => {
-      const config = {
+      const config: SeedanceSegmentConfig = {
         prompt: 'x'.repeat(1001),
         imageUrls: [],
         duration: 10,
-        aspectRatio: '9:16' as const,
-        resolution: '720p' as const,
+        aspectRatio: '9:16',
+        resolution: '720p',
         generateAudio: true
       }
       const result = validateSeedanceConfig(config)
@@ -176,8 +181,8 @@ describe('Seedance Optimizer Service', () => {
     it('should detect invalid duration', () => {
       const config = {
         prompt: '长度足够的基本提示词内容用于校验',
-        imageUrls: [],
-        duration: 2,
+        imageUrls: [] as string[],
+        duration: 2 as 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15,
         aspectRatio: '9:16' as const,
         resolution: '720p' as const,
         generateAudio: true

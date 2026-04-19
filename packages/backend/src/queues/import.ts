@@ -73,17 +73,20 @@ export const importWorker = new Worker<ImportJobData>(
 
       const episodes = await projectRepository.findManyEpisodesOrdered(targetProjectId)
       if (episodes.length > 0) {
-        const merged = mergeEpisodesToScriptContent(episodes as any)
+        const merged = mergeEpisodesToScriptContent(
+          episodes.map((e) => ({ episodeNum: e.episodeNum, title: e.title, script: e.script }))
+        )
         await applyScriptVisualEnrichment(targetProjectId, merged)
       }
 
       await importWorkerService.markCompleted(taskId, results)
 
       console.log(`Import job ${job.id} completed successfully`)
-    } catch (error: any) {
-      console.error(`Import job ${job.id} failed:`, error.message)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      console.error(`Import job ${job.id} failed:`, message)
 
-      await importWorkerService.markFailed(taskId, error.message)
+      await importWorkerService.markFailed(taskId, message)
 
       throw error
     }

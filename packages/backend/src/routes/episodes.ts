@@ -1,5 +1,9 @@
 import { FastifyInstance } from 'fastify'
-import { verifyEpisodeOwnership, verifyProjectOwnership } from '../plugins/auth.js'
+import {
+  verifyEpisodeOwnership,
+  verifyProjectOwnership,
+  getRequestUserId
+} from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { episodeService } from '../services/episode-service.js'
 import { enqueueEpisodeStoryboardScriptJob } from '../services/episode-storyboard-job.js'
@@ -10,7 +14,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { projectId } = request.query
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
@@ -26,7 +30,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const episodeId = request.params.id
 
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
@@ -48,7 +52,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/:id/detail',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const episodeId = request.params.id
 
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
@@ -70,7 +74,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/:id/scenes',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const episodeId = request.params.id
 
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
@@ -87,7 +91,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { projectId, episodeNum, title } = request.body
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
@@ -105,7 +109,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     Params: { id: string }
     Body: { title?: string; synopsis?: string | null; script?: unknown }
   }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const episodeId = request.params.id
 
     if (!(await verifyEpisodeOwnership(userId, episodeId))) {
@@ -120,7 +124,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const episodeId = request.params.id
 
       if (!(await verifyEpisodeOwnership(userId, episodeId))) {
@@ -141,7 +145,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/:id/compose',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const episodeId = request.params.id
       const titleOverride = request.body?.title
 
@@ -178,7 +182,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/:id/expand',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { summary } = request.body
       const episodeId = request.params.id
 
@@ -212,7 +216,7 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     '/:id/generate-storyboard-script',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const episodeId = request.params.id
       const hint = request.body?.hint
 

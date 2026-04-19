@@ -22,7 +22,7 @@ export interface ParsedScript {
   episodes: {
     episodeNum: number
     title: string
-    script: any
+    script: unknown
     scenes: {
       sceneNum: number
       description: string
@@ -130,90 +130,133 @@ export async function parseScriptDocument(
   }
 }
 
-function normalizeParsedData(data: any): ParsedScript {
+/** Raw shape from LLM JSON (before normalization) */
+interface RawCharacterImage {
+  name?: unknown
+  type?: unknown
+  description?: unknown
+}
+interface RawCharacter {
+  name?: unknown
+  description?: unknown
+  aliases?: unknown
+  images?: unknown
+}
+interface RawEpisodeScene {
+  sceneNum?: unknown
+  num?: unknown
+  location?: unknown
+  timeOfDay?: unknown
+  time?: unknown
+  characters?: unknown
+  description?: unknown
+  content?: unknown
+  text?: unknown
+  dialogues?: unknown
+  actions?: unknown
+  prompt?: unknown
+}
+interface RawEpisode {
+  episodeNum?: unknown
+  number?: unknown
+  num?: unknown
+  title?: unknown
+  name?: unknown
+  summary?: unknown
+  description?: unknown
+  scenes?: unknown
+  chapters?: unknown
+  content?: unknown
+}
+
+function toStr(v: unknown): string {
+  return typeof v === 'string' ? v : ''
+}
+
+function normalizeParsedData(raw: unknown): ParsedScript {
+  const d = raw as Record<string, unknown>
+
   // Normalize characters - handle both old format ["角色1", "角色2"] and new format [{name, description, images}]
-  let characters: ParsedCharacter[] = []
-  if (Array.isArray(data.characters)) {
-    characters = data.characters.map((c: any) => {
-      if (typeof c === 'string') {
-        return { name: c, description: '' }
-      }
-      const images: ParsedCharacterImage[] | undefined = Array.isArray(c.images)
-        ? c.images.map((img: any) => ({
-            name: String(img?.name || '').trim() || '基础形象',
-            type: String(img?.type || 'base').toLowerCase(),
-            description: String(img?.description || '').trim()
-          }))
-        : undefined
-      const aliases: string[] | undefined = Array.isArray(c.aliases)
-        ? c.aliases.map((a: any) => String(a).trim()).filter(Boolean)
-        : undefined
-      return {
-        name: c.name || '',
-        description: c.description || '',
-        aliases,
-        images
-      }
-    })
-    characters = normalizeParsedCharacterList(characters)
-  }
+  const rawChars = (d.characters ?? []) as unknown[]
+  const characters: ParsedCharacter[] = rawChars.map((c) => {
+    if (typeof c === 'string') return { name: c, description: '' }
+    const ch = c as RawCharacter
+    const images: ParsedCharacterImage[] | undefined = Array.isArray(ch.images)
+      ? (ch.images as RawCharacterImage[]).map((img) => ({
+          name: toStr(img?.name).trim() || '基础形象',
+          type: toStr(img?.type).toLowerCase(),
+          description: toStr(img?.description).trim()
+        }))
+      : undefined
+    const aliases: string[] | undefined = Array.isArray(ch.aliases)
+      ? (ch.aliases as unknown[]).map((a) => toStr(a).trim()).filter(Boolean)
+      : undefined
+    return {
+      name: toStr(ch.name),
+      description: toStr(ch.description),
+      aliases,
+      images
+    }
+  })
 
   const result: ParsedScript = {
-    projectName: data.projectName || data.name || '未命名项目',
-    description: data.description || '',
-    characters,
+    projectName: toStr(d.projectName ?? d.name ?? '未命名项目'),
+    description: toStr(d.description),
+    characters: normalizeParsedCharacterList(characters),
     episodes: []
   }
 
-  const episodes = data.episodes || data.chapters || data.scripts || []
+  const episodes = (d.episodes ?? d.chapters ?? d.scripts ?? []) as RawEpisode[]
 
   for (const ep of episodes) {
-    const scenes: ParsedScript['episodes'][0]['scenes'] = []
+    const sceneList: ParsedScript['episodes'][0]['scenes'] = []
+    const epScenes = (ep.scenes ?? ep.chapters ?? ep.content ?? []) as RawEpisodeScene[]
 
-    const epScenes = ep.scenes || ep.chapters || ep.content || []
-    for (const scene of epScenes) {
-      scenes.push({
-        sceneNum: scene.sceneNum || scene.num || 1,
-        description: scene.description || scene.content || scene.text || '',
-        prompt: scene.prompt || buildPromptFromScene(scene)
+    for (const sc of epScenes) {
+      sceneList.push({
+        sceneNum: (sc.sceneNum ?? sc.num ?? 1) as number,
+        description: toStr(sc.description ?? sc.content ?? sc.text),
+        prompt: toStr(sc.prompt) || buildPromptFromScene(sc)
       })
     }
 
+    const epNum = (ep.episodeNum ?? ep.number ?? ep.num ?? 1) as number
     result.episodes.push({
-      episodeNum: ep.episodeNum || ep.number || ep.num || 1,
-      title: ep.title || ep.name || `第${ep.episodeNum || 1}集`,
+      episodeNum: epNum,
+      title: toStr(ep.title ?? ep.name ?? `第${epNum}集`),
       script: {
-        title: ep.title || ep.name,
-        summary: ep.summary || ep.description || '',
-        scenes: epScenes.map((s: any) => ({
-          sceneNum: s.sceneNum || 1,
-          location: s.location || '',
-          timeOfDay: s.timeOfDay || s.time || '日',
-          characters: s.characters || [],
-          description: s.description || s.content || '',
-          dialogues: s.dialogues || [],
-          actions: s.actions || []
+        title: toStr(ep.title ?? ep.name),
+        summary: toStr(ep.summary ?? ep.description),
+        scenes: epScenes.map((s) => ({
+          sceneNum: (s.sceneNum ?? 1) as number,
+          location: toStr(s.location),
+          timeOfDay: toStr(s.timeOfDay ?? s.time ?? '日'),
+          characters: (Array.isArray(s.characters) ? s.characters : []) as string[],
+          description: toStr(s.description ?? s.content),
+          dialogues: (Array.isArray(s.dialogues) ? s.dialogues : []) as unknown[],
+          actions: (Array.isArray(s.actions) ? s.actions : []) as string[]
         }))
       },
-      scenes
+      scenes: sceneList
     })
   }
 
-  // 按集数排序
   result.episodes.sort((a, b) => a.episodeNum - b.episodeNum)
-
   return result
 }
 
-function buildPromptFromScene(scene: any): string {
+function buildPromptFromScene(scene: RawEpisodeScene): string {
   const parts: string[] = []
 
-  if (scene.location) parts.push(scene.location)
-  if (scene.timeOfDay) parts.push(scene.timeOfDay)
-  if (scene.description) parts.push(scene.description)
+  const loc = toStr(scene.location)
+  const tod = toStr(scene.timeOfDay)
+  const desc = toStr(scene.description)
+  if (loc) parts.push(loc)
+  if (tod) parts.push(tod)
+  if (desc) parts.push(desc)
   if (scene.actions) {
     if (Array.isArray(scene.actions)) {
-      parts.push(...scene.actions)
+      parts.push(...(scene.actions as string[]))
     } else if (typeof scene.actions === 'string') {
       parts.push(scene.actions)
     }
@@ -221,8 +264,8 @@ function buildPromptFromScene(scene: any): string {
   if (scene.dialogues) {
     const dialogues = Array.isArray(scene.dialogues)
       ? scene.dialogues
-      : Object.entries(scene.dialogues || {}).map(([c, d]) => `${c}: ${d}`)
-    parts.push(dialogues.join(' '))
+      : Object.entries(scene.dialogues as Record<string, unknown>).map(([c, d]) => `${c}: ${d}`)
+    parts.push((dialogues as string[]).join(' '))
   }
 
   return parts.filter(Boolean).join(', ')

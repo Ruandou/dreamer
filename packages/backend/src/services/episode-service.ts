@@ -116,8 +116,8 @@ export class EpisodeService {
 
       const hasShots = sc.shots && sc.shots.length > 0
       let sceneDurationMs = 5000
-      if (hasShots) {
-        sceneDurationMs = sc.shots!.reduce((sum, sh) => sum + (sh.duration ?? 5000), 0)
+      if (hasShots && sc.shots) {
+        sceneDurationMs = sc.shots.reduce((sum, sh) => sum + (sh.duration ?? 5000), 0)
       }
       // 每个场次总时长不能超过 15 秒
       const MAX_SCENE_DURATION_MS = 15000
@@ -135,8 +135,8 @@ export class EpisodeService {
         status: 'pending'
       })
 
-      if (hasShots) {
-        const sorted = [...sc.shots!].sort(
+      if (hasShots && sc.shots) {
+        const sorted = [...sc.shots].sort(
           (a, b) => (a.order ?? a.shotNum ?? 0) - (b.order ?? b.shotNum ?? 0)
         )
         let idx = 0
@@ -258,7 +258,10 @@ export class EpisodeService {
     const charIdsByEpisode = new Map<string, Set<string>>()
     const addChar = (episodeId: string, characterId: string) => {
       if (!charIdsByEpisode.has(episodeId)) charIdsByEpisode.set(episodeId, new Set())
-      charIdsByEpisode.get(episodeId)!.add(characterId)
+      const charSet = charIdsByEpisode.get(episodeId)
+      if (charSet) {
+        charSet.add(characterId)
+      }
     }
     for (const r of dialogueRows) {
       addChar(r.scene.episodeId, r.characterId)

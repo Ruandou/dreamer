@@ -110,7 +110,8 @@ export function matchAssets(
   options?: SceneAssetMatcherOptions
 ): SceneAssetRecommendation {
   const maxAssets = options?.maxAssetsPerScene || MAX_ASSETS_PER_SCENE
-  const { requiredTypes, suggestedAssets } = analyzeSceneRequirements(scene, sceneActions)
+  const { requiredTypes: _requiredTypes, suggestedAssets: _suggestedAssets } =
+    analyzeSceneRequirements(scene, sceneActions)
 
   const recommendedAssets: SceneAssetRecommendation['recommendedAssets'] = []
   const usedUrls = new Set<string>()

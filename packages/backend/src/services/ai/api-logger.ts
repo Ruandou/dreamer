@@ -79,7 +79,7 @@ export interface ApiCallParams {
   model: string
   provider: string
   prompt: string
-  requestParams?: Record<string, any>
+  requestParams?: Record<string, unknown>
   takeId?: string
 }
 
@@ -118,7 +118,7 @@ export async function updateApiCall(
   externalTaskId: string,
   update: {
     status?: string
-    responseData?: Record<string, any>
+    responseData?: Record<string, unknown>
     cost?: number
     duration?: number
     errorMsg?: string

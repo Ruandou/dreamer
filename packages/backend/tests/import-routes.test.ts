@@ -40,7 +40,9 @@ vi.mock('../src/services/ai/parser.js', () => ({
 
 // Mock verifyProjectOwnership
 vi.mock('../src/plugins/auth.js', () => ({
-  verifyProjectOwnership: vi.fn().mockResolvedValue(true)
+  verifyProjectOwnership: vi.fn().mockResolvedValue(true),
+  getRequestUser: (request: any) => request.user,
+  getRequestUserId: (request: any) => request.user?.id
 }))
 
 // Mock the index.js module

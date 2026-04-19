@@ -4,20 +4,25 @@ import fp from 'fastify-plugin'
 // Store for SSE connections per user
 const sseConnections = new Map<string, FastifyReply[]>()
 
-export function sendSSEToUser(userId: string, event: string, data: any) {
+export function sendSSEToUser(userId: string, event: string, data: Record<string, unknown>) {
   const connections = sseConnections.get(userId) || []
   const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 
   connections.forEach((reply) => {
     try {
       reply.raw.write(message)
-    } catch (e) {
+    } catch {
       // Connection might be closed
     }
   })
 }
 
-export function sendTaskUpdate(userId: string, taskId: string, status: string, data: any) {
+export function sendTaskUpdate(
+  userId: string,
+  taskId: string,
+  status: string,
+  data: Record<string, unknown>
+) {
   sendSSEToUser(userId, 'task-update', {
     taskId,
     status,
@@ -25,7 +30,12 @@ export function sendTaskUpdate(userId: string, taskId: string, status: string, d
   })
 }
 
-export function sendProjectUpdate(userId: string, projectId: string, type: string, data: any) {
+export function sendProjectUpdate(
+  userId: string,
+  projectId: string,
+  type: string,
+  data: Record<string, unknown>
+) {
   sendSSEToUser(userId, 'project-update', {
     projectId,
     type,
@@ -37,7 +47,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     sse: {
       subscribe: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
-      sendToUser: (userId: string, event: string, data: any) => void
+      sendToUser: (userId: string, event: string, data: Record<string, unknown>) => void
     }
   }
 }
@@ -50,12 +60,13 @@ export const ssePlugin = fp(async (fastify: FastifyInstance) => {
       try {
         // Try to get token from query string for SSE
         const token =
-          (request.query as any)?.subscribe || request.headers.authorization?.replace('Bearer ', '')
+          ((request.query as Record<string, unknown>)?.subscribe as string) ||
+          request.headers.authorization?.replace('Bearer ', '')
         if (token) {
           const decoded = await fastify.jwt.verify(token)
-          userId = (decoded as any).id || 'anonymous'
+          userId = ((decoded as Record<string, unknown>).id as string) || 'anonymous'
         }
-      } catch (e) {
+      } catch {
         // Allow anonymous SSE connections for public updates
       }
 
@@ -71,7 +82,10 @@ export const ssePlugin = fp(async (fastify: FastifyInstance) => {
       if (!sseConnections.has(userId)) {
         sseConnections.set(userId, [])
       }
-      sseConnections.get(userId)!.push(reply)
+      const userConnections = sseConnections.get(userId)
+      if (userConnections) {
+        userConnections.push(reply)
+      }
 
       // Send initial connection message
       reply.raw.write(`event: connected\ndata: ${JSON.stringify({ userId })}\n\n`)
@@ -80,7 +94,7 @@ export const ssePlugin = fp(async (fastify: FastifyInstance) => {
       const heartbeat = setInterval(() => {
         try {
           reply.raw.write(': heartbeat\n\n')
-        } catch (e) {
+        } catch {
           clearInterval(heartbeat)
         }
       }, 30000)
@@ -101,7 +115,7 @@ export const ssePlugin = fp(async (fastify: FastifyInstance) => {
       })
     },
 
-    sendToUser: (userId: string, event: string, data: any) => {
+    sendToUser: (userId: string, event: string, data: Record<string, unknown>) => {
       sendSSEToUser(userId, event, data)
     }
   })

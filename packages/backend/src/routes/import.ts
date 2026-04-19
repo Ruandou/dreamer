@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { verifyProjectOwnership } from '../plugins/auth.js'
+import { verifyProjectOwnership, getRequestUserId } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { importRouteService } from '../services/import-route-service.js'
 
@@ -37,7 +37,7 @@ export async function importRoutes(fastify: FastifyInstance) {
       type: 'markdown' | 'json'
     }
   }>('/script', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const { projectId, content, type } = request.body
 
     if (!projectId || !content) {
@@ -69,7 +69,7 @@ export async function importRoutes(fastify: FastifyInstance) {
       type: 'markdown' | 'json'
     }
   }>('/project', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const { content, type } = request.body
 
     if (!content) {
@@ -89,7 +89,7 @@ export async function importRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: { id: string }
   }>('/task/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const taskId = request.params.id
 
     const task = await importRouteService.getImportTask(taskId)
@@ -108,8 +108,8 @@ export async function importRoutes(fastify: FastifyInstance) {
   // 获取用户所有导入任务列表
   fastify.get<{
     Querystring: { limit?: number; offset?: number }
-  }>('/tasks', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+  }>('/tasks', { preHandler: [fastify.authenticate] }, async (request, _reply) => {
+    const userId = getRequestUserId(request)
     const limit = request.query.limit || 50
     const offset = request.query.offset || 0
 

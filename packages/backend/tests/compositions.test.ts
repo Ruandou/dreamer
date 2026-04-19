@@ -54,7 +54,9 @@ const mockVerifyProjectOwnership = vi.fn().mockResolvedValue(true)
 
 vi.mock('../src/plugins/auth.js', () => ({
   verifyCompositionOwnership: (...args: any[]) => mockVerifyCompositionOwnership(...args),
-  verifyProjectOwnership: (...args: any[]) => mockVerifyProjectOwnership(...args)
+  verifyProjectOwnership: (...args: any[]) => mockVerifyProjectOwnership(...args),
+  getRequestUser: (request: any) => request.user,
+  getRequestUserId: (request: any) => request.user?.id
 }))
 
 vi.mock('../src/lib/prisma.js', () => ({

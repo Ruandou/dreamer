@@ -80,7 +80,7 @@ export async function buildEpisodeWritingContext(
 export async function buildStoryboardContext(
   memoryRepo: MemoryRepository,
   projectId: string,
-  episodeId: string
+  _episodeId: string
 ): Promise<string> {
   const memories = await memoryRepo.findByProject(projectId, {
     isActive: true,

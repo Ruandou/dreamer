@@ -1,7 +1,11 @@
 import type { Prisma } from '@prisma/client'
 import { FastifyInstance } from 'fastify'
 import { uploadFile, generateFileKey } from '../services/storage.js'
-import { verifyLocationOwnership, verifyProjectOwnership } from '../plugins/auth.js'
+import {
+  verifyLocationOwnership,
+  verifyProjectOwnership,
+  getRequestUserId
+} from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { locationService } from '../services/location-service.js'
 
@@ -12,7 +16,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const { projectId } = request.query
 
       if (!projectId) {
@@ -35,7 +39,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
       description?: string | null
     }
   }>('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const projectId = request.body?.projectId
     const name = request.body?.name
 
@@ -69,7 +73,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: { projectId: string; promptOverrides?: Record<string, string> }
   }>('/batch-generate-images', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const body = request.body || {}
     const projectId = body.projectId
     const promptOverrides =
@@ -104,7 +108,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
       characters?: string[]
     }
   }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const userId = (request as any).user.id
+    const userId = getRequestUserId(request)
     const locationId = request.params.id
 
     if (!(await verifyLocationOwnership(userId, locationId))) {
@@ -135,7 +139,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const locationId = request.params.id
 
       if (!(await verifyLocationOwnership(userId, locationId))) {
@@ -155,7 +159,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
     '/:id/image',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const locationId = request.params.id
 
       if (!(await verifyLocationOwnership(userId, locationId))) {
@@ -167,7 +171,8 @@ export async function locationRoutes(fastify: FastifyInstance) {
       }
 
       const isMultipart =
-        typeof (request as any).isMultipart === 'function' && (request as any).isMultipart()
+        typeof (request as unknown as { isMultipart: () => boolean }).isMultipart === 'function' &&
+        (request as unknown as { isMultipart: () => boolean }).isMultipart()
       if (!isMultipart) {
         return reply.status(400).send({ error: '请使用 multipart 上传，字段名 file' })
       }
@@ -213,7 +218,7 @@ export async function locationRoutes(fastify: FastifyInstance) {
     '/:id/generate-image',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUserId(request)
       const locationId = request.params.id
       const override = request.body?.prompt
 

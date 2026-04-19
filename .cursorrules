@@ -1,0 +1,104 @@
+# Dreamer 项目编码规范（Cursor 规则）
+
+你是 Dreamer 项目的 AI 编程助手。在生成或修改代码时，**必须严格遵守**以下规范：
+
+## 核心规则
+
+### 1. 类型安全（强制）
+
+- **禁止使用 `any` 类型**，除非添加注释说明原因
+- 外部 JSON 数据必须用 `unknown` + Zod 校验或类型守卫
+- 使用类型安全的辅助函数：`getRequestUserId()`, `getRequestUser()`
+- ❌ 禁止：`(request as any).user.id`
+
+### 2. 函数命名规范
+
+使用 **动词+名词** 格式，前缀含义：
+
+| 前缀 | 用途 | 示例 |
+|------|------|------|
+| `generate` | 构造提示词/数据 | `generatePrompt()`, `generatePayload()` |
+| `call` | 实际 API 请求 | `callDeepSeek()`, `callSeedance()` |
+| `build` | 组装数据结构 | `buildSeedanceAudio()`, `buildQuery()` |
+| `create` | 数据库操作 | `createProject()`, `createEpisode()` |
+| `fetch` | 从外部获取 | `fetchRemoteData()`, `fetchAsset()` |
+| `validate` | 校验逻辑 | `validateSchema()`, `validateInput()` |
+
+### 3. AI 模型调用（强制）
+
+**所有 AI 模型调用必须记录日志**：
+
+```typescript
+await recordModelApiCall({
+  userId: context.userId,
+  op: 'operation-name',
+  model: 'model-name',
+  provider: 'provider-name',
+  status: 'success' | 'error',
+  cost: 0.001,
+  projectId: context.projectId
+})
+```
+
+必须传入 `ModelCallLogContext`（包含 `userId`, `op`, 可选 `projectId`）
+
+### 4. 错误处理
+
+- **禁止吞掉错误**（空 catch 块）
+- 错误必须分类：
+  - `RetryableError` - 可重试（如限流、超时）
+  - `NonRetryableError` - 不可重试（如参数错误、认证失败）
+- 使用具体错误类型：`AIGenerationError`, `ValidationError`
+- 必须记录错误上下文和堆栈
+
+### 5. 环境变量加载
+
+**后端入口文件第一行必须是**：
+
+```typescript
+import './bootstrap-env.js'
+// 然后才能 import 其他业务代码
+```
+
+### 6. API 响应格式
+
+新 API 使用 **envelope 格式**：
+
+```typescript
+return {
+  success: true,
+  data: result,
+  error: undefined
+}
+```
+
+### 7. 数据库操作（Prisma）
+
+- 避免过宽的 `select`，仅获取必要字段
+- 谨慎使用 `include`（可能导致 N+1 查询）
+- 禁止使用 `--force-reset`
+
+## 检查清单
+
+在生成代码后，**自动检查**：
+
+- [ ] 未使用 `any` 类型（或已添加注释）
+- [ ] 外部数据使用 `unknown` + 校验
+- [ ] 函数命名符合动词+名词规则
+- [ ] AI 调用已记录 `ModelApiCall`
+- [ ] 错误已分类且未吞错
+- [ ] API 响应使用 envelope 格式
+- [ ] Prisma 查询限定字段
+
+## 违规处理
+
+- 如果发现代码违反上述规则，**必须指出并修复**
+- 优先保证类型安全和错误处理正确性
+- 不确定时，查阅 `docs/CODING_STANDARDS.md` 和 `docs/CODE_REVIEW_CHECKLIST.md`
+
+## 参考文档
+
+- 完整规范：`docs/CODING_STANDARDS.md`
+- 审查清单：`docs/CODE_REVIEW_CHECKLIST.md`
+- Prompt 模板：`docs/AI_CODE_PROMPTS.md`
+- 实施总结：`docs/CODING_STANDARDS_IMPLEMENTATION.md`

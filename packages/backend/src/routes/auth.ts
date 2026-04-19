@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify'
 import { authService } from '../services/auth-service.js'
+import { getRequestUser } from '../plugins/auth.js'
 
 export async function authRoutes(fastify: FastifyInstance) {
   // Register
@@ -51,7 +52,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
   // Get current user
   fastify.get('/me', { preHandler: [fastify.authenticate] }, async (request) => {
-    const user = (request as any).user
+    const user = getRequestUser(request)
     return authService.getMe(user.id)
   })
 }

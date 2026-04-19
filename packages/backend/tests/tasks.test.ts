@@ -29,7 +29,9 @@ vi.mock('../src/queues/video.js', () => ({
 
 vi.mock('../src/plugins/auth.js', () => ({
   verifyTaskOwnership: (...args: unknown[]) => mockVerifyTaskOwnership(...args),
-  verifyProjectOwnership: (...args: unknown[]) => mockVerifyProjectOwnership(...args)
+  verifyProjectOwnership: (...args: unknown[]) => mockVerifyProjectOwnership(...args),
+  getRequestUser: (request: any) => request.user,
+  getRequestUserId: (request: any) => request.user?.id
 }))
 
 vi.mock('../src/lib/prisma.js', () => ({

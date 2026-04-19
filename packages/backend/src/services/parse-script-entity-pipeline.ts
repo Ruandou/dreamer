@@ -82,7 +82,10 @@ async function ensureCharacterImagesFromIdentityMerge(
     if (!imagesByChar.has(img.characterId)) {
       imagesByChar.set(img.characterId, [])
     }
-    imagesByChar.get(img.characterId)!.push(img)
+    const charImages = imagesByChar.get(img.characterId)
+    if (charImages) {
+      charImages.push(img)
+    }
   }
 
   // 收集需要批量创建的形象图
@@ -229,8 +232,15 @@ export async function runParseScriptEntityPipeline(
     throw new Error('项目不存在')
   }
 
-  const capped = project.episodes.filter((e) => e.episodeNum <= targetEpisodes)
-  let merged = mergeEpisodesToScriptContent(capped as any)
+  const capped = project.episodes
+    .filter((e) => e.episodeNum <= targetEpisodes)
+    .map((e) => ({
+      id: e.id,
+      episodeNum: e.episodeNum,
+      title: e.title,
+      script: e.script
+    }))
+  let merged = mergeEpisodesToScriptContent(capped)
 
   const uniqueNames = collectUniqueCharacterNamesFromScript(merged)
   const log: ModelCallLogContext = {
@@ -260,7 +270,7 @@ export async function runParseScriptEntityPipeline(
   // 优化：避免重新获取整个项目，直接从本地数据重新合并
   // 只有在脚本被修改后才需要重新合并
   if (Object.keys(aliasToCanonical).length > 0) {
-    merged = mergeEpisodesToScriptContent(capped as any)
+    merged = mergeEpisodesToScriptContent(capped)
   }
 
   await saveLocations(projectId, merged)

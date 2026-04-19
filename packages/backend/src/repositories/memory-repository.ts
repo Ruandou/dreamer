@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma.js'
 
 export type MemoryType =
@@ -15,7 +16,7 @@ export interface CreateMemoryItemInput {
   category?: string
   title: string
   content: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   episodeId?: string
   tags?: string[]
   importance?: number
@@ -25,7 +26,7 @@ export interface CreateMemoryItemInput {
 export interface UpdateMemoryItemInput {
   title?: string
   content?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   tags?: string[]
   importance?: number
   isActive?: boolean
@@ -45,7 +46,7 @@ export interface MemoryFilter {
 
 export interface SnapshotData {
   summary: string
-  contextJson: Record<string, any>
+  contextJson: Record<string, unknown>
 }
 
 export class MemoryRepository {
@@ -57,7 +58,7 @@ export class MemoryRepository {
         category: data.category,
         title: data.title,
         content: data.content,
-        metadata: data.metadata as any,
+        metadata: data.metadata as Prisma.InputJsonValue,
         episodeId: data.episodeId,
         tags: data.tags || [],
         importance: data.importance || 3,
@@ -78,7 +79,7 @@ export class MemoryRepository {
       data: {
         title: data.title,
         content: data.content,
-        metadata: data.metadata as any,
+        metadata: data.metadata as Prisma.InputJsonValue,
         tags: data.tags,
         importance: data.importance,
         isActive: data.isActive,
@@ -96,7 +97,7 @@ export class MemoryRepository {
   }
 
   async findByProject(projectId: string, filters?: MemoryFilter) {
-    const where: any = { projectId }
+    const where: Record<string, unknown> = { projectId }
 
     if (filters) {
       if (filters.type) where.type = filters.type
@@ -168,14 +169,14 @@ export class MemoryRepository {
       },
       update: {
         summary: data.summary,
-        contextJson: data.contextJson as any,
+        contextJson: data.contextJson as Prisma.InputJsonValue,
         snapshotAt: new Date()
       },
       create: {
         projectId,
         upToEpisode,
         summary: data.summary,
-        contextJson: data.contextJson as any
+        contextJson: data.contextJson as Prisma.InputJsonValue
       }
     })
   }
@@ -214,7 +215,7 @@ export class MemoryRepository {
         category: item.category,
         title: item.title,
         content: item.content,
-        metadata: item.metadata as any,
+        metadata: item.metadata as Prisma.InputJsonValue,
         episodeId: item.episodeId,
         tags: item.tags || [],
         importance: item.importance || 3,

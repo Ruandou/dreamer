@@ -43,9 +43,9 @@ export class VolcanoTTSProvider implements TTSProvider {
     }
 
     // 火山引擎返回音频数据
-    const _audioData = await response.arrayBuffer()
+    // TODO: 实现音频存储逻辑，将 arrayBuffer 上传到 OSS/S3 并返回 URL
+    await response.arrayBuffer() // 消费响应流
 
-    // 这里应该上传到存储并返回 URL
     // 暂时返回空字符串，实际使用时需要实现存储逻辑
     console.warn('Volcano TTS audio storage not implemented, returning empty URL')
     return ''

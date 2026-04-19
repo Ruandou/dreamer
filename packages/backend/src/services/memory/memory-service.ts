@@ -74,14 +74,14 @@ export class MemoryService {
   /**
    * 查询记忆
    */
-  async queryMemories(projectId: string, filters?: any) {
+  async queryMemories(projectId: string, filters?: Record<string, unknown>) {
     return this.repo.findByProject(projectId, filters)
   }
 
   /**
    * 更新记忆
    */
-  async updateMemory(memoryId: string, data: any) {
+  async updateMemory(memoryId: string, data: Record<string, unknown>) {
     return this.repo.update(memoryId, data)
   }
 

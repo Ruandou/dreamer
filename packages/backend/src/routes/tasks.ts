@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { verifyTaskOwnership, verifyProjectOwnership } from '../plugins/auth.js'
+import { verifyTaskOwnership, verifyProjectOwnership, getRequestUser } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { taskService } from '../services/task-service.js'
 
@@ -8,7 +8,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const taskId = request.params.id
 
       if (!(await verifyTaskOwnership(userId, taskId))) {
@@ -29,7 +29,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const { projectId } = request.query
 
       if (!(await verifyProjectOwnership(userId, projectId))) {
@@ -44,7 +44,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
     '/:id/cancel',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const taskId = request.params.id
 
       if (!(await verifyTaskOwnership(userId, taskId))) {
@@ -64,7 +64,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
     '/:id/retry',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const taskId = request.params.id
 
       if (!(await verifyTaskOwnership(userId, taskId))) {

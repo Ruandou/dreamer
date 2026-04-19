@@ -1,11 +1,12 @@
 import { FastifyInstance } from 'fastify'
 import { projectService } from '../services/project-service.js'
 import { generateVisualStyleConfig } from '../services/ai/visual-style-generator.js'
+import { getRequestUser } from '../plugins/auth.js'
 
 export async function projectRoutes(fastify: FastifyInstance) {
   // List projects
   fastify.get('/', { preHandler: [fastify.authenticate] }, async (request) => {
-    const user = (request as any).user
+    const user = getRequestUser(request)
     return projectService.listProjects(user.id)
   })
 
@@ -13,7 +14,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: { name: string; description?: string; aspectRatio?: string }
   }>('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const user = (request as any).user
+    const user = getRequestUser(request)
     const { name, description, aspectRatio } = request.body
 
     const project = await projectService.createProject(user.id, {
@@ -33,7 +34,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     '/:id/episodes/generate-first',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const user = (request as any).user
+      const user = getRequestUser(request)
       const projectId = request.params.id
       const { description } = request.body || {}
 
@@ -59,7 +60,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     '/:id/generate-visual-style',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const user = (request as any).user
+      const user = getRequestUser(request)
       const projectId = request.params.id
 
       const project = await projectService.getProjectDetail(user.id, projectId)
@@ -104,7 +105,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     '/:id/episodes/generate-remaining',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const user = (request as any).user
+      const user = getRequestUser(request)
       const projectId = request.params.id
       const targetEpisodes = request.body?.targetEpisodes
 
@@ -132,7 +133,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     Params: { id: string }
     Body: { targetEpisodes?: number }
   }>('/:id/parse', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const user = (request as any).user
+    const user = getRequestUser(request)
     const projectId = request.params.id
     const targetEpisodes = request.body?.targetEpisodes
 
@@ -154,7 +155,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     '/:id/outline-active-job',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const user = (request as any).user
+      const user = getRequestUser(request)
       const projectId = request.params.id
 
       const result = await projectService.getOutlineActiveJob(user.id, projectId)
@@ -173,7 +174,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const user = (request as any).user
+      const user = getRequestUser(request)
       const project = await projectService.getProjectDetail(user.id, request.params.id)
 
       if (!project) {
@@ -185,12 +186,12 @@ export async function projectRoutes(fastify: FastifyInstance) {
   )
 
   async function handleProjectUpdate(
-    request: { params: { id: string }; body: Record<string, unknown> },
+    request: import('fastify').FastifyRequest,
     reply: import('fastify').FastifyReply
   ) {
-    const user = (request as any).user as { id: string }
+    const userId = getRequestUser(request).id
     const { name, description, synopsis, visualStyle, visualStyleConfig, aspectRatio } =
-      request.body as {
+      request.body as unknown as {
         name?: string
         description?: string
         synopsis?: string | null
@@ -199,14 +200,19 @@ export async function projectRoutes(fastify: FastifyInstance) {
         aspectRatio?: string
       }
 
-    const result = await projectService.updateProject(user.id, request.params.id, {
-      name,
-      description,
-      synopsis,
-      visualStyle,
-      visualStyleConfig: visualStyleConfig as any,
-      aspectRatio
-    })
+    const result = await projectService.updateProject(
+      userId,
+      (request.params as { id: string }).id,
+      {
+        name,
+        description,
+        synopsis,
+        visualStyle,
+        visualStyleConfig:
+          visualStyleConfig as import('../services/project-service.js').UpdateProjectBody['visualStyleConfig'],
+        aspectRatio
+      }
+    )
 
     if (!result.ok) {
       return reply.status(result.status).send({ error: result.error })
@@ -249,7 +255,7 @@ export async function projectRoutes(fastify: FastifyInstance) {
     '/:id',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const user = (request as any).user
+      const user = getRequestUser(request)
 
       const deleted = await projectService.deleteProject(user.id, request.params.id)
       if (!deleted) {

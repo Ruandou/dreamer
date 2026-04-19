@@ -60,12 +60,14 @@ export class DeepSeekProvider implements LLMProvider {
         model,
         rawResponse: completion
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errStatus = (error as { status?: number })?.status
+      const errMsg = error instanceof Error ? error.message : ''
       // 转换为标准错误类型
-      if (error?.status === 401 || error?.status === 403) {
+      if (errStatus === 401 || errStatus === 403) {
         throw new DeepSeekAuthError()
       }
-      if (error?.status === 429 || error?.message?.includes('rate_limit')) {
+      if (errStatus === 429 || errMsg.includes('rate_limit')) {
         throw new DeepSeekRateLimitError()
       }
       throw error

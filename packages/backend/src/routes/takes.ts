@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { verifyTaskOwnership } from '../plugins/auth.js'
+import { verifyTaskOwnership, getRequestUser } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { takeService } from '../services/take-service.js'
 
@@ -8,7 +8,7 @@ export async function takeRoutes(fastify: FastifyInstance) {
     '/:id/select',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const takeId = request.params.id
 
       if (!(await verifyTaskOwnership(userId, takeId))) {

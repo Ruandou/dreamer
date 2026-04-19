@@ -2,7 +2,8 @@ import { FastifyInstance } from 'fastify'
 import {
   verifyCharacterImageOwnership,
   verifyCharacterOwnership,
-  verifyProjectOwnership
+  verifyProjectOwnership,
+  getRequestUser
 } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { characterImageService } from '../services/character-image-service.js'
@@ -13,7 +14,7 @@ export async function characterImageRoutes(fastify: FastifyInstance) {
     '/batch-generate-missing-avatars',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const projectId = request.body?.projectId
       const rawCharacterId = request.body?.characterId
       if (!projectId || typeof projectId !== 'string') {
@@ -45,7 +46,7 @@ export async function characterImageRoutes(fastify: FastifyInstance) {
     '/:id/generate',
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
-      const userId = (request as any).user.id
+      const userId = getRequestUser(request).id
       const characterImageId = request.params.id
       const bodyPrompt = request.body?.prompt
 

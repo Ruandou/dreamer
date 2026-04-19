@@ -15,7 +15,6 @@ import type {
   VoiceConfig
 } from '@dreamer/shared/types'
 import { extractActionsFromScene } from './action-extractor.js'
-import { matchAssets, getReferenceImageUrls } from './scene-asset.js'
 
 export interface StoryboardGeneratorOptions {
   defaultAspectRatio?: '16:9' | '9:16' | '1:1'
@@ -100,7 +99,7 @@ function createSegment(
   )
 
   // 获取参考图 URL
-  const compositeImageUrls = assets.filter((a) => a.url).map((a) => a.url!)
+  const compositeImageUrls = assets.filter((a) => a.url).map((a) => a.url as string)
 
   return {
     episodeNum,
@@ -137,7 +136,7 @@ function buildCharacterInfo(
     if (!characterActions.has(action.characterName)) {
       characterActions.set(action.characterName, [])
     }
-    characterActions.get(action.characterName)!.push(action)
+    characterActions.get(action.characterName)?.push(action)
   }
 
   // 构建角色信息
@@ -292,7 +291,7 @@ function buildVoiceSegments(
   }
 
   // 获取角色ID（如果有）
-  const getCharacterId = (characterName: string): string => {
+  const getCharacterId = (_characterName: string): string => {
     // 暂时返回空字符串，实际使用时需要从项目角色列表中查找
     return ''
   }
@@ -339,10 +338,6 @@ function inferVoiceConfig(
     timbre: 'warm_solid',
     speed: 'medium'
   }
-
-  // 根据角色名推断性别（简单规则：常见女性名优先）
-  const femaleNames = ['她', '女主', '小姐', '姑娘', '姐姐', '妹妹', '妈妈', '奶奶']
-  const maleNames = ['他', '男主', '先生', '哥哥', '弟弟', '爸爸', '爷爷']
 
   // 简单判断：如果角色名包含特定字符
   // 实际使用时应该从角色元数据获取
@@ -445,7 +440,7 @@ function generateSeedancePrompt(
 /**
  * 生成分镜间的衔接提示
  */
-function generateContextForNext(currentScene: ScriptScene, segmentNum: number): string {
+function generateContextForNext(currentScene: ScriptScene, _segmentNum: number): string {
   const hints: string[] = []
 
   // 如果有对话，提示下一镜接续情绪

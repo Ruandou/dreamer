@@ -69,7 +69,9 @@ export function createMentionSuggestionRender() {
         command(item)
         hide()
       })
-      root!.appendChild(row)
+      if (root) {
+        root.appendChild(row)
+      }
     })
 
     // 修复定位逻辑

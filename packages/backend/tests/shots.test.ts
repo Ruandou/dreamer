@@ -9,7 +9,9 @@ const { mockVerifyShotOwnership, mockCharacterShotServiceCreateForShot } = vi.ho
 })
 
 vi.mock('../src/plugins/auth.js', () => ({
-  verifyShotOwnership: (...args: unknown[]) => mockVerifyShotOwnership(...args)
+  verifyShotOwnership: (...args: unknown[]) => mockVerifyShotOwnership(...args),
+  getRequestUser: (request: any) => request.user,
+  getRequestUserId: (request: any) => request.user?.id
 }))
 
 vi.mock('../src/services/character-shot-service.js', () => ({
