@@ -1070,6 +1070,30 @@ async function runFaithfulParse(
   const project = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
   if (!project) return
 
+  // 从剧本内容中提取并更新项目名
+  try {
+    console.log('[faithful-parse] 正在从剧本中提取项目名称...')
+    const firstEpisodeContent = episodes.find((ep) => ep.content)?.content || ''
+
+    // 使用 AI 解析器提取项目名（只需要 projectName 字段）
+    const { parseScriptDocument } = await import('./ai/parser.js')
+    const { parsed } = await parseScriptDocument(firstEpisodeContent, 'markdown', {
+      userId: project.userId,
+      projectId,
+      op: 'extract_project_name_from_complete_script'
+    })
+
+    if (parsed.projectName && parsed.projectName !== '未命名项目') {
+      await projectRepository.update(projectId, {
+        name: parsed.projectName
+      })
+      console.log(`[faithful-parse] 项目名已更新: ${parsed.projectName}`)
+    }
+  } catch (error) {
+    // 提取失败不影响后续流程，使用原有项目名
+    console.warn('[faithful-parse] 项目名提取失败，使用原有项目名:', error)
+  }
+
   const totalEpisodes = episodes.length
   let completed = 0
 
