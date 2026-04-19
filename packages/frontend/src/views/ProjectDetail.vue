@@ -1,16 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  NLayout,
-  NLayoutSider,
-  NMenu,
-  NButton,
-  NTag,
-  NAlert,
-  NProgress,
-  useMessage
-} from 'naive-ui'
+import { NLayout, NLayoutSider, NMenu, NButton, NAlert, NProgress, useMessage } from 'naive-ui'
 import type { MenuOption } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -100,12 +91,12 @@ const currentMenu = computed(() => {
   if (path.includes('/locations')) return 'locations'
   if (path.includes('/episodes')) return 'episodes'
   if (path.includes('/compose')) return 'compose'
+  if (path.includes('/pipeline')) return 'pipeline'
+  if (path.includes('/storyboard')) return 'storyboard'
   /** 旧子路由仍可达：侧栏高亮归到最接近的主 Tab */
   if (path.includes('/script')) return 'overview'
-  if (path.includes('/storyboard') || path.includes('/pipeline')) return 'episodes'
   return 'overview'
 })
-
 </script>
 
 <template>
@@ -126,15 +117,19 @@ const currentMenu = computed(() => {
             <span class="back-icon">←</span>
             <span v-if="!isCollapsed">返回</span>
           </NButton>
-          <NButton text circle size="small" @click="isCollapsed = !isCollapsed" class="collapse-btn">
+          <NButton
+            text
+            circle
+            size="small"
+            @click="isCollapsed = !isCollapsed"
+            class="collapse-btn"
+          >
             {{ isCollapsed ? '→' : '←' }}
           </NButton>
         </div>
 
         <div v-if="!isCollapsed" class="project-header__info">
-          <div class="project-cover">
-            🎬
-          </div>
+          <div class="project-cover">🎬</div>
           <h3 class="project-name">{{ projectStore.currentProject?.name || '项目' }}</h3>
           <p class="project-desc">
             {{ projectStore.currentProject?.description || '暂无描述' }}
@@ -171,16 +166,6 @@ const currentMenu = computed(() => {
             />
           </NAlert>
         </div>
-        <header class="project-topbar">
-          <div class="project-topbar__left">
-            <h2 class="project-topbar__title">
-              {{ menuOptions.find(m => m.key === currentMenu)?.label }}
-            </h2>
-            <NTag v-if="projectStore.currentProject" size="small" round>
-              {{ projectStore.currentProject.name }}
-            </NTag>
-          </div>
-        </header>
 
         <div class="project-content">
           <RouterView />
@@ -246,6 +231,27 @@ const currentMenu = computed(() => {
 
 .project-sider {
   background: var(--color-bg-white) !important;
+}
+
+/* Clean Menu Styles */
+:deep(.n-menu-item) {
+  margin: 2px 12px;
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+:deep(.n-menu-item:hover) {
+  background: var(--color-bg-gray);
+}
+
+:deep(.n-menu-item--active) {
+  background: var(--color-primary-light);
+  color: var(--color-primary) !important;
+  font-weight: var(--font-weight-medium);
+}
+
+:deep(.n-menu-item--active:hover) {
+  background: var(--color-primary-light);
 }
 
 .project-header {
@@ -327,28 +333,6 @@ const currentMenu = computed(() => {
   letter-spacing: 0.05em;
   margin-bottom: var(--spacing-sm);
   padding-left: var(--spacing-md);
-}
-
-.project-topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-md) var(--spacing-lg);
-  background: var(--color-bg-white);
-  border-bottom: 1px solid var(--color-border-light);
-  flex-shrink: 0;
-}
-
-.project-topbar__left {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.project-topbar__title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
 }
 
 .project-content {

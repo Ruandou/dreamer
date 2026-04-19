@@ -1,110 +1,137 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
-import { useRouter } from "vue-router";
-import {
-  NCard,
-  NButton,
-  NSpace,
-  NInput,
-  NDropdown,
-  useMessage,
-  useDialog,
-} from "naive-ui";
-import { useProjectStore } from "@/stores/project";
-import type { Project } from "@dreamer/shared/types";
-import { api } from "@/api";
-import type { PipelineJob } from "@/api";
-import EmptyState from "@/components/EmptyState.vue";
-import StatusBadge from "@/components/StatusBadge.vue";
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { NCard, NButton, NSpace, NInput, NDropdown, useMessage, useDialog } from 'naive-ui'
+import { useProjectStore } from '@/stores/project'
+import type { Project } from '@dreamer/shared/types'
+import { api } from '@/api'
+import type { PipelineJob } from '@/api'
+import EmptyState from '@/components/EmptyState.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import SkeletonLoader from '@/components/SkeletonLoader.vue'
+import ErrorBoundary from '@/components/ErrorBoundary.vue'
+import { useAsyncState } from '@/composables/useAsyncState'
+import { useKeyboardShortcuts, commonShortcuts } from '@/composables/useKeyboardShortcuts'
 
-const router = useRouter();
-const message = useMessage();
-const dialog = useDialog();
-const projectStore = useProjectStore();
+const router = useRouter()
+const message = useMessage()
+const dialog = useDialog()
+const projectStore = useProjectStore()
 
-const searchQuery = ref("");
-const quickIdea = ref("");
-const isCreating = ref(false);
-const fileInputRef = ref<HTMLInputElement | null>(null);
+const searchQuery = ref('')
+const quickIdea = ref('')
+const isCreating = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+// Async state management for loading and error handling
+const {
+  loading,
+  error,
+  hasError,
+  execute: fetchProjects
+} = useAsyncState(() => projectStore.fetchProjects(), {
+  onError: (err) => {
+    message.error(`加载项目失败: ${err.message}`)
+  }
+})
+
+// Keyboard shortcuts
+useKeyboardShortcuts([
+  {
+    ...commonShortcuts.newProject,
+    handler: () => {
+      const input = document.querySelector<HTMLInputElement>(
+        'input[placeholder="请输入剧本想法..."]'
+      )
+      input?.focus()
+    }
+  },
+  {
+    ...commonShortcuts.search,
+    handler: () => {
+      const input = document.querySelector<HTMLInputElement>('input[placeholder="搜索项目..."]')
+      input?.focus()
+    }
+  }
+])
 
 onMounted(() => {
-  projectStore.fetchProjects();
-});
+  void fetchProjects()
+})
 
 const filteredProjects = computed(() => {
   if (!searchQuery.value.trim()) {
-    return projectStore.projects;
+    return projectStore.projects
   }
-  const query = searchQuery.value.toLowerCase();
+  const query = searchQuery.value.toLowerCase()
   return projectStore.projects.filter(
     (p) =>
       p.name.toLowerCase().includes(query) ||
-      (p.description && p.description.toLowerCase().includes(query)),
-  );
-});
+      (p.description && p.description.toLowerCase().includes(query))
+  )
+})
 
 const handleFileInputClick = () => {
-  fileInputRef.value?.click();
-};
+  fileInputRef.value?.click()
+}
 
 const handleFileInputChange = (e: Event) => {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
 
-  const reader = new FileReader();
+  const reader = new FileReader()
   reader.onload = (ev) => {
-    quickIdea.value = ev.target?.result as string;
-    message.success("剧本已导入");
-  };
-  reader.readAsText(file);
-};
+    quickIdea.value = ev.target?.result as string
+    message.success('剧本已导入')
+  }
+  reader.readAsText(file)
+}
 
 const handleDrop = (e: DragEvent) => {
-  const files = e.dataTransfer?.files;
-  if (!files?.length) return;
+  const files = e.dataTransfer?.files
+  if (!files?.length) return
 
-  const file = files[0];
-  if (!file) return;
+  const file = files[0]
+  if (!file) return
 
-  const reader = new FileReader();
+  const reader = new FileReader()
   reader.onload = (ev) => {
-    quickIdea.value = ev.target?.result as string;
-    message.success("剧本已导入");
-  };
-  reader.readAsText(file);
-};
+    quickIdea.value = ev.target?.result as string
+    message.success('剧本已导入')
+  }
+  reader.readAsText(file)
+}
 
 const handleQuickCreate = async () => {
   if (!quickIdea.value.trim()) {
-    message.warning("请输入剧本想法");
-    return;
+    message.warning('请输入剧本想法')
+    return
   }
-  isCreating.value = true;
+  isCreating.value = true
   try {
-    const idea = quickIdea.value.trim();
-    const name =
-      idea.length <= 40 ? idea : `${idea.slice(0, 37)}…`;
+    const idea = quickIdea.value.trim()
+    const name = idea.length <= 40 ? idea : `${idea.slice(0, 37)}…`
     const project = await projectStore.createProject({
       name,
-      description: idea,
-    });
-    router.push(`/generate?projectId=${project.id}&autogen=1`);
+      description: idea
+    })
+    router.push(`/generate?projectId=${project.id}&autogen=1`)
   } catch (e: any) {
-    message.error(e.message || "创建项目失败");
+    message.error(e.message || '创建项目失败')
   } finally {
-    isCreating.value = false;
+    isCreating.value = false
   }
-};
+}
 
 function isParseScriptOutlineJob(job: PipelineJob | null | undefined): boolean {
-  if (!job) return false;
-  const jt = (job.jobType ?? "").toString().trim().toLowerCase();
-  const step = (job.currentStep ?? "").toString().trim().toLowerCase();
-  return jt === "parse-script" || step === "parse-script";
+  if (!job) return false
+  const jt = (job.jobType ?? '').toString().trim().toLowerCase()
+  const step = (job.currentStep ?? '').toString().trim().toLowerCase()
+  return jt === 'parse-script' || step === 'parse-script'
 }
 
 function hasAnyCharacter(project: Project | null | undefined): boolean {
-  return ((project?.characters?.length ?? 0) > 0);
+  return (project?.characters?.length ?? 0) > 0
 }
 
 /**
@@ -114,66 +141,66 @@ function hasAnyCharacter(project: Project | null | undefined): boolean {
  * 先拉 GET /projects/:id，避免列表里 characters 滞后（解析刚完成仍显示 0）。
  */
 const handleProjectClick = async (project: Project) => {
-  let fresh: Project | null = null;
+  let fresh: Project | null = null
   try {
-    const res = await api.get<Project>(`/projects/${project.id}`);
-    fresh = res.data;
+    const res = await api.get<Project>(`/projects/${project.id}`)
+    fresh = res.data
   } catch {
-    fresh = null;
+    fresh = null
   }
 
   if (hasAnyCharacter(fresh) || hasAnyCharacter(project)) {
-    router.push(`/project/${project.id}`);
-    return;
+    router.push(`/project/${project.id}`)
+    return
   }
 
   try {
     const res = await api.get<{ job: PipelineJob | null }>(
       `/projects/${project.id}/outline-active-job`
-    );
-    const job = res.data?.job;
+    )
+    const job = res.data?.job
     if (
       job &&
-      (job.status === "pending" || job.status === "running") &&
+      (job.status === 'pending' || job.status === 'running') &&
       isParseScriptOutlineJob(job)
     ) {
-      router.push(`/project/${project.id}?parseJobId=${job.id}`);
-      return;
+      router.push(`/project/${project.id}?parseJobId=${job.id}`)
+      return
     }
   } catch {
     /* ignore */
   }
-  router.push(`/generate?projectId=${project.id}`);
-};
+  router.push(`/generate?projectId=${project.id}`)
+}
 
 const handleDelete = (id: string) => {
   dialog.warning({
-    title: "确认删除",
-    content: "确定要删除这个项目吗？此操作不可撤销。",
-    positiveText: "删除",
-    negativeText: "取消",
+    title: '确认删除',
+    content: '确定要删除这个项目吗？此操作不可撤销。',
+    positiveText: '删除',
+    negativeText: '取消',
     onPositiveClick: async () => {
-      await projectStore.deleteProject(id);
-      message.success("项目已删除");
-    },
-  });
-};
+      await projectStore.deleteProject(id)
+      message.success('项目已删除')
+    }
+  })
+}
 
 const formatDate = (date: string | Date) => {
-  return new Date(date).toLocaleDateString("zh-CN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-};
+  return new Date(date).toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
 
-const dropdownOptions = [{ label: "删除", key: "delete" }];
+const dropdownOptions = [{ label: '删除', key: 'delete' }]
 
 const handleDropdownSelect = (key: string, projectId: string) => {
-  if (key === "delete") {
-    handleDelete(projectId);
+  if (key === 'delete') {
+    handleDelete(projectId)
   }
-};
+}
 </script>
 
 <template>
@@ -182,7 +209,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
     <header class="projects-header">
       <div class="projects-header__info">
         <h1 class="projects-header__title">我的项目</h1>
-        <p class="projects-header__count" v-if="projectStore.projects.length">
+        <p class="projects-header__count" v-if="projectStore.projects.length && !loading">
           共 {{ projectStore.projects.length }} 个项目
         </p>
       </div>
@@ -190,7 +217,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         <NSpace>
           <NInput
             v-model:value="searchQuery"
-            placeholder="搜索项目..."
+            placeholder="搜索项目... (⌘K)"
             clearable
             style="width: 200px"
           >
@@ -208,8 +235,22 @@ const handleDropdownSelect = (key: string, projectId: string) => {
       </div>
     </header>
 
+    <!-- Error Boundary -->
+    <ErrorBoundary
+      :has-error="hasError"
+      :error="error || undefined"
+      title="加载项目失败"
+      @retry="fetchProjects"
+    />
+
+    <!-- Loading Skeleton -->
+    <div v-if="loading" class="projects-loading">
+      <SkeletonLoader :rows="3" variant="grid" :show-header="false" />
+    </div>
+
     <!-- Quick Create -->
     <div
+      v-else
       class="quick-create"
       @drop.prevent="handleDrop"
       @dragover.prevent
@@ -219,7 +260,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         <NInput
           v-model:value="quickIdea"
           type="textarea"
-          placeholder="✨ 输入想法，快速创建短剧... 或 拖拽剧本文件到此处"
+          placeholder="✨ 输入想法，快速创建短剧... 或 拖拽剧本文件到此处 (⌘N)"
           :rows="3"
           @keydown.enter.ctrl="handleQuickCreate"
         />
@@ -250,19 +291,30 @@ const handleDropdownSelect = (key: string, projectId: string) => {
     <div class="projects-content">
       <!-- Empty State -->
       <EmptyState
-        v-if="!projectStore.projects.length"
+        v-if="!projectStore.projects.length && !loading"
         title="暂无项目"
         description="在上方快速创建区输入想法、导入剧本或拖入文件，生成大纲后即可开始创作"
         icon="🎬"
-      />
+        :show-background="true"
+        variant="large"
+      >
+        <template #action>
+          <NButton type="primary" @click="router.push('/generate')"> 创建第一个项目 </NButton>
+        </template>
+      </EmptyState>
 
       <!-- Search Empty -->
       <EmptyState
         v-else-if="!filteredProjects.length"
         title="未找到项目"
-        description="尝试其他搜索词"
+        :description="`未找到包含「${searchQuery}」的项目`"
         icon="🔍"
-      />
+        :show-background="true"
+      >
+        <template #action>
+          <NButton @click="searchQuery = ''">清除搜索</NButton>
+        </template>
+      </EmptyState>
 
       <!-- Grid View -->
       <template v-else>
@@ -282,14 +334,12 @@ const handleDropdownSelect = (key: string, projectId: string) => {
             <div class="project-card__body">
               <h3 class="project-card__title">{{ project.name }}</h3>
               <p class="project-card__desc">
-                {{ project.description || "暂无描述" }}
+                {{ project.description || '暂无描述' }}
               </p>
             </div>
 
             <div class="project-card__footer">
-              <span class="project-card__date">{{
-                formatDate(project.createdAt)
-              }}</span>
+              <span class="project-card__date">{{ formatDate(project.createdAt) }}</span>
               <NDropdown
                 :options="dropdownOptions"
                 @select="(key) => handleDropdownSelect(key, project.id)"
@@ -337,6 +387,10 @@ const handleDropdownSelect = (key: string, projectId: string) => {
   min-height: 400px;
 }
 
+.projects-loading {
+  margin-top: var(--spacing-lg);
+}
+
 .quick-create {
   display: flex;
   flex-direction: column;
@@ -364,13 +418,25 @@ const handleDropdownSelect = (key: string, projectId: string) => {
 
 .project-card {
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
   border: 1px solid var(--color-border-light);
   overflow: hidden;
+  animation: fadeInUp 0.4s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .project-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-4px);
   box-shadow: var(--shadow-lg);
   border-color: var(--color-primary);
 }
