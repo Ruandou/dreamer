@@ -188,19 +188,26 @@ export const videoWorker = new Worker<VideoJobData>(
         }
       }
 
-      // Download video and upload to MinIO
+      // Download video and thumbnail in parallel, then upload to MinIO
       console.log(`Downloading video from ${videoUrl} and uploading to MinIO`)
-      const videoResponse = await fetch(videoUrl)
-      const videoBuffer = Buffer.from(await videoResponse.arrayBuffer())
+      const videoDownloadPromise = fetch(videoUrl).then(async (res) =>
+        Buffer.from(await res.arrayBuffer())
+      )
+      const thumbnailDownloadPromise = thumbnailUrl
+        ? fetch(thumbnailUrl).then(async (res) => Buffer.from(await res.arrayBuffer()))
+        : Promise.resolve(null)
+
+      const [videoBuffer, thumbBuffer] = await Promise.all([
+        videoDownloadPromise,
+        thumbnailDownloadPromise
+      ])
 
       const videoKey = generateFileKey('videos', `${taskId}.mp4`)
       const uploadedVideoUrl = await uploadFile('videos', videoKey, videoBuffer, 'video/mp4')
 
       // Upload thumbnail if exists
       let uploadedThumbnailUrl = ''
-      if (thumbnailUrl) {
-        const thumbResponse = await fetch(thumbnailUrl)
-        const thumbBuffer = Buffer.from(await thumbResponse.arrayBuffer())
+      if (thumbBuffer) {
         const thumbKey = generateFileKey('assets', `${taskId}_thumb.jpg`)
         uploadedThumbnailUrl = await uploadFile('assets', thumbKey, thumbBuffer, 'image/jpeg')
       }

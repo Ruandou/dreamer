@@ -20,12 +20,8 @@ import {
   NProgress,
   useMessage
 } from 'naive-ui'
-import {
-  executePipeline,
-  getPipelineJob,
-  getPipelineStatus,
-  type PipelineJob
-} from '@/api'
+import { executePipeline, getPipelineJob, getPipelineStatus, type PipelineJob } from '@/api'
+import { usePolling } from '@/composables/usePolling'
 import EmptyState from '@/components/EmptyState.vue'
 
 const route = useRoute()
@@ -48,9 +44,6 @@ const isExecuting = ref(false)
 const defaultAspectRatio = ref<'16:9' | '9:16' | '1:1'>('9:16')
 const defaultResolution = ref<'480p' | '720p'>('720p')
 
-// Polling
-let pollInterval: ReturnType<typeof setInterval> | null = null
-
 // Pipeline steps
 const steps = [
   { id: 'script-writing', label: '剧本生成', description: 'DeepSeek AI' },
@@ -62,7 +55,7 @@ const steps = [
 // Current step index
 const currentStepIndex = computed(() => {
   if (!currentJob.value) return -1
-  const idx = steps.findIndex(s => s.id === currentJob.value?.currentStep)
+  const idx = steps.findIndex((s) => s.id === currentJob.value?.currentStep)
   return idx >= 0 ? idx : 0
 })
 
@@ -82,6 +75,33 @@ const stepStatuses = computed((): Array<'wait' | 'process' | 'finish' | 'error'>
   })
 })
 
+const { start: startPolling, stop: stopPolling } = usePolling(
+  async () => {
+    if (!currentJob.value) return null
+    const result = await getPipelineJob(currentJob.value.id)
+    if (result.data) {
+      currentJob.value = result.data
+      if (result.data.status === 'completed') {
+        message.success('流水线执行完成！')
+        isRunning.value = false
+      } else if (result.data.status === 'failed') {
+        error.value = result.data.error || '流水线执行失败'
+        message.error(error.value ?? '流水线执行失败')
+        isRunning.value = false
+      }
+    }
+    return result.data
+  },
+  {
+    interval: 2000,
+    shouldContinue: (data) => {
+      if (!data) return false
+      return data.status === 'running' || data.status === 'pending'
+    },
+    immediate: false
+  }
+)
+
 onMounted(async () => {
   // Check if there's a previous running or completed job
   try {
@@ -93,6 +113,7 @@ onMounted(async () => {
         if (jobResult.data) {
           currentJob.value = jobResult.data
           if (jobResult.data.status === 'running') {
+            isRunning.value = true
             startPolling()
             showInputModal.value = false
           } else if (jobResult.data.status === 'completed') {
@@ -110,43 +131,6 @@ onMounted(async () => {
 onUnmounted(() => {
   stopPolling()
 })
-
-const startPolling = () => {
-  if (pollInterval) return
-  isRunning.value = true
-  pollInterval = setInterval(async () => {
-    if (!currentJob.value) {
-      stopPolling()
-      return
-    }
-    try {
-      const result = await getPipelineJob(currentJob.value.id)
-      if (result.data) {
-        currentJob.value = result.data
-        if (result.data.status === 'completed') {
-          message.success('流水线执行完成！')
-          stopPolling()
-          isRunning.value = false
-        } else if (result.data.status === 'failed') {
-          error.value = result.data.error || '流水线执行失败'
-          message.error(error.value ?? '流水线执行失败')
-          stopPolling()
-          isRunning.value = false
-        }
-      }
-    } catch (e) {
-      console.error('Polling error:', e)
-    }
-  }, 2000) // Poll every 2 seconds
-}
-
-const stopPolling = () => {
-  if (pollInterval) {
-    clearInterval(pollInterval)
-    pollInterval = null
-  }
-  isRunning.value = false
-}
 
 const executePipelineAsync = async () => {
   if (!idea.value.trim()) {
@@ -177,6 +161,7 @@ const executePipelineAsync = async () => {
         updatedAt: new Date().toISOString()
       } as PipelineJob
       showInputModal.value = false
+      isRunning.value = true
       startPolling()
       message.info('流水线已启动，正在后台执行...')
     } else {
@@ -256,9 +241,9 @@ const goToProjectDetail = () => {
               <span>ℹ️</span>
             </template>
             <template #header>流程说明</template>
-            1. DeepSeek 生成专业剧本<br/>
-            2. 智能分集（起承转合）<br/>
-            3. 提取角色、场景、动作<br/>
+            1. DeepSeek 生成专业剧本<br />
+            2. 智能分集（起承转合）<br />
+            3. 提取角色、场景、动作<br />
             4. 生成分镜提示词
           </NAlert>
         </NForm>
@@ -339,9 +324,7 @@ const goToProjectDetail = () => {
         description="从想法到 Seedance 视频参数，一站式完成"
       >
         <template #action>
-          <NButton type="primary" @click="showInputModal = true">
-            启动流水线
-          </NButton>
+          <NButton type="primary" @click="showInputModal = true"> 启动流水线 </NButton>
         </template>
       </EmptyState>
     </NCard>

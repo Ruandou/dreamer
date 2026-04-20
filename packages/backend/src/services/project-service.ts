@@ -1,15 +1,13 @@
 import type { Prisma, Project } from '@prisma/client'
 import { normalizeProjectDefaultAspectRatio } from '../lib/project-aspect.js'
 import { ProjectRepository, projectRepository } from '../repositories/project-repository.js'
-import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import {
   runGenerateFirstEpisodePipelineJob,
-  runScriptBatchJob,
-  runParseScriptJob,
   DEFAULT_TARGET_EPISODES,
   hasConcurrentOutlinePipelineJob,
   getActiveOutlinePipelineJob
 } from './project-script-jobs.js'
+import { pipelineQueue } from '../queues/pipeline.js'
 import type { VisualStyleConfig } from '@dreamer/shared'
 
 export type CreateProjectInput = {
@@ -156,25 +154,12 @@ export class ProjectService {
       progress: 0
     })
 
-    // 异步执行任务，不阻塞响应
-    setImmediate(async () => {
-      try {
-        await runScriptBatchJob(job.id, projectId, targetEpisodes)
-      } catch (err) {
-        console.error('script-batch job failed', err)
-        // 确保错误状态被更新到数据库
-        try {
-          await pipelineRepository.updateJob(job.id, {
-            status: 'failed',
-            error: err instanceof Error ? err.message : '批量生成失败',
-            progressMeta: {
-              message: err instanceof Error ? err.message : undefined
-            }
-          })
-        } catch (updateErr) {
-          console.error('Failed to update job status to failed', updateErr)
-        }
-      }
+    // 入队到 Pipeline Worker，在独立进程中执行
+    await pipelineQueue.add('script-batch', {
+      jobId: job.id,
+      jobType: 'script-batch',
+      projectId,
+      targetEpisodes
     })
 
     return { ok: true, jobId: job.id, targetEpisodes }
@@ -216,26 +201,12 @@ export class ProjectService {
       progress: 0
     })
 
-    // 异步执行任务，不阻塞响应
-    // 使用 setImmediate 确保在下一个事件循环执行，立即返回 jobId
-    setImmediate(async () => {
-      try {
-        await runParseScriptJob(job.id, projectId, targetEpisodes)
-      } catch (err) {
-        console.error('parse-script job failed', err)
-        // 确保错误状态被更新到数据库
-        try {
-          await pipelineRepository.updateJob(job.id, {
-            status: 'failed',
-            error: err instanceof Error ? err.message : '解析失败',
-            progressMeta: {
-              message: err instanceof Error ? err.message : undefined
-            }
-          })
-        } catch (updateErr) {
-          console.error('Failed to update job status to failed', updateErr)
-        }
-      }
+    // 入队到 Pipeline Worker，在独立进程中执行
+    await pipelineQueue.add('parse-script', {
+      jobId: job.id,
+      jobType: 'parse-script',
+      projectId,
+      targetEpisodes
     })
 
     return { ok: true, jobId: job.id }

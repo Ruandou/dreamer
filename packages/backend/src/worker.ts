@@ -5,11 +5,13 @@ import './bootstrap-env.js'
 import { videoWorker } from './queues/video.js'
 import { importWorker } from './queues/import.js'
 import { closeImageWorker } from './queues/image.js'
+import { closePipelineWorker } from './queues/pipeline.js'
 
 console.log('Workers started')
 console.log('- Video generation worker: video-generation (concurrency: 5)')
 console.log('- Import worker: import (concurrency: 2)')
 console.log('- Image generation worker: image-generation (concurrency: 3)')
+console.log('- Pipeline worker: pipeline (concurrency: 2)')
 
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
@@ -17,6 +19,7 @@ process.on('SIGINT', async () => {
   await videoWorker.close()
   await importWorker.close()
   await closeImageWorker()
+  await closePipelineWorker()
   process.exit(0)
 })
 
@@ -25,5 +28,6 @@ process.on('SIGTERM', async () => {
   await videoWorker.close()
   await importWorker.close()
   await closeImageWorker()
+  await closePipelineWorker()
   process.exit(0)
 })

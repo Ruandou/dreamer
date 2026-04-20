@@ -53,8 +53,7 @@ export function createStoryboardMentionExtension(
         ...parent,
         HTMLAttributes: parent?.HTMLAttributes ?? {},
         deleteTriggerWithBackspace: parent?.deleteTriggerWithBackspace ?? false,
-        // 不要覆盖 suggestions - 这就是问题！
-        // suggestions: parent?.suggestions ?? [],
+        suggestions: parent?.suggestions ?? [],
         renderHTML({ options, node }) {
           const label = (node.attrs.label as string) ?? (node.attrs.id as string) ?? ''
           const avatar = node.attrs.avatarUrl as string | undefined

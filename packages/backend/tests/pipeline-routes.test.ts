@@ -26,6 +26,7 @@ const {
 
 // Mock executePipelineJob
 const mockExecutePipelineJob = vi.fn()
+const mockPipelineQueueAdd = vi.fn()
 
 // Mock the index.js module
 vi.mock('../src/lib/prisma.js', () => ({
@@ -52,6 +53,14 @@ vi.mock('../src/lib/prisma.js', () => ({
 // Mock the executor
 vi.mock('../src/services/pipeline-executor.js', () => ({
   executePipelineJob: (...args: any[]) => mockExecutePipelineJob(...args)
+}))
+
+vi.mock('../src/queues/pipeline.js', () => ({
+  pipelineQueue: {
+    add: (...args: any[]) => mockPipelineQueueAdd(...args)
+  },
+  pipelineWorker: {},
+  closePipelineWorker: vi.fn()
 }))
 
 // Import routes after all mocks are set up
@@ -321,9 +330,11 @@ describe('Pipeline Routes', () => {
       expect(body.data.jobId).toBe('new-job-id')
       expect(mockPipelineJobCreate).toHaveBeenCalled()
       expect(mockPipelineStepResultCreateMany).toHaveBeenCalled()
-      expect(mockExecutePipelineJob).toHaveBeenCalledWith(
-        'new-job-id',
+      expect(mockPipelineQueueAdd).toHaveBeenCalledWith(
+        'full-pipeline',
         expect.objectContaining({
+          jobId: 'new-job-id',
+          jobType: 'full-pipeline',
           projectId: 'proj-1',
           idea: '一个悬疑故事',
           targetEpisodes: 3,

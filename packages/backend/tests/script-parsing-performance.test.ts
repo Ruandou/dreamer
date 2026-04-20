@@ -296,9 +296,9 @@ describe('Script Parsing Performance Benchmark', () => {
         { id: 'alias-3', name: '别名3', description: 'Alias 3', projectId }
       ]
 
-      mockCharacterRepository.findFirstByProjectAndName.mockImplementation((async (
+      mockCharacterRepository.findManyByProjectAndNames.mockImplementation((async (
         _proj: string,
-        name: string
+        names: string[]
       ) => {
         const allChars = [
           {
@@ -309,7 +309,7 @@ describe('Script Parsing Performance Benchmark', () => {
           },
           ...aliasCharacters
         ]
-        return allChars.find((c) => c.name === name) || null
+        return allChars.filter((c) => names.includes(c.name))
       }) as any)
 
       // Override the mock to return alias mappings

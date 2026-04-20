@@ -14,7 +14,8 @@ const {
   mockRunScriptBatchJob,
   mockRunGenerateFirstEpisodePipelineJob,
   mockHasConcurrentOutlinePipelineJob,
-  mockGetActiveOutlinePipelineJob
+  mockGetActiveOutlinePipelineJob,
+  mockPipelineQueueAdd
 } = vi.hoisted(() => ({
   mockProjectFindFirst: vi.fn(),
   mockProjectFindUnique: vi.fn(),
@@ -28,7 +29,8 @@ const {
   mockRunScriptBatchJob: vi.fn(),
   mockRunGenerateFirstEpisodePipelineJob: vi.fn(),
   mockHasConcurrentOutlinePipelineJob: vi.fn(),
-  mockGetActiveOutlinePipelineJob: vi.fn()
+  mockGetActiveOutlinePipelineJob: vi.fn(),
+  mockPipelineQueueAdd: vi.fn()
 }))
 
 vi.mock('../src/services/project-script-jobs.js', () => ({
@@ -41,6 +43,14 @@ vi.mock('../src/services/project-script-jobs.js', () => ({
   getActiveOutlinePipelineJob: (...args: unknown[]) =>
     mockGetActiveOutlinePipelineJob(...args) as Promise<unknown>,
   DEFAULT_TARGET_EPISODES: 36
+}))
+
+vi.mock('../src/queues/pipeline.js', () => ({
+  pipelineQueue: {
+    add: (...args: unknown[]) => mockPipelineQueueAdd(...args) as Promise<unknown>
+  },
+  pipelineWorker: {},
+  closePipelineWorker: vi.fn()
 }))
 
 vi.mock('../src/lib/prisma.js', () => ({
@@ -243,9 +253,15 @@ describe('Project outline & parse routes', () => {
         })
       )
 
-      // Wait for setImmediate to execute
-      await new Promise((resolve) => setImmediate(resolve))
-      expect(mockRunParseScriptJob).toHaveBeenCalledWith('job-parse-1', 'p1', 5)
+      expect(mockPipelineQueueAdd).toHaveBeenCalledWith(
+        'parse-script',
+        expect.objectContaining({
+          jobId: 'job-parse-1',
+          jobType: 'parse-script',
+          projectId: 'p1',
+          targetEpisodes: 5
+        })
+      )
     })
 
     it('returns 409 when another outline job is in progress', async () => {
@@ -266,7 +282,7 @@ describe('Project outline & parse routes', () => {
       const body = JSON.parse(res.payload)
       expect(body.error).toMatch(/进行中/)
       expect(mockPipelineJobCreate).not.toHaveBeenCalled()
-      expect(mockRunParseScriptJob).not.toHaveBeenCalled()
+      expect(mockPipelineQueueAdd).not.toHaveBeenCalled()
     })
   })
 
@@ -305,9 +321,15 @@ describe('Project outline & parse routes', () => {
       const body = JSON.parse(res.payload)
       expect(body.jobId).toBe('job-batch-1')
 
-      // Wait for setImmediate to execute
-      await new Promise((resolve) => setImmediate(resolve))
-      expect(mockRunScriptBatchJob).toHaveBeenCalledWith('job-batch-1', 'p1', 8)
+      expect(mockPipelineQueueAdd).toHaveBeenCalledWith(
+        'script-batch',
+        expect.objectContaining({
+          jobId: 'job-batch-1',
+          jobType: 'script-batch',
+          projectId: 'p1',
+          targetEpisodes: 8
+        })
+      )
     })
 
     it('returns 409 when another outline job is in progress', async () => {

@@ -1,4 +1,4 @@
-import { executePipelineJob } from './pipeline-executor.js'
+import { pipelineQueue } from '../queues/pipeline.js'
 import { pipelineAspectRatioFromProjectDefault } from '../lib/project-aspect.js'
 import { pipelineRepository, PipelineRepository } from '../repositories/pipeline-repository.js'
 
@@ -70,15 +70,15 @@ export class PipelineRouteService {
         defaultAspectRatio ?? project.aspectRatio
       )
 
-      executePipelineJob(job.id, {
+      await pipelineQueue.add('full-pipeline', {
+        jobId: job.id,
+        jobType: 'full-pipeline',
         projectId,
         idea,
         targetEpisodes,
         targetDuration,
         defaultAspectRatio: resolvedAspect,
         defaultResolution: defaultResolution || '720p'
-      }).catch((error) => {
-        console.error(`Pipeline Job ${job.id} failed:`, error)
       })
 
       return { ok: true, jobId: job.id }

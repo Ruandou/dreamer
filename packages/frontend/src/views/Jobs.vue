@@ -1,11 +1,21 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, h, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NCard, NButton, NSpace, NEmpty, NTag, NSpin,
-  NDataTable, NTabs, NTabPane, type DataTableColumns, useMessage
+  NCard,
+  NButton,
+  NSpace,
+  NEmpty,
+  NTag,
+  NSpin,
+  NDataTable,
+  NTabs,
+  NTabPane,
+  type DataTableColumns,
+  useMessage
 } from 'naive-ui'
 import { api } from '@/api'
+import { usePolling } from '@/composables/usePolling'
 
 const message = useMessage()
 
@@ -92,7 +102,24 @@ const router = useRouter()
 const activeTab = ref('all')
 const jobs = ref<Job[]>([])
 const isLoading = ref(false)
-let pollTimer: ReturnType<typeof setInterval> | null = null
+
+const hasProcessingJobs = computed(() =>
+  jobs.value.some(
+    (j) => j.status === 'pending' || j.status === 'queued' || j.status === 'processing'
+  )
+)
+
+const { start: startPolling, stop: stopPolling } = usePolling(
+  async () => {
+    await fetchJobs()
+    return jobs.value
+  },
+  {
+    interval: 3000,
+    shouldContinue: () => hasProcessingJobs.value,
+    immediate: false
+  }
+)
 
 const statusMap: Record<string, { type: string; label: string }> = {
   pending: { type: 'default', label: '等待中' },
@@ -109,7 +136,9 @@ const columns: DataTableColumns<Job> = [
     width: 118,
     render(row) {
       if (row.type === 'pipeline') {
-        return h(NTag, { type: 'info' as const, size: 'small' }, () => pipelineSubtypeLabel(row.jobType))
+        return h(NTag, { type: 'info' as const, size: 'small' }, () =>
+          pipelineSubtypeLabel(row.jobType)
+        )
       }
       const typeMap: Record<string, { type: string; label: string }> = {
         video: { type: 'info', label: '🎬 视频' },
@@ -143,16 +172,19 @@ const columns: DataTableColumns<Job> = [
       }
       if (row.type === 'pipeline') {
         const proj = row.projectName ? `项目：${row.projectName}` : '未关联项目'
-        const meta = row.progressMeta && typeof row.progressMeta === 'object' ? row.progressMeta : null
+        const meta =
+          row.progressMeta && typeof row.progressMeta === 'object' ? row.progressMeta : null
         if (row.jobType === 'episode-storyboard-script' && meta && 'episodeNum' in meta) {
           const n = (meta as { episodeNum?: number }).episodeNum
           return n != null ? `${proj} · 第 ${n} 集` : proj
         }
-        const hint =
-          meta && 'message' in meta && meta.message ? ` · ${String(meta.message)}` : ''
+        const hint = meta && 'message' in meta && meta.message ? ` · ${String(meta.message)}` : ''
         return `${proj}${hint}`
       }
-      return row.contentPreview || (row.content || '').slice(0, 50) + ((row.content || '').length > 50 ? '...' : '')
+      return (
+        row.contentPreview ||
+        (row.content || '').slice(0, 50) + ((row.content || '').length > 50 ? '...' : '')
+      )
     }
   },
   {
@@ -194,7 +226,11 @@ const columns: DataTableColumns<Job> = [
         return `${r.episodesCreated || 0} 集, ${r.charactersCreated || 0} 角色`
       }
       if (row.type === 'pipeline' && row.status === 'completed') {
-        if (row.jobType === 'episode-storyboard-script' && row.progressMeta && typeof row.progressMeta === 'object') {
+        if (
+          row.jobType === 'episode-storyboard-script' &&
+          row.progressMeta &&
+          typeof row.progressMeta === 'object'
+        ) {
           const m = row.progressMeta as { scenesCreated?: number; aiCost?: number }
           if (m.scenesCreated != null && typeof m.aiCost === 'number') {
             return `${m.scenesCreated} 场 · ¥${m.aiCost.toFixed(4)}`
@@ -210,12 +246,23 @@ const columns: DataTableColumns<Job> = [
         const msg = row.errorMsg || '未知错误'
         const shortMsg = msg.length > 20 ? msg.slice(0, 20) + '...' : msg
         return h('div', { style: { display: 'flex', alignItems: 'center', gap: '4px' } }, [
-          h('span', { style: { color: 'red', fontSize: '12px', title: msg }, title: msg }, shortMsg),
-          h(NButton, {
-            size: 'tiny',
-            quaternary: true,
-            onClick: (e: MouseEvent) => { e.stopPropagation(); copyError(msg) }
-          }, () => '📋')
+          h(
+            'span',
+            { style: { color: 'red', fontSize: '12px', title: msg }, title: msg },
+            shortMsg
+          ),
+          h(
+            NButton,
+            {
+              size: 'tiny',
+              quaternary: true,
+              onClick: (e: MouseEvent) => {
+                e.stopPropagation()
+                copyError(msg)
+              }
+            },
+            () => '📋'
+          )
         ])
       }
       return '-'
@@ -256,27 +303,39 @@ const columns: DataTableColumns<Job> = [
     render(row) {
       if (row.type === 'video') {
         if (row.status === 'completed' && row.projectId) {
-          return h(NButton, {
-            size: 'small',
-            type: 'primary',
-            onClick: () => router.push(`/project/${row.projectId}/storyboard`)
-          }, () => '查看')
+          return h(
+            NButton,
+            {
+              size: 'small',
+              type: 'primary',
+              onClick: () => router.push(`/project/${row.projectId}/storyboard`)
+            },
+            () => '查看'
+          )
         }
       }
       if (row.type === 'image' && row.projectId) {
-        return h(NButton, {
-          size: 'small',
-          type: 'primary',
-          onClick: () => router.push(`/project/${row.projectId}/characters`)
-        }, () => '查看项目')
+        return h(
+          NButton,
+          {
+            size: 'small',
+            type: 'primary',
+            onClick: () => router.push(`/project/${row.projectId}/characters`)
+          },
+          () => '查看项目'
+        )
       }
       if (row.type === 'import') {
         if (row.status === 'completed' && row.result?.projectId) {
-          return h(NButton, {
-            size: 'small',
-            type: 'primary',
-            onClick: () => router.push(`/project/${row.result.projectId}`)
-          }, () => '查看项目')
+          return h(
+            NButton,
+            {
+              size: 'small',
+              type: 'primary',
+              onClick: () => router.push(`/project/${row.result.projectId}`)
+            },
+            () => '查看项目'
+          )
         }
         if (row.status === 'failed') {
           return h(NButton, { size: 'small', onClick: () => handleRetry(row) }, () => '重试')
@@ -287,121 +346,62 @@ const columns: DataTableColumns<Job> = [
   }
 ]
 
+const videoCount = computed(() => jobs.value.filter((j) => j.type === 'video').length)
+const importCount = computed(() => jobs.value.filter((j) => j.type === 'import').length)
+const pipelineCount = computed(() => jobs.value.filter((j) => j.type === 'pipeline').length)
+const imageCount = computed(() => jobs.value.filter((j) => j.type === 'image').length)
+
 const filteredJobs = computed(() => {
   if (activeTab.value === 'all') return jobs.value
-  if (activeTab.value === 'video') return jobs.value.filter(j => j.type === 'video')
-  if (activeTab.value === 'import') return jobs.value.filter(j => j.type === 'import')
-  if (activeTab.value === 'pipeline') return jobs.value.filter(j => j.type === 'pipeline')
-  if (activeTab.value === 'image') return jobs.value.filter(j => j.type === 'image')
+  if (activeTab.value === 'video') return jobs.value.filter((j) => j.type === 'video')
+  if (activeTab.value === 'import') return jobs.value.filter((j) => j.type === 'import')
+  if (activeTab.value === 'pipeline') return jobs.value.filter((j) => j.type === 'pipeline')
+  if (activeTab.value === 'image') return jobs.value.filter((j) => j.type === 'image')
   return jobs.value
 })
 
 const fetchJobs = async () => {
   isLoading.value = true
   try {
-    // 获取导入任务
-    const importRes = await api.get('/import/tasks')
-    const importJobs: Job[] = (importRes.data.tasks || []).map((t: any) => ({
-      id: t.id,
-      type: 'import' as const,
-      status: t.status,
-      createdAt: t.createdAt,
-      updatedAt: t.updatedAt,
-      projectId: t.projectId,
-      content: t.content,
-      contentPreview: (t.content || '').slice(0, 60) + ((t.content || '').length > 60 ? '...' : ''),
-      result: t.result,
-      errorMsg: t.errorMsg
+    const res = await api.get('/tasks/all')
+    const data = res.data || {}
+    const list: Job[] = (data.jobs || []).map((j: any) => ({
+      id: j.id,
+      type: j.type,
+      status: j.status,
+      createdAt: j.createdAt,
+      updatedAt: j.updatedAt,
+      projectId: j.projectId,
+      projectName: j.projectName,
+      // video
+      sceneId: j.sceneId,
+      sceneNum: j.sceneNum,
+      segmentDescription: j.segmentDescription,
+      model: j.model,
+      videoUrl: j.videoUrl,
+      thumbnailUrl: j.thumbnailUrl,
+      cost: j.cost,
+      duration: j.duration,
+      prompt: j.prompt,
+      // import
+      content: j.content,
+      contentPreview: j.contentPreview,
+      result: j.result,
+      errorMsg: j.errorMsg,
+      // pipeline
+      jobType: j.jobType,
+      currentStep: j.currentStep,
+      progress: j.progress,
+      progressMeta: j.progressMeta,
+      stepResults: j.stepResults,
+      // image
+      kind: j.kind,
+      characterId: j.characterId,
+      characterImageId: j.characterImageId,
+      locationId: j.locationId,
+      returnvalue: j.returnvalue
     }))
-
-    // 获取视频任务（需要项目ID列表）
-    const projectRes = await api.get('/projects')
-    const projects = projectRes.data.projects || projectRes.data || []
-    const projectNameById = new Map<string, string>(
-      projects.map((p: { id: string; name: string }) => [p.id, p.name])
-    )
-    const videoJobs: Job[] = []
-
-    for (const proj of projects) {
-      try {
-        const tasksRes = await api.get('/tasks', { params: { projectId: proj.id } })
-        const tasks = tasksRes.data || []
-        for (const t of tasks) {
-          videoJobs.push({
-            id: t.id,
-            type: 'video',
-            status: t.status,
-            createdAt: t.createdAt,
-            updatedAt: t.updatedAt,
-            sceneId: t.sceneId,
-            sceneNum: t.sceneNum,
-            segmentDescription: t.description,
-            model: t.model,
-            videoUrl: t.videoUrl,
-            thumbnailUrl: t.thumbnailUrl,
-            cost: t.cost,
-            duration: t.duration,
-            prompt: t.prompt,
-            projectId: proj.id
-          })
-        }
-      } catch (e) {
-        // 项目可能没有任务
-      }
-    }
-
-    // 获取 Pipeline 任务
-    const pipelineJobs: Job[] = []
-    try {
-      const pipelineRes = await api.get('/pipeline/jobs')
-      const pipelines = pipelineRes.data || []
-      for (const p of pipelines) {
-        pipelineJobs.push({
-          id: p.id,
-          type: 'pipeline',
-          status: normalizePipelineListStatus(p.status),
-          jobType: p.jobType,
-          currentStep: p.currentStep,
-          progress: p.progress,
-          progressMeta: p.progressMeta,
-          projectId: p.projectId,
-          projectName: p.projectName,
-          createdAt: p.createdAt,
-          updatedAt: p.updatedAt,
-          errorMsg: p.error
-        })
-      }
-    } catch (e) {
-      // 忽略 Pipeline 任务获取错误
-    }
-
-    let imageJobs: Job[] = []
-    try {
-      const imageRes = await api.get('/image-generation/jobs')
-      const list = imageRes.data || []
-      imageJobs = list.map((j: Record<string, unknown>) => ({
-        id: String(j.id),
-        type: 'image' as const,
-        status: j.status as Job['status'],
-        kind: j.kind as string,
-        projectId: j.projectId as string,
-        projectName: projectNameById.get(j.projectId as string),
-        characterId: j.characterId as string | undefined,
-        characterImageId: j.characterImageId as string | undefined,
-        locationId: j.locationId as string | undefined,
-        createdAt: j.createdAt as string,
-        updatedAt: j.updatedAt as string,
-        errorMsg: j.errorMsg as string | undefined,
-        returnvalue: j.returnvalue
-      }))
-    } catch {
-      imageJobs = []
-    }
-
-    // 合并并按时间排序
-    jobs.value = [...importJobs, ...videoJobs, ...pipelineJobs, ...imageJobs].sort((a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )
+    jobs.value = list
   } catch (error) {
     console.error('Failed to fetch jobs:', error)
   } finally {
@@ -422,27 +422,15 @@ const copyError = async (msg: string) => {
   }
 }
 
-const startPolling = () => {
-  pollTimer = setInterval(() => {
-    const hasProcessing = jobs.value.some(j =>
-      j.status === 'pending' || j.status === 'queued' || j.status === 'processing'
-    )
-    if (hasProcessing) {
-      fetchJobs()
-    }
-  }, 3000)
-}
-
-const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
-
 onMounted(() => {
-  fetchJobs()
-  startPolling()
+  fetchJobs().then(() => {
+    if (hasProcessingJobs.value) startPolling()
+  })
+})
+
+watch(hasProcessingJobs, (has) => {
+  if (has) startPolling()
+  else stopPolling()
 })
 
 onUnmounted(() => {
@@ -458,9 +446,7 @@ onUnmounted(() => {
         <p class="jobs-subtitle">查看所有任务进度和历史记录</p>
       </div>
       <NSpace>
-        <NButton @click="router.push('/projects')">
-          返回项目
-        </NButton>
+        <NButton @click="router.push('/projects')"> 返回项目 </NButton>
       </NSpace>
     </header>
 
@@ -478,9 +464,7 @@ onUnmounted(() => {
           <template #tab>
             <NSpace :size="8">
               <span>🎬 视频</span>
-              <NTag v-if="jobs.filter(j => j.type === 'video').length" size="small" round type="info">
-                {{ jobs.filter(j => j.type === 'video').length }}
-              </NTag>
+              <NTag v-if="videoCount" size="small" round type="info">{{ videoCount }}</NTag>
             </NSpace>
           </template>
         </NTabPane>
@@ -488,9 +472,7 @@ onUnmounted(() => {
           <template #tab>
             <NSpace :size="8">
               <span>📄 导入</span>
-              <NTag v-if="jobs.filter(j => j.type === 'import').length" size="small" round type="warning">
-                {{ jobs.filter(j => j.type === 'import').length }}
-              </NTag>
+              <NTag v-if="importCount" size="small" round type="warning">{{ importCount }}</NTag>
             </NSpace>
           </template>
         </NTabPane>
@@ -498,9 +480,7 @@ onUnmounted(() => {
           <template #tab>
             <NSpace :size="8">
               <span>🔄 Pipeline</span>
-              <NTag v-if="jobs.filter(j => j.type === 'pipeline').length" size="small" round type="error">
-                {{ jobs.filter(j => j.type === 'pipeline').length }}
-              </NTag>
+              <NTag v-if="pipelineCount" size="small" round type="error">{{ pipelineCount }}</NTag>
             </NSpace>
           </template>
         </NTabPane>
@@ -508,9 +488,7 @@ onUnmounted(() => {
           <template #tab>
             <NSpace :size="8">
               <span>🖼️ 图片</span>
-              <NTag v-if="jobs.filter(j => j.type === 'image').length" size="small" round type="success">
-                {{ jobs.filter(j => j.type === 'image').length }}
-              </NTag>
+              <NTag v-if="imageCount" size="small" round type="success">{{ imageCount }}</NTag>
             </NSpace>
           </template>
         </NTabPane>
@@ -520,9 +498,7 @@ onUnmounted(() => {
         <NSpin :show="isLoading && !jobs.length">
           <NEmpty v-if="!filteredJobs.length && !isLoading" description="暂无任务">
             <template #extra>
-              <NButton type="primary" @click="router.push('/projects')">
-                去创建项目
-              </NButton>
+              <NButton type="primary" @click="router.push('/projects')"> 去创建项目 </NButton>
             </template>
           </NEmpty>
 
@@ -537,7 +513,10 @@ onUnmounted(() => {
         </NSpin>
       </div>
 
-      <div v-if="jobs.some(j => j.status === 'processing' || j.status === 'queued')" class="jobs-footer">
+      <div
+        v-if="jobs.some((j) => j.status === 'processing' || j.status === 'queued')"
+        class="jobs-footer"
+      >
         <NTag type="info" size="small">🔄 实时更新中...</NTag>
       </div>
     </NCard>

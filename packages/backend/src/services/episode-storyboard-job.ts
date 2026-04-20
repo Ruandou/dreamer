@@ -3,6 +3,7 @@ import { hasEpisodeContentForStoryboard } from './ai/deepseek.js'
 import { episodeService, type ExpandEpisodeResult } from './episode-service.js'
 import { episodeRepository } from '../repositories/episode-repository.js'
 import { pipelineRepository } from '../repositories/pipeline-repository.js'
+import { pipelineQueue } from '../queues/pipeline.js'
 
 function expandFailureMessage(r: Extract<ExpandEpisodeResult, { ok: false }>): string {
   return 'message' in r && r.message ? r.message : r.error
@@ -74,8 +75,13 @@ export async function enqueueEpisodeStoryboardScriptJob(
       } as Prisma.InputJsonValue
     })
 
-    void runEpisodeStoryboardPipelineJob(job.id, userId, episodeId, hint).catch((err) => {
-      console.error(`episode-storyboard-script job ${job.id} failed:`, err)
+    await pipelineQueue.add('episode-storyboard-script', {
+      jobId: job.id,
+      jobType: 'episode-storyboard-script',
+      projectId: episode.projectId,
+      userId,
+      episodeId,
+      hint
     })
 
     return { ok: true, jobId: job.id }

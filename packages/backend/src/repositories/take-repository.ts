@@ -60,6 +60,33 @@ export class TakeRepository {
     })
   }
 
+  /** 获取用户的所有视频生成任务（通过 project.userId 关联） */
+  findAllForUser(userId: string) {
+    return this.prisma.take.findMany({
+      where: {
+        scene: {
+          episode: {
+            project: { userId }
+          }
+        }
+      },
+      include: {
+        scene: {
+          select: {
+            sceneNum: true,
+            description: true,
+            episode: {
+              select: {
+                projectId: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+  }
+
   updateScene(sceneId: string, data: Prisma.SceneUpdateInput) {
     return this.prisma.scene.update({
       where: { id: sceneId },

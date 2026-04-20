@@ -56,12 +56,15 @@ function bindingFromData(data: ImageGenerationJobData): ImageGenerationJobBindin
   }
 }
 
-function mapQueueState(state: string): ImageGenerationJobRow['status'] {
-  if (state === 'completed') return 'completed'
-  if (state === 'failed') return 'failed'
-  if (state === 'active') return 'processing'
-  if (state === 'waiting' || state === 'delayed') return 'queued'
-  return 'pending'
+function inferJobStatus(job: {
+  finishedOn?: number | null
+  failedReason?: string | null
+  processedOn?: number | null
+}): ImageGenerationJobRow['status'] {
+  if (job.finishedOn) return 'completed'
+  if (job.failedReason) return 'failed'
+  if (job.processedOn) return 'processing'
+  return 'queued'
 }
 
 export async function listImageGenerationJobsForUser(
@@ -76,8 +79,8 @@ export async function listImageGenerationJobsForUser(
     const data = job.data as ImageGenerationJobData
     if (!data?.userId || data.userId !== userId) continue
 
-    const state = await job.getState()
-    const status = mapQueueState(state)
+    // 避免对每个 job 调用 getState() 触发额外 Redis 查询
+    const status = inferJobStatus(job)
     const createdAt = job.timestamp
       ? new Date(job.timestamp).toISOString()
       : new Date().toISOString()

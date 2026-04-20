@@ -19,14 +19,30 @@ async function deleteAliasCharacterRows(
   projectId: string,
   aliasToCanonical: Record<string, string>
 ) {
+  // 收集所有涉及的角色名，一次批量查询
+  const involvedNames = new Set<string>()
+  for (const [alias, canonical] of Object.entries(aliasToCanonical)) {
+    if (alias === canonical) continue
+    involvedNames.add(alias)
+    involvedNames.add(canonical)
+  }
+
+  if (involvedNames.size === 0) return
+
+  const allChars = await characterRepository.findManyByProjectAndNames(
+    projectId,
+    Array.from(involvedNames)
+  )
+  const charByName = new Map(allChars.map((c) => [c.name, c]))
+
   // 批量收集需要删除的别名角色ID
   const idsToDelete: string[] = []
 
   for (const [alias, canonical] of Object.entries(aliasToCanonical)) {
     if (alias === canonical) continue
-    const dupe = await characterRepository.findFirstByProjectAndName(projectId, alias)
+    const dupe = charByName.get(alias)
     if (!dupe) continue
-    const main = await characterRepository.findFirstByProjectAndName(projectId, canonical)
+    const main = charByName.get(canonical)
     if (main && dupe.id !== main.id) {
       idsToDelete.push(dupe.id)
     }
@@ -88,7 +104,106 @@ async function ensureCharacterImagesFromIdentityMerge(
     }
   }
 
-  // 收集需要批量创建的形象图
+  // 先批量创建所有缺失的 base 形象（避免循环内串行创建）
+  const baseCreations: Array<{
+    characterId: string
+    name: string
+    description: string | undefined
+  }> = []
+  // 记录每个角色在解析后应有的 base 信息（用于后续 derived 关联）
+  const charBaseInfo = new Map<
+    string,
+    { existingBaseId: string | null; needsCreate: boolean; createIndex: number }
+  >()
+
+  for (const pc of characters) {
+    if (!pc.name?.trim()) continue
+    const c = allCharacters.find((char) => char.name === pc.name.trim())
+    if (!c) continue
+
+    const existing = imagesByChar.get(c.id) || []
+    const slots = normalizeParsedCharacterList([pc])[0].images || []
+    let baseId = existing.find((i) => i.type === 'base' && !i.parentId)?.id ?? null
+    let hasBaseSlot = false
+
+    for (const slot of slots) {
+      const st = (slot.type || 'base').toLowerCase()
+      if (st === 'base') {
+        hasBaseSlot = true
+        const dup = existing.find((i) => i.type === 'base' && !i.parentId && i.name === slot.name)
+        if (dup) {
+          baseId = dup.id
+          if (slot.description?.trim() && !dup.description?.trim()) {
+            await characterRepository.updateCharacterImage(dup.id, {
+              description: slot.description
+            })
+          }
+        } else {
+          baseCreations.push({
+            characterId: c.id,
+            name: slot.name,
+            description: slot.description || undefined
+          })
+        }
+        break
+      }
+    }
+
+    // 如果解析的 slots 中没有 base 类型，但角色也没有 base 形象，后续需要自动创建
+    if (!baseId && !hasBaseSlot) {
+      baseCreations.push({
+        characterId: c.id,
+        name: '基础形象',
+        description: pc.description || undefined
+      })
+    }
+
+    charBaseInfo.set(c.id, {
+      existingBaseId: baseId,
+      needsCreate:
+        baseCreations.length > 0 &&
+        baseCreations[baseCreations.length - 1].characterId === c.id &&
+        !baseId,
+      createIndex:
+        baseCreations.length > 0 &&
+        baseCreations[baseCreations.length - 1].characterId === c.id &&
+        !baseId
+          ? baseCreations.length - 1
+          : -1
+    })
+  }
+
+  // 批量创建 base 形象
+  if (baseCreations.length > 0) {
+    await characterRepository.createManyCharacterImages(
+      baseCreations.map((b) => ({
+        characterId: b.characterId,
+        name: b.name,
+        type: 'base',
+        description: b.description,
+        prompt: null,
+        avatarUrl: null,
+        order: 0,
+        parentId: null
+      }))
+    )
+    // 重新查询获取新创建的 base id
+    const refreshedImages = await characterRepository.findImagesByCharacterIds(characterIds)
+    for (const img of refreshedImages) {
+      if (img.type === 'base' && !img.parentId) {
+        const existing = imagesByChar.get(img.characterId)
+        if (existing) {
+          if (!existing.find((i) => i.id === img.id)) {
+            existing.push(img)
+          }
+        } else {
+          imagesByChar.set(img.characterId, [img])
+        }
+      }
+    }
+  }
+
+  // 收集需要批量创建的非 base 形象图
   const imagesToCreate: Array<{
     characterId: string
     name: string
@@ -107,64 +222,23 @@ async function ensureCharacterImagesFromIdentityMerge(
 
     const existing = imagesByChar.get(c.id) || []
     const slots = normalizeParsedCharacterList([pc])[0].images || []
-    let baseId = existing.find((i) => i.type === 'base' && !i.parentId)?.id ?? null
+    const baseId = existing.find((i) => i.type === 'base' && !i.parentId)?.id ?? null
+    if (!baseId) continue
 
     for (const slot of slots) {
       const st = (slot.type || 'base').toLowerCase()
-      const dup = existing.find((i) => {
-        if (i.name !== slot.name || i.type !== st) return false
-        if (st === 'base') return !i.parentId
-        return i.parentId === baseId
-      })
+      if (st === 'base') continue
+
+      const dup = existing.find(
+        (i) => i.name === slot.name && i.type === st && i.parentId === baseId
+      )
       if (dup) {
-        if (st === 'base') baseId = dup.id
         if (slot.description?.trim() && !dup.description?.trim()) {
           await characterRepository.updateCharacterImage(dup.id, {
             description: slot.description
           })
         }
         continue
-      }
-
-      if (st === 'base') {
-        imagesToCreate.push({
-          characterId: c.id,
-          name: slot.name,
-          type: 'base',
-          parentId: null,
-          description: slot.description || undefined,
-          prompt: null,
-          avatarUrl: null,
-          order: 0
-        })
-        // 注意：这里需要特殊处理，因为base的ID会被后续slot引用
-        // 所以我们先单独创建base，再批量创建其他的
-        const created = await characterRepository.createCharacterImage({
-          characterId: c.id,
-          name: slot.name,
-          type: 'base',
-          description: slot.description || undefined,
-          prompt: null,
-          avatarUrl: null,
-          order: 0
-        })
-        baseId = created.id
-        existing.push(created)
-        continue
-      }
-
-      if (!baseId) {
-        const b = await characterRepository.createCharacterImage({
-          characterId: c.id,
-          name: '基础形象',
-          type: 'base',
-          description: pc.description || undefined,
-          prompt: null,
-          avatarUrl: null,
-          order: 0
-        })
-        baseId = b.id
-        existing.push(b)
       }
 
       const maxOrder = await characterRepository.maxSiblingOrder(c.id, baseId)
@@ -181,7 +255,7 @@ async function ensureCharacterImagesFromIdentityMerge(
     }
   }
 
-  // 批量创建非base形象图
+  // 批量创建非 base 形象图
   if (imagesToCreate.length > 0) {
     await characterRepository.createManyCharacterImages(imagesToCreate)
   }

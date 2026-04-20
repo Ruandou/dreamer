@@ -29,6 +29,7 @@ import { pipelineRoutes } from './routes/pipeline.js'
 import { imageGenerationJobRoutes } from './routes/image-generation-jobs.js'
 import { modelApiCallRoutes } from './routes/model-api-calls.js'
 import { memoryRoutes } from './routes/memories.js'
+import { tasksUnifiedRoutes } from './routes/tasks-unified.js'
 
 export { prisma } from './lib/prisma.js'
 
@@ -113,6 +114,7 @@ async function start() {
       prefix: '/api/model-api-calls'
     })
     await fastify.register(memoryRoutes, { prefix: '/api/projects' })
+    await fastify.register(tasksUnifiedRoutes, { prefix: '/api/tasks' })
 
     // Health check
     fastify.get('/health', async () => ({ status: 'ok' }))

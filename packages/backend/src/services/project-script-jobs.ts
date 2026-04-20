@@ -903,9 +903,15 @@ export async function ensureAllEpisodeScripts(
     }
   }
 
+  // 复用已获取的 project.episodes，避免逐集 N+1 查询
+  const episodesMap = new Map(
+    (project?.episodes ?? [])
+      .filter((e) => e.episodeNum >= 2 && e.episodeNum <= targetEpisodes)
+      .map((e) => [e.episodeNum, e])
+  )
   let needBatch = false
   for (let n = 2; n <= targetEpisodes; n++) {
-    const ep = await projectRepository.findEpisodeByProjectNum(projectId, n)
+    const ep = episodesMap.get(n)
     if (!ep || !scriptFromJson(ep.script)) {
       needBatch = true
       break

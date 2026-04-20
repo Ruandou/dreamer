@@ -98,9 +98,9 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
       }
       script = await runParseScriptEntityPipeline(projectId, projectMeta.userId, te)
 
-      const episodesForPlan = await pipelineRepository.findEpisodesUpTo(projectId, te)
+      // 复用已有的 existingEpisodes，避免重复查询
       await updateStepProgress(jobId, 'episode-split', 'processing')
-      episodes = buildEpisodePlansFromDbEpisodes(episodesForPlan, script)
+      episodes = buildEpisodePlansFromDbEpisodes(existingEpisodes, script)
       await updateStepResult(jobId, 'episode-split', {
         status: 'completed',
         output: { episodes, skipped: true }
