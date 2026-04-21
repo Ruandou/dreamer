@@ -1,9 +1,14 @@
-/** 角色定妆/衍生图提示词：拼接项目 visualStyle，供文生图队列使用。 */
+/**
+ * Build a character image prompt by prepending the project's visual style.
+ *
+ * Why separate: the visual style is managed at project level while the core
+ * prompt comes from character identity / outfit descriptions.
+ */
 export function buildCharacterImageStyledPrompt(
   visualStyle: string[] | undefined,
-  core: string
+  corePrompt: string
 ): string {
-  const vs = (visualStyle || []).filter(Boolean).join(', ')
-  if (!vs) return core
-  return `Visual style: ${vs}. ${core}`
+  const styleText = (visualStyle || []).filter(Boolean).join(', ')
+  if (!styleText) return corePrompt
+  return `Visual style: ${styleText}. ${corePrompt}`
 }

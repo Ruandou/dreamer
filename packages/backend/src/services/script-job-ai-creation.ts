@@ -20,11 +20,11 @@ import {
   sliceStoryContext
 } from './script-job-helpers.js'
 import {
-  calcEpisodePct,
+  calculateEpisodePercentage,
   mapThreePhaseProgress,
   mapBatchProgressToParseRange,
   mapLegacyProgress
-} from './script-jobs/progress-mappers.js'
+} from './progress-mappers.js'
 import { withTimeout, timeoutErrorMessage } from '../lib/with-timeout.js'
 import {
   OUTLINE_GENERATION_TIMEOUT_MS,
@@ -37,7 +37,11 @@ import {
 } from './project-script-jobs.constants.js'
 
 /**
- * 分批并行生成所有集的大纲
+ * Generate outlines for all episodes in parallel batches.
+ *
+ * Why batch: DeepSeek has rate limits; sending all episodes at once risks
+ * throttling. Batching keeps concurrency bounded while still parallelizing
+ * within each batch.
  */
 export async function generateAllOutlines(
   projectId: string,
@@ -45,7 +49,7 @@ export async function generateAllOutlines(
   seriesTitle: string,
   seriesSynopsis: string,
   concurrency: number = OUTLINE_BATCH_CONCURRENCY,
-  modelLogCtx?: { userId: string; projectId: string; op: string }
+  modelLogContext?: { userId: string; projectId: string; op: string }
 ): Promise<Map<number, string>> {
   const outlines = new Map<number, string>()
   const totalBatches = Math.ceil(targetEpisodes / concurrency)
@@ -61,17 +65,17 @@ export async function generateAllOutlines(
     )
 
     await Promise.all(
-      Array.from({ length: batchEnd - batchStart + 1 }, async (_, i) => {
-        const epNum = batchStart + i
+      Array.from({ length: batchEnd - batchStart + 1 }, async (_, index) => {
+        const episodeNumber = batchStart + index
         let retries = 0
 
         while (retries < OUTLINE_MAX_RETRIES) {
           try {
             const outline = await generateEpisodeOutline(
-              epNum,
+              episodeNumber,
               seriesTitle,
               seriesSynopsis,
-              modelLogCtx
+              modelLogContext
             )
 
             if (!outline || outline.length < OUTLINE_MIN_LENGTH) {
@@ -80,17 +84,19 @@ export async function generateAllOutlines(
               )
             }
 
-            outlines.set(epNum, outline)
-            console.log(`[outline-generation] 第 ${epNum} 集大纲生成成功 (${outline.length} 字)`)
+            outlines.set(episodeNumber, outline)
+            console.log(
+              `[outline-generation] 第 ${episodeNumber} 集大纲生成成功 (${outline.length} 字)`
+            )
             break
           } catch (error) {
             retries++
             if (retries >= OUTLINE_MAX_RETRIES) {
               console.error(
-                `[outline-generation] 第 ${epNum} 集大纲生成失败（已重试 ${OUTLINE_MAX_RETRIES} 次）`,
+                `[outline-generation] 第 ${episodeNumber} 集大纲生成失败（已重试 ${OUTLINE_MAX_RETRIES} 次）`,
                 {
                   projectId,
-                  episodeNum: epNum,
+                  episodeNum: episodeNumber,
                   error: error instanceof Error ? error.message : 'Unknown error',
                   stack: error instanceof Error ? error.stack : undefined
                 }
@@ -99,7 +105,7 @@ export async function generateAllOutlines(
             }
             const delay = OUTLINE_BASE_DELAY_MS * Math.pow(2, retries - 1)
             console.log(
-              `[outline-generation] 第 ${epNum} 集大纲生成失败，${delay / 1000}秒后重试 (${retries}/${OUTLINE_MAX_RETRIES})...`
+              `[outline-generation] 第 ${episodeNumber} 集大纲生成失败，${delay / 1000}秒后重试 (${retries}/${OUTLINE_MAX_RETRIES})...`
             )
             await new Promise((resolve) => setTimeout(resolve, delay))
           }
@@ -122,44 +128,52 @@ interface AiCreationContext {
   }
   synopsis: string
   embedded: boolean
-  modelLogCtx: ModelCallLogContext
+  modelLogContext: ModelCallLogContext
 }
 
 /**
- * 串行生成剧集的共享逻辑
- * 三阶段和旧版模式共用
+ * Shared serial episode-generation logic used by both three-phase and legacy modes.
+ *
+ * Why serial: each episode builds on the rolling story context; parallel
+ * generation would break narrative continuity.
  */
 async function generateEpisodesSerial(
-  ctx: AiCreationContext,
+  context: AiCreationContext,
   startEpisode: number,
   allOutlines: Map<number, string> | null,
-  progressMapper: (pct: number) => number
+  progressMapper: (percentage: number) => number
 ): Promise<void> {
-  const { jobId, projectId, targetEpisodes, project, synopsis, embedded } = ctx
+  const { jobId, projectId, targetEpisodes, project, synopsis, embedded } = context
   const memoryService = getMemoryService()
   let rolling = project.storyContext || synopsis
 
-  for (let n = startEpisode; n <= targetEpisodes; n++) {
-    const existing = await projectRepository.findEpisodeByProjectNum(projectId, n)
+  for (let episodeNumber = startEpisode; episodeNumber <= targetEpisodes; episodeNumber++) {
+    const existing = await projectRepository.findEpisodeByProjectNum(projectId, episodeNumber)
     if (existing && scriptFromJson(existing.script)) {
-      const pct = calcEpisodePct(n, targetEpisodes)
-      const progress = embedded ? mapBatchProgressToParseRange(pct) : progressMapper(pct)
+      const percentage = calculateEpisodePercentage(episodeNumber, targetEpisodes)
+      const progress = embedded
+        ? mapBatchProgressToParseRange(percentage)
+        : progressMapper(percentage)
       await updateJob(jobId, {
         progress,
-        progressMeta: { current: n, total: targetEpisodes, message: `第 ${n} 集已存在，跳过` }
+        progressMeta: {
+          current: episodeNumber,
+          total: targetEpisodes,
+          message: `第 ${episodeNumber} 集已存在，跳过`
+        }
       })
       continue
     }
 
-    console.log(`[script-batch] 开始生成第 ${n}/${targetEpisodes} 集剧本...`)
+    console.log(`[script-batch] 开始生成第 ${episodeNumber}/${targetEpisodes} 集剧本...`)
 
-    // 构建增强上下文：记忆 + 未来大纲（仅三阶段有 allOutlines）
+    // Build enhanced context: memories + future outlines (three-phase only)
     let episodeContext = rolling
     try {
-      const memoryContext = await memoryService.getEpisodeWritingContext(projectId, n)
+      const memoryContext = await memoryService.getEpisodeWritingContext(projectId, episodeNumber)
       if (memoryContext.fullContext && !memoryContext.fullContext.includes('（暂无）')) {
         if (allOutlines) {
-          const futureOutlines = getFutureOutlines(allOutlines, n)
+          const futureOutlines = getFutureOutlines(allOutlines, episodeNumber)
           episodeContext = buildEnhancedContext(memoryContext.fullContext, futureOutlines)
         } else {
           episodeContext = memoryContext.fullContext
@@ -169,44 +183,55 @@ async function generateEpisodesSerial(
       console.error('Failed to build memory context, falling back to rolling context:', error)
     }
 
-    const { script } = await writeEpisodeForProject(n, synopsis, episodeContext, project.name, {
-      userId: project.userId,
+    const { script } = await writeEpisodeForProject(
+      episodeNumber,
+      synopsis,
+      episodeContext,
+      project.name,
+      {
+        userId: project.userId,
+        projectId,
+        op: 'script_batch_write_episode'
+      }
+    )
+
+    const episode = await projectRepository.upsertEpisodeBatchFromScript(
       projectId,
-      op: 'script_batch_write_episode'
-    })
+      episodeNumber,
+      script
+    )
 
-    const ep = await projectRepository.upsertEpisodeBatchFromScript(projectId, n, script)
-
-    rolling = sliceStoryContext([rolling, `第${n}集：${script.summary}`].join('\n'))
+    rolling = sliceStoryContext([rolling, `第${episodeNumber}集：${script.summary}`].join('\n'))
     await projectRepository.update(projectId, { storyContext: rolling })
 
-    // 提取记忆
-    await safeExtractAndSaveMemories(projectId, n, ep.id, script, {
+    await safeExtractAndSaveMemories(projectId, episodeNumber, episode.id, script, {
       userId: project.userId,
       projectId,
       op: 'extract_episode_memories'
     })
 
-    const pct = calcEpisodePct(n, targetEpisodes)
-    const progress = embedded ? mapBatchProgressToParseRange(pct) : progressMapper(pct)
+    const percentage = calculateEpisodePercentage(episodeNumber, targetEpisodes)
+    const progress = embedded
+      ? mapBatchProgressToParseRange(percentage)
+      : progressMapper(percentage)
     await updateJob(jobId, {
       progress,
       progressMeta: {
-        current: n,
+        current: episodeNumber,
         total: targetEpisodes,
-        message: `正在生成第 ${n}/${targetEpisodes} 集`
+        message: `正在生成第 ${episodeNumber}/${targetEpisodes} 集`
       }
     })
 
-    console.log(`[script-batch] 第 ${n}/${targetEpisodes} 集生成完成`)
+    console.log(`[script-batch] 第 ${episodeNumber}/${targetEpisodes} 集生成完成`)
   }
 }
 
 /**
  * 三阶段 AI 创作模式：大纲 → 审核 → 剧本
  */
-export async function runAiCreationThreePhase(ctx: AiCreationContext): Promise<void> {
-  const { jobId, projectId, targetEpisodes, project, synopsis, modelLogCtx } = ctx
+export async function runAiCreationThreePhase(context: AiCreationContext): Promise<void> {
+  const { jobId, projectId, targetEpisodes, project, synopsis, modelLogContext } = context
 
   console.log('[script-batch] 开始三阶段生成：大纲 → 审核 → 剧本')
 
@@ -225,7 +250,7 @@ export async function runAiCreationThreePhase(ctx: AiCreationContext): Promise<v
       project.name,
       synopsis,
       undefined,
-      modelLogCtx as { userId: string; projectId: string; op: string }
+      modelLogContext as { userId: string; projectId: string; op: string }
     ),
     OUTLINE_GENERATION_TIMEOUT_MS,
     timeoutErrorMessage('大纲生成', OUTLINE_GENERATION_TIMEOUT_MS)
@@ -241,7 +266,7 @@ export async function runAiCreationThreePhase(ctx: AiCreationContext): Promise<v
 
   console.log('[script-batch] 阶段 2：开始 AI 总编剧审核（15分钟超时保护）...')
   let review = await withTimeout(
-    showrunnerReviewOutlines(synopsis, allOutlines, modelLogCtx),
+    showrunnerReviewOutlines(synopsis, allOutlines, modelLogContext),
     SHOWRUNNER_REVIEW_TIMEOUT_MS,
     timeoutErrorMessage('总编剧审核', SHOWRUNNER_REVIEW_TIMEOUT_MS)
   )
@@ -262,10 +287,10 @@ export async function runAiCreationThreePhase(ctx: AiCreationContext): Promise<v
       synopsis,
       allOutlines,
       review.feedback,
-      modelLogCtx
+      modelLogContext
     )
     console.log(`[showrunner] 第 ${revisionRound} 轮修正完成，重新审核...`)
-    review = await showrunnerReviewOutlines(synopsis, allOutlines, modelLogCtx)
+    review = await showrunnerReviewOutlines(synopsis, allOutlines, modelLogContext)
 
     if (review.approved) {
       console.log('[showrunner] 大纲审核通过 ✅')
@@ -287,13 +312,13 @@ export async function runAiCreationThreePhase(ctx: AiCreationContext): Promise<v
     progressMeta: { message: '基于审核通过的大纲生成完整剧本...' }
   })
 
-  await generateEpisodesSerial(ctx, 1, allOutlines, mapThreePhaseProgress)
+  await generateEpisodesSerial(context, 1, allOutlines, mapThreePhaseProgress)
 }
 
 /**
- * 旧版串行生成（兼容模式）
+ * Legacy serial generation (compatibility mode).
  */
-export async function runAiCreationLegacy(ctx: AiCreationContext): Promise<void> {
+export async function runAiCreationLegacy(context: AiCreationContext): Promise<void> {
   console.log('[script-batch] 使用旧版串行生成模式')
-  await generateEpisodesSerial(ctx, 2, null, mapLegacyProgress)
+  await generateEpisodesSerial(context, 2, null, mapLegacyProgress)
 }

@@ -1,5 +1,5 @@
 /**
- * AI 错误分类与项目上下文工具
+ * AI error classification and project-context builder.
  */
 
 import type { PrismaClient } from '@prisma/client'
@@ -10,7 +10,10 @@ type ProjectWithExpandInfo = Awaited<ReturnType<PrismaClient['project']['findUni
 }
 
 /**
- * 统一 AI 错误分类：将 DeepSeek 特定错误映射为 HTTP 状态码
+ * Classify AI errors into HTTP status codes.
+ *
+ * Maps DeepSeek-specific errors to standard status codes so the route layer
+ * can return appropriate responses without knowing provider details.
  */
 export function classifyAIError(
   error: unknown,
@@ -34,11 +37,11 @@ export function classifyAIError(
 }
 
 /**
- * 构建 AI 上下文中的项目描述
+ * Build a concise project description for AI prompts.
  */
 export function buildProjectContext(project: ProjectWithExpandInfo | null): string | undefined {
   if (!project) return undefined
-  const charNames = project.characters?.map((c) => c.name).join(', ') || '暂无'
-  const epCount = project.episodes?.length ?? 0
-  return `项目名称: ${project.name}\n已有角色: ${charNames}\n已有集数: ${epCount}集`
+  const characterNames = project.characters?.map((character) => character.name).join(', ') ?? '暂无'
+  const episodeCount = project.episodes?.length ?? 0
+  return `项目名称: ${project.name}\n已有角色: ${characterNames}\n已有集数: ${episodeCount}集`
 }

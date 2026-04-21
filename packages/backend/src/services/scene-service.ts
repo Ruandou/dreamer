@@ -50,11 +50,13 @@ export class SceneService {
       return { ok: false as const, reason: 'episode_not_found' }
     }
 
+    const DEFAULT_SCENE_DURATION_MS = 5000
+
     const scene = await this.repository.createScene({
       episodeId,
       sceneNum,
       description: description ?? '',
-      duration: 5000,
+      duration: DEFAULT_SCENE_DURATION_MS,
       aspectRatio: episode.project.aspectRatio ?? '9:16',
       visualStyle: [],
       status: 'pending'
@@ -65,7 +67,7 @@ export class SceneService {
       shotNum: 1,
       order: 1,
       description: prompt,
-      duration: 5000
+      duration: DEFAULT_SCENE_DURATION_MS
     })
 
     return { ok: true as const, scene }

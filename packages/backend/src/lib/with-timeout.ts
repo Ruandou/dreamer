@@ -1,14 +1,21 @@
 /**
- * 通用 Promise 超时工具
- * 替代重复的 Promise.race + setTimeout 模式
+ * Generic Promise timeout utility.
+ * Replaces repetitive `Promise.race` + `setTimeout` patterns.
  */
 
+/** Milliseconds per second. */
+const MS_PER_SECOND = 1000
+
+/** Seconds per minute. */
+const SECONDS_PER_MINUTE = 60
+
 /**
- * 为 Promise 添加超时保护
- * @param promise 要执行的操作
- * @param timeoutMs 超时毫秒数
- * @param errorMessage 超时时的错误消息
- * @throws 超时或原 promise 的错误
+ * Attach a timeout guard to a Promise.
+ *
+ * @param promise   The operation to guard.
+ * @param timeoutMs Timeout in milliseconds.
+ * @param errorMessage Error message when timeout fires.
+ * @throws The original promise rejection or a timeout Error.
  */
 export function withTimeout<T>(
   promise: Promise<T>,
@@ -22,8 +29,12 @@ export function withTimeout<T>(
 }
 
 /**
- * 构建超时错误消息（分钟单位）
+ * Build a human-readable timeout error message (minutes).
+ *
+ * Why minutes: most pipeline operations (outline generation, review,
+ * visual enrichment) are measured in minutes; showing seconds would be noisy.
  */
 export function timeoutErrorMessage(label: string, timeoutMs: number): string {
-  return `${label}超时（${timeoutMs / 1000 / 60}分钟），请检查API连接`
+  const minutes = timeoutMs / MS_PER_SECOND / SECONDS_PER_MINUTE
+  return `${label}超时（${minutes}分钟），请检查API连接`
 }

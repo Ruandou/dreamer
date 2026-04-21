@@ -1,16 +1,17 @@
 /**
- * 智能剧本模式检测
- * 根据剧本文本完整度，决定处理模式：
- * - faithful-parse：忠实解析完整剧本
- * - expand：扩展大纲/片段
- * - ai-create：AI 创作
- * - mixed：混合模式
+ * Intelligent script-mode detector.
+ *
+ * Decides how to process a script based on its completeness:
+ * - faithful-parse: parse a complete script without changes
+ * - expand: expand outlines / fragments
+ * - ai-create: generate from scratch
+ * - mixed: a combination of the above
  */
 
-/** 单集处理模式 */
+/** Processing mode for a single episode. */
 export type EpisodeProcessingMode = 'faithful-parse' | 'expand' | 'ai-create'
 
-/** 单集完整度检测结果 */
+/** Result of completeness detection for one episode. */
 export interface EpisodeCompleteness {
   episodeNum: number
   mode: EpisodeProcessingMode
@@ -18,7 +19,7 @@ export interface EpisodeCompleteness {
   content?: string
 }
 
-// ── 评分指标常量 ──
+// ── Scoring constants ──
 
 const SCORE_EPISODE_MATCHES_3PLUS = 3
 const SCORE_EPISODE_MATCHES_1PLUS = 2
@@ -37,20 +38,21 @@ const CONFIDENCE_FAITHFUL = 0.95
 const CONFIDENCE_EXPAND = 0.8
 const CONFIDENCE_AI_CREATE = 0.7
 
-// ── 正则常量 ──
+// ── RegExp constants ──
 
 const RE_EPISODE_SPLIT = /第\s*(\d+)\s*集[\s\S]*?(?=第\s*\d+\s*集|$)/g
 const RE_EPISODE_MARKER = /第\s*\d+\s*集/gi
 const RE_SCENE_MARKER = /第?\d+[场景场]|scene\s*\d*/i
-const RE_DIALOGUE_FORMAT = /[""「"]|[\u4e00-\u9fa5]+[：:]\s*[""「"]/
+const RE_DIALOGUE_FORMAT = /["""「"]|[\u4e00-\u9fa5]+[：:]\s*[""「"]/
 const RE_CHARACTER_DESC = /角色[：:]|人物[：:]|character/i
 
-// ── 公开 API ──
+// ── Public API ──
 
 /**
- * 智能检测剧本处理模式
- * @param script 完整剧本文本
- * @returns 检测结果
+ * Detect the best processing mode for a script.
+ *
+ * @param script Full script text.
+ * @returns Detection result with mode and optional per-episode breakdown.
  */
 export function detectScriptMode(
   script: string
@@ -69,59 +71,63 @@ export function detectScriptMode(
       return { mode: 'ai-create' }
     }
 
-    const hasMixedMode = episodesMode.some((ep) => ep.mode !== 'faithful-parse')
+    const hasMixedMode = episodesMode.some((episode) => episode.mode !== 'faithful-parse')
 
     if (hasMixedMode) {
-      const faithfulCount = episodesMode.filter((ep) => ep.mode === 'faithful-parse').length
-      const expandCount = episodesMode.filter((ep) => ep.mode === 'expand').length
-      const createCount = episodesMode.filter((ep) => ep.mode === 'ai-create').length
+      const faithfulCount = episodesMode.filter(
+        (episode) => episode.mode === 'faithful-parse'
+      ).length
+      const expandCount = episodesMode.filter((episode) => episode.mode === 'expand').length
+      const createCount = episodesMode.filter((episode) => episode.mode === 'ai-create').length
 
       console.log(
         `[detect] 检测到混合模式：${faithfulCount} 集忠实解析，${expandCount} 集扩展生成，${createCount} 集 AI 创作`
       )
       return { mode: 'mixed', episodes: episodesMode }
-    } else {
-      console.log(`[detect] 检测到完整剧本（${episodesMode.length} 集），使用忠实解析模式`)
-      return { mode: 'faithful-parse', episodes: episodesMode }
     }
-  } else {
-    console.log(`[detect] 全剧本得分 ${overallScore}/8，检测到创意想法，使用 AI 创作模式`)
-    return { mode: 'ai-create' }
+
+    console.log(`[detect] 检测到完整剧本（${episodesMode.length} 集），使用忠实解析模式`)
+    return { mode: 'faithful-parse', episodes: episodesMode }
   }
+
+  console.log(`[detect] 全剧本得分 ${overallScore}/8，检测到创意想法，使用 AI 创作模式`)
+  return { mode: 'ai-create' }
 }
 
 /**
- * 全剧本级别检测（快速判断）
- * @param script 完整剧本文本
- * @returns 分数 0-10
+ * Quick overall-score heuristic for the whole script.
+ *
+ * @param script Full script text.
+ * @returns Score between 0 and 10.
  */
 export function calculateOverallScore(script: string): number {
   let score = 0
 
-  // 指标 1：分集标记 - 3分（最重要指标）
-  const episodeMatches = script.match(RE_EPISODE_MARKER) || []
+  // Indicator 1: episode markers – 3 pts (strongest signal)
+  const episodeMatches = script.match(RE_EPISODE_MARKER) ?? []
   if (episodeMatches.length >= 3) score += SCORE_EPISODE_MATCHES_3PLUS
   else if (episodeMatches.length >= 1) score += SCORE_EPISODE_MATCHES_1PLUS
 
-  // 指标 2：场景标记 - 2分
+  // Indicator 2: scene markers – 2 pts
   if (RE_SCENE_MARKER.test(script)) score += SCORE_SCENE_MARKER
 
-  // 指标 3：对话格式 - 2分
+  // Indicator 3: dialogue format – 2 pts
   if (RE_DIALOGUE_FORMAT.test(script)) score += SCORE_DIALOGUE_FORMAT
 
-  // 指标 4：字数 - 1分
+  // Indicator 4: word count – 1 pt
   if (script.length > 5000) score += SCORE_WORD_COUNT_5K
 
-  // 指标 5：角色说明 - 2分
+  // Indicator 5: character descriptions – 2 pts
   if (RE_CHARACTER_DESC.test(script)) score += SCORE_CHARACTER_DESC
 
   return score
 }
 
 /**
- * 逐集检测（精细判断）
- * @param script 完整剧本文本
- * @returns 每集的处理模式
+ * Fine-grained per-episode detection.
+ *
+ * @param script Full script text.
+ * @returns Array of per-episode processing modes.
  */
 export function detectEpisodesMode(script: string): EpisodeCompleteness[] {
   const episodes = splitScriptByEpisodes(script)
@@ -130,54 +136,57 @@ export function detectEpisodesMode(script: string): EpisodeCompleteness[] {
     return []
   }
 
-  return episodes.map((ep) => {
-    const score = calculateCompletenessScore(ep.content)
+  return episodes.map((episode) => {
+    const score = calculateCompletenessScore(episode.content)
 
     if (score >= COMPLETENESS_THRESHOLD_HIGH) {
       return {
-        episodeNum: ep.num,
+        episodeNum: episode.number,
         mode: 'faithful-parse' as const,
         confidence: CONFIDENCE_FAITHFUL,
-        content: ep.content
+        content: episode.content
       }
-    } else if (score >= COMPLETENESS_THRESHOLD_LOW) {
+    }
+
+    if (score >= COMPLETENESS_THRESHOLD_LOW) {
       return {
-        episodeNum: ep.num,
+        episodeNum: episode.number,
         mode: 'expand' as const,
         confidence: CONFIDENCE_EXPAND,
-        content: ep.content
+        content: episode.content
       }
-    } else {
-      return {
-        episodeNum: ep.num,
-        mode: 'ai-create' as const,
-        confidence: CONFIDENCE_AI_CREATE,
-        content: undefined
-      }
+    }
+
+    return {
+      episodeNum: episode.number,
+      mode: 'ai-create' as const,
+      confidence: CONFIDENCE_AI_CREATE,
+      content: undefined
     }
   })
 }
 
-// ── 内部工具函数 ──
+// ── Internal helpers ──
 
 /**
- * 计算文本完整度分数
- * @param content 文本内容
- * @returns 分数 0-8
+ * Calculate completeness score for a single episode's text.
+ *
+ * @param content Episode text content.
+ * @returns Score between 0 and 8.
  */
 function calculateCompletenessScore(content: string): number {
   let score = 0
 
-  // 指标 1：场景标记（第X场/scene X）- 2分
+  // Indicator 1: scene markers (第X场 / scene X) – 2 pts
   if (RE_SCENE_MARKER.test(content)) score += SCORE_SCENE_MARKER
 
-  // 指标 2：对话格式（引号或角色名+冒号）- 2分
+  // Indicator 2: dialogue format (quotes or character + colon) – 2 pts
   if (RE_DIALOGUE_FORMAT.test(content)) score += SCORE_DIALOGUE_FORMAT
 
-  // 指标 3：角色说明 - 1分
+  // Indicator 3: character descriptions – 1 pt
   if (RE_CHARACTER_DESC.test(content)) score += 1
 
-  // 指标 4：字数 - 最多 2分
+  // Indicator 4: word count – up to 2 pts
   if (content.length > 1000) score += SCORE_WORD_COUNT_1K
   if (content.length > 3000) score += SCORE_WORD_COUNT_3K
 
@@ -185,19 +194,20 @@ function calculateCompletenessScore(content: string): number {
 }
 
 /**
- * 按集分割剧本
- * @param script 完整剧本文本
- * @returns 分集数组
+ * Split a full script into per-episode chunks.
+ *
+ * @param script Full script text.
+ * @returns Array of episode chunks with episode number and content.
  */
-function splitScriptByEpisodes(script: string): Array<{ num: number; content: string }> {
-  const episodes: Array<{ num: number; content: string }> = []
+function splitScriptByEpisodes(script: string): Array<{ number: number; content: string }> {
+  const episodes: Array<{ number: number; content: string }> = []
 
   const regex = new RegExp(RE_EPISODE_SPLIT.source, RE_EPISODE_SPLIT.flags)
-  let match
+  let match: RegExpExecArray | null
 
   while ((match = regex.exec(script)) !== null) {
     episodes.push({
-      num: parseInt(match[1], 10),
+      number: parseInt(match[1], 10),
       content: match[0].trim()
     })
   }

@@ -6,22 +6,26 @@ export const PROJECT_DEFAULT_ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4
 
 export type ProjectDefaultAspectRatio = (typeof PROJECT_DEFAULT_ASPECT_RATIOS)[number]
 
-const ALLOWED = new Set<string>(PROJECT_DEFAULT_ASPECT_RATIOS)
+const ALLOWED_ASPECT_RATIOS = new Set<string>(PROJECT_DEFAULT_ASPECT_RATIOS)
 
-/** 写入 DB / API 前校验，非法值回落为 9:16 */
+/** Fallback ratio when input is invalid or empty. */
+const FALLBACK_ASPECT_RATIO = '9:16'
+
+/** Validate before writing to DB / API; fall back to 9:16 for illegal values. */
 export function normalizeProjectDefaultAspectRatio(input: string | undefined | null): string {
-  const s = (input || '').trim()
-  if (ALLOWED.has(s)) return s
-  return '9:16'
+  const trimmed = (input || '').trim()
+  if (ALLOWED_ASPECT_RATIOS.has(trimmed)) return trimmed
+  return FALLBACK_ASPECT_RATIO
 }
 
 /**
- * Pipeline / storyboard 仅支持三种比例；项目若设为 4:3 等则兜底为竖屏 9:16。
+ * Pipeline / storyboard only support three ratios.
+ * If the project default is 4:3 etc., fall back to portrait 9:16.
  */
 export function pipelineAspectRatioFromProjectDefault(
   aspect: string | undefined | null
 ): '16:9' | '9:16' | '1:1' {
-  const n = normalizeProjectDefaultAspectRatio(aspect)
-  if (n === '16:9' || n === '9:16' || n === '1:1') return n
-  return '9:16'
+  const normalized = normalizeProjectDefaultAspectRatio(aspect)
+  if (normalized === '16:9' || normalized === '9:16' || normalized === '1:1') return normalized
+  return FALLBACK_ASPECT_RATIO
 }

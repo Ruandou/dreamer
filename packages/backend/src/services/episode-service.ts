@@ -34,10 +34,10 @@ function scriptSceneCharacterCounts(script: unknown): {
     return { scriptSceneCount: 0, scriptCharacterCount: 0 }
   }
   const names = new Set<string>()
-  for (const sc of scenes) {
-    if (sc && typeof sc === 'object' && Array.isArray(sc.characters)) {
-      for (const n of sc.characters) {
-        if (typeof n === 'string' && n.trim()) names.add(n.trim())
+  for (const scene of scenes) {
+    if (scene && typeof scene === 'object' && Array.isArray(scene.characters)) {
+      for (const name of scene.characters) {
+        if (typeof name === 'string' && name.trim()) names.add(name.trim())
       }
     }
   }
@@ -59,8 +59,8 @@ function buildScenePrompt(
     scene.location,
     scene.timeOfDay,
     scene.description,
-    scene.actions?.join(' ') || '',
-    scene.dialogues?.map((d) => `${d.character}: ${d.content}`).join(' ') || ''
+    scene.actions?.join(' ') ?? '',
+    scene.dialogues?.map((dialogue) => `${dialogue.character}: ${dialogue.content}`).join(' ') ?? ''
   ].filter(Boolean)
 
   return parts.join(', ')
@@ -122,18 +122,18 @@ export class EpisodeService {
       imagesByCharId.set(img.characterId, list)
     }
 
-    for (const sc of script.scenes) {
+    for (const sceneData of script.scenes) {
       let locationId: string | undefined
-      if (sc.location) {
-        const loc = await this.repo.findLocationByProjectAndName(projectId, sc.location)
-        locationId = loc?.id
+      if (sceneData.location) {
+        const location = await this.repo.findLocationByProjectAndName(projectId, sceneData.location)
+        locationId = location?.id
       }
 
-      const hasShots = sc.shots && sc.shots.length > 0
+      const hasShots = sceneData.shots && sceneData.shots.length > 0
       let sceneDurationMs = DEFAULT_SHOT_DURATION_MS
-      if (hasShots && sc.shots) {
-        sceneDurationMs = sc.shots.reduce(
-          (sum, sh) => sum + (sh.duration ?? DEFAULT_SHOT_DURATION_MS),
+      if (hasShots && sceneData.shots) {
+        sceneDurationMs = sceneData.shots.reduce(
+          (sum, shot) => sum + (shot.duration ?? DEFAULT_SHOT_DURATION_MS),
           0
         )
       }
@@ -141,46 +141,48 @@ export class EpisodeService {
 
       const scene = await this.repo.createScene({
         episodeId,
-        sceneNum: sc.sceneNum || 1,
+        sceneNum: sceneData.sceneNum || 1,
         locationId,
-        timeOfDay: sc.timeOfDay,
-        description: sc.description || `${sc.location} - ${sc.timeOfDay}`,
+        timeOfDay: sceneData.timeOfDay,
+        description: sceneData.description || `${sceneData.location} - ${sceneData.timeOfDay}`,
         duration: sceneDurationMs,
         aspectRatio: project?.aspectRatio ?? '9:16',
-        visualStyle: [], // visualStyle已废弃，使用visualStyleConfig
+        visualStyle: [], // visualStyle deprecated; use visualStyleConfig
         status: 'pending'
       })
 
-      if (hasShots && sc.shots) {
-        const sorted = [...sc.shots].sort(
+      if (hasShots && sceneData.shots) {
+        const sorted = [...sceneData.shots].sort(
           (a, b) => (a.order ?? a.shotNum ?? 0) - (b.order ?? b.shotNum ?? 0)
         )
-        let idx = 0
-        for (const sh of sorted) {
-          idx += 1
+        let shotIndex = 0
+        for (const shotData of sorted) {
+          shotIndex += 1
           const shot = await this.repo.createShot({
             sceneId: scene.id,
-            shotNum: sh.shotNum ?? idx,
-            order: sh.order ?? idx,
-            description: sh.description || '',
-            duration: sh.duration ?? DEFAULT_SHOT_DURATION_MS,
-            cameraAngle: sh.cameraAngle || null,
-            cameraMovement: sh.cameraMovement || null
+            shotNum: shotData.shotNum ?? shotIndex,
+            order: shotData.order ?? shotIndex,
+            description: shotData.description ?? '',
+            duration: shotData.duration ?? DEFAULT_SHOT_DURATION_MS,
+            cameraAngle: shotData.cameraAngle ?? null,
+            cameraMovement: shotData.cameraMovement ?? null
           })
-          for (const c of sh.characters || []) {
-            const ch = charMapByName.get(c.characterName)
-            if (!ch) continue
-            const charImages = imagesByCharId.get(ch.id) || []
-            let img = charImages.find((i) => i.name === c.imageName)
-            if (!img) {
-              img = charImages.find((i) => i.type === 'base')
+          for (const characterData of shotData.characters || []) {
+            const character = charMapByName.get(characterData.characterName)
+            if (!character) continue
+            const characterImages = imagesByCharId.get(character.id) ?? []
+            let matchedImage = characterImages.find(
+              (image) => image.name === characterData.imageName
+            )
+            if (!matchedImage) {
+              matchedImage = characterImages.find((image) => image.type === 'base')
             }
-            if (!img) continue
+            if (!matchedImage) continue
             await prisma.characterShot.create({
               data: {
                 shotId: shot.id,
-                characterImageId: img.id,
-                action: c.action ?? null
+                characterImageId: matchedImage.id,
+                action: characterData.action ?? null
               }
             })
           }
@@ -190,36 +192,36 @@ export class EpisodeService {
           sceneId: scene.id,
           shotNum: 1,
           order: 1,
-          description: buildScenePrompt(sc, script.title || ''),
+          description: buildScenePrompt(sceneData, script.title ?? ''),
           duration: DEFAULT_SHOT_DURATION_MS
         })
       }
 
-      if (sc.dialogues?.length) {
-        const n = sc.dialogues.length
-        const slot = Math.max(1000, Math.floor(sceneDurationMs / n))
-        let t = 0
-        for (let i = 0; i < sc.dialogues.length; i++) {
-          const d = sc.dialogues[i]
-          const character = charMapByName.get(d.character)
+      if (sceneData.dialogues?.length) {
+        const dialogueCount = sceneData.dialogues.length
+        const timeSlot = Math.max(1000, Math.floor(sceneDurationMs / dialogueCount))
+        let currentTime = 0
+        for (let index = 0; index < sceneData.dialogues.length; index++) {
+          const dialogue = sceneData.dialogues[index]
+          const character = charMapByName.get(dialogue.character)
           if (!character) continue
-          const vc = character.voiceConfig
+          const voiceConfigRaw = character.voiceConfig
           const voiceConfig =
-            vc && typeof vc === 'object' && !Array.isArray(vc)
-              ? (vc as Prisma.InputJsonValue)
+            voiceConfigRaw && typeof voiceConfigRaw === 'object' && !Array.isArray(voiceConfigRaw)
+              ? (voiceConfigRaw as Prisma.InputJsonValue)
               : DEFAULT_VOICE_CONFIG
           await prisma.sceneDialogue.create({
             data: {
               sceneId: scene.id,
               characterId: character.id,
-              order: i + 1,
-              startTimeMs: t,
-              durationMs: slot,
-              text: d.content,
+              order: index + 1,
+              startTimeMs: currentTime,
+              durationMs: timeSlot,
+              text: dialogue.content,
               voiceConfig
             }
           })
-          t += slot
+          currentTime += timeSlot
         }
       }
     }

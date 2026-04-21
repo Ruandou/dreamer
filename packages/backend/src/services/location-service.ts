@@ -30,7 +30,10 @@ export class LocationService {
   }
 
   /**
-   * 手动添加场地；名称 trim 后须非空，且与项目内未删除场地不重名（否则 duplicate_name）。
+   * Manually add a location.
+   *
+   * Name must be non-empty after trim, and must not duplicate an existing
+   * active location in the same project.
    */
   async createManual(
     projectId: string,
@@ -39,14 +42,14 @@ export class LocationService {
     | { ok: true; location: Awaited<ReturnType<LocationRepository['createActive']>> }
     | { ok: false; reason: 'empty_name' | 'duplicate_name' }
   > {
-    const name = (body.name || '').trim()
+    const name = (body.name ?? '').trim()
     if (!name) {
       return { ok: false, reason: 'empty_name' }
     }
     const timeRaw = body.timeOfDay != null ? String(body.timeOfDay).trim() : ''
     const timeOfDay = timeRaw || '日'
-    const descRaw = body.description != null ? String(body.description).trim() : ''
-    const description = descRaw || null
+    const descriptionRaw = body.description != null ? String(body.description).trim() : ''
+    const description = descriptionRaw || null
     try {
       const location = await this.repository.createActive({
         projectId,
@@ -55,11 +58,15 @@ export class LocationService {
         description
       })
       return { ok: true, location }
-    } catch (e: unknown) {
-      if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002') {
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        (error as { code?: string }).code === 'P2002'
+      ) {
         return { ok: false, reason: 'duplicate_name' }
       }
-      throw e
+      throw error
     }
   }
 

@@ -1,11 +1,17 @@
-/** 定场图入队：imagePrompt 应在视觉补全中含「风格与画质」与项目 visualStyle，此处不再拼英文 Visual style 前缀以免重复。 */
+/**
+ * Build a location establishing-shot prompt.
+ *
+ * Why no visual-style prefix: the full imagePrompt already includes style and
+ * quality descriptors during visual enrichment; prepending again would duplicate.
+ */
 export function buildLocationEstablishingPrompt(
   establishingName: string,
-  effective: string
+  effectivePrompt: string
 ): string {
-  return `${establishingName}. ${effective}`
+  return `${establishingName}. ${effectivePrompt}`
 }
 
+/** Check whether a non-empty establishing image URL exists. */
 export function locationHasEstablishingImage(imageUrl: string | null | undefined): boolean {
-  return !!(imageUrl && String(imageUrl).trim())
+  return Boolean(imageUrl && String(imageUrl).trim())
 }

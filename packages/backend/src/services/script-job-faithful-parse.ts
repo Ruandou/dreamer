@@ -1,5 +1,5 @@
 /**
- * 忠实解析模式：格式化完整剧本，不改变内容
+ * Faithful-parse mode: format a complete script without changing content.
  */
 
 import type { EpisodeCompleteness } from './script-mode-detector.js'
@@ -7,7 +7,10 @@ import { projectRepository } from '../repositories/project-repository.js'
 import { formatScriptToJSON } from './script-writer.js'
 import { safeExtractAndSaveMemories } from './memory/index.js'
 import { updateJob } from './script-job-helpers.js'
-import { mapBatchProgressToParseRange } from './script-jobs/progress-mappers.js'
+import { mapBatchProgressToParseRange } from './progress-mappers.js'
+
+/** Default project name returned when parsing fails to extract one. */
+const DEFAULT_PROJECT_NAME = '未命名项目'
 
 export async function runFaithfulParse(
   jobId: string,
@@ -19,12 +22,11 @@ export async function runFaithfulParse(
   const project = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
   if (!project) return
 
-  // 从剧本内容中提取并更新项目名
+  // Extract and update project name from script content
   try {
     console.log('[faithful-parse] 正在从剧本中提取项目名称...')
-    const firstEpisodeContent = episodes.find((ep) => ep.content)?.content || ''
+    const firstEpisodeContent = episodes.find((episode) => episode.content)?.content ?? ''
 
-    // 使用 AI 解析器提取项目名（只需要 projectName 字段）
     const { parseScriptDocument } = await import('./ai/parser.js')
     const { parsed } = await parseScriptDocument(firstEpisodeContent, 'markdown', {
       userId: project.userId,
@@ -32,55 +34,49 @@ export async function runFaithfulParse(
       op: 'extract_project_name_from_complete_script'
     })
 
-    if (parsed.projectName && parsed.projectName !== '未命名项目') {
-      await projectRepository.update(projectId, {
-        name: parsed.projectName
-      })
+    if (parsed.projectName && parsed.projectName !== DEFAULT_PROJECT_NAME) {
+      await projectRepository.update(projectId, { name: parsed.projectName })
       console.log(`[faithful-parse] 项目名已更新: ${parsed.projectName}`)
     }
   } catch (error) {
-    // 提取失败不影响后续流程，使用原有项目名
+    // Extraction failure is non-fatal; continue with the existing project name
     console.warn('[faithful-parse] 项目名提取失败，使用原有项目名:', error)
   }
 
   const totalEpisodes = episodes.length
   let completed = 0
 
-  for (const ep of episodes) {
-    if (!ep.content) continue
+  for (const episode of episodes) {
+    if (!episode.content) continue
 
     completed++
-    const progress = embedded
-      ? mapBatchProgressToParseRange(Math.round((completed / totalEpisodes) * 100))
-      : Math.round((completed / totalEpisodes) * 100)
+    const rawPercentage = Math.round((completed / totalEpisodes) * 100)
+    const progress = embedded ? mapBatchProgressToParseRange(rawPercentage) : rawPercentage
 
     await updateJob(jobId, {
       progress,
       progressMeta: {
         current: completed,
         total: totalEpisodes,
-        message: `忠实解析第 ${ep.episodeNum}/${totalEpisodes} 集...`
+        message: `忠实解析第 ${episode.episodeNum}/${totalEpisodes} 集...`
       }
     })
 
-    console.log(`[faithful-parse] 格式化第 ${ep.episodeNum} 集...`)
+    console.log(`[faithful-parse] 格式化第 ${episode.episodeNum} 集...`)
 
-    // 格式化为 JSON
-    const script = await formatScriptToJSON(ep.content, {
+    const script = await formatScriptToJSON(episode.content, {
       userId: project.userId,
       projectId,
       op: 'faithful_parse_format'
     })
 
-    // 保存到数据库
-    const episode = await projectRepository.upsertEpisodeBatchFromScript(
+    const episodeRecord = await projectRepository.upsertEpisodeBatchFromScript(
       projectId,
-      ep.episodeNum,
+      episode.episodeNum,
       script
     )
 
-    // 提取记忆
-    await safeExtractAndSaveMemories(projectId, ep.episodeNum, episode.id, script, {
+    await safeExtractAndSaveMemories(projectId, episode.episodeNum, episodeRecord.id, script, {
       userId: project.userId,
       projectId,
       op: 'extract_faithful_parse_memories'

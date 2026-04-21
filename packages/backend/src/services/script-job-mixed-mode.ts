@@ -1,5 +1,5 @@
 /**
- * 混合模式：部分忠实解析、部分扩展、部分 AI 创作
+ * Mixed mode: faithful-parse some episodes, expand others, AI-create the rest.
  */
 
 import type { EpisodeCompleteness } from './script-mode-detector.js'
@@ -15,73 +15,83 @@ export async function runMixedMode(
   _targetEpisodes: number,
   episodes: EpisodeCompleteness[],
   embedded: boolean,
-  modelLogCtx: ModelCallLogContext
+  modelLogContext: ModelCallLogContext
 ) {
   const project = await projectRepository.findUniqueWithEpisodesOrdered(projectId)
   if (!project) return
 
-  const synopsis = project.synopsis || ''
+  const synopsis = project.synopsis ?? ''
 
-  // 分组处理
-  const faithfulEpisodes = episodes.filter((ep) => ep.mode === 'faithful-parse')
-  const expandEpisodes = episodes.filter((ep) => ep.mode === 'expand')
-  const createEpisodes = episodes.filter((ep) => ep.mode === 'ai-create')
+  // Group episodes by processing mode
+  const faithfulEpisodes = episodes.filter((episode) => episode.mode === 'faithful-parse')
+  const expandEpisodes = episodes.filter((episode) => episode.mode === 'expand')
+  const createEpisodes = episodes.filter((episode) => episode.mode === 'ai-create')
 
   let completed = 0
   const total = episodes.length
 
-  // 阶段 1：忠实解析
-  for (const ep of faithfulEpisodes) {
-    if (!ep.content) continue
+  // Phase 1: faithful parse
+  for (const episode of faithfulEpisodes) {
+    if (!episode.content) continue
     completed++
 
     await updateJob(jobId, {
       progress: Math.round((completed / total) * 100),
-      progressMeta: { message: `忠实解析第 ${ep.episodeNum} 集...` }
+      progressMeta: { message: `忠实解析第 ${episode.episodeNum} 集...` }
     })
 
-    const script = await formatScriptToJSON(ep.content, modelLogCtx)
-    const episode = await projectRepository.upsertEpisodeBatchFromScript(
+    const script = await formatScriptToJSON(episode.content, modelLogContext)
+    const episodeRecord = await projectRepository.upsertEpisodeBatchFromScript(
       projectId,
-      ep.episodeNum,
+      episode.episodeNum,
       script
     )
 
-    await safeExtractAndSaveMemories(projectId, ep.episodeNum, episode.id, script, modelLogCtx)
+    await safeExtractAndSaveMemories(
+      projectId,
+      episode.episodeNum,
+      episodeRecord.id,
+      script,
+      modelLogContext
+    )
   }
 
-  // 阶段 2：扩展生成
-  for (const ep of expandEpisodes) {
-    if (!ep.content) continue
+  // Phase 2: expand from outline
+  for (const episode of expandEpisodes) {
+    if (!episode.content) continue
     completed++
 
     await updateJob(jobId, {
       progress: Math.round((completed / total) * 100),
-      progressMeta: { message: `扩展生成第 ${ep.episodeNum} 集...` }
+      progressMeta: { message: `扩展生成第 ${episode.episodeNum} 集...` }
     })
 
     const script = await expandEpisodeFromOutline(
-      ep.episodeNum,
+      episode.episodeNum,
       project.name,
       synopsis,
-      ep.content,
-      modelLogCtx
+      episode.content,
+      modelLogContext
     )
 
-    const episode = await projectRepository.upsertEpisodeBatchFromScript(
+    const episodeRecord = await projectRepository.upsertEpisodeBatchFromScript(
       projectId,
-      ep.episodeNum,
+      episode.episodeNum,
       script
     )
 
-    await safeExtractAndSaveMemories(projectId, ep.episodeNum, episode.id, script, modelLogCtx)
+    await safeExtractAndSaveMemories(
+      projectId,
+      episode.episodeNum,
+      episodeRecord.id,
+      script,
+      modelLogContext
+    )
   }
 
-  // 阶段 3：AI 创作（使用三阶段）
+  // Phase 3: AI creation (placeholder – full three-phase logic not yet implemented for subsets)
   if (createEpisodes.length > 0) {
     console.log(`[mixed] 剩余 ${createEpisodes.length} 集使用 AI 创作`)
-    // TODO: 调用原有的三阶段生成逻辑，但只生成 createEpisodes 中的集数
-    // 这里简化处理：标记为需要后续处理
     await updateJob(jobId, {
       progressMeta: {
         message: `已完成 ${completed} 集，剩余 ${createEpisodes.length} 集需要 AI 创作`
@@ -89,7 +99,7 @@ export async function runMixedMode(
     })
   }
 
-  // 混合模式下 embedded 参数保留接口兼容，暂未使用
+  // `embedded` kept for interface compatibility; not used in mixed mode yet
   void embedded
 
   await updateJob(jobId, {

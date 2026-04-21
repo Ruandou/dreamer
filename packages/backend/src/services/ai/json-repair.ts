@@ -1,6 +1,7 @@
 /**
- * AI 自动修复 JSON 语法错误
- * 用于处理 DeepSeek 等模型返回的非法 JSON
+ * AI-powered JSON syntax repair.
+ *
+ * Uses an LLM to fix malformed JSON returned by models like DeepSeek.
  */
 
 import { callLLMWithRetry } from './llm-call-wrapper.js'
@@ -21,7 +22,7 @@ const REPAIR_PROMPT = `修复下列JSON的语法错误，只返回修复后的JS
 
 export async function repairJsonWithAI(
   brokenJson: string,
-  log?: ModelCallLogContext
+  logContext?: ModelCallLogContext
 ): Promise<string> {
   const provider = getDefaultProvider()
 
@@ -34,7 +35,7 @@ export async function repairJsonWithAI(
       ],
       temperature: DEEPSEEK_TEMPERATURE.JSON_REPAIR,
       maxTokens: DEEPSEEK_MAX_TOKENS.JSON_REPAIR,
-      modelLog: log
+      modelLog: logContext
     },
     (content) => content.trim()
   )

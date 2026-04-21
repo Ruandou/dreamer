@@ -346,20 +346,20 @@ export async function runScriptBatchJob(
     }
 
     // ====== 模式 C：AI 创作 ======
-    const aiCreationCtx = {
+    const aiCreationContext = {
       jobId,
       projectId,
       targetEpisodes,
       project: { userId: project.userId, name: project.name, storyContext: project.storyContext },
       synopsis,
       embedded,
-      modelLogCtx
+      modelLogContext: modelLogCtx
     }
 
     if (useThreePhase) {
-      await runAiCreationThreePhase(aiCreationCtx)
+      await runAiCreationThreePhase(aiCreationContext)
     } else {
-      await runAiCreationLegacy(aiCreationCtx)
+      await runAiCreationLegacy(aiCreationContext)
     }
 
     if (embedded) {
