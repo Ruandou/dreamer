@@ -2,6 +2,20 @@ import type { Prisma, PrismaClient } from '@prisma/client'
 import type { ScriptContent } from '@dreamer/shared/types'
 import { prisma } from '../lib/prisma.js'
 
+const projectWithEpisodesOrderedInclude = {
+  include: { episodes: { orderBy: { episodeNum: 'asc' as const } } }
+} as const
+
+type ProjectWithEpisodesOrdered = Prisma.ProjectGetPayload<typeof projectWithEpisodesOrderedInclude>
+
+const projectUserIdAndVisualStyleSelect = {
+  select: { userId: true, visualStyle: true, visualStyleConfig: true }
+} as const
+
+type ProjectUserIdAndVisualStyle = Prisma.ProjectGetPayload<
+  typeof projectUserIdAndVisualStyleSelect
+>
+
 export class ProjectRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -87,10 +101,10 @@ export class ProjectRepository {
     return this.prisma.project.findUnique({ where: { id: projectId } })
   }
 
-  findUniqueWithEpisodesOrdered(projectId: string) {
+  findUniqueWithEpisodesOrdered(projectId: string): Promise<ProjectWithEpisodesOrdered | null> {
     return this.prisma.project.findUnique({
       where: { id: projectId },
-      include: { episodes: { orderBy: { episodeNum: 'asc' } } }
+      ...projectWithEpisodesOrderedInclude
     })
   }
 
@@ -148,10 +162,10 @@ export class ProjectRepository {
     })
   }
 
-  findUserIdAndVisualStyle(projectId: string) {
+  findUserIdAndVisualStyle(projectId: string): Promise<ProjectUserIdAndVisualStyle | null> {
     return this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { userId: true, visualStyle: true, visualStyleConfig: true }
+      ...projectUserIdAndVisualStyleSelect
     })
   }
 }

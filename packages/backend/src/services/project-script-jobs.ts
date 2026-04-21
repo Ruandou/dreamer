@@ -21,7 +21,6 @@ import {
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
 import { runParseScriptEntityPipeline } from './parse-script-entity-pipeline.js'
 import { getMemoryService } from './memory/index.js'
-import type { ScriptContent } from '@dreamer/shared/types'
 
 // 从拆分后的模块导入
 export {
@@ -50,12 +49,10 @@ import {
   sliceStoryContext
 } from './script-job-helpers.js'
 import { detectScriptMode } from './script-mode-detector.js'
-import type { EpisodeCompleteness } from './script-mode-detector.js'
 import { runFaithfulParse } from './script-job-faithful-parse.js'
 import { runMixedMode } from './script-job-mixed-mode.js'
 import { safeExtractAndSaveMemories } from './memory/index.js'
 import {
-  DEFAULT_TARGET_EPISODES,
   OUTLINE_GENERATION_TIMEOUT_MS,
   SHOWRUNNER_REVIEW_TIMEOUT_MS,
   VISUAL_ENRICHMENT_TIMEOUT_MS,
