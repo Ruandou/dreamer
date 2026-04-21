@@ -67,6 +67,12 @@ function imageKindLabel(kind: string | undefined): string {
   return k || '图片'
 }
 
+const typeTagMap: Record<string, { type: string; label: string }> = {
+  video: { type: 'info', label: '🎬 视频' },
+  import: { type: 'warning', label: '📄 导入' },
+  image: { type: 'success', label: '🖼️ 图片' }
+}
+
 /** PipelineJob.jobType → 任务中心「类型」列（仅中文，避免与步骤英文 id 混排） */
 function pipelineSubtypeLabel(jobType: string | undefined): string {
   const t = (jobType || '').toLowerCase().trim()
@@ -76,15 +82,6 @@ function pipelineSubtypeLabel(jobType: string | undefined): string {
   if (t === 'episode-storyboard-script') return '分镜剧本'
   if (t === 'full-pipeline') return '完整流水线'
   return 'Pipeline'
-}
-
-function normalizePipelineListStatus(raw: string | undefined): Job['status'] {
-  if (raw === 'running') return 'processing'
-  if (raw === 'completed') return 'completed'
-  if (raw === 'failed') return 'failed'
-  if (raw === 'queued') return 'queued'
-  if (raw === 'pending') return 'pending'
-  return 'pending'
 }
 
 // 计算任务运行时长
@@ -140,12 +137,7 @@ const columns: DataTableColumns<Job> = [
           pipelineSubtypeLabel(row.jobType)
         )
       }
-      const typeMap: Record<string, { type: string; label: string }> = {
-        video: { type: 'info', label: '🎬 视频' },
-        import: { type: 'warning', label: '📄 导入' },
-        image: { type: 'success', label: '🖼️ 图片' }
-      }
-      const config = typeMap[row.type] || typeMap.video
+      const config = typeTagMap[row.type] || typeTagMap.video
       return h(NTag, { type: config.type as any, size: 'small' }, () => config.label)
     }
   },
@@ -353,11 +345,7 @@ const imageCount = computed(() => jobs.value.filter((j) => j.type === 'image').l
 
 const filteredJobs = computed(() => {
   if (activeTab.value === 'all') return jobs.value
-  if (activeTab.value === 'video') return jobs.value.filter((j) => j.type === 'video')
-  if (activeTab.value === 'import') return jobs.value.filter((j) => j.type === 'import')
-  if (activeTab.value === 'pipeline') return jobs.value.filter((j) => j.type === 'pipeline')
-  if (activeTab.value === 'image') return jobs.value.filter((j) => j.type === 'image')
-  return jobs.value
+  return jobs.value.filter((j) => j.type === activeTab.value)
 })
 
 const fetchJobs = async () => {
@@ -365,42 +353,7 @@ const fetchJobs = async () => {
   try {
     const res = await api.get('/tasks/all')
     const data = res.data || {}
-    const list: Job[] = (data.jobs || []).map((j: any) => ({
-      id: j.id,
-      type: j.type,
-      status: j.status,
-      createdAt: j.createdAt,
-      updatedAt: j.updatedAt,
-      projectId: j.projectId,
-      projectName: j.projectName,
-      // video
-      sceneId: j.sceneId,
-      sceneNum: j.sceneNum,
-      segmentDescription: j.segmentDescription,
-      model: j.model,
-      videoUrl: j.videoUrl,
-      thumbnailUrl: j.thumbnailUrl,
-      cost: j.cost,
-      duration: j.duration,
-      prompt: j.prompt,
-      // import
-      content: j.content,
-      contentPreview: j.contentPreview,
-      result: j.result,
-      errorMsg: j.errorMsg,
-      // pipeline
-      jobType: j.jobType,
-      currentStep: j.currentStep,
-      progress: j.progress,
-      progressMeta: j.progressMeta,
-      stepResults: j.stepResults,
-      // image
-      kind: j.kind,
-      characterId: j.characterId,
-      characterImageId: j.characterImageId,
-      locationId: j.locationId,
-      returnvalue: j.returnvalue
-    }))
+    const list: Job[] = (data.jobs || []).map((j: any) => ({ ...j }))
     jobs.value = list
   } catch (error) {
     console.error('Failed to fetch jobs:', error)

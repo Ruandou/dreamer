@@ -145,12 +145,13 @@ export async function tasksUnifiedRoutes(fastify: FastifyInstance) {
       jobs.push(job)
     }
 
-    // 转换 Pipeline 任务
+    // 转换 Pipeline 任务（统一状态命名：running → processing）
     for (const job of pipelineJobs) {
+      const normalizedStatus = job.status === 'running' ? 'processing' : (job.status as string)
       const j: UnifiedJob = {
         id: job.id,
         type: 'pipeline',
-        status: job.status,
+        status: normalizedStatus,
         createdAt: job.createdAt.toISOString(),
         updatedAt: job.updatedAt.toISOString(),
         projectId: job.projectId,

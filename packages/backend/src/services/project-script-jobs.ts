@@ -967,8 +967,7 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
     }
 
     // 自动生成 visualStyleConfig（如果没有）
-    const projectResult = project as { visualStyleConfig?: unknown }
-    if (!projectResult.visualStyleConfig) {
+    if (!project.visualStyleConfig) {
       console.log('[parse-script] 基于完整梗概自动生成 visualStyleConfig')
       try {
         const config = await generateVisualStyleConfig(

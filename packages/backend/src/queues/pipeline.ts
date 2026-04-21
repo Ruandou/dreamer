@@ -7,6 +7,7 @@ import {
   runParseScriptJob
 } from '../services/project-script-jobs.js'
 import { runEpisodeStoryboardPipelineJob } from '../services/episode-storyboard-job.js'
+import { pipelineRepository } from '../repositories/pipeline-repository.js'
 
 const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null
@@ -118,8 +119,20 @@ pipelineWorker.on('completed', (job) => {
   console.log(`[pipeline-worker] Job ${job.id} completed`)
 })
 
-pipelineWorker.on('failed', (job, err) => {
+pipelineWorker.on('failed', async (job, err) => {
   console.error(`[pipeline-worker] Job ${job?.id} failed:`, err?.message)
+  // 兜底：如果执行函数内部未成功更新 Prisma PipelineJob 状态，在这里补上
+  try {
+    const data = job?.data as PipelineJobData | undefined
+    if (data?.jobId) {
+      await pipelineRepository.updateJob(data.jobId, {
+        status: 'failed',
+        error: err?.message || 'Worker 执行失败'
+      })
+    }
+  } catch (updateErr) {
+    console.error('[pipeline-worker] 无法更新 PipelineJob 失败状态:', updateErr)
+  }
 })
 
 export async function closePipelineWorker(): Promise<void> {

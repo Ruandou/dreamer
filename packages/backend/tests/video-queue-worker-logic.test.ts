@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } from 'vitest'
 
 // Suppress console.error/warn for cleaner test output
 const originalConsoleError = console.error
@@ -94,6 +94,20 @@ vi.mock('../src/services/ai/api-logger.js', () => ({
   updateApiCall: mockUpdateApiCall
 }))
 
+// Mock global fetch to avoid real network requests
+const originalFetch = global.fetch
+beforeAll(() => {
+  global.fetch = vi.fn(() =>
+    Promise.resolve({
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8))
+    } as Response)
+  )
+})
+
+afterAll(() => {
+  global.fetch = originalFetch
+})
+
 // Mock BullMQ Worker to capture the processor function
 let capturedVideoProcessor: Function
 let capturedVideoWorkerOptions: any
@@ -127,6 +141,8 @@ describe('Video Queue Worker', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset fetch mock to avoid leaking call counts
+    ;(global.fetch as any).mockClear?.()
   })
 
   afterEach(() => {
@@ -134,9 +150,6 @@ describe('Video Queue Worker', () => {
   })
 
   it('should process Wan 2.6 video generation successfully', async () => {
-    // Import to trigger worker registration
-    await import('../src/queues/video.js')
-
     expect(capturedVideoProcessor).toBeDefined()
 
     // Mock job data

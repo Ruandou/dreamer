@@ -2,6 +2,7 @@
  * 大纲「解析剧本」与 Pipeline 跳过前期步骤时共用：身份合并、分集 `script` 写回、场地/角色落库、形象槽位。
  */
 
+import { Prisma } from '@prisma/client'
 import type { ScriptContent } from '@dreamer/shared/types'
 import { episodeRepository } from '../repositories/episode-repository.js'
 import { characterRepository } from '../repositories/character-repository.js'
@@ -110,11 +111,8 @@ async function ensureCharacterImagesFromIdentityMerge(
     name: string
     description: string | undefined
   }> = []
-  // 记录每个角色在解析后应有的 base 信息（用于后续 derived 关联）
-  const charBaseInfo = new Map<
-    string,
-    { existingBaseId: string | null; needsCreate: boolean; createIndex: number }
-  >()
+  // 收集需要批量更新的角色形象描述（避免循环内串行 await）
+  const baseDescUpdates: Array<{ id: string; description: string }> = []
 
   for (const pc of characters) {
     if (!pc.name?.trim()) continue
@@ -134,9 +132,7 @@ async function ensureCharacterImagesFromIdentityMerge(
         if (dup) {
           baseId = dup.id
           if (slot.description?.trim() && !dup.description?.trim()) {
-            await characterRepository.updateCharacterImage(dup.id, {
-              description: slot.description
-            })
+            baseDescUpdates.push({ id: dup.id, description: slot.description })
           }
         } else {
           baseCreations.push({
@@ -157,20 +153,15 @@ async function ensureCharacterImagesFromIdentityMerge(
         description: pc.description || undefined
       })
     }
+  }
 
-    charBaseInfo.set(c.id, {
-      existingBaseId: baseId,
-      needsCreate:
-        baseCreations.length > 0 &&
-        baseCreations[baseCreations.length - 1].characterId === c.id &&
-        !baseId,
-      createIndex:
-        baseCreations.length > 0 &&
-        baseCreations[baseCreations.length - 1].characterId === c.id &&
-        !baseId
-          ? baseCreations.length - 1
-          : -1
-    })
+  // 批量更新 base 形象描述
+  if (baseDescUpdates.length > 0) {
+    await Promise.all(
+      baseDescUpdates.map((u) =>
+        characterRepository.updateCharacterImage(u.id, { description: u.description })
+      )
+    )
   }
 
   // 批量创建 base 形象
@@ -204,16 +195,17 @@ async function ensureCharacterImagesFromIdentityMerge(
   }
 
   // 收集需要批量创建的非 base 形象图
-  const imagesToCreate: Array<{
-    characterId: string
-    name: string
-    type: string
-    parentId: string | null
-    description: string | undefined
-    prompt: null
-    avatarUrl: null
-    order: number
-  }> = []
+  // 预查每个角色的 maxSiblingOrder，避免循环内串行查询
+  const derivedDescUpdates: Array<{ id: string; description: string }> = []
+  const derivedCreationsByChar = new Map<
+    string,
+    Array<{
+      name: string
+      type: string
+      parentId: string
+      description: string | undefined
+    }>
+  >()
 
   for (const pc of characters) {
     if (!pc.name?.trim()) continue
@@ -234,23 +226,57 @@ async function ensureCharacterImagesFromIdentityMerge(
       )
       if (dup) {
         if (slot.description?.trim() && !dup.description?.trim()) {
-          await characterRepository.updateCharacterImage(dup.id, {
-            description: slot.description
-          })
+          derivedDescUpdates.push({ id: dup.id, description: slot.description })
         }
         continue
       }
 
-      const maxOrder = await characterRepository.maxSiblingOrder(c.id, baseId)
-      imagesToCreate.push({
-        characterId: c.id,
+      const list = derivedCreationsByChar.get(c.id) || []
+      list.push({
         name: slot.name,
         type: st,
         parentId: baseId,
-        description: slot.description || undefined,
+        description: slot.description || undefined
+      })
+      derivedCreationsByChar.set(c.id, list)
+    }
+  }
+
+  // 批量更新 derived 形象描述
+  if (derivedDescUpdates.length > 0) {
+    await Promise.all(
+      derivedDescUpdates.map((u) =>
+        characterRepository.updateCharacterImage(u.id, { description: u.description })
+      )
+    )
+  }
+
+  // 一次性查询所有需要创建 derived 的角色的 maxSiblingOrder，然后内存分配 order
+  const imagesToCreate: Array<{
+    characterId: string
+    name: string
+    type: string
+    parentId: string | null
+    description: string | undefined
+    prompt: null
+    avatarUrl: null
+    order: number
+  }> = []
+
+  for (const [charId, list] of derivedCreationsByChar.entries()) {
+    const baseId = list[0].parentId
+    const maxOrder = await characterRepository.maxSiblingOrder(charId, baseId)
+    let nextOrder = (maxOrder._max.order ?? 0) + 1
+    for (const item of list) {
+      imagesToCreate.push({
+        characterId: charId,
+        name: item.name,
+        type: item.type,
+        parentId: item.parentId,
+        description: item.description,
         prompt: null,
         avatarUrl: null,
-        order: (maxOrder._max.order ?? 0) + 1
+        order: nextOrder++
       })
     }
   }
@@ -333,12 +359,16 @@ export async function runParseScriptEntityPipeline(
   }
 
   if (Object.keys(aliasToCanonical).length > 0) {
-    for (const ep of capped) {
-      const sc = scriptFromJson(ep.script)
-      if (!sc) continue
-      const normalized = normalizeScriptContent(sc, aliasToCanonical)
-      await episodeRepository.update(ep.id, { script: normalized as object })
-    }
+    await Promise.all(
+      capped.map(async (ep) => {
+        const sc = scriptFromJson(ep.script)
+        if (!sc) return
+        const normalized = normalizeScriptContent(sc, aliasToCanonical)
+        await episodeRepository.update(ep.id, {
+          script: normalized as unknown as Prisma.InputJsonValue
+        })
+      })
+    )
   }
 
   // 优化：避免重新获取整个项目，直接从本地数据重新合并

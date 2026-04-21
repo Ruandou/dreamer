@@ -66,11 +66,13 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
 
   console.log(`Starting Pipeline Job ${jobId} for project ${projectId}`)
 
+  let currentStep = 'script-writing'
+
   try {
     // 更新状态为运行中
     await updateJobProgress(jobId, {
       status: 'running',
-      currentStep: 'script-writing',
+      currentStep,
       progress: 5
     })
 
@@ -99,13 +101,14 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
       script = await runParseScriptEntityPipeline(projectId, projectMeta.userId, te)
 
       // 复用已有的 existingEpisodes，避免重复查询
-      await updateStepProgress(jobId, 'episode-split', 'processing')
+      currentStep = 'episode-split'
+      await updateStepProgress(jobId, currentStep, 'processing')
       episodes = buildEpisodePlansFromDbEpisodes(existingEpisodes, script)
-      await updateStepResult(jobId, 'episode-split', {
+      await updateStepResult(jobId, currentStep, {
         status: 'completed',
         output: { episodes, skipped: true }
       })
-      await updateJobProgress(jobId, { currentStep: 'episode-split', progress: 45 })
+      await updateJobProgress(jobId, { currentStep, progress: 45 })
     } else {
       // ========== 步骤 1: 剧本生成 ==========
       await updateStepResult(jobId, 'script-writing', { status: 'processing', input: { idea } })
@@ -125,18 +128,19 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
       await updateJobProgress(jobId, { progress: 25 })
 
       // ========== 步骤 2: 智能分集 ==========
-      await updateStepProgress(jobId, 'episode-split', 'processing')
+      currentStep = 'episode-split'
+      await updateStepProgress(jobId, currentStep, 'processing')
 
       episodes = splitIntoEpisodes(script, {
         targetDuration: targetDuration || 60
       })
 
       await pipelineRepository.saveEpisodes(projectId, episodes, script)
-      await updateStepResult(jobId, 'episode-split', {
+      await updateStepResult(jobId, currentStep, {
         status: 'completed',
         output: { episodes }
       })
-      await updateJobProgress(jobId, { currentStep: 'episode-split', progress: 45 })
+      await updateJobProgress(jobId, { currentStep, progress: 45 })
 
       if (!projectMeta?.userId) {
         throw new Error('流水线缺少项目用户，无法执行角色身份合并')
@@ -148,19 +152,19 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
     await applyScriptVisualEnrichment(projectId, script)
 
     // ========== 步骤 3: 分镜提取 ==========
-    await updateStepResult(jobId, 'segment-extract', { status: 'processing' })
+    currentStep = 'segment-extract'
+    await updateStepResult(jobId, currentStep, { status: 'processing' })
 
     const sceneActions = extractActionsFromScenes(script.scenes, [])
-    await updateStepResult(jobId, 'segment-extract', {
+    await updateStepResult(jobId, currentStep, {
       status: 'completed',
       output: { sceneActions }
     })
-    await updateJobProgress(jobId, { currentStep: 'segment-extract', progress: 65 })
+    await updateJobProgress(jobId, { currentStep, progress: 65 })
 
     // ========== 步骤 4: 分镜生成 ==========
-    await updateStepResult(jobId, 'storyboard', { status: 'processing' })
-
-    await pipelineRepository.findLocationsActive(projectId)
+    currentStep = 'storyboard'
+    await updateStepResult(jobId, currentStep, { status: 'processing' })
 
     // 生成 storyboard
     const allSegments: StoryboardSegment[] = []
@@ -177,17 +181,18 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
     // 保存分镜到数据库
     await pipelineRepository.saveSegments(projectId, episodes, allSegments, script.scenes)
 
-    await updateStepResult(jobId, 'storyboard', {
+    await updateStepResult(jobId, currentStep, {
       status: 'completed',
       output: { storyboard: allSegments }
     })
-    await updateJobProgress(jobId, { currentStep: 'storyboard', progress: 90 })
+    await updateJobProgress(jobId, { currentStep, progress: 90 })
 
     // ========== 完成 ==========
+    currentStep = 'completed'
     await updateJobProgress(jobId, {
       status: 'completed',
       progress: 100,
-      currentStep: 'completed'
+      currentStep
     })
 
     console.log(`Pipeline Job ${jobId} completed successfully`)
@@ -201,11 +206,13 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
       error: errorMessage
     })
 
-    // 更新当前步骤为失败
-    await updateStepResult(jobId, 'unknown', {
-      status: 'failed',
-      error: errorMessage
-    })
+    // 更新最后已知步骤为失败（若存在）
+    if (currentStep && currentStep !== 'completed') {
+      await updateStepResult(jobId, currentStep, {
+        status: 'failed',
+        error: errorMessage
+      })
+    }
   }
 }
 
