@@ -17,12 +17,14 @@ import {
   scriptFromJson,
   buildEnhancedContext,
   getFutureOutlines,
+  sliceStoryContext
+} from './script-job-helpers.js'
+import {
   calcEpisodePct,
   mapThreePhaseProgress,
   mapBatchProgressToParseRange,
-  mapLegacyProgress,
-  sliceStoryContext
-} from './script-job-helpers.js'
+  mapLegacyProgress
+} from './script-jobs/progress-mappers.js'
 import { withTimeout, timeoutErrorMessage } from '../lib/with-timeout.js'
 import {
   OUTLINE_GENERATION_TIMEOUT_MS,

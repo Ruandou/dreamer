@@ -1,9 +1,4 @@
-import type {
-  ScriptContent,
-  ScriptScene,
-  ScriptDialogueLine,
-  Character
-} from '@dreamer/shared/types'
+import type { ScriptContent, Character } from '@dreamer/shared/types'
 import type { DeepSeekCost } from './ai/deepseek.js'
 import type { ModelCallLogContext } from './ai/api-logger.js'
 import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai/ai.constants.js'
@@ -15,6 +10,12 @@ import {
 } from './ai/llm-call-wrapper.js'
 import { getDefaultProvider } from './ai/llm-factory.js'
 import { PromptRegistry } from './prompts/registry.js'
+import {
+  parseScriptResponse,
+  validateScript,
+  formatOutlinesList,
+  parseOutlinesFromText
+} from './script-parsing/index.js'
 
 export interface ScriptWriterOptions {
   characters?: Character[]
@@ -33,19 +34,11 @@ export interface ScriptWriterResult {
  * 4 个 LLM 调用都使用相同的解析流程
  */
 function parseAndValidateScript(content: string): ScriptContent {
-  const script = parseScriptResponse(content)
+  const script = parseScriptResponse(content, {
+    cleanMarkdownCodeBlocks
+  })
   validateScript(script)
   return script
-}
-
-/**
- * 格式化大纲列表为文本（showrunner + revise 共用）
- */
-function formatOutlinesList(outlines: Map<number, string>): string {
-  return Array.from(outlines.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([num, outline]) => `第${num}集：${outline}`)
-    .join('\n\n')
 }
 
 /**
@@ -270,135 +263,6 @@ function buildUserPrompt(idea: string, options?: ScriptWriterOptions): string {
   return prompt
 }
 
-function parseScriptResponse(content: string): ScriptContent {
-  // 使用共享的 Markdown 代码块清理工具
-  const cleanContent = cleanMarkdownCodeBlocks(content)
-
-  // 移除可能的引号包裹
-  const unquoted =
-    cleanContent.startsWith('"') && cleanContent.endsWith('"')
-      ? cleanContent.slice(1, -1)
-      : cleanContent
-
-  // 尝试解析JSON
-  try {
-    const parsed = JSON.parse(unquoted)
-    return convertToScriptContent(parsed)
-  } catch (error) {
-    console.warn('[script-writer] 直接JSON解析失败，尝试提取和修复...')
-
-    // 如果直接解析失败，尝试提取 JSON 部分
-    const jsonMatch = unquoted.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      try {
-        console.log('[script-writer] 成功提取JSON块，尝试解析')
-        return convertToScriptContent(JSON.parse(jsonMatch[0]))
-      } catch (innerError) {
-        console.error('[script-writer] JSON extract failed')
-        console.error(
-          '[script-writer] Raw content (first 1000 chars):',
-          unquoted.substring(0, 1000)
-        )
-        console.error(
-          '[script-writer] Extracted JSON (first 1000 chars):',
-          jsonMatch[0].substring(0, 1000)
-        )
-        console.error('[script-writer] Error position:', (innerError as Error)?.message)
-        console.error('[script-writer] Error:', innerError)
-        throw new Error(
-          `剧本JSON格式不正确: ${innerError instanceof Error ? innerError.message : '未知错误'}`,
-          { cause: innerError }
-        )
-      }
-    }
-
-    console.error('[script-writer] No JSON found in response')
-    console.error('[script-writer] Content (first 500 chars):', unquoted.substring(0, 500))
-    throw new Error('剧本格式不正确，无法解析', { cause: error })
-  }
-}
-
-function convertToScriptContent(data: unknown): ScriptContent {
-  const d = data as Record<string, unknown>
-  // 处理可能的嵌套结构
-  let scenesArray: Record<string, unknown>[] = []
-
-  // 支持 scenes 或 segments（segment 是新的命名）
-  if (Array.isArray(d.scenes)) {
-    scenesArray = d.scenes as Record<string, unknown>[]
-  } else if (Array.isArray(d.segments)) {
-    scenesArray = d.segments as Record<string, unknown>[]
-  } else if (Array.isArray(d.episodes) && d.episodes.length > 0) {
-    // 兼容嵌套 episodes 结构
-    const firstEp = (d.episodes as Record<string, unknown>[])[0]
-    scenesArray =
-      (firstEp?.scenes as Record<string, unknown>[]) ||
-      (firstEp?.segments as Record<string, unknown>[]) ||
-      []
-  }
-
-  const scenes: ScriptScene[] = scenesArray.map((s, index: number) => {
-    // 处理 dialogues
-    let dialogues: ScriptDialogueLine[] = []
-    if (Array.isArray(s.dialogues)) {
-      dialogues = (s.dialogues as Record<string, unknown>[]).map((d) => ({
-        character: String(d.character || d.name || ''),
-        content: String(d.content || d.line || '')
-      }))
-    } else if (s.dialogue && typeof s.dialogue === 'object') {
-      dialogues = Object.entries(s.dialogue as Record<string, unknown>).map(
-        ([character, content]) => ({
-          character,
-          content: content as string
-        })
-      )
-    }
-
-    // 处理 actions
-    let actions: string[] = []
-    if (Array.isArray(s.actions)) {
-      actions = s.actions as string[]
-    } else if (typeof s.action === 'string') {
-      actions = (s.action as string).split(/(?<=[。！？；.!?;])/).filter(Boolean)
-    }
-
-    return {
-      sceneNum: (s.segmentNum || s.sceneNum || s.scene_number || index + 1) as number,
-      location: String(s.location || ''),
-      timeOfDay: String(s.timeOfDay || s.time || '日'),
-      characters: Array.isArray(s.characters) ? (s.characters as string[]) : [],
-      description: String(s.description || ''),
-      dialogues,
-      actions
-    }
-  })
-
-  return {
-    title: String(d.title || d.episode_title || '未命名剧本'),
-    summary: String(d.summary || ''),
-    scenes
-  }
-}
-
-function validateScript(script: ScriptContent): void {
-  if (!script.title) {
-    throw new Error('剧本缺少标题')
-  }
-
-  if (!Array.isArray(script.scenes) || script.scenes.length === 0) {
-    throw new Error('剧本缺少场景')
-  }
-
-  for (const scene of script.scenes) {
-    if (!scene.location) {
-      throw new Error(`场景${scene.sceneNum}缺少地点描述`)
-    }
-    if (!scene.description) {
-      throw new Error(`场景${scene.sceneNum}缺少场景描述`)
-    }
-  }
-}
-
 /**
  * 生成单集核心剧情大纲（100-200字）
  * 用于三阶段生成的第一阶段：并行生成所有集的大纲
@@ -600,26 +464,4 @@ export async function reviseOutlinesBasedOnFeedback(
 
   // 解析修正后的大纲文本，转换为 Map
   return parseOutlinesFromText(revisedText, outlines.size)
-}
-
-/**
- * 从文本中解析大纲列表
- * 期望格式：第1集：...\n第2集：...\n...
- */
-function parseOutlinesFromText(text: string, expectedCount: number): Map<number, string> {
-  const outlines = new Map<number, string>()
-
-  // 匹配 "第N集：..." 格式
-  const regex = /第(\d+)集[：:]\s*([\s\S]*?)(?=第\d+集[：:]|$)/g
-  let match
-
-  while ((match = regex.exec(text)) !== null) {
-    const episodeNum = parseInt(match[1], 10)
-    const outline = match[2].trim()
-    if (episodeNum >= 1 && episodeNum <= expectedCount && outline) {
-      outlines.set(episodeNum, outline)
-    }
-  }
-
-  return outlines
 }

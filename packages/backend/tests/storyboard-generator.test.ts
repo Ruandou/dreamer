@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { generateStoryboard, exportStoryboardAsText } from '../src/services/storyboard-generator.js'
+import { generateStoryboard } from '../src/services/storyboard-generator.js'
+import { exportStoryboardAsText } from '../src/services/storyboard/exporters.js'
 import type { EpisodePlan, ScriptScene } from '@dreamer/shared/types'
 
 describe('Storyboard Generator Service', () => {

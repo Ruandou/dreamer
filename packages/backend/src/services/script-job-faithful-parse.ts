@@ -6,7 +6,8 @@ import type { EpisodeCompleteness } from './script-mode-detector.js'
 import { projectRepository } from '../repositories/project-repository.js'
 import { formatScriptToJSON } from './script-writer.js'
 import { safeExtractAndSaveMemories } from './memory/index.js'
-import { updateJob, mapBatchProgressToParseRange } from './script-job-helpers.js'
+import { updateJob } from './script-job-helpers.js'
+import { mapBatchProgressToParseRange } from './script-jobs/progress-mappers.js'
 
 export async function runFaithfulParse(
   jobId: string,

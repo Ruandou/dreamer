@@ -10,6 +10,9 @@ import { characterRepository } from '../repositories/character-repository.js'
 import { fetchScriptVisualEnrichmentJson, generateCharacterSlotImagePrompt } from './ai/deepseek.js'
 import { repairJsonWithAI } from './ai/json-repair.js'
 import type { ModelCallLogContext } from './ai/api-logger.js'
+import { extractJsonObject } from './visual-enrich/json-extractor.js'
+import { processLocationImagePrompts } from './visual-enrich/location-processor.js'
+import { processCharacterImageSlots } from './visual-enrich/character-processor.js'
 
 interface ParsedLocation {
   name: string
@@ -28,59 +31,9 @@ interface ParsedCharacter {
   images?: ParsedCharImage[]
 }
 
-/** 衍生 prompt：若模型未写「相对 base」句式，则补锚定并摘要基础定妆，便于与主参考图一致（中英句式均识别） */
-function buildDerivativePrompt(
-  baseAnchor: string | null | undefined,
-  derivativePrompt: string
-): string {
-  const d = derivativePrompt.trim()
-  if (!d) return d
-  if (/same\s+(person|identity|character|face)/i.test(d)) return d
-  if (/base\s+reference/i.test(d)) return d
-  if (/unchanged|consistent\s+with/i.test(d)) return d
-  if (/同一人|与基础|保持一致|参考基础|与基础定妆|相同人物|同一人物/i.test(d)) return d
-  const b = (baseAnchor || '').trim().replace(/\s+/g, ' ')
-  if (b.length >= 12) {
-    return `与基础定妆为同一人；保持与基础形象一致的特征（${b.slice(0, 220)}）；本套仅变化：${d}`
-  }
-  return `与基础定妆为同一人；保持面部结构与年龄感一致；${d}`
-}
-
-function isDerivedImageType(t: string): t is 'outfit' | 'expression' | 'pose' {
-  return t === 'outfit' || t === 'expression' || t === 'pose'
-}
-
-function slotProcessOrder(type: string | undefined): number {
-  const t = (type || 'base').toLowerCase()
-  if (t === 'base') return 0
-  return 1
-}
-
-function sortCharacterImageSlots(slots: ParsedCharImage[]): ParsedCharImage[] {
-  return [...slots].sort((a, b) => slotProcessOrder(a.type) - slotProcessOrder(b.type))
-}
-
 interface VisualPayload {
   locations?: ParsedLocation[]
   characters?: ParsedCharacter[]
-}
-
-function extractJsonObject(text: string): string {
-  const t = text.trim()
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fence?.[1]) return fence[1].trim()
-  const start = t.indexOf('{')
-  const end = t.lastIndexOf('}')
-  if (start >= 0 && end > start) return t.slice(start, end + 1)
-  return t
-}
-
-/** 去掉模型爱加的场景前缀，便于与库内场地名对齐 */
-function stripLocationNameNoise(s: string): string {
-  return s
-    .replace(/^第[一二三四五六七八九十百千\d]+场[：:\s]*/u, '')
-    .replace(/^(场景|内景|外景|场地|地点)[：:\s]*/u, '')
-    .trim()
 }
 
 /**
@@ -105,40 +58,6 @@ export function sanitizeLocationImagePromptForImageApi(text: string): string {
     if (s.includes(from)) s = s.split(from).join(to)
   }
   return s
-}
-
-/** 模型返回的场地名与库内名称对齐（空白、句末标点、常见前缀） */
-function resolveDbLocationName(
-  dbNames: readonly string[],
-  aiName: string | undefined
-): string | null {
-  if (!aiName) return null
-  const collapsed = (s: string) => s.replace(/\s+/g, ' ').trim()
-  const stripTrailingPeriod = (s: string) => collapsed(s).replace(/[.。．]+$/u, '')
-
-  const tryOne = (raw: string): string | null => {
-    const t = collapsed(raw)
-    if (!t) return null
-    if (dbNames.includes(t)) return t
-    const ct = collapsed(t)
-    for (const n of dbNames) {
-      if (collapsed(n) === ct) return n
-    }
-    const nt = stripTrailingPeriod(t)
-    for (const n of dbNames) {
-      if (stripTrailingPeriod(n) === nt) return n
-    }
-    const stripped = stripLocationNameNoise(t)
-    if (stripped !== t) {
-      const st = stripTrailingPeriod(stripped)
-      for (const n of dbNames) {
-        if (stripTrailingPeriod(n) === st || collapsed(n) === collapsed(stripped)) return n
-      }
-    }
-    return null
-  }
-
-  return tryOne(aiName)
 }
 
 /** 视觉补全后仍为空的槽位，用单槽提示词生成补写（须已具备 description 或角色描述） */
@@ -340,22 +259,12 @@ export async function applyScriptVisualEnrichment(
     )
   }
 
-  let locationPromptWrites = 0
-  if (Array.isArray(payload.locations)) {
-    for (const loc of payload.locations) {
-      const raw = loc?.imagePrompt?.trim()
-      if (!raw) continue
-      const prompt = sanitizeLocationImagePromptForImageApi(raw)
-      const resolvedName = resolveDbLocationName(dbLocationNames, loc?.name)
-      if (!resolvedName) continue
-      const r = await locationRepository.updateManyActiveImagePromptByProjectAndName(
-        projectId,
-        resolvedName,
-        prompt
-      )
-      locationPromptWrites += r.count
-    }
-  }
+  const locationPromptWrites = await processLocationImagePrompts(
+    projectId,
+    payload.locations,
+    dbLocationNames,
+    sanitizeLocationImagePromptForImageApi
+  )
 
   if (
     locations.length > 0 &&
@@ -370,74 +279,7 @@ export async function applyScriptVisualEnrichment(
     )
   }
 
-  if (!Array.isArray(payload.characters)) return
-
-  for (const pc of payload.characters) {
-    if (!pc?.name) continue
-    const character = characters.find((c) => c.name === pc.name)
-    if (!character) continue
-
-    const images = sortCharacterImageSlots(Array.isArray(pc.images) ? pc.images : [])
-    let baseImageId: string | null =
-      character.images.find((i) => i.type === 'base' && !i.parentId)?.id || null
-    let lastBasePrompt: string | null =
-      character.images.find((i) => i.type === 'base' && !i.parentId)?.prompt?.trim() || null
-
-    for (const slot of images) {
-      if (!slot?.name || !slot.prompt?.trim()) continue
-      const type = (slot.type || 'base').toLowerCase()
-      const prompt = slot.prompt.trim()
-      const desc = slot.description?.trim() || null
-
-      if (type === 'base') {
-        const existingBase = character.images.find((i) => i.type === 'base' && !i.parentId)
-        if (existingBase) {
-          await characterRepository.updateCharacterImage(existingBase.id, {
-            prompt,
-            description: desc ?? existingBase.description ?? undefined,
-            name: slot.name
-          })
-          baseImageId = existingBase.id
-          lastBasePrompt = prompt
-        } else {
-          const created = await characterRepository.createCharacterImage({
-            characterId: character.id,
-            name: slot.name,
-            type: 'base',
-            description: desc ?? undefined,
-            prompt,
-            avatarUrl: null,
-            order: 0
-          })
-          baseImageId = created.id
-          lastBasePrompt = prompt
-          character.images.push(created)
-        }
-        continue
-      }
-
-      if (isDerivedImageType(type)) {
-        const parentId =
-          baseImageId || character.images.find((i) => i.type === 'base' && !i.parentId)?.id || null
-        if (!parentId) continue
-
-        const finalPrompt = buildDerivativePrompt(lastBasePrompt, prompt)
-        const maxOrder = await characterRepository.maxSiblingOrder(character.id, parentId)
-        const created = await characterRepository.createCharacterImage({
-          characterId: character.id,
-          name: slot.name,
-          parentId,
-          type,
-          description: desc ?? undefined,
-          prompt: finalPrompt,
-          avatarUrl: null,
-          order: (maxOrder._max.order || 0) + 1
-        })
-        character.images.push(created)
-        if (!baseImageId) baseImageId = parentId
-      }
-    }
-  }
+  await processCharacterImageSlots(projectId, payload.characters, characters)
 
   await fillMissingCharacterImagePrompts(projectId, visualLog)
 }

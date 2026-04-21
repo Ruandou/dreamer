@@ -174,26 +174,6 @@ export function getFutureOutlines(
 
 // ── 进度计算 ──
 
-/** 将批量进度百分比映射到 parse 嵌入模式的 8–28% 区间 */
-export function mapBatchProgressToParseRange(batchPct: number): number {
-  return Math.min(28, 8 + Math.round((Math.min(100, batchPct) / 100) * 20))
-}
-
-/** 计算剧本集进度百分比 */
-export function calcEpisodePct(current: number, total: number): number {
-  return Math.round(((current - 1) / Math.max(1, total - 1)) * 100)
-}
-
-/** 三阶段模式下的进度映射：20% 起步，95% 封顶 */
-export function mapThreePhaseProgress(pct: number): number {
-  return 20 + Math.round((pct / 100) * 75)
-}
-
-/** 旧版串行模式下的进度映射 */
-export function mapLegacyProgress(pct: number): number {
-  return Math.min(99, pct)
-}
-
 /** 截取故事上下文到最大长度 */
 export function sliceStoryContext(context: string): string {
   return context.slice(-STORY_CONTEXT_MAX_LENGTH)
