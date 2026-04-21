@@ -7,6 +7,7 @@
 import type { LLMProvider, LLMMessage } from './llm-provider.js'
 import type { DeepSeekCost } from './deepseek-client.js'
 import { DeepSeekAuthError, DeepSeekRateLimitError } from './deepseek-client.js'
+import { withTimeout } from '../../lib/with-timeout.js'
 import { logDeepSeekChat } from './model-call-log.js'
 import type { ModelCallLogContext } from './api-logger.js'
 import {
@@ -71,20 +72,15 @@ export async function callLLMWithRetry<T>(
         `[llm-call] 调用 LLM, attempt ${attempt}/${maxRetries}, op=${modelLog?.op || 'unknown'}`
       )
 
-      // 添加超时保护
-      const completion = await Promise.race([
+      const completion = await withTimeout(
         provider.complete(messages, {
           temperature,
           maxTokens,
           model
         }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`LLM API 调用超时 (${API_CALL_TIMEOUT_MS / 1000 / 60}分钟)`)),
-            API_CALL_TIMEOUT_MS
-          )
-        )
-      ])
+        API_CALL_TIMEOUT_MS,
+        `LLM API 调用超时 (${API_CALL_TIMEOUT_MS / 1000 / 60}分钟)`
+      )
 
       const parsedContent = parser(completion.content)
 

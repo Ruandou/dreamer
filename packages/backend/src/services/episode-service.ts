@@ -12,6 +12,7 @@ import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import { sceneRepository } from '../repositories/scene-repository.js'
 import { safeExtractAndSaveMemories } from './memory/index.js'
 import { DEFAULT_SHOT_DURATION_MS, MAX_SCENE_DURATION_MS } from './episode-service.constants.js'
+import { classifyAIError, buildProjectContext } from './ai/error-classifier.js'
 
 const DEFAULT_VOICE_CONFIG: Prisma.InputJsonValue = {
   gender: 'male',
@@ -444,9 +445,7 @@ export class EpisodeService {
     try {
       const project = await this.repo.findProjectForExpandScript(episode.projectId)
 
-      const projectContext = project
-        ? `项目名称: ${project.name}\n已有角色: ${project.characters.map((c) => c.name).join(', ') || '暂无'}\n已有集数: ${project.episodes.length}集`
-        : undefined
+      const projectContext = buildProjectContext(project)
 
       const { script, cost } = await expandScript(summary, projectContext, {
         userId,
@@ -503,9 +502,7 @@ export class EpisodeService {
     try {
       const project = await this.repo.findProjectForExpandScript(episode.projectId)
 
-      const projectContext = project
-        ? `项目名称: ${project.name}\n已有角色: ${project.characters.map((c) => c.name).join(', ') || '暂无'}\n已有集数: ${project.episodes.length}集`
-        : undefined
+      const projectContext = buildProjectContext(project)
 
       const { script, cost } = await generateStoryboardScriptFromEpisode(
         episode,
@@ -536,22 +533,6 @@ export class EpisodeService {
       console.error('Storyboard script generation failed:', error)
       return classifyAIError(error, '分镜剧本生成失败')
     }
-  }
-}
-
-/** 统一 AI 错误分类：将 DeepSeek 特定错误映射为 HTTP 状态码 */
-function classifyAIError(error: unknown, fallbackMessage: string): ExpandEpisodeResult {
-  if (error instanceof Error && error.name === 'DeepSeekAuthError') {
-    return { ok: false, status: 401, error: 'AI 服务认证失败', message: error.message }
-  }
-  if (error instanceof Error && error.name === 'DeepSeekRateLimitError') {
-    return { ok: false, status: 429, error: 'AI 服务请求受限', message: error.message }
-  }
-  return {
-    ok: false,
-    status: 500,
-    error: fallbackMessage,
-    message: error instanceof Error ? error.message : '未知错误'
   }
 }
 

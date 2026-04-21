@@ -10,17 +10,9 @@ import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import { projectRepository } from '../repositories/project-repository.js'
 import { recordModelApiCall } from './ai/api-logger.js'
 import { generateVisualStyleConfig } from './ai/visual-style-generator.js'
-import {
-  writeScriptFromIdea,
-  writeEpisodeForProject,
-  generateEpisodeOutline,
-  showrunnerReviewOutlines,
-  reviseOutlinesBasedOnFeedback,
-  formatScriptToJSON
-} from './script-writer.js'
+import { writeScriptFromIdea, formatScriptToJSON } from './script-writer.js'
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
 import { runParseScriptEntityPipeline } from './parse-script-entity-pipeline.js'
-import { getMemoryService } from './memory/index.js'
 
 // 从拆分后的模块导入
 export {
@@ -37,30 +29,15 @@ export {
 export type { EpisodeProcessingMode, EpisodeCompleteness } from './script-mode-detector.js'
 export { DEFAULT_TARGET_EPISODES } from './project-script-jobs.constants.js'
 
-import {
-  updateJob,
-  scriptFromJson,
-  buildEnhancedContext,
-  getFutureOutlines,
-  mapBatchProgressToParseRange,
-  calcEpisodePct,
-  mapThreePhaseProgress,
-  mapLegacyProgress,
-  sliceStoryContext
-} from './script-job-helpers.js'
+import { updateJob, scriptFromJson } from './script-job-helpers.js'
 import { detectScriptMode } from './script-mode-detector.js'
 import { runFaithfulParse } from './script-job-faithful-parse.js'
 import { runMixedMode } from './script-job-mixed-mode.js'
 import { safeExtractAndSaveMemories } from './memory/index.js'
+import { withTimeout, timeoutErrorMessage } from '../lib/with-timeout.js'
+import { runAiCreationThreePhase, runAiCreationLegacy } from './script-job-ai-creation.js'
 import {
-  OUTLINE_GENERATION_TIMEOUT_MS,
-  SHOWRUNNER_REVIEW_TIMEOUT_MS,
   VISUAL_ENRICHMENT_TIMEOUT_MS,
-  OUTLINE_MAX_RETRIES,
-  OUTLINE_BASE_DELAY_MS,
-  OUTLINE_BATCH_CONCURRENCY,
-  OUTLINE_MIN_LENGTH,
-  MAX_REVISION_ROUNDS,
   STORY_CONTEXT_MAX_LENGTH
 } from './project-script-jobs.constants.js'
 
@@ -80,80 +57,7 @@ export async function getActiveOutlinePipelineJob(projectId: string) {
   return pipelineRepository.getActiveOutlinePipelineJob(projectId)
 }
 
-async function generateAllOutlines(
-  projectId: string,
-  targetEpisodes: number,
-  seriesTitle: string,
-  seriesSynopsis: string,
-  concurrency: number = OUTLINE_BATCH_CONCURRENCY,
-  modelLogCtx?: { userId: string; projectId: string; op: string }
-): Promise<Map<number, string>> {
-  const outlines = new Map<number, string>()
-  const totalBatches = Math.ceil(targetEpisodes / concurrency)
-  let completedBatches = 0
-
-  // 分批并行生成
-  for (let batchStart = 1; batchStart <= targetEpisodes; batchStart += concurrency) {
-    const batchEnd = Math.min(batchStart + concurrency - 1, targetEpisodes)
-    completedBatches++
-    const batchProgress = Math.round((completedBatches / totalBatches) * 100)
-
-    console.log(
-      `[outline-generation] 生成第 ${batchStart}-${batchEnd} 集大纲... (批次 ${completedBatches}/${totalBatches}, ${batchProgress}%)`
-    )
-
-    await Promise.all(
-      Array.from({ length: batchEnd - batchStart + 1 }, async (_, i) => {
-        const epNum = batchStart + i
-        let retries = 0
-
-        while (retries < OUTLINE_MAX_RETRIES) {
-          try {
-            const outline = await generateEpisodeOutline(
-              epNum,
-              seriesTitle,
-              seriesSynopsis,
-              modelLogCtx
-            )
-
-            // 验证大纲质量
-            if (!outline || outline.length < OUTLINE_MIN_LENGTH) {
-              throw new Error(
-                `大纲质量不合格（长度：${outline?.length || 0}，要求至少 ${OUTLINE_MIN_LENGTH} 字）`
-              )
-            }
-
-            outlines.set(epNum, outline)
-            console.log(`[outline-generation] 第 ${epNum} 集大纲生成成功 (${outline.length} 字)`)
-            break
-          } catch (error) {
-            retries++
-            if (retries >= OUTLINE_MAX_RETRIES) {
-              console.error(
-                `[outline-generation] 第 ${epNum} 集大纲生成失败（已重试 ${OUTLINE_MAX_RETRIES} 次）`,
-                {
-                  projectId,
-                  episodeNum: epNum,
-                  error: error instanceof Error ? error.message : 'Unknown error',
-                  stack: error instanceof Error ? error.stack : undefined
-                }
-              )
-              throw error
-            }
-            // 指数退避策略
-            const delay = OUTLINE_BASE_DELAY_MS * Math.pow(2, retries - 1)
-            console.log(
-              `[outline-generation] 第 ${epNum} 集大纲生成失败，${delay / 1000}秒后重试 (${retries}/${OUTLINE_MAX_RETRIES})...`
-            )
-            await new Promise((resolve) => setTimeout(resolve, delay))
-          }
-        }
-      })
-    )
-  }
-
-  return outlines
-}
+export { generateAllOutlines } from './script-job-ai-creation.js'
 
 export async function runGenerateFirstEpisode(projectId: string, targetEpisodes?: number) {
   const project = await projectRepository.findUniqueById(projectId)
@@ -359,7 +263,6 @@ export async function runScriptBatchJob(
   }
 
   const synopsis = project.synopsis || ''
-  const memoryService = getMemoryService()
   const modelLogCtx = {
     userId: project.userId,
     projectId,
@@ -442,241 +345,21 @@ export async function runScriptBatchJob(
       return
     }
 
-    // ====== 模式 C：AI 创作（原有三阶段） ======
-    console.log('[script-batch] 使用 AI 创作模式（三阶段）')
+    // ====== 模式 C：AI 创作 ======
+    const aiCreationCtx = {
+      jobId,
+      projectId,
+      targetEpisodes,
+      project: { userId: project.userId, name: project.name, storyContext: project.storyContext },
+      synopsis,
+      embedded,
+      modelLogCtx
+    }
+
     if (useThreePhase) {
-      console.log('[script-batch] 开始三阶段生成：大纲 → 审核 → 剧本')
-
-      // 阶段 1：并行生成所有大纲
-      await updateJob(jobId, {
-        currentStep: 'outline-generation',
-        progress: 5,
-        progressMeta: { message: '正在生成所有集的大纲...' }
-      })
-
-      console.log('[script-batch] 阶段 1：开始生成大纲（30分钟超时保护）')
-      let allOutlines = await Promise.race([
-        generateAllOutlines(
-          projectId,
-          targetEpisodes,
-          project.name,
-          synopsis,
-          OUTLINE_BATCH_CONCURRENCY,
-          modelLogCtx
-        ),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () =>
-              reject(
-                new Error(
-                  `大纲生成超时（${OUTLINE_GENERATION_TIMEOUT_MS / 1000 / 60}分钟），请检查API连接或减少集数`
-                )
-              ),
-            OUTLINE_GENERATION_TIMEOUT_MS
-          )
-        )
-      ])
-
-      console.log(`[script-batch] 阶段 1 完成：已生成 ${allOutlines.size} 集大纲`)
-
-      // 阶段 2：AI 总编剧审核大纲
-      await updateJob(jobId, {
-        currentStep: 'showrunner-review',
-        progress: 15,
-        progressMeta: { message: 'AI 总编剧审核大纲一致性...' }
-      })
-
-      console.log('[script-batch] 阶段 2：开始 AI 总编剧审核（15分钟超时保护）...')
-      let review = await Promise.race([
-        showrunnerReviewOutlines(synopsis, allOutlines, modelLogCtx),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () =>
-              reject(
-                new Error(
-                  `总编剧审核超时（${SHOWRUNNER_REVIEW_TIMEOUT_MS / 1000 / 60}分钟），请检查API连接`
-                )
-              ),
-            SHOWRUNNER_REVIEW_TIMEOUT_MS
-          )
-        )
-      ])
-
-      let revisionRound = 0
-
-      while (!review.approved && revisionRound < MAX_REVISION_ROUNDS) {
-        revisionRound++
-        console.log(`[showrunner] 审核未通过，开始第 ${revisionRound} 轮自动修正...`)
-
-        await updateJob(jobId, {
-          progressMeta: {
-            message: `审核发现问题，正在进行第 ${revisionRound} 轮自动修正...`,
-            reviewFeedback: review.feedback.substring(0, 500)
-          }
-        })
-
-        // AI 根据审核意见修正大纲
-        allOutlines = await reviseOutlinesBasedOnFeedback(
-          synopsis,
-          allOutlines,
-          review.feedback,
-          modelLogCtx
-        )
-
-        console.log(`[showrunner] 第 ${revisionRound} 轮修正完成，重新审核...`)
-
-        // 重新审核
-        review = await showrunnerReviewOutlines(synopsis, allOutlines, modelLogCtx)
-
-        if (review.approved) {
-          console.log('[showrunner] 大纲审核通过 ✅')
-          break
-        }
-      }
-
-      // 审核结果处理
-      if (review.approved) {
-        console.log('[script-batch] 大纲审核通过，进入阶段 3')
-      } else {
-        console.log('[script-batch] ⚠️ 2 轮修正后仍有问题，但仍继续生成')
-        console.log('[script-batch] 审核意见：', review.feedback.substring(0, 200))
-      }
-
-      // 阶段 3：基于大纲串行生成完整剧本
-      await updateJob(jobId, {
-        currentStep: 'script-generation',
-        progress: 20,
-        progressMeta: { message: '基于审核通过的大纲生成完整剧本...' }
-      })
-
-      let rolling = project.storyContext || synopsis
-
-      // 串行生成每一集，确保上下文连贯性和质量
-      for (let n = 1; n <= targetEpisodes; n++) {
-        // 检查是否已存在
-        const existing = await projectRepository.findEpisodeByProjectNum(projectId, n)
-        if (existing && scriptFromJson(existing.script)) {
-          const pct = calcEpisodePct(n, targetEpisodes)
-          const progress = embedded ? mapBatchProgressToParseRange(pct) : mapThreePhaseProgress(pct)
-          await updateJob(jobId, {
-            progress,
-            progressMeta: {
-              current: n,
-              total: targetEpisodes,
-              message: `第 ${n} 集已存在，跳过`
-            }
-          })
-          continue
-        }
-
-        console.log(`[script-batch] 开始生成第 ${n}/${targetEpisodes} 集剧本...`)
-
-        // 构建增强上下文：记忆 + 未来大纲
-        let episodeContext = rolling
-        try {
-          const memoryContext = await memoryService.getEpisodeWritingContext(projectId, n)
-          if (memoryContext.fullContext && !memoryContext.fullContext.includes('（暂无）')) {
-            const futureOutlines = getFutureOutlines(allOutlines, n)
-            episodeContext = buildEnhancedContext(memoryContext.fullContext, futureOutlines)
-          }
-        } catch (error) {
-          console.error('Failed to build memory context, falling back to rolling context:', error)
-        }
-
-        const { script } = await writeEpisodeForProject(n, synopsis, episodeContext, project.name, {
-          userId: project.userId,
-          projectId,
-          op: 'script_batch_write_episode'
-        })
-
-        const ep = await projectRepository.upsertEpisodeBatchFromScript(projectId, n, script)
-
-        rolling = sliceStoryContext([rolling, `第${n}集：${script.summary}`].join('\n'))
-        await projectRepository.update(projectId, { storyContext: rolling })
-
-        // 提取记忆
-        await safeExtractAndSaveMemories(projectId, n, ep.id, script, {
-          userId: project.userId,
-          projectId,
-          op: 'extract_episode_memories'
-        })
-
-        const pct = calcEpisodePct(n, targetEpisodes)
-        const progress = embedded ? mapBatchProgressToParseRange(pct) : mapThreePhaseProgress(pct)
-        await updateJob(jobId, {
-          progress,
-          progressMeta: {
-            current: n,
-            total: targetEpisodes,
-            message: `正在生成第 ${n}/${targetEpisodes} 集`
-          }
-        })
-
-        console.log(`[script-batch] 第 ${n}/${targetEpisodes} 集生成完成`)
-      }
+      await runAiCreationThreePhase(aiCreationCtx)
     } else {
-      // ====== 旧版串行生成（兼容模式） ======
-      console.log('[script-batch] 使用旧版串行生成模式')
-      let rolling = project.storyContext || synopsis
-
-      for (let n = 2; n <= targetEpisodes; n++) {
-        const existing = await projectRepository.findEpisodeByProjectNum(projectId, n)
-        if (existing && scriptFromJson(existing.script)) {
-          const pct = calcEpisodePct(n, targetEpisodes)
-          const progress = embedded ? mapBatchProgressToParseRange(pct) : mapLegacyProgress(pct)
-          await updateJob(jobId, {
-            progress,
-            progressMeta: {
-              current: n,
-              total: targetEpisodes,
-              message: `第 ${n} 集已存在，跳过`
-            }
-          })
-          continue
-        }
-
-        console.log(`[script-batch] 开始生成第 ${n}/${targetEpisodes} 集...`)
-
-        let episodeContext = rolling
-        try {
-          const memoryContext = await memoryService.getEpisodeWritingContext(projectId, n)
-          if (memoryContext.fullContext && !memoryContext.fullContext.includes('（暂无）')) {
-            episodeContext = memoryContext.fullContext
-          }
-        } catch (error) {
-          console.error('Failed to build memory context, falling back to rolling context:', error)
-        }
-
-        const { script } = await writeEpisodeForProject(n, synopsis, episodeContext, project.name, {
-          userId: project.userId,
-          projectId,
-          op: 'script_batch_write_episode'
-        })
-
-        const ep = await projectRepository.upsertEpisodeBatchFromScript(projectId, n, script)
-
-        rolling = sliceStoryContext([rolling, `第${n}集：${script.summary}`].join('\n'))
-        await projectRepository.update(projectId, { storyContext: rolling })
-
-        await safeExtractAndSaveMemories(projectId, n, ep.id, script, {
-          userId: project.userId,
-          projectId,
-          op: 'extract_episode_memories'
-        })
-
-        const pct = calcEpisodePct(n, targetEpisodes)
-        const progress = embedded ? mapBatchProgressToParseRange(pct) : mapLegacyProgress(pct)
-        await updateJob(jobId, {
-          progress,
-          progressMeta: {
-            current: n,
-            total: targetEpisodes,
-            message: `正在生成第 ${n}/${targetEpisodes} 集`
-          }
-        })
-
-        console.log(`[script-batch] 第 ${n}/${targetEpisodes} 集生成完成`)
-      }
+      await runAiCreationLegacy(aiCreationCtx)
     }
 
     if (embedded) {
@@ -865,20 +548,11 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
     })
 
     console.log('[parse-script] 开始应用视觉增强（20分钟超时保护）')
-    await Promise.race([
+    await withTimeout(
       applyScriptVisualEnrichment(projectId, merged),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                `视觉增强超时（${VISUAL_ENRICHMENT_TIMEOUT_MS / 1000 / 60}分钟），请检查API连接`
-              )
-            ),
-          VISUAL_ENRICHMENT_TIMEOUT_MS
-        )
-      )
-    ])
+      VISUAL_ENRICHMENT_TIMEOUT_MS,
+      timeoutErrorMessage('视觉增强', VISUAL_ENRICHMENT_TIMEOUT_MS)
+    )
 
     console.log('[parse-script] 填充分集简介')
     const { fillEpisodeSynopses } = await import('./script-job-helpers.js')
