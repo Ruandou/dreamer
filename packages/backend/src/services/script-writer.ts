@@ -282,31 +282,24 @@ function buildUserPrompt(idea: string, options?: ScriptWriterOptions): string {
 }
 
 function parseScriptResponse(content: string): ScriptContent {
-  // 清理返回内容，移除可能的 markdown 代码块
-  let cleanContent = content
-  if (content.includes('```json')) {
-    cleanContent = content
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .trim()
-  } else if (content.includes('```')) {
-    cleanContent = content.replace(/```\n?/g, '').trim()
-  }
+  // 使用共享的 Markdown 代码块清理工具
+  const cleanContent = cleanMarkdownCodeBlocks(content)
 
   // 移除可能的引号包裹
-  if (cleanContent.startsWith('"') && cleanContent.endsWith('"')) {
-    cleanContent = cleanContent.slice(1, -1)
-  }
+  const unquoted =
+    cleanContent.startsWith('"') && cleanContent.endsWith('"')
+      ? cleanContent.slice(1, -1)
+      : cleanContent
 
   // 尝试解析JSON
   try {
-    const parsed = JSON.parse(cleanContent)
+    const parsed = JSON.parse(unquoted)
     return convertToScriptContent(parsed)
   } catch (error) {
     console.warn('[script-writer] 直接JSON解析失败，尝试提取和修复...')
 
     // 如果直接解析失败，尝试提取 JSON 部分
-    const jsonMatch = cleanContent.match(/\{[\s\S]*\}/)
+    const jsonMatch = unquoted.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
       try {
         console.log('[script-writer] 成功提取JSON块，尝试解析')
@@ -315,7 +308,7 @@ function parseScriptResponse(content: string): ScriptContent {
         console.error('[script-writer] JSON extract failed')
         console.error(
           '[script-writer] Raw content (first 1000 chars):',
-          cleanContent.substring(0, 1000)
+          unquoted.substring(0, 1000)
         )
         console.error(
           '[script-writer] Extracted JSON (first 1000 chars):',
@@ -331,7 +324,7 @@ function parseScriptResponse(content: string): ScriptContent {
     }
 
     console.error('[script-writer] No JSON found in response')
-    console.error('[script-writer] Content (first 500 chars):', cleanContent.substring(0, 500))
+    console.error('[script-writer] Content (first 500 chars):', unquoted.substring(0, 500))
     throw new Error('剧本格式不正确，无法解析', { cause: error })
   }
 }
@@ -391,9 +384,6 @@ function convertToScriptContent(data: unknown): ScriptContent {
     }
   })
 
-  // 处理 metadata (保留供未来使用)
-  // const metadata = data.metadata || {}
-
   return {
     title: String(d.title || d.episode_title || '未命名剧本'),
     summary: String(d.summary || ''),
@@ -419,11 +409,6 @@ function validateScript(script: ScriptContent): void {
     }
   }
 }
-
-// 睡眠函数 (保留供未来使用)
-// function sleep(ms: number): Promise<void> {
-//   return new Promise((resolve) => setTimeout(resolve, ms))
-// }
 
 /**
  * 生成单集核心剧情大纲（100-200字）

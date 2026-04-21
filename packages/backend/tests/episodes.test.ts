@@ -137,6 +137,12 @@ vi.mock('../src/lib/prisma.js', () => ({
     characterShot: {
       findMany: mockCharacterShotFindMany
     },
+    character: {
+      findMany: vi.fn().mockResolvedValue([])
+    },
+    characterImage: {
+      findMany: vi.fn().mockResolvedValue([])
+    },
     shot: {
       create: mockShotCreate
     },

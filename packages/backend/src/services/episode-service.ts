@@ -10,7 +10,8 @@ import { runCompositionExport } from './composition-export.js'
 import { episodeRepository, type EpisodeRepository } from '../repositories/episode-repository.js'
 import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import { sceneRepository } from '../repositories/scene-repository.js'
-import { getMemoryService } from './memory/index.js'
+import { safeExtractAndSaveMemories } from './memory/index.js'
+import { DEFAULT_SHOT_DURATION_MS, MAX_SCENE_DURATION_MS } from './episode-service.constants.js'
 
 const DEFAULT_VOICE_CONFIG: Prisma.InputJsonValue = {
   gender: 'male',
@@ -107,6 +108,19 @@ export class EpisodeService {
 
     await this.repo.deleteScenesByEpisode(episodeId)
 
+    // 批量预加载项目角色与形象，避免 N+1 查询
+    const allCharacters = await prisma.character.findMany({ where: { projectId } })
+    const charMapByName = new Map(allCharacters.map((c) => [c.name, c]))
+    const allImages = await prisma.characterImage.findMany({
+      where: { characterId: { in: allCharacters.map((c) => c.id) } }
+    })
+    const imagesByCharId = new Map<string, typeof allImages>()
+    for (const img of allImages) {
+      const list = imagesByCharId.get(img.characterId) || []
+      list.push(img)
+      imagesByCharId.set(img.characterId, list)
+    }
+
     for (const sc of script.scenes) {
       let locationId: string | undefined
       if (sc.location) {
@@ -115,12 +129,13 @@ export class EpisodeService {
       }
 
       const hasShots = sc.shots && sc.shots.length > 0
-      let sceneDurationMs = 5000
+      let sceneDurationMs = DEFAULT_SHOT_DURATION_MS
       if (hasShots && sc.shots) {
-        sceneDurationMs = sc.shots.reduce((sum, sh) => sum + (sh.duration ?? 5000), 0)
+        sceneDurationMs = sc.shots.reduce(
+          (sum, sh) => sum + (sh.duration ?? DEFAULT_SHOT_DURATION_MS),
+          0
+        )
       }
-      // 每个场次总时长不能超过 15 秒
-      const MAX_SCENE_DURATION_MS = 15000
       sceneDurationMs = Math.min(sceneDurationMs, MAX_SCENE_DURATION_MS)
 
       const scene = await this.repo.createScene({
@@ -147,22 +162,17 @@ export class EpisodeService {
             shotNum: sh.shotNum ?? idx,
             order: sh.order ?? idx,
             description: sh.description || '',
-            duration: sh.duration ?? 5000,
+            duration: sh.duration ?? DEFAULT_SHOT_DURATION_MS,
             cameraAngle: sh.cameraAngle || null,
             cameraMovement: sh.cameraMovement || null
           })
           for (const c of sh.characters || []) {
-            const ch = await prisma.character.findFirst({
-              where: { projectId, name: c.characterName }
-            })
+            const ch = charMapByName.get(c.characterName)
             if (!ch) continue
-            let img = await prisma.characterImage.findFirst({
-              where: { characterId: ch.id, name: c.imageName }
-            })
+            const charImages = imagesByCharId.get(ch.id) || []
+            let img = charImages.find((i) => i.name === c.imageName)
             if (!img) {
-              img = await prisma.characterImage.findFirst({
-                where: { characterId: ch.id, type: 'base' }
-              })
+              img = charImages.find((i) => i.type === 'base')
             }
             if (!img) continue
             await prisma.characterShot.create({
@@ -180,7 +190,7 @@ export class EpisodeService {
           shotNum: 1,
           order: 1,
           description: buildScenePrompt(sc, script.title || ''),
-          duration: 5000
+          duration: DEFAULT_SHOT_DURATION_MS
         })
       }
 
@@ -190,9 +200,7 @@ export class EpisodeService {
         let t = 0
         for (let i = 0; i < sc.dialogues.length; i++) {
           const d = sc.dialogues[i]
-          const character = await prisma.character.findFirst({
-            where: { projectId, name: d.character }
-          })
+          const character = charMapByName.get(d.character)
           if (!character) continue
           const vc = character.voiceConfig
           const voiceConfig =
@@ -454,23 +462,11 @@ export class EpisodeService {
       )
 
       // 提取扩展剧本的记忆
-      try {
-        const memoryService = getMemoryService()
-        await memoryService.extractAndSaveMemories(
-          episode.projectId,
-          episode.episodeNum,
-          episodeId,
-          script,
-          {
-            userId,
-            projectId: episode.projectId,
-            op: 'extract_expanded_script_memories'
-          }
-        )
-      } catch (error) {
-        console.error('Failed to extract memories after script expansion:', error)
-        // 不阻断流程
-      }
+      await safeExtractAndSaveMemories(episode.projectId, episode.episodeNum, episodeId, script, {
+        userId,
+        projectId: episode.projectId,
+        op: 'extract_expanded_script_memories'
+      })
 
       return {
         ok: true,
@@ -481,31 +477,7 @@ export class EpisodeService {
       }
     } catch (error) {
       console.error('Script expansion failed:', error)
-
-      if (error instanceof Error && error.name === 'DeepSeekAuthError') {
-        return {
-          ok: false,
-          status: 401,
-          error: 'AI 服务认证失败',
-          message: error.message
-        }
-      }
-
-      if (error instanceof Error && error.name === 'DeepSeekRateLimitError') {
-        return {
-          ok: false,
-          status: 429,
-          error: 'AI 服务请求受限',
-          message: error.message
-        }
-      }
-
-      return {
-        ok: false,
-        status: 500,
-        error: '剧本生成失败',
-        message: error instanceof Error ? error.message : '未知错误'
-      }
+      return classifyAIError(error, '剧本生成失败')
     }
   }
 
@@ -562,32 +534,24 @@ export class EpisodeService {
       }
     } catch (error) {
       console.error('Storyboard script generation failed:', error)
-
-      if (error instanceof Error && error.name === 'DeepSeekAuthError') {
-        return {
-          ok: false,
-          status: 401,
-          error: 'AI 服务认证失败',
-          message: error.message
-        }
-      }
-
-      if (error instanceof Error && error.name === 'DeepSeekRateLimitError') {
-        return {
-          ok: false,
-          status: 429,
-          error: 'AI 服务请求受限',
-          message: error.message
-        }
-      }
-
-      return {
-        ok: false,
-        status: 500,
-        error: '分镜剧本生成失败',
-        message: error instanceof Error ? error.message : '未知错误'
-      }
+      return classifyAIError(error, '分镜剧本生成失败')
     }
+  }
+}
+
+/** 统一 AI 错误分类：将 DeepSeek 特定错误映射为 HTTP 状态码 */
+function classifyAIError(error: unknown, fallbackMessage: string): ExpandEpisodeResult {
+  if (error instanceof Error && error.name === 'DeepSeekAuthError') {
+    return { ok: false, status: 401, error: 'AI 服务认证失败', message: error.message }
+  }
+  if (error instanceof Error && error.name === 'DeepSeekRateLimitError') {
+    return { ok: false, status: 429, error: 'AI 服务请求受限', message: error.message }
+  }
+  return {
+    ok: false,
+    status: 500,
+    error: fallbackMessage,
+    message: error instanceof Error ? error.message : '未知错误'
   }
 }
 

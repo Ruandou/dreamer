@@ -17,3 +17,5 @@ export {
 
 export type { ExtractedMemory, MemoryExtractionResult } from './extractor.js'
 export type { EpisodeWritingContext } from './context-builder.js'
+
+export { safeExtractAndSaveMemories } from './helpers.js'
