@@ -248,5 +248,145 @@ describe('script-expand', () => {
       // Extra fields should not be in the result
       expect((result as any).extra).toBeUndefined()
     })
+
+    it('handles episodes nested response format', () => {
+      const response = {
+        title: 'Nested Episode',
+        summary: 'Test',
+        episodes: [
+          {
+            scenes: [
+              {
+                sceneNum: 1,
+                location: 'Home',
+                timeOfDay: 'morning',
+                characters: ['Alice'],
+                description: 'Alice wakes up',
+                dialogues: [{ character: 'Alice', content: 'Good morning!' }],
+                actions: ['wakes up']
+              }
+            ]
+          }
+        ]
+      }
+
+      const result = convertDeepSeekResponse(response)
+
+      expect(result.title).toBe('Nested Episode')
+      expect(result.scenes).toHaveLength(1)
+      expect(result.scenes[0].location).toBe('Home')
+    })
+
+    it('handles dialogues as object format', () => {
+      const response = {
+        title: 'Object Dialogues',
+        scenes: [
+          {
+            sceneNum: 1,
+            description: 'Scene',
+            dialogue: { Alice: 'Hello', Bob: 'Hi' }
+          }
+        ]
+      }
+
+      const result = convertDeepSeekResponse(response)
+
+      expect(result.scenes[0].dialogues).toHaveLength(2)
+      expect(result.scenes[0].dialogues[0]).toMatchObject({ character: 'Alice', content: 'Hello' })
+      expect(result.scenes[0].dialogues[1]).toMatchObject({ character: 'Bob', content: 'Hi' })
+    })
+
+    it('handles action as string format', () => {
+      const response = {
+        title: 'String Action',
+        scenes: [
+          {
+            sceneNum: 1,
+            description: 'Scene',
+            action: 'Alice walks. She stops!'
+          }
+        ]
+      }
+
+      const result = convertDeepSeekResponse(response)
+
+      expect(result.scenes[0].actions).toEqual(['Alice walks.', ' She stops!'])
+    })
+
+    it('handles shots with character data', () => {
+      const response = {
+        title: 'With Shots',
+        scenes: [
+          {
+            sceneNum: 1,
+            description: 'Scene',
+            shots: [
+              {
+                shotNum: 1,
+                description: 'Wide shot',
+                characters: [
+                  { characterName: 'Alice', imageName: 'alice_base', action: 'standing' }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+
+      const result = convertDeepSeekResponse(response)
+
+      expect(result.scenes[0].shots).toHaveLength(1)
+      expect(result.scenes[0].shots![0].shotNum).toBe(1)
+      expect(result.scenes[0].shots![0].characters).toHaveLength(1)
+      expect(result.scenes[0].shots![0].characters![0]).toMatchObject({
+        characterName: 'Alice',
+        imageName: 'alice_base'
+      })
+    })
+
+    it('handles episode_title fallback', () => {
+      const response = {
+        episode_title: 'Episode Title',
+        summary: 'Test',
+        scenes: []
+      }
+
+      const result = convertDeepSeekResponse(response)
+
+      expect(result.title).toBe('Episode Title')
+    })
+
+    it('handles scene_number fallback for sceneNum', () => {
+      const response = {
+        title: 'Test',
+        scenes: [
+          {
+            scene_number: 5,
+            description: 'Scene'
+          }
+        ]
+      }
+
+      const result = convertDeepSeekResponse(response)
+
+      expect(result.scenes[0].sceneNum).toBe(5)
+    })
+
+    it('handles time fallback for timeOfDay', () => {
+      const response = {
+        title: 'Test',
+        scenes: [
+          {
+            sceneNum: 1,
+            time: 'night',
+            description: 'Scene'
+          }
+        ]
+      }
+
+      const result = convertDeepSeekResponse(response)
+
+      expect(result.scenes[0].timeOfDay).toBe('night')
+    })
   })
 })

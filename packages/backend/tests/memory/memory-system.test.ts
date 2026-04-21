@@ -235,5 +235,65 @@ describe('Memory System', () => {
 
       expect(result.memories[0].importance).toBe(3)
     })
+
+    it('uses default tags as empty array when not provided', async () => {
+      const mockProvider = createMockProvider(
+        JSON.stringify({
+          memories: [{ type: 'EVENT', title: '测试', content: '内容' }]
+        })
+      )
+
+      const script = { title: '测试', summary: '', scenes: [] }
+
+      const result = await extractMemoriesWithLLM(
+        script as any,
+        1,
+        '',
+        undefined,
+        mockProvider as any
+      )
+
+      expect(result.memories[0].tags).toEqual([])
+    })
+
+    it('uses default metadata as empty object when not provided', async () => {
+      const mockProvider = createMockProvider(
+        JSON.stringify({
+          memories: [{ type: 'EVENT', title: '测试', content: '内容', tags: [] }]
+        })
+      )
+
+      const script = { title: '测试', summary: '', scenes: [] }
+
+      const result = await extractMemoriesWithLLM(
+        script as any,
+        1,
+        '',
+        undefined,
+        mockProvider as any
+      )
+
+      expect(result.memories[0].metadata).toEqual({})
+    })
+
+    it('uses provided existingMemories in prompt', async () => {
+      const mockProvider = createMockProvider(
+        JSON.stringify({
+          memories: [{ type: 'EVENT', title: '测试', content: '内容', tags: [] }]
+        })
+      )
+
+      const script = { title: '测试', summary: '', scenes: [] }
+
+      await extractMemoriesWithLLM(
+        script as any,
+        1,
+        'Previous memory',
+        undefined,
+        mockProvider as any
+      )
+
+      expect(mockProvider.complete).toHaveBeenCalled()
+    })
   })
 })

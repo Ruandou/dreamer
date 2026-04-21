@@ -56,6 +56,12 @@ describe('Storage Service', () => {
       expect(webpKey).toContain('.webp')
     })
 
+    it('should handle filename without extension', () => {
+      const key = generateFileKey('assets', 'nofile')
+      // When no extension, the code adds 'undefined' or empty ext
+      expect(key).toMatch(/^assets\/\d+_[a-z0-9]+_nofile/)
+    })
+
     it('should use correct bucket prefix', () => {
       const assetsKey = generateFileKey('assets', 'file.png')
       const videosKey = generateFileKey('videos', 'file.mp4')

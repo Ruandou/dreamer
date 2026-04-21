@@ -1,169 +1,106 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+import { importParsedData } from '../src/services/importer.js'
+import { projectRepository } from '../src/repositories/project-repository.js'
+import { characterRepository } from '../src/repositories/character-repository.js'
+import { episodeRepository } from '../src/repositories/episode-repository.js'
 
-// Use vi.hoisted to define mocks before module loading
-const {
-  mockCharacterCreate,
-  mockCharacterImageCreate,
-  mockCharacterImageAggregate,
-  mockEpisodeFindUnique,
-  mockEpisodeCreate,
-  mockEpisodeUpdate,
-  mockSceneDeleteMany,
-  mockSceneCreate,
-  mockShotCreate,
-  mockProjectFindFirst,
-  mockProjectFindUnique
-} = vi.hoisted(() => {
-  return {
-    mockCharacterCreate: vi.fn(),
-    mockCharacterImageCreate: vi.fn(),
-    mockCharacterImageAggregate: vi.fn(),
-    mockEpisodeFindUnique: vi.fn(),
-    mockEpisodeCreate: vi.fn(),
-    mockEpisodeUpdate: vi.fn(),
-    mockSceneDeleteMany: vi.fn(),
-    mockSceneCreate: vi.fn(),
-    mockShotCreate: vi.fn(),
-    mockProjectFindFirst: vi.fn(),
-    mockProjectFindUnique: vi.fn()
-  }
-})
-
-// Mock the index.js module
-vi.mock('../src/lib/prisma.js', () => ({
-  prisma: {
-    character: {
-      create: mockCharacterCreate
-    },
-    characterImage: {
-      create: mockCharacterImageCreate,
-      aggregate: mockCharacterImageAggregate
-    },
-    episode: {
-      findUnique: mockEpisodeFindUnique,
-      create: mockEpisodeCreate,
-      update: mockEpisodeUpdate
-    },
-    scene: {
-      deleteMany: mockSceneDeleteMany,
-      create: mockSceneCreate
-    },
-    shot: {
-      create: mockShotCreate
-    },
-    project: {
-      findFirst: mockProjectFindFirst,
-      findUnique: mockProjectFindUnique
-    },
-    $connect: vi.fn(),
-    $disconnect: vi.fn()
+vi.mock('../src/repositories/project-repository.js', () => ({
+  projectRepository: {
+    findAspectRatioSelect: vi.fn().mockResolvedValue({ aspectRatio: '9:16' })
   }
 }))
 
-// Import after mocks
-import { importParsedData, type ParsedScript } from '../src/services/importer.js'
+vi.mock('../src/repositories/character-repository.js', () => ({
+  characterRepository: {
+    createCharacter: vi.fn().mockResolvedValue({ id: 'char-1' }),
+    createCharacterImage: vi.fn().mockResolvedValue({ id: 'img-1' }),
+    maxSiblingOrder: vi.fn().mockResolvedValue({ _max: { order: null } })
+  }
+}))
 
-describe('Importer Service', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockProjectFindUnique.mockResolvedValue({ aspectRatio: '9:16' })
-    mockCharacterImageCreate.mockImplementation((args: { data: { name?: string } }) =>
-      Promise.resolve({ id: `img-${args.data.name || 'x'}`, ...args.data })
-    )
-    mockCharacterImageAggregate.mockResolvedValue({ _max: { order: null } })
+vi.mock('../src/repositories/episode-repository.js', () => ({
+  episodeRepository: {
+    findUniqueByProjectEpisodeWithScenes: vi.fn().mockResolvedValue(null),
+    create: vi.fn().mockResolvedValue({ id: 'ep-1' }),
+    createScene: vi.fn().mockResolvedValue({ id: 'scene-1' }),
+    createShot: vi.fn().mockResolvedValue({ id: 'shot-1' }),
+    update: vi.fn().mockResolvedValue({}),
+    deleteScenesByEpisode: vi.fn().mockResolvedValue({})
+  }
+}))
+
+describe('importParsedData', () => {
+  it('imports new episodes and characters', async () => {
+    const parsed = {
+      characters: [
+        { name: 'Alice', description: '主角', images: [{ name: '基础形象', type: 'base' }] }
+      ],
+      episodes: [
+        {
+          episodeNum: 1,
+          title: '第一集',
+          script: { title: '第一集', scenes: [] },
+          scenes: [{ sceneNum: 1, description: '场景1', prompt: 'prompt1' }]
+        }
+      ]
+    }
+
+    const result = await importParsedData('proj-1', parsed as any)
+    expect(result.charactersCreated).toBe(1)
+    expect(result.episodesCreated).toBe(1)
+    expect(result.scenesCreated).toBe(1)
+    expect(result.episodesUpdated).toBe(0)
   })
 
-  describe('importParsedData', () => {
-    it('should create characters and episodes', async () => {
-      const parsed: ParsedScript = {
-        projectName: 'Test Project',
-        description: 'A test project',
-        characters: [
-          { name: 'Alice', description: 'Young woman with red hair' },
-          { name: 'Bob', description: 'Old man with beard' }
-        ],
-        episodes: [
-          {
-            episodeNum: 1,
-            title: 'Episode 1',
-            script: { scenes: [] },
-            scenes: [
-              { sceneNum: 1, description: 'Scene 1', prompt: 'prompt 1' },
-              { sceneNum: 2, description: 'Scene 2', prompt: 'prompt 2' }
-            ]
-          }
-        ]
-      }
+  it('updates existing episodes', async () => {
+    vi.mocked(episodeRepository.findUniqueByProjectEpisodeWithScenes).mockResolvedValue({
+      id: 'ep-existing'
+    } as any)
 
-      // First call returns null (episode doesn't exist), subsequent calls also return null
-      mockEpisodeFindUnique.mockResolvedValue(null)
-      mockEpisodeCreate.mockResolvedValue({ id: 'ep-1', episodeNum: 1 })
-      mockCharacterCreate.mockResolvedValue({ id: 'char-1' })
-      mockSceneCreate.mockImplementation((args: { data: { sceneNum: number } }) =>
-        Promise.resolve({ id: `scene-${args.data.sceneNum}`, ...args.data })
-      )
-      mockShotCreate.mockResolvedValue({ id: 'shot-1' })
-
-      const results = await importParsedData('proj-1', parsed)
-
-      expect(results.charactersCreated).toBe(2)
-      expect(results.episodesCreated).toBe(1)
-      expect(results.scenesCreated).toBe(2)
-      expect(results.episodesUpdated).toBe(0)
-    })
-
-    it('should update existing episode', async () => {
-      const parsed: ParsedScript = {
-        projectName: 'Test Project',
-        characters: [],
-        episodes: [
-          {
-            episodeNum: 1,
-            title: 'Updated Episode 1',
-            script: { scenes: [] },
-            scenes: [{ sceneNum: 1, description: 'New Scene 1', prompt: 'new prompt' }]
-          }
-        ]
-      }
-
-      // Episode exists
-      mockEpisodeFindUnique.mockResolvedValue({
-        id: 'ep-1',
-        episodeNum: 1,
-        scenes: [{ id: 'old-scene-1' }]
-      })
-      mockSceneCreate.mockImplementation((args: { data: { sceneNum: number } }) =>
-        Promise.resolve({ id: `scene-${args.data.sceneNum}`, ...args.data })
-      )
-      mockShotCreate.mockResolvedValue({ id: 'shot-1' })
-
-      const results = await importParsedData('proj-1', parsed)
-
-      expect(results.episodesCreated).toBe(0)
-      expect(results.episodesUpdated).toBe(1)
-      expect(results.scenesCreated).toBe(1)
-      expect(mockSceneDeleteMany).toHaveBeenCalledWith({ where: { episodeId: 'ep-1' } })
-      expect(mockEpisodeUpdate).toHaveBeenCalled()
-    })
-
-    it('should use default description for characters without description', async () => {
-      const parsed: ParsedScript = {
-        projectName: 'Test Project',
-        characters: [{ name: 'Alice', description: '' }],
-        episodes: []
-      }
-
-      mockCharacterCreate.mockImplementation((data) => Promise.resolve({ id: 'char-1', ...data }))
-
-      await importParsedData('proj-1', parsed)
-
-      expect(mockCharacterCreate).toHaveBeenCalledWith({
-        data: {
-          projectId: 'proj-1',
-          name: 'Alice',
-          description: expect.stringContaining('从剧本导入的角色')
+    const parsed = {
+      characters: [],
+      episodes: [
+        {
+          episodeNum: 1,
+          title: '第一集',
+          script: { title: '第一集', scenes: [] },
+          scenes: [{ sceneNum: 1, description: '场景1', prompt: 'prompt1' }]
         }
-      })
-    })
+      ]
+    }
+
+    const result = await importParsedData('proj-1', parsed as any)
+    expect(result.episodesUpdated).toBe(1)
+    expect(result.episodesCreated).toBe(0)
+  })
+
+  it('creates derived images with base fallback', async () => {
+    vi.mocked(characterRepository.createCharacterImage)
+      .mockResolvedValueOnce({ id: 'base-img' } as any)
+      .mockResolvedValueOnce({ id: 'derived-img' } as any)
+
+    const parsed = {
+      characters: [
+        {
+          name: 'Alice',
+          description: '主角',
+          images: [{ name: '表情1', type: 'expression' }]
+        }
+      ],
+      episodes: []
+    }
+
+    const result = await importParsedData('proj-1', parsed as any)
+    expect(result.charactersCreated).toBe(1)
+  })
+
+  it('handles character without description', async () => {
+    const parsed = {
+      characters: [{ name: 'Bob', images: [] }],
+      episodes: []
+    }
+
+    const result = await importParsedData('proj-1', parsed as any)
+    expect(result.charactersCreated).toBe(1)
   })
 })

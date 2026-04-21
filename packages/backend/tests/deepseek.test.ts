@@ -19,6 +19,7 @@ import {
   optimizePrompt,
   type DeepSeekBalance
 } from '../src/services/ai/deepseek.js'
+import { classifyAIError, buildProjectContext } from '../src/services/ai/error-classifier.js'
 
 // Mock OpenAI client
 const { mockCreate } = vi.hoisted(() => ({
@@ -498,6 +499,67 @@ describe('DeepSeek Service', () => {
       expect(built).toMatch(/正面全身/)
       expect(built).toMatch(/纯色影棚/)
       expect(built).toMatch(/保持该角色面部特征/)
+    })
+  })
+
+  describe('classifyAIError', () => {
+    it('classifies DeepSeekAuthError as 401', () => {
+      const error = new Error('Auth failed')
+      error.name = 'DeepSeekAuthError'
+      const result = classifyAIError(error, 'Fallback')
+      expect(result.status).toBe(401)
+      expect(result.error).toContain('认证失败')
+    })
+
+    it('classifies DeepSeekRateLimitError as 429', () => {
+      const error = new Error('Rate limited')
+      error.name = 'DeepSeekRateLimitError'
+      const result = classifyAIError(error, 'Fallback')
+      expect(result.status).toBe(429)
+      expect(result.error).toContain('请求受限')
+    })
+
+    it('classifies generic Error as 500', () => {
+      const error = new Error('Something broke')
+      const result = classifyAIError(error, 'Fallback message')
+      expect(result.status).toBe(500)
+      expect(result.error).toBe('Fallback message')
+      expect(result.message).toBe('Something broke')
+    })
+
+    it('classifies non-Error as 500 with unknown message', () => {
+      const result = classifyAIError('string error', 'Fallback')
+      expect(result.status).toBe(500)
+      expect(result.message).toBe('未知错误')
+    })
+  })
+
+  describe('buildProjectContext', () => {
+    it('returns undefined for null project', () => {
+      expect(buildProjectContext(null)).toBeUndefined()
+    })
+
+    it('builds context with characters and episodes', () => {
+      const project = {
+        name: 'Test Project',
+        characters: [{ name: 'Alice' }, { name: 'Bob' }],
+        episodes: [{ id: '1' }, { id: '2' }]
+      }
+      const result = buildProjectContext(project as any)
+      expect(result).toContain('Test Project')
+      expect(result).toContain('Alice, Bob')
+      expect(result).toContain('2集')
+    })
+
+    it('shows default text when no characters', () => {
+      const project = {
+        name: 'Empty Project',
+        characters: [],
+        episodes: []
+      }
+      const result = buildProjectContext(project as any)
+      expect(result).toContain('已有角色:')
+      expect(result).toContain('0集')
     })
   })
 })

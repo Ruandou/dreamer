@@ -6,6 +6,11 @@ import {
   mergeEpisodesToScriptContent,
   DEFAULT_TARGET_EPISODES
 } from '../src/services/project-script-jobs.js'
+import {
+  buildEnhancedContext,
+  getFutureOutlines,
+  sliceStoryContext
+} from '../src/services/script-job-helpers.js'
 import type { ScriptContent } from '@dreamer/shared/types'
 
 describe('scriptFromJson', () => {
@@ -465,5 +470,79 @@ describe('buildEpisodePlansFromDbEpisodes', () => {
 describe('DEFAULT_TARGET_EPISODES', () => {
   it('should be 36', () => {
     expect(DEFAULT_TARGET_EPISODES).toBe(36)
+  })
+})
+
+describe('buildEnhancedContext', () => {
+  it('returns memory context only when no future outlines', () => {
+    const result = buildEnhancedContext('Memory context', [])
+    expect(result).toBe('Memory context')
+  })
+
+  it('appends future outlines when provided', () => {
+    const result = buildEnhancedContext('Memory context', [
+      'Episode 2 outline',
+      'Episode 3 outline'
+    ])
+    expect(result).toContain('Memory context')
+    expect(result).toContain('后续剧情走向参考')
+    expect(result).toContain('Episode 2 outline')
+    expect(result).toContain('Episode 3 outline')
+  })
+})
+
+describe('getFutureOutlines', () => {
+  it('returns empty array when no future outlines exist', () => {
+    const outlines = new Map<number, string>()
+    const result = getFutureOutlines(outlines, 1)
+    expect(result).toEqual([])
+  })
+
+  it('returns next N episode outlines', () => {
+    const outlines = new Map([
+      [2, 'Outline 2'],
+      [3, 'Outline 3'],
+      [4, 'Outline 4']
+    ])
+    const result = getFutureOutlines(outlines, 1, 2)
+    expect(result).toHaveLength(2)
+    expect(result[0]).toContain('第2集大纲：Outline 2')
+    expect(result[1]).toContain('第3集大纲：Outline 3')
+  })
+
+  it('skips missing outlines', () => {
+    const outlines = new Map([
+      [2, 'Outline 2'],
+      [4, 'Outline 4']
+    ])
+    const result = getFutureOutlines(outlines, 1, 3)
+    expect(result).toHaveLength(2)
+    expect(result[0]).toContain('第2集大纲：Outline 2')
+    expect(result[1]).toContain('第4集大纲：Outline 4')
+  })
+
+  it('uses default lookahead of 2', () => {
+    const outlines = new Map([
+      [2, 'O2'],
+      [3, 'O3'],
+      [4, 'O4'],
+      [5, 'O5']
+    ])
+    const result = getFutureOutlines(outlines, 1)
+    expect(result).toHaveLength(2)
+  })
+})
+
+describe('sliceStoryContext', () => {
+  it('returns full context when under max length', () => {
+    const context = 'Short context'
+    expect(sliceStoryContext(context)).toBe(context)
+  })
+
+  it('truncates from the end when exceeding max length', () => {
+    const longContext = 'a'.repeat(15000)
+    const result = sliceStoryContext(longContext)
+    expect(result.length).toBeLessThan(longContext.length)
+    expect(result).toBe(longContext.slice(-12000))
   })
 })

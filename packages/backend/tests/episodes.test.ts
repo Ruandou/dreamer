@@ -354,6 +354,17 @@ describe('Episode Routes', () => {
 
       expect(response.statusCode).toBe(404)
     })
+
+    it('should return 403 when user does not own episode', async () => {
+      mockVerifyEpisodeOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/episodes/ep-1/detail'
+      })
+
+      expectPermissionDeniedPayload(response)
+    })
   })
 
   describe('GET /api/episodes/:id/scenes', () => {
@@ -624,6 +635,20 @@ describe('Episode Routes', () => {
       })
 
       expect(response.statusCode).toBe(404)
+    })
+
+    it('should return 403 when user does not own episode', async () => {
+      mockVerifyEpisodeOwnership.mockResolvedValueOnce(false)
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/episodes/ep-1/expand',
+        payload: {
+          summary: 'A story'
+        }
+      })
+
+      expectPermissionDeniedPayload(response)
     })
   })
 
