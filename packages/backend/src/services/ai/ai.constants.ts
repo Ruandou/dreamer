@@ -24,7 +24,23 @@ export const DEEPSEEK_TEMPERATURE = {
   /** 场景提示词优化 - 中等创造性 */
   SCENE_PROMPT_OPTIMIZE: 0.5,
   /** 分镜脚本生成 - 中等创造性 */
-  STORYBOARD_GENERATE: 0.65
+  STORYBOARD_GENERATE: 0.65,
+  /** 视觉风格生成 - 低创造性 */
+  VISUAL_STYLE: 0.3,
+  /** JSON 修复 - 极低创造性 */
+  JSON_REPAIR: 0.1,
+  /** 场景描述优化 - 中等创造性 */
+  SCENE_DESCRIPTION: 0.5,
+  /** 大纲生成 - 中等创造性 */
+  EPISODE_OUTLINE: 0.5,
+  /** 总编剧审核 - 低创造性 */
+  SHOWRUNNER_REVIEW: 0.3,
+  /** 剧本格式化（忠实解析） - 极低创造性 */
+  SCRIPT_FORMATTER: 0.1,
+  /** 从大纲扩展剧本 - 中高创造性 */
+  EPISODE_EXPAND: 0.6,
+  /** 大纲修正 - 低中创造性 */
+  OUTLINE_REVISION: 0.4
 } as const
 
 /** 默认最大 token 限制 */
@@ -46,7 +62,23 @@ export const DEEPSEEK_MAX_TOKENS = {
   /** 场景提示词优化 */
   SCENE_PROMPT_OPTIMIZE: 1000,
   /** 分镜脚本生成 */
-  STORYBOARD_GENERATE: 6000
+  STORYBOARD_GENERATE: 6000,
+  /** 视觉风格生成 - 简短 JSON */
+  VISUAL_STYLE: 500,
+  /** JSON 修复 - 可能很大 */
+  JSON_REPAIR: 10000,
+  /** 场景描述优化 - 简短文本 */
+  SCENE_DESCRIPTION: 500,
+  /** 大纲生成 */
+  EPISODE_OUTLINE: 400,
+  /** 总编剧审核 */
+  SHOWRUNNER_REVIEW: 2000,
+  /** 剧本格式化（忠实解析） */
+  SCRIPT_FORMATTER: 8000,
+  /** 从大纲扩展剧本 */
+  EPISODE_EXPAND: 6000,
+  /** 大纲修正 */
+  OUTLINE_REVISION: 4000
 } as const
 
 // ==================== 重试配置 ====================

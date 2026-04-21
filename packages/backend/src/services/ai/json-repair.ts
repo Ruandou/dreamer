@@ -6,6 +6,7 @@
 import { callLLMWithRetry } from './llm-call-wrapper.js'
 import { getDefaultProvider } from './llm-factory.js'
 import type { ModelCallLogContext } from './api-logger.js'
+import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
 
 const REPAIR_PROMPT = `修复下列JSON的语法错误，只返回修复后的JSON，不要解释：
 
@@ -31,8 +32,8 @@ export async function repairJsonWithAI(
         { role: 'system', content: REPAIR_PROMPT },
         { role: 'user', content: brokenJson }
       ],
-      temperature: 0.1,
-      maxTokens: 10000,
+      temperature: DEEPSEEK_TEMPERATURE.JSON_REPAIR,
+      maxTokens: DEEPSEEK_MAX_TOKENS.JSON_REPAIR,
       modelLog: log
     },
     (content) => content.trim()

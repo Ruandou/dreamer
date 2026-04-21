@@ -29,6 +29,26 @@ export interface ScriptWriterResult {
 }
 
 /**
+ * 共享的剧本解析函数（parse + validate）
+ * 4 个 LLM 调用都使用相同的解析流程
+ */
+function parseAndValidateScript(content: string): ScriptContent {
+  const script = parseScriptResponse(content)
+  validateScript(script)
+  return script
+}
+
+/**
+ * 格式化大纲列表为文本（showrunner + revise 共用）
+ */
+function formatOutlinesList(outlines: Map<number, string>): string {
+  return Array.from(outlines.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([num, outline]) => `第${num}集：${outline}`)
+    .join('\n\n')
+}
+
+/**
  * 从一句话想法生成专业剧本
  */
 export async function writeScriptFromIdea(
@@ -37,13 +57,6 @@ export async function writeScriptFromIdea(
 ): Promise<ScriptWriterResult> {
   const provider = getDefaultProvider()
   const userPrompt = buildUserPrompt(idea, options)
-
-  // Parser function for the wrapper
-  const parseScript = (content: string): ScriptContent => {
-    const script = parseScriptResponse(content)
-    validateScript(script)
-    return script
-  }
 
   const callOptions: LLMCallOptions = {
     provider,
@@ -57,7 +70,7 @@ export async function writeScriptFromIdea(
     modelLog: options?.modelLog
   }
 
-  const result = await callLLMWithRetry(callOptions, parseScript)
+  const result = await callLLMWithRetry(callOptions, parseAndValidateScript)
 
   return {
     script: result.content,
@@ -82,13 +95,6 @@ export async function writeEpisodeForProject(
 
 请只写第 ${episodeNum} 集的剧本 JSON。`
 
-  // Parser function for the wrapper
-  const parseScript = (content: string): ScriptContent => {
-    const script = parseScriptResponse(content)
-    validateScript(script)
-    return script
-  }
-
   const callOptions: LLMCallOptions = {
     provider,
     model: 'deepseek-chat',
@@ -101,7 +107,7 @@ export async function writeEpisodeForProject(
     modelLog
   }
 
-  const result = await callLLMWithRetry(callOptions, parseScript)
+  const result = await callLLMWithRetry(callOptions, parseAndValidateScript)
 
   return {
     script: result.content,
@@ -133,13 +139,6 @@ ${JSON.stringify(script, null, 2)}
 
 直接返回JSON格式的完整剧本（包括原有场景+新场景）。`
 
-  // Parser function for the wrapper
-  const parseScript = (content: string): ScriptContent => {
-    const parsed = parseScriptResponse(content)
-    validateScript(parsed)
-    return parsed
-  }
-
   const callOptions: LLMCallOptions = {
     provider,
     model: 'deepseek-chat',
@@ -147,12 +146,12 @@ ${JSON.stringify(script, null, 2)}
       { role: 'system', content: SCRIPT_WRITER_PROMPT },
       { role: 'user', content: userPrompt }
     ],
-    temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
-    maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING,
+    temperature: DEEPSEEK_TEMPERATURE.SCRIPT_EXPAND,
+    maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_EXPAND,
     modelLog: options?.modelLog
   }
 
-  const result = await callLLMWithRetry(callOptions, parseScript)
+  const result = await callLLMWithRetry(callOptions, parseAndValidateScript)
 
   return {
     script: result.content,
@@ -182,13 +181,6 @@ ${feedback}
 
 直接返回JSON格式的完整剧本。`
 
-  // Parser function for the wrapper
-  const parseScript = (content: string): ScriptContent => {
-    const improvedScript = parseScriptResponse(content)
-    validateScript(improvedScript)
-    return improvedScript
-  }
-
   const callOptions: LLMCallOptions = {
     provider,
     model: 'deepseek-chat',
@@ -196,12 +188,12 @@ ${feedback}
       { role: 'system', content: SCRIPT_WRITER_PROMPT },
       { role: 'user', content: userPrompt }
     ],
-    temperature: DEEPSEEK_TEMPERATURE.SCRIPT_WRITING,
-    maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_WRITING,
+    temperature: DEEPSEEK_TEMPERATURE.SCRIPT_IMPROVEMENT,
+    maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_IMPROVEMENT,
     modelLog: options?.modelLog
   }
 
-  const result = await callLLMWithRetry(callOptions, parseScript)
+  const result = await callLLMWithRetry(callOptions, parseAndValidateScript)
 
   return {
     script: result.content,
@@ -242,9 +234,6 @@ ${contextStr}
 
 直接返回优化后的描述文字，不要其他内容。`
 
-  // Simple parser - just return the content
-  const parseResponse = (content: string): string => content.trim()
-
   const callOptions: LLMCallOptions = {
     provider,
     model: 'deepseek-chat',
@@ -252,12 +241,12 @@ ${contextStr}
       { role: 'system', content: '你是一个专业的AI视频提示词优化专家。' },
       { role: 'user', content: userPrompt }
     ],
-    temperature: 0.5,
-    maxTokens: 500,
+    temperature: DEEPSEEK_TEMPERATURE.SCENE_DESCRIPTION,
+    maxTokens: DEEPSEEK_MAX_TOKENS.SCENE_DESCRIPTION,
     modelLog
   }
 
-  const result = await callLLMWithRetry(callOptions, parseResponse)
+  const result = await callLLMWithRetry(callOptions, (content: string) => content.trim())
 
   return result.content
 }
@@ -436,8 +425,8 @@ export async function generateEpisodeOutline(
       { role: 'system', content: rendered.systemPrompt },
       { role: 'user', content: rendered.userPrompt }
     ],
-    temperature: 0.5,
-    maxTokens: 400,
+    temperature: DEEPSEEK_TEMPERATURE.EPISODE_OUTLINE,
+    maxTokens: DEEPSEEK_MAX_TOKENS.EPISODE_OUTLINE,
     modelLog
   }
 
@@ -459,11 +448,7 @@ export async function showrunnerReviewOutlines(
   const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
-  // 格式化大纲列表
-  const outlinesList = Array.from(outlines.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([num, outline]) => `第${num}集：${outline}`)
-    .join('\n\n')
+  const outlinesList = formatOutlinesList(outlines)
 
   const rendered = registry.render('showrunner-review', {
     seriesSynopsis,
@@ -478,8 +463,8 @@ export async function showrunnerReviewOutlines(
       { role: 'system', content: rendered.systemPrompt },
       { role: 'user', content: rendered.userPrompt }
     ],
-    temperature: 0.3,
-    maxTokens: 2000,
+    temperature: DEEPSEEK_TEMPERATURE.SHOWRUNNER_REVIEW,
+    maxTokens: DEEPSEEK_MAX_TOKENS.SHOWRUNNER_REVIEW,
     modelLog
   }
 
@@ -515,8 +500,8 @@ export async function formatScriptToJSON(
       { role: 'system', content: rendered.systemPrompt },
       { role: 'user', content: rendered.userPrompt }
     ],
-    temperature: 0.1,
-    maxTokens: 8000,
+    temperature: DEEPSEEK_TEMPERATURE.SCRIPT_FORMATTER,
+    maxTokens: DEEPSEEK_MAX_TOKENS.SCRIPT_FORMATTER,
     modelLog
   }
 
@@ -559,8 +544,8 @@ export async function expandEpisodeFromOutline(
       { role: 'system', content: rendered.systemPrompt },
       { role: 'user', content: rendered.userPrompt }
     ],
-    temperature: 0.6,
-    maxTokens: 6000,
+    temperature: DEEPSEEK_TEMPERATURE.EPISODE_EXPAND,
+    maxTokens: DEEPSEEK_MAX_TOKENS.EPISODE_EXPAND,
     modelLog
   }
 
@@ -589,11 +574,7 @@ export async function reviseOutlinesBasedOnFeedback(
   const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
-  // 格式化大纲列表
-  const outlinesList = Array.from(outlines.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([num, outline]) => `第${num}集：${outline}`)
-    .join('\n\n')
+  const outlinesList = formatOutlinesList(outlines)
 
   const rendered = registry.render('outline-revision', {
     seriesSynopsis,
@@ -609,8 +590,8 @@ export async function reviseOutlinesBasedOnFeedback(
       { role: 'system', content: rendered.systemPrompt },
       { role: 'user', content: rendered.userPrompt }
     ],
-    temperature: 0.4,
-    maxTokens: 4000,
+    temperature: DEEPSEEK_TEMPERATURE.OUTLINE_REVISION,
+    maxTokens: DEEPSEEK_MAX_TOKENS.OUTLINE_REVISION,
     modelLog
   }
 

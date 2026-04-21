@@ -8,6 +8,7 @@ import { VISUAL_STYLE_PRESETS } from '@dreamer/shared'
 import { callLLMWithRetry } from './llm-call-wrapper.js'
 import { getDefaultProvider } from './llm-factory.js'
 import type { ModelCallLogContext } from './api-logger.js'
+import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
 
 const SYSTEM_PROMPT = `你是短剧视觉风格分析专家。根据项目描述和梗概，推断最合适的视觉风格配置。
 
@@ -64,8 +65,8 @@ export async function generateVisualStyleConfig(
     {
       provider,
       messages,
-      temperature: 0.3,
-      maxTokens: 500,
+      temperature: DEEPSEEK_TEMPERATURE.VISUAL_STYLE,
+      maxTokens: DEEPSEEK_MAX_TOKENS.VISUAL_STYLE,
       modelLog: log
     },
     (content) => {
