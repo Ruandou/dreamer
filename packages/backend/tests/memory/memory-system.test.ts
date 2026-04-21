@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { formatExistingMemories } from '../../src/services/memory/extractor.js'
+import {
+  formatExistingMemories,
+  extractMemoriesWithLLM
+} from '../../src/services/memory/extractor.js'
 import { formatMemoriesForPrompt } from '../../src/services/memory/context-builder.js'
 import { MemoryRepository } from '../../src/repositories/memory-repository.js'
 
@@ -113,7 +116,124 @@ describe('Memory System', () => {
     })
   })
 
-  // Note: Repository tests require proper Prisma mocking setup
-  // For now, we test the pure utility functions
-  // Repository integration tests should be added with proper database test setup
+  describe('extractMemoriesWithLLM', () => {
+    const createMockProvider = (responseContent: string) => ({
+      complete: vi.fn().mockResolvedValue({
+        content: responseContent,
+        usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+          costCNY: 0.01
+        },
+        model: 'deepseek-chat',
+        rawResponse: {}
+      }),
+      name: 'deepseek',
+      getConfig: vi.fn().mockReturnValue({
+        provider: 'deepseek',
+        apiKey: 'test-key'
+      })
+    })
+
+    it('extracts memories from script content via LLM', async () => {
+      const mockProvider = createMockProvider(
+        JSON.stringify({
+          memories: [
+            {
+              type: 'CHARACTER',
+              category: 'main',
+              title: '李明',
+              content: '30岁科学家',
+              tags: ['protagonist'],
+              importance: 5,
+              metadata: { age: 30 }
+            }
+          ]
+        })
+      )
+
+      const script = {
+        title: '测试剧本',
+        summary: '一个科学家的故事',
+        scenes: [
+          {
+            location: '实验室',
+            timeOfDay: '白天',
+            characters: ['李明'],
+            description: '现代化实验室',
+            dialogues: [{ character: '李明', content: '实验成功了！' }],
+            actions: ['拿起试管']
+          }
+        ]
+      }
+
+      const result = await extractMemoriesWithLLM(
+        script as any,
+        1,
+        '',
+        { userId: 'u1', projectId: 'p1', op: 'test' },
+        mockProvider as any
+      )
+
+      expect(result.memories).toHaveLength(1)
+      expect(result.memories[0].title).toBe('李明')
+      expect(result.memories[0].type).toBe('CHARACTER')
+      expect(result.memories[0].importance).toBe(5)
+      expect(result.cost.costCNY).toBeGreaterThanOrEqual(0)
+    })
+
+    it('handles markdown code blocks in LLM response', async () => {
+      const mockProvider = createMockProvider(
+        '```json\n{"memories":[{"type":"EVENT","title":"实验","content":"成功","tags":[],"importance":3}]}\n```'
+      )
+
+      const script = {
+        title: '测试',
+        summary: '测试摘要',
+        scenes: []
+      }
+
+      const result = await extractMemoriesWithLLM(
+        script as any,
+        1,
+        '',
+        undefined,
+        mockProvider as any
+      )
+
+      expect(result.memories).toHaveLength(1)
+      expect(result.memories[0].title).toBe('实验')
+    })
+
+    it('throws error when memories array is missing', async () => {
+      const mockProvider = createMockProvider(JSON.stringify({ data: 'invalid' }))
+
+      const script = { title: '测试', summary: '', scenes: [] }
+
+      await expect(
+        extractMemoriesWithLLM(script as any, 1, '', undefined, mockProvider as any)
+      ).rejects.toThrow('Invalid memory extraction response')
+    })
+
+    it('uses default importance of 3 when not provided', async () => {
+      const mockProvider = createMockProvider(
+        JSON.stringify({
+          memories: [{ type: 'EVENT', title: '测试', content: '内容', tags: [] }]
+        })
+      )
+
+      const script = { title: '测试', summary: '', scenes: [] }
+
+      const result = await extractMemoriesWithLLM(
+        script as any,
+        1,
+        '',
+        undefined,
+        mockProvider as any
+      )
+
+      expect(result.memories[0].importance).toBe(3)
+    })
+  })
 })
