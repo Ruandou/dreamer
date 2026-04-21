@@ -3,7 +3,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NButton,
-  NSpace,
   useMessage,
   useDialog,
   NSpin,
@@ -19,7 +18,7 @@ import { useEpisodeStore, type EpisodeDetailPayload } from '@/stores/episode'
 import { useEpisodeStoryboardPipelineJob } from '@/composables/useEpisodeStoryboardPipelineJob'
 import { api } from '@/api'
 import { parseEditorDocToScene } from '@/lib/storyboard-editor/script-to-doc'
-import type { ScriptContent, Character, VideoModel } from '@dreamer/shared/types'
+import type { ScriptContent, ScriptScene, Character, VideoModel } from '@dreamer/shared/types'
 import { useSceneStore } from '@/stores/scene'
 import StoryboardScriptEditor from '@/components/storyboard/StoryboardScriptEditor.vue'
 
@@ -59,8 +58,10 @@ function toApiVideoModel(ui: string): VideoModel {
 const episode = computed(() => detail.value?.episode ?? null)
 const scenes = computed(() => (detail.value?.scenes as EpisodeDetailScene[]) ?? [])
 
-const { runningByEpisodeId: storyboardJobRunningByEpisode, refresh: refreshStoryboardPipelineJobs } =
-  useEpisodeStoryboardPipelineJob(projectId)
+const {
+  runningByEpisodeId: storyboardJobRunningByEpisode,
+  refresh: refreshStoryboardPipelineJobs
+} = useEpisodeStoryboardPipelineJob(projectId)
 
 const storyboardJobRunning = computed(
   () => storyboardJobRunningByEpisode.value[episodeId.value] === true
@@ -69,6 +70,7 @@ const storyboardJobRunning = computed(
 interface EpisodeDetailScene {
   id: string
   sceneNum: number
+  name?: string
   description?: string
   duration?: number
   status?: string
@@ -162,13 +164,6 @@ async function generateSceneVideo() {
   }
 }
 
-const selectedShot = computed(() => {
-  const sc = selectedScene.value
-  const sid = selectedShotId.value
-  if (!sc?.shots?.length || !sid) return null
-  return sc.shots.find((s) => s.id === sid) ?? null
-})
-
 /** 优先已选 Take，否则第一个有视频的成片 */
 const previewTake = computed(() => {
   const sc = selectedScene.value
@@ -212,8 +207,7 @@ const characterAssetTiles = computed(() => {
     if (!characterIds.has(c.id)) continue
     const used = imageIdsByCharacter.get(c.id)
     const imgs = c.images ?? []
-    const pick =
-      used && used.size > 0 ? imgs.filter((im) => used.has(im.id)) : imgs
+    const pick = used && used.size > 0 ? imgs.filter((im) => used.has(im.id)) : imgs
     for (const img of pick) {
       out.push({
         key: `${c.id}-${img.id}`,
@@ -245,11 +239,11 @@ const sceneDurationLabel = computed(() => {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 })
 
-const railThumbUrl = computed(() => previewTake.value?.thumbnailUrl ?? null)
-
 function exportEpisodeScript() {
   const raw = episode.value?.script
-  const blob = new Blob([JSON.stringify(raw ?? {}, null, 2)], { type: 'application/json;charset=utf-8' })
+  const blob = new Blob([JSON.stringify(raw ?? {}, null, 2)], {
+    type: 'application/json;charset=utf-8'
+  })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -470,18 +464,18 @@ async function onSaveScript(script: ScriptContent) {
 
     if (fullScript?.scenes?.length && currentSceneNum) {
       // 解析编辑器内容，提取对话和镜头
-      const currentScene = fullScript.scenes.find(s => s.sceneNum === currentSceneNum)
+      const currentScene = fullScript.scenes.find((s) => s.sceneNum === currentSceneNum)
       const parsedScene = parseEditorDocToScene(
         script.editorDoc || null,
         currentSceneNum,
-        currentScene
+        currentScene || undefined
       )
 
-      const otherScenes = fullScript.scenes.filter(s => s.sceneNum !== currentSceneNum)
+      const otherScenes = fullScript.scenes.filter((s) => s.sceneNum !== currentSceneNum)
       finalScript = {
         ...fullScript,
         editorDoc: script.editorDoc,
-        scenes: [...otherScenes, parsedScene]
+        scenes: [...otherScenes, parsedScene as ScriptScene]
       }
     }
 
@@ -501,9 +495,7 @@ function onCancelScriptEdit() {
   scriptEditing.value = false
   void load()
 }
-
 </script>
-
 
 <template>
   <div class="episode-detail">
@@ -513,243 +505,267 @@ function onCancelScriptEdit() {
       class="episode-detail-root-spin"
     >
       <div class="episode-detail__mount">
-      <NEmpty v-if="notFound" description="分集不存在或无权访问">
-        <template #extra>
-          <NButton @click="goBack">返回分集列表</NButton>
-        </template>
-      </NEmpty>
+        <NEmpty v-if="notFound" description="分集不存在或无权访问">
+          <template #extra>
+            <NButton @click="goBack">返回分集列表</NButton>
+          </template>
+        </NEmpty>
 
-      <template v-else-if="detail && episode">
-        <NSpin
-          :show="storyboardJobRunning"
-          size="small"
-          description="分镜剧本生成中…"
-          class="episode-detail-card-spin"
-        >
-          <div class="episode-detail__shell">
-          <header class="episode-detail__topbar">
-            <div class="episode-detail__topbar-left">
-              <NButton quaternary size="small" @click="goBack">返回</NButton>
-              <div class="episode-detail__topbar-titles">
-                <span class="episode-detail__topbar-title">{{ titleLine }}</span>
-                <span v-if="episode.synopsis?.trim()" class="episode-detail__topbar-sub">{{ episode.synopsis }}</span>
-              </div>
-            </div>
-            <div class="episode-detail__topbar-right">
-              <NSelect
-                v-model:value="videoModel"
-                :options="videoModelOptions"
-                size="small"
-                placeholder="生成模型"
-                class="episode-detail__model-select"
-              />
-              <NButton
-                size="small"
-                type="primary"
-                :loading="composingId"
-                :disabled="storyboardJobRunning"
-                @click="composeEpisode"
-              >
-                合成全集
-              </NButton>
-              <NTooltip placement="bottom">
-                <template #trigger>
-                  <NButton size="small" quaternary circle class="episode-detail__toolbar-icon" aria-label="积分说明">
-                    <template #icon>
-                      <HelpCircleOutline />
-                    </template>
+        <template v-else-if="detail && episode">
+          <NSpin
+            :show="storyboardJobRunning"
+            size="small"
+            description="分镜剧本生成中…"
+            class="episode-detail-card-spin"
+          >
+            <div class="episode-detail__shell">
+              <header class="episode-detail__topbar">
+                <div class="episode-detail__topbar-left">
+                  <NButton quaternary size="small" @click="goBack">返回</NButton>
+                  <div class="episode-detail__topbar-titles">
+                    <span class="episode-detail__topbar-title">{{ titleLine }}</span>
+                    <span v-if="episode.synopsis?.trim()" class="episode-detail__topbar-sub">{{
+                      episode.synopsis
+                    }}</span>
+                  </div>
+                </div>
+                <div class="episode-detail__topbar-right">
+                  <NSelect
+                    v-model:value="videoModel"
+                    :options="videoModelOptions"
+                    size="small"
+                    placeholder="生成模型"
+                    class="episode-detail__model-select"
+                  />
+                  <NButton
+                    size="small"
+                    type="primary"
+                    :loading="composingId"
+                    :disabled="storyboardJobRunning"
+                    @click="composeEpisode"
+                  >
+                    合成全集
                   </NButton>
-                </template>
-                积分与账单以方舟控制台为准，本页不展示实时余额
-              </NTooltip>
-              <NDropdown trigger="click" :options="moreMenuOptions" @select="onMoreSelect">
-                <NButton size="small" quaternary class="episode-detail__menu-trigger">
-                  更多
-                  <ChevronDownOutline class="episode-detail__menu-trigger-chev" />
-                </NButton>
-              </NDropdown>
-            </div>
-          </header>
+                  <NTooltip placement="bottom">
+                    <template #trigger>
+                      <NButton
+                        size="small"
+                        quaternary
+                        circle
+                        class="episode-detail__toolbar-icon"
+                        aria-label="积分说明"
+                      >
+                        <template #icon>
+                          <HelpCircleOutline />
+                        </template>
+                      </NButton>
+                    </template>
+                    积分与账单以方舟控制台为准，本页不展示实时余额
+                  </NTooltip>
+                  <NDropdown trigger="click" :options="moreMenuOptions" @select="onMoreSelect">
+                    <NButton size="small" quaternary class="episode-detail__menu-trigger">
+                      更多
+                      <ChevronDownOutline class="episode-detail__menu-trigger-chev" />
+                    </NButton>
+                  </NDropdown>
+                </div>
+              </header>
 
-          <div class="episode-detail__body">
-            <aside class="episode-detail__assets">
-              <div class="episode-detail__assets-head">
-                <span class="episode-detail__assets-title">资产库</span>
-                <NDropdown trigger="click" :options="assetMenuOptions" @select="onAssetMenuSelect">
-                  <NButton size="tiny" quaternary circle>+</NButton>
-                </NDropdown>
-              </div>
-
-              <div class="episode-detail__assets-content">
-                <section class="episode-detail__asset-block">
-                  <div class="episode-detail__asset-label">本集角色（{{ characterAssetTiles.length }}）</div>
-                  <div class="episode-detail__asset-grid">
-                    <div
-                      v-for="tile in characterAssetTiles"
-                      :key="tile.key"
-                      class="episode-detail__asset-tile"
+              <div class="episode-detail__body">
+                <aside class="episode-detail__assets">
+                  <div class="episode-detail__assets-head">
+                    <span class="episode-detail__assets-title">资产库</span>
+                    <NDropdown
+                      trigger="click"
+                      :options="assetMenuOptions"
+                      @select="onAssetMenuSelect"
                     >
-                      <div class="episode-detail__asset-thumb-wrap">
-                        <img
-                          v-if="tile.avatarUrl"
-                          :src="tile.avatarUrl"
-                          alt=""
-                          class="episode-detail__asset-thumb"
-                        />
-                        <div v-else class="episode-detail__asset-placeholder" />
-                      </div>
-                      <div class="episode-detail__asset-name">{{ tile.label }}</div>
-                    </div>
-                    <p v-if="!characterAssetTiles.length" class="episode-detail__muted episode-detail__asset-empty">
-                      本集暂未出现角色（台词或分镜出镜后会显示）
-                    </p>
+                      <NButton size="tiny" quaternary circle>+</NButton>
+                    </NDropdown>
                   </div>
-                </section>
 
-                <NDivider class="episode-detail__divider" />
-
-
-                <section class="episode-detail__asset-block">
-                  <div class="episode-detail__asset-label">本集场景（{{ episodeLocations.length }}）</div>
-                  <div class="episode-detail__asset-grid episode-detail__asset-grid--loc">
-                    <div
-                      v-for="loc in episodeLocations"
-                      :key="loc.id"
-                      class="episode-detail__asset-tile"
-                    >
-                      <div class="episode-detail__asset-thumb-wrap episode-detail__asset-thumb-wrap--loc">
-                        <img
-                          v-if="loc.imageUrl"
-                          :src="loc.imageUrl"
-                          alt=""
-                          class="episode-detail__asset-thumb"
-                        />
-                        <div v-else class="episode-detail__asset-placeholder" />
+                  <div class="episode-detail__assets-content">
+                    <section class="episode-detail__asset-block">
+                      <div class="episode-detail__asset-label">
+                        本集角色（{{ characterAssetTiles.length }}）
                       </div>
-                      <div class="episode-detail__asset-name">{{ loc.name }}</div>
-                    </div>
-                    <p v-if="!episodeLocations.length" class="episode-detail__muted episode-detail__asset-empty">
-                      本集场次尚未绑定场地库场景
-                    </p>
-                  </div>
-                </section>
-              </div>
-            </aside>
-
-            <div class="episode-detail__work">
-              <div class="episode-detail__work-top">
-                <main class="episode-detail__main-col">
-                  <div class="episode-detail__editor-wrap">
-                    <StoryboardScriptEditor
-                      :key="episodeId"
-                      :project-id="projectId"
-                      :script="editorScript"
-                      :editing="scriptEditing"
-                      :saving="scriptSaving"
-                      :fragment-title="selectedScene ? `片段 ${selectedScene.sceneNum}` : '片段'"
-                      @start-edit="scriptEditing = true"
-                      @cancel="onCancelScriptEdit"
-                      @save="onSaveScript"
-                    >
-                      <template #fab-extra />
-                      <template #below-editor>
-                        <NTooltip
-                          :disabled="canGenerateSceneVideo"
-                          placement="top"
+                      <div class="episode-detail__asset-grid">
+                        <div
+                          v-for="tile in characterAssetTiles"
+                          :key="tile.key"
+                          class="episode-detail__asset-tile"
                         >
-                          <template #trigger>
-                            <span class="episode-detail__fab-gen-wrap">
-                              <NButton
-                                size="tiny"
-                                type="primary"
-                                :loading="sceneStore.isGenerating"
-                                :disabled="!canGenerateSceneVideo"
-                                @click="generateSceneVideo"
-                              >
-                                生成视频
-                              </NButton>
-                            </span>
-                          </template>
-                          <span v-if="!selectedScene">需有已入库场次（可通过分镜控制台或 AI 分镜剧本生成）</span>
-                          <span v-else-if="storyboardJobRunning">分镜剧本任务运行中</span>
-                          <span v-else-if="selectedScene?.status === 'processing'">当前场次视频生成中</span>
-                        </NTooltip>
-                      </template>
-                    </StoryboardScriptEditor>
-                  </div>
-                </main>
-
-                <aside class="episode-detail__preview-col">
-                  <div class="episode-detail__preview-label">预览</div>
-                  <div class="episode-detail__preview-frame" aria-label="竖屏 9:16 预览区域">
-                    <div class="episode-detail__preview-box">
-                      <video
-                        v-if="previewTake?.videoUrl"
-                        class="episode-detail__preview-video"
-                        controls
-                        playsinline
-                        :src="previewTake.videoUrl"
-                        :poster="previewTake.thumbnailUrl ?? undefined"
-                      />
-                      <img
-                        v-else-if="previewTake?.thumbnailUrl"
-                        :src="previewTake.thumbnailUrl"
-                        alt=""
-                        class="episode-detail__preview-poster"
-                      />
-                      <div v-else class="episode-detail__preview-empty">
-                        <span class="episode-detail__preview-empty-icon" aria-hidden="true">🎬</span>
-                        <span>未生成内容</span>
+                          <div class="episode-detail__asset-thumb-wrap">
+                            <img
+                              v-if="tile.avatarUrl"
+                              :src="tile.avatarUrl"
+                              alt=""
+                              class="episode-detail__asset-thumb"
+                            />
+                            <div v-else class="episode-detail__asset-placeholder" />
+                          </div>
+                          <div class="episode-detail__asset-name">{{ tile.label }}</div>
+                        </div>
+                        <p
+                          v-if="!characterAssetTiles.length"
+                          class="episode-detail__muted episode-detail__asset-empty"
+                        >
+                          本集暂未出现角色（台词或分镜出镜后会显示）
+                        </p>
                       </div>
-                    </div>
+                    </section>
+
+                    <NDivider class="episode-detail__divider" />
+
+                    <section class="episode-detail__asset-block">
+                      <div class="episode-detail__asset-label">
+                        本集场景（{{ episodeLocations.length }}）
+                      </div>
+                      <div class="episode-detail__asset-grid episode-detail__asset-grid--loc">
+                        <div
+                          v-for="loc in episodeLocations"
+                          :key="loc.id"
+                          class="episode-detail__asset-tile"
+                        >
+                          <div
+                            class="episode-detail__asset-thumb-wrap episode-detail__asset-thumb-wrap--loc"
+                          >
+                            <img
+                              v-if="loc.imageUrl"
+                              :src="loc.imageUrl"
+                              alt=""
+                              class="episode-detail__asset-thumb"
+                            />
+                            <div v-else class="episode-detail__asset-placeholder" />
+                          </div>
+                          <div class="episode-detail__asset-name">{{ loc.name }}</div>
+                        </div>
+                        <p
+                          v-if="!episodeLocations.length"
+                          class="episode-detail__muted episode-detail__asset-empty"
+                        >
+                          本集场次尚未绑定场地库场景
+                        </p>
+                      </div>
+                    </section>
                   </div>
                 </aside>
-              </div>
 
-              <div
-                v-if="scenes.length"
-                class="episode-detail__work-bottom"
-              >
-                <div class="episode-detail__transport">
-                  <NButton size="small" quaternary circle disabled aria-label="播放（占位）">
-                    <template #icon>
-                      <CaretForwardOutline />
-                    </template>
-                  </NButton>
-                  <span class="episode-detail__transport-time">
-                    00:00 / {{ sceneDurationLabel }}
-                  </span>
-                  <span class="episode-detail__transport-hint">时间轴占位，成片以导出为准</span>
-                </div>
+                <div class="episode-detail__work">
+                  <div class="episode-detail__work-top">
+                    <main class="episode-detail__main-col">
+                      <div class="episode-detail__editor-wrap">
+                        <StoryboardScriptEditor
+                          :key="episodeId"
+                          :project-id="projectId"
+                          :script="editorScript"
+                          :editing="scriptEditing"
+                          :saving="scriptSaving"
+                          :fragment-title="
+                            selectedScene ? `片段 ${selectedScene.sceneNum}` : '片段'
+                          "
+                          @start-edit="scriptEditing = true"
+                          @cancel="onCancelScriptEdit"
+                          @save="onSaveScript"
+                        >
+                          <template #fab-extra />
+                          <template #below-editor>
+                            <NTooltip :disabled="canGenerateSceneVideo" placement="top">
+                              <template #trigger>
+                                <span class="episode-detail__fab-gen-wrap">
+                                  <NButton
+                                    size="tiny"
+                                    type="primary"
+                                    :loading="sceneStore.isGenerating"
+                                    :disabled="!canGenerateSceneVideo"
+                                    @click="generateSceneVideo"
+                                  >
+                                    生成视频
+                                  </NButton>
+                                </span>
+                              </template>
+                              <span v-if="!selectedScene"
+                                >需有已入库场次（可通过分镜控制台或 AI 分镜剧本生成）</span
+                              >
+                              <span v-else-if="storyboardJobRunning">分镜剧本任务运行中</span>
+                              <span v-else-if="selectedScene?.status === 'processing'"
+                                >当前场次视频生成中</span
+                              >
+                            </NTooltip>
+                          </template>
+                        </StoryboardScriptEditor>
+                      </div>
+                    </main>
 
-                <footer class="episode-detail__shot-rail">
-                  <button
-                    v-for="sc in scenes"
-                    :key="sc.id"
-                    type="button"
-                    class="episode-detail__rail-cell"
-                    :class="{ 'is-active': sc.id === selectedSceneId }"
-                    @click="selectedSceneId = sc.id"
-                  >
-                    <div
-                      class="episode-detail__rail-thumb"
-                    >
-                      <span class="episode-detail__rail-num">{{ sc.sceneNum }}</span>
+                    <aside class="episode-detail__preview-col">
+                      <div class="episode-detail__preview-label">预览</div>
+                      <div class="episode-detail__preview-frame" aria-label="竖屏 9:16 预览区域">
+                        <div class="episode-detail__preview-box">
+                          <video
+                            v-if="previewTake?.videoUrl"
+                            class="episode-detail__preview-video"
+                            controls
+                            playsinline
+                            :src="previewTake.videoUrl"
+                            :poster="previewTake.thumbnailUrl ?? undefined"
+                          />
+                          <img
+                            v-else-if="previewTake?.thumbnailUrl"
+                            :src="previewTake.thumbnailUrl"
+                            alt=""
+                            class="episode-detail__preview-poster"
+                          />
+                          <div v-else class="episode-detail__preview-empty">
+                            <span class="episode-detail__preview-empty-icon" aria-hidden="true"
+                              >🎬</span
+                            >
+                            <span>未生成内容</span>
+                          </div>
+                        </div>
+                      </div>
+                    </aside>
+                  </div>
+
+                  <div v-if="scenes.length" class="episode-detail__work-bottom">
+                    <div class="episode-detail__transport">
+                      <NButton size="small" quaternary circle disabled aria-label="播放（占位）">
+                        <template #icon>
+                          <CaretForwardOutline />
+                        </template>
+                      </NButton>
+                      <span class="episode-detail__transport-time">
+                        00:00 / {{ sceneDurationLabel }}
+                      </span>
+                      <span class="episode-detail__transport-hint">时间轴占位，成片以导出为准</span>
                     </div>
-                    <span class="episode-detail__rail-dur">{{ sc.status === 'processing' ? '生成中' : (sc.status || '待生成') }}</span>
-                  </button>
-                </footer>
+
+                    <footer class="episode-detail__shot-rail">
+                      <button
+                        v-for="sc in scenes"
+                        :key="sc.id"
+                        type="button"
+                        class="episode-detail__rail-cell"
+                        :class="{ 'is-active': sc.id === selectedSceneId }"
+                        @click="selectedSceneId = sc.id"
+                      >
+                        <div class="episode-detail__rail-thumb">
+                          <span class="episode-detail__rail-num">{{ sc.sceneNum }}</span>
+                        </div>
+                        <span class="episode-detail__rail-dur">{{
+                          sc.status === 'processing' ? '生成中' : sc.status || '待生成'
+                        }}</span>
+                      </button>
+                    </footer>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-          </div>
-        </NSpin>
-      </template>
+          </NSpin>
+        </template>
       </div>
     </NSpin>
   </div>
 </template>
-
 
 <style scoped>
 .episode-detail {
@@ -1122,7 +1138,9 @@ function onCancelScriptEdit() {
   align-items: center;
   justify-content: center;
   min-height: 0;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 .episode-detail__preview-box:hover {
   transform: translateY(-2px);
@@ -1192,7 +1210,9 @@ function onCancelScriptEdit() {
   background: var(--color-bg-gray);
   cursor: pointer;
   text-align: center;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
 }
 .episode-detail__rail-cell.is-active {
   border-color: var(--color-primary);

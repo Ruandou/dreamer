@@ -27,7 +27,10 @@ const StoryboardMention = Mention.extend({
 
     return [
       'span',
-      mergeAttributes(HTMLAttributes, { 'data-avatar-url': avatar || '', class: 'storyboard-mention' }),
+      mergeAttributes(HTMLAttributes, {
+        'data-avatar-url': avatar || '',
+        class: 'storyboard-mention'
+      }),
       ['span', { class: 'storyboard-mention__name' }, `@${label}`],
       avatar
         ? ['img', { src: avatar, class: 'storyboard-mention__avatar', draggable: 'false' }]
@@ -60,18 +63,25 @@ const StoryboardLocation = Node.create({
     const label = node.attrs.label ?? node.attrs.id ?? ''
     const imageUrl = node.attrs.imageUrl
 
-    return [
+    const result: [string, ...unknown[]] = [
       'span',
-      mergeAttributes(HTMLAttributes, { 'data-storyboard-location': '', class: 'storyboard-location' }),
-      ['span', { class: 'storyboard-location__name' }, `📍${label}`],
-      imageUrl
-        ? ['img', { src: imageUrl, class: 'storyboard-location__image', draggable: 'false' }]
-        : null
-    ].filter(Boolean)
+      mergeAttributes(HTMLAttributes, {
+        'data-storyboard-location': '',
+        class: 'storyboard-location'
+      }),
+      ['span', { class: 'storyboard-location__name' }, `📍${label}`]
+    ]
+    if (imageUrl) {
+      result.push([
+        'img',
+        { src: imageUrl, class: 'storyboard-location__image', draggable: 'false' }
+      ])
+    }
+    return result
   }
 })
 
-import { NButton, NSpace } from 'naive-ui'
+import { NButton } from 'naive-ui'
 import { CreateOutline } from '@vicons/ionicons5'
 import type { ScriptContent, Character, ProjectLocation } from '@dreamer/shared/types'
 import { api } from '@/api'
@@ -94,8 +104,7 @@ const props = withDefaults(
     saving: false,
     script: undefined,
     fragmentTitle: '',
-    hint:
-      '片段时长请限制在 4–15s。输入「@」可引用角色形象；角色与场景亦可在左侧资产库查看。',
+    hint: '片段时长请限制在 4–15s。输入「@」可引用角色形象；角色与场景亦可在左侧资产库查看。',
     editButtonLabel: '编辑脚本'
   }
 )
@@ -132,7 +141,7 @@ const editor = useEditor({
     StoryboardLocation
   ],
   editorProps: {
-    handleKeyDown: (view, event) => {
+    handleKeyDown: (_view, event) => {
       // 处理下拉框显示时的Enter键
       if (showDropdown.value && dropdownItems.value.length > 0) {
         if (event.key === 'Enter') {
@@ -147,7 +156,8 @@ const editor = useEditor({
         }
         if (event.key === 'ArrowUp') {
           event.preventDefault()
-          selectedIndex.value = (selectedIndex.value - 1 + dropdownItems.value.length) % dropdownItems.value.length
+          selectedIndex.value =
+            (selectedIndex.value - 1 + dropdownItems.value.length) % dropdownItems.value.length
           return true
         }
         if (event.key === 'Escape') {
@@ -168,7 +178,7 @@ const editor = useEditor({
       handleTextChange(editor.value)
     }
   }
-}, [props.editing])
+})
 
 // 监听文本变化，检测@
 function handleTextChange(editor: any) {
@@ -181,10 +191,10 @@ function handleTextChange(editor: any) {
     const query = match[1]
 
     // 过滤匹配的角色
-    const filtered = flatItems.value.filter(item => 
+    const filtered = flatItems.value.filter((item) =>
       item.label.toLowerCase().includes(query.toLowerCase())
     )
-    
+
     if (filtered.length > 0 || query === '') {
       // 计算@的位置 - 直接用窗口坐标，因为下拉框是fixed定位
       const coords = editor.view.coordsAtPos($from.pos - match[0].length)
@@ -193,19 +203,19 @@ function handleTextChange(editor: any) {
         from: $from.pos - match[0].length,
         to: $from.pos
       }
-      
+
       // 定位下拉框 - coords已经是窗口坐标，直接用
       mentionPosition.value = {
         left: coords.left,
         top: coords.bottom + 4
       }
-      
+
       selectedIndex.value = 0
       showDropdown.value = true
       return
     }
   }
-  
+
   // 没有匹配到@，隐藏下拉框
   showDropdown.value = false
 }
@@ -230,7 +240,7 @@ function selectItem(item: StoryboardMentionItem) {
     })
     .insertContent(' ')
     .run()
-  
+
   showDropdown.value = false
 }
 
@@ -245,7 +255,7 @@ function selectCurrentItem() {
 // 监听键盘事件 - 在editor外部监听
 function handleGlobalKeyDown(e: KeyboardEvent) {
   if (!showDropdown.value || !dropdownItems.value.length) return
-  
+
   if (e.key === 'ArrowDown') {
     e.preventDefault()
     e.stopPropagation()
@@ -253,7 +263,8 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
     e.stopPropagation()
-    selectedIndex.value = (selectedIndex.value - 1 + dropdownItems.value.length) % dropdownItems.value.length
+    selectedIndex.value =
+      (selectedIndex.value - 1 + dropdownItems.value.length) % dropdownItems.value.length
   } else if (e.key === 'Enter') {
     e.preventDefault()
     e.stopPropagation()
@@ -268,7 +279,7 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
 // 点击页面其他地方关闭下拉框
 function handleClickOutside(e: Event) {
   const dropdown = document.querySelector('.storyboard-mention-dropdown')
-  if (dropdown && !dropdown.contains(e.target as Node)) {
+  if (dropdown && !dropdown.contains(e.target as globalThis.Node)) {
     showDropdown.value = false
   }
 }
@@ -297,7 +308,7 @@ watch(
     const next = scriptToEditorDoc(s ?? null, characters.value, locations.value)
     const cur = editor.value.getJSON()
     if (JSON.stringify(cur) === JSON.stringify(next)) return
-    editor.value.commands.setContent(next, { emitUpdate: false })
+    editor.value.commands.setContent(next, { emitUpdate: false } as any)
   },
   { deep: true }
 )
@@ -311,31 +322,35 @@ watch(
   { immediate: true }
 )
 
-watch(
-  characters,
-  (chars) => {
-    if (!editor.value || chars.length === 0) return
-    const next = scriptToEditorDoc(props.script ?? null, chars, locations.value)
-    editor.value.commands.setContent(next, false)
-  }
-)
+watch(characters, (chars) => {
+  if (!editor.value || chars.length === 0) return
+  const next = scriptToEditorDoc(props.script ?? null, chars, locations.value)
+  editor.value.commands.setContent(next, { emitUpdate: false } as any)
+})
 
-watch(
-  locations,
-  (locs) => {
-    if (!editor.value || locs.length === 0) return
-    const next = scriptToEditorDoc(props.script ?? null, characters.value, locs)
-    editor.value.commands.setContent(next, false)
-  }
-)
+watch(locations, (locs) => {
+  if (!editor.value || locs.length === 0) return
+  const next = scriptToEditorDoc(props.script ?? null, characters.value, locs)
+  editor.value.commands.setContent(next, { emitUpdate: false } as any)
+})
 
 async function loadCharacters() {
   // 先加测试数据，确保一定有内容
   flatItems.value = [
-    { id: 'test1', characterId: '1', label: '测试角色 · 形象1', avatarUrl: 'https://picsum.photos/100/100' },
-    { id: 'test2', characterId: '2', label: '测试角色 · 形象2', avatarUrl: 'https://picsum.photos/100/100' }
+    {
+      id: 'test1',
+      characterId: '1',
+      label: '测试角色 · 形象1',
+      avatarUrl: 'https://picsum.photos/100/100'
+    },
+    {
+      id: 'test2',
+      characterId: '2',
+      label: '测试角色 · 形象2',
+      avatarUrl: 'https://picsum.photos/100/100'
+    }
   ]
-  
+
   if (!props.projectId) return
   try {
     const res = await api.get<Character[]>(`/characters?projectId=${props.projectId}`)
@@ -372,9 +387,7 @@ async function loadLocations() {
 function handleSave() {
   if (!editor.value) return
   const doc = editor.value.getJSON() as Record<string, unknown>
-  const base =
-    props.script ??
-    ({ title: '', summary: '', scenes: [] } satisfies ScriptContent)
+  const base = props.script ?? ({ title: '', summary: '', scenes: [] } satisfies ScriptContent)
   const next: ScriptContent = {
     ...base,
     editorDoc: doc
@@ -391,7 +404,9 @@ onBeforeUnmount(() => {
   <div class="storyboard-script-editor" :class="{ 'is-readonly': !editing, 'is-editing': editing }">
     <div class="storyboard-script-editor__head-row">
       <div class="storyboard-script-editor__head-left">
-        <span v-if="fragmentTitle" class="storyboard-script-editor__fragment-title">{{ fragmentTitle }}</span>
+        <span v-if="fragmentTitle" class="storyboard-script-editor__fragment-title">{{
+          fragmentTitle
+        }}</span>
         <span v-if="hint" class="storyboard-script-editor__hint">{{ hint }}</span>
       </div>
       <div v-if="$slots['head-extra']" class="storyboard-script-editor__head-extra">
@@ -399,17 +414,15 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <div v-if="editor" class="storyboard-script-editor__canvas">
-      <div 
-        class="storyboard-script-editor__pane"
-      >
+      <div class="storyboard-script-editor__pane">
         <EditorContent :editor="editor" @keydown="handleGlobalKeyDown" />
         <!-- 自定义@下拉框，用fixed定位基于窗口 -->
         <Teleport to="body">
           <div
             v-if="showDropdown && editing"
             class="storyboard-mention-dropdown"
-            :style="{ 
-              left: `${mentionPosition.left}px`, 
+            :style="{
+              left: `${mentionPosition.left}px`,
               top: `${mentionPosition.top}px`,
               position: 'fixed'
             }"
@@ -425,7 +438,12 @@ onBeforeUnmount(() => {
               type="button"
               @click="selectItem(item)"
             >
-              <img v-if="item.avatarUrl" :src="item.avatarUrl" alt="" class="storyboard-mention-dropdown__avatar">
+              <img
+                v-if="item.avatarUrl"
+                :src="item.avatarUrl"
+                alt=""
+                class="storyboard-mention-dropdown__avatar"
+              />
               <span class="storyboard-mention-dropdown__label">{{ item.label }}</span>
             </button>
           </div>
