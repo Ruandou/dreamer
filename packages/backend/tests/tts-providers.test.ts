@@ -1,12 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { VoiceConfig } from '@dreamer/shared/types'
 
-// Mock storage
-vi.mock('../src/services/storage.js', () => ({
-  uploadFile: vi.fn().mockResolvedValue('https://storage.example.com/audio.mp3'),
-  generateFileKey: vi.fn().mockReturnValue('assets/tts_audio.mp3')
-}))
-
 const baseVc: VoiceConfig = {
   gender: 'female',
   age: 'young',
@@ -34,7 +28,16 @@ describe('TTS providers', () => {
       expect(id.length).toBeGreaterThan(0)
     })
 
-    it.skip('synthesize posts to Ark - TODO: storage mock not applied in ESM', async () => {
+    it('synthesize posts to Ark and uploads to storage', async () => {
+      // Mock storage functions
+      const mockUploadFile = vi.fn().mockResolvedValue('https://storage.example.com/audio.mp3')
+      const mockGenerateFileKey = vi.fn().mockReturnValue('assets/tts_audio.mp3')
+
+      vi.doMock('../src/services/storage.js', () => ({
+        uploadFile: mockUploadFile,
+        generateFileKey: mockGenerateFileKey
+      }))
+
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
@@ -42,14 +45,19 @@ describe('TTS providers', () => {
           arrayBuffer: async () => new Uint8Array([1, 2]).buffer
         })
       )
+
       const { AliyunTTSProvider } = await import('../src/services/tts/aliyun.js')
       const p = new AliyunTTSProvider()
       const url = await p.synthesize('你好', p.getVoiceId(baseVc), { speed: 1.1 })
+
       expect(url).toBe('https://storage.example.com/audio.mp3')
       expect(vi.mocked(fetch)).toHaveBeenCalledWith(
         expect.stringContaining('/audio/tts'),
         expect.objectContaining({ method: 'POST' })
       )
+      expect(mockUploadFile).toHaveBeenCalled()
+
+      vi.doUnmock('../src/services/storage.js')
     })
 
     it('throws when API error', async () => {
@@ -83,7 +91,16 @@ describe('TTS providers', () => {
       expect(p.getVoiceId(baseVc)).toBeTruthy()
     })
 
-    it.skip('synthesize calls openspeech - ESM mock limitation', async () => {
+    it('synthesize calls openspeech and uploads to storage', async () => {
+      // Mock storage functions
+      const mockUploadFile = vi.fn().mockResolvedValue('https://storage.example.com/audio.mp3')
+      const mockGenerateFileKey = vi.fn().mockReturnValue('assets/tts_audio.mp3')
+
+      vi.doMock('../src/services/storage.js', () => ({
+        uploadFile: mockUploadFile,
+        generateFileKey: mockGenerateFileKey
+      }))
+
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
@@ -91,14 +108,19 @@ describe('TTS providers', () => {
           arrayBuffer: async () => new ArrayBuffer(0)
         })
       )
+
       const { VolcanoTTSProvider } = await import('../src/services/tts/volcano.js')
       const p = new VolcanoTTSProvider()
       const url = await p.synthesize('hi', 'vid')
+
       expect(url).toBe('https://storage.example.com/audio.mp3')
       expect(vi.mocked(fetch)).toHaveBeenCalledWith(
         'https://openspeech.bytedance.com/api/v1/tts',
         expect.any(Object)
       )
+      expect(mockUploadFile).toHaveBeenCalled()
+
+      vi.doUnmock('../src/services/storage.js')
     })
 
     it('throws when API not ok', async () => {
@@ -126,7 +148,16 @@ describe('TTS providers', () => {
       vi.restoreAllMocks()
     })
 
-    it.skip('delegates to Aliyun - ESM mock limitation', async () => {
+    it('delegates to Aliyun and uploads to storage', async () => {
+      // Mock storage functions
+      const mockUploadFile = vi.fn().mockResolvedValue('https://storage.example.com/audio.mp3')
+      const mockGenerateFileKey = vi.fn().mockReturnValue('assets/tts_audio.mp3')
+
+      vi.doMock('../src/services/storage.js', () => ({
+        uploadFile: mockUploadFile,
+        generateFileKey: mockGenerateFileKey
+      }))
+
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
@@ -134,6 +165,7 @@ describe('TTS providers', () => {
           arrayBuffer: async () => new ArrayBuffer(0)
         })
       )
+
       const { synthesizeSpeech } = await import('../src/services/tts/index.js')
       const url = await synthesizeSpeech('你好世界', {
         gender: 'female',
@@ -142,7 +174,11 @@ describe('TTS providers', () => {
         timbre: 'warm_solid',
         speed: 'medium'
       })
+
       expect(url).toBe('https://storage.example.com/audio.mp3')
+      expect(mockUploadFile).toHaveBeenCalled()
+
+      vi.doUnmock('../src/services/storage.js')
     })
   })
 })

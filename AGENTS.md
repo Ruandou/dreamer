@@ -25,19 +25,19 @@ config({ path: '../../.env' })
 import Fastify from 'fastify' // 若 Fastify 之前的路由链已读 env，仍可能踩坑
 
 // 错误！PrismaClient 在 dotenv 之前被初始化
-import { PrismaClient } from '@prisma/client'  // ❌
-import 'dotenv/config'  // 太晚了
+import { PrismaClient } from '@prisma/client' // ❌
+import 'dotenv/config' // 太晚了
 ```
 
 ### 防回归（避免反复踩坑）
 
-| 场景 | 做法 |
-|------|------|
-| 新增后端入口（脚本 / 子进程） | 第一行 `import './bootstrap-env.js'`（路径相对该入口），或 `node --import ./dist/bootstrap-env.js …` |
-| 改 `index.ts` / `worker.ts` | **禁止**在 `import './bootstrap-env.js'` 之上再加任何会加载业务代码的 `import` |
-| 单测只 `import` 某个 service | 已在 `vitest.config.ts` 里 `setupFiles: ['./src/bootstrap-env.ts']`，一般无需再抄 |
-| 生产 `pnpm start` | `package.json` 已用 `node --import ./dist/bootstrap-env.js`，勿删 |
-| 方舟图片成本展示 | 从 `images/generations` 的 `usage` 取 token，按 `ARK_IMAGE_YUAN_PER_MILLION_TOKENS`（默认 `4`，即每百万 token 约 4 元）估算后写入 `CharacterImage.imageCost` / `Location.imageCost`；可按控制台账单改 `.env` |
+| 场景                          | 做法                                                                                                                                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 新增后端入口（脚本 / 子进程） | 第一行 `import './bootstrap-env.js'`（路径相对该入口），或 `node --import ./dist/bootstrap-env.js …`                                                                                                         |
+| 改 `index.ts` / `worker.ts`   | **禁止**在 `import './bootstrap-env.js'` 之上再加任何会加载业务代码的 `import`                                                                                                                               |
+| 单测只 `import` 某个 service  | 已在 `vitest.config.ts` 里 `setupFiles: ['./src/bootstrap-env.ts']`，一般无需再抄                                                                                                                            |
+| 生产 `pnpm start`             | `package.json` 已用 `node --import ./dist/bootstrap-env.js`，勿删                                                                                                                                            |
+| 方舟图片成本展示              | 从 `images/generations` 的 `usage` 取 token，按 `ARK_IMAGE_YUAN_PER_MILLION_TOKENS`（默认 `4`，即每百万 token 约 4 元）估算后写入 `CharacterImage.imageCost` / `Location.imageCost`；可按控制台账单改 `.env` |
 
 ## 模型调用可观测性
 
@@ -48,12 +48,14 @@ import 'dotenv/config'  // 太晚了
 ## 启动命令
 
 后端必须在项目根目录运行：
+
 ```bash
 cd /Users/leifu/Learn/dreamer
 pnpm dev:backend
 ```
 
 前端同理：
+
 ```bash
 cd /Users/leifu/Learn/dreamer
 pnpm dev:frontend
@@ -62,6 +64,7 @@ pnpm dev:frontend
 ## Prisma 数据库
 
 确保 PostgreSQL 已启动后再操作数据库：
+
 ```bash
 pnpm docker:up    # 启动数据库
 pnpm db:push      # 同步 schema（只做增量更新）
@@ -121,7 +124,8 @@ pnpm db:push      # 同步 schema（只做增量更新）
    - lint-staged 命令: `pnpm exec lint-staged`
    - **后端**（`packages/backend/**/*.{ts,js}`）: `vitest related`（与暂存改动相关）
    - **前端**（`packages/frontend/**/*.{ts,vue}`）: `pnpm --filter @dreamer/frontend test`（当前前端测试量少，全量 `vitest run`）
-  - 注意：勿随意删除或弱化上述规则；若调整 lint-staged，须保持前后端测试仍会在提交前执行。
+
+- 注意：勿随意删除或弱化上述规则；若调整 lint-staged，须保持前后端测试仍会在提交前执行。
 
 ### 测试命令
 
@@ -175,16 +179,17 @@ git commit -m "feat: 添加新功能"
 
 任务中心（`/jobs`）**必须**显示所有类型的任务，包括：
 
-| 类型 | 说明 | API 来源 |
-|------|------|----------|
-| `video` | 视频生成任务 | `/api/tasks` |
-| `import` | 剧本导入任务 | `/api/import/tasks` |
-| `pipeline` | Pipeline 执行任务 | `/api/pipeline/jobs` |
-| `image` | 图片生成任务（定妆 / 定场图，BullMQ） | `/api/image-generation/jobs` |
+| 类型       | 说明                                  | API 来源                     |
+| ---------- | ------------------------------------- | ---------------------------- |
+| `video`    | 视频生成任务                          | `/api/tasks`                 |
+| `import`   | 剧本导入任务                          | `/api/import/tasks`          |
+| `pipeline` | Pipeline 执行任务                     | `/api/pipeline/jobs`         |
+| `image`    | 图片生成任务（定妆 / 定场图，BullMQ） | `/api/image-generation/jobs` |
 
 `pipeline` 在任务中心仅在 **「类型」列** 用中文展示 **`jobType`**（`/api/pipeline/jobs` 须返回 `jobType`，`Jobs.vue` 的 `pipelineSubtypeLabel`）。新增大纲相关 `jobType` 时须同步后端列表字段与该映射。分集「AI 生成分镜脚本」使用 `jobType`=`episode-storyboard-script`（`PipelineJob`，由 `POST /api/episodes/:id/generate-storyboard-script` 创建，与完整流水线共用 `/api/pipeline/jobs` 列表）。
 
 新增任务类型时，**必须**同步更新：
+
 1. 后端 API（获取任务列表）
 2. 前端 `Jobs.vue`（添加类型支持）
 3. AGENTS.md（本规则）
@@ -221,6 +226,7 @@ services/
 ### 模块职责
 
 语音管理模块负责：
+
 1. 从剧本对话生成结构化语音配置（VoiceSegment）
 2. 将 VoiceConfig 映射为各 TTS 平台的 voice_id
 3. 提供统一 TTS 合成接口
@@ -281,10 +287,7 @@ export function getTTSProvider(platform: 'aliyun' | 'volcano'): TTSProvider
 ```typescript
 // packages/backend/src/services/tts/mapper.ts
 
-export function getVoiceIdFromConfig(
-  config: VoiceConfig,
-  platform: 'aliyun' | 'volcano'
-): string
+export function getVoiceIdFromConfig(config: VoiceConfig, platform: 'aliyun' | 'volcano'): string
 
 // 映射表示例
 const ALIYUN_VOICE_MAP = {
@@ -294,10 +297,16 @@ const ALIYUN_VOICE_MAP = {
       clear_bright: 'zh_male_qingse',
       default: 'zh_male_shaonian'
     },
-    middle_aged: { /* ... */ },
-    old: { /* ... */ }
+    middle_aged: {
+      /* ... */
+    },
+    old: {
+      /* ... */
+    }
   },
-  female: { /* ... */ }
+  female: {
+    /* ... */
+  }
 }
 ```
 
@@ -307,11 +316,11 @@ const ALIYUN_VOICE_MAP = {
 // packages/backend/src/services/seedance-audio.ts
 
 export interface SeedanceAudioSegment {
-  character_tag: string      // @Character1
+  character_tag: string // @Character1
   text: string
   voice_config: VoiceConfig
-  start_time: number        // 秒
-  duration: number          // 秒
+  start_time: number // 秒
+  duration: number // 秒
 }
 
 export interface SeedanceAudioPayload {
@@ -406,6 +415,7 @@ pnpm run db:migrate:deploy
 ### DATABASE_URL not found
 
 检查 index.ts 第一行是否是：
+
 ```typescript
 import { config } from 'dotenv'
 config({ path: '../../.env' })
@@ -415,4 +425,55 @@ config({ path: '../../.env' })
 
 ```bash
 lsof -ti:4000 | xargs kill -9
+```
+
+---
+
+## YOLO 执行模式（自动执行计划）
+
+当用户提供了明确的执行计划（如 `docs/plans/*.md` 或对话中列出的步骤），**必须自动执行到底，不得中途询问确认**。
+
+### 行为规则
+
+| 场景              | 处理方式                        |
+| ----------------- | ------------------------------- |
+| 用户给了计划/步骤 | **直接执行**，不问"要不要继续"  |
+| 命令失败          | 自动重试3次，然后换替代方案     |
+| 测试失败          | 修实现代码，**绝不改测试**      |
+| 不确定怎么弄      | 自己查文档/代码，**不要问用户** |
+| 需要选择          | 按最佳实践选，执行后告知        |
+| 全部完成          | 统一汇报结果，不逐条汇报        |
+
+### 禁止行为
+
+- ❌ "做到这一步了，要继续吗？"
+- ❌ "这样对吗？"
+- ❌ "确认一下..."
+- ❌ 每做一步就汇报一次
+
+### 执行流程
+
+```
+1. 读取计划/步骤
+2. 检查已完成的部分（跳过）
+3. 执行下一步
+4. 标记完成
+5. 重复 2-4 直到全部完成
+6. 最终统一汇报
+```
+
+### 最终汇报格式
+
+```
+✅ 任务完成
+
+完成内容:
+1. xxx
+2. xxx
+
+关键结果:
+- 文件: xxx
+- 功能: xxx
+
+（如有问题单独列出）
 ```
