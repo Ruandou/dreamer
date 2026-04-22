@@ -47,95 +47,34 @@
         <div v-else class="script-preview" v-html="renderedContent"></div>
       </div>
 
-      <!-- 右侧 AI 面板 -->
+      <!-- 右侧 AI 编剧助手 -->
       <div class="ai-panel">
-        <NCard title="🎬 AI 编剧助手" size="small" :bordered="false">
-          <div class="ai-input-area">
-            <NInput
-              v-model="aiInstruction"
-              type="textarea"
-              placeholder="输入修改指令..."
-              :rows="4"
-              :disabled="aiLoading"
-            />
-            <NButton
-              type="primary"
-              class="ai-execute-btn"
-              :loading="aiLoading"
-              :disabled="!aiInstruction.trim()"
-              @click="executeAI"
-            >
-              ✨ 执行
-            </NButton>
-          </div>
-
-          <NDivider>⚡ 快捷指令</NDivider>
-          <div class="quick-commands">
-            <NButton size="small" @click="setInstruction('续写下一幕')">续写</NButton>
-            <NButton size="small" @click="setInstruction('润色台词，使语言更生动')">润色</NButton>
-            <NButton size="small" @click="setInstruction('扩写动作描写，增加细节')">扩写</NButton>
-            <NButton size="small" @click="setInstruction('缩写，精简冗余描述')">缩写</NButton>
-          </div>
-
-          <NDivider>🎭 切换语气</NDivider>
-          <div class="tone-commands">
-            <NButton size="small" @click="setToneInstruction('平淡')">平淡</NButton>
-            <NButton size="small" @click="setToneInstruction('激动')">激动</NButton>
-            <NButton size="small" @click="setToneInstruction('疑惑')">疑惑</NButton>
-            <NButton size="small" @click="setToneInstruction('愤怒')">愤怒</NButton>
-          </div>
-        </NCard>
-
-        <NDivider>📋 操作历史</NDivider>
-        <div class="history-panel">
-          <div v-if="history.length === 0" class="empty-hint">暂无操作历史</div>
-          <div v-else class="history-list">
-            <div
-              v-for="(item, index) in history"
-              :key="index"
-              class="history-item"
-              @click="restoreHistory(index)"
-            >
-              <span class="history-desc">{{ item.description }}</span>
-              <span class="history-time">{{ formatTime(item.timestamp) }}</span>
-            </div>
-          </div>
-        </div>
+        <ChatPanel
+          :script-id="script?.id"
+          :script-content="content"
+          :script-title="script?.title"
+          @apply-changes="handleApplyChanges"
+        />
       </div>
     </div>
 
     <!-- 差异对比 Modal -->
-    <NModal v-model:show="showDiffModal" preset="card" title="AI 修改对比" style="width: 900px">
-      <div class="diff-container">
-        <div class="diff-panel">
-          <h4>修改前</h4>
-          <pre class="diff-text diff-old">{{ originalContent }}</pre>
-        </div>
-        <div class="diff-panel">
-          <h4>修改后</h4>
-          <pre class="diff-text diff-new">{{ revisedContent }}</pre>
-        </div>
-      </div>
-      <template #footer>
-        <div class="diff-actions">
-          <NButton @click="rejectRevision">拒绝</NButton>
-          <NButton type="primary" @click="acceptRevision">接受</NButton>
-        </div>
-      </template>
-    </NModal>
+    <DiffModal
+      v-model:show="showDiffModal"
+      :original-content="originalContent"
+      :revised-content="revisedContent"
+      @accept="handleAcceptRevision"
+      @reject="handleRejectRevision"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
-import { NButton, NInput, NCard, NDivider, NModal, useMessage } from 'naive-ui'
+import { ref, computed, nextTick } from 'vue'
+import { NButton, useMessage } from 'naive-ui'
 import { api } from '../api'
-
-interface HistoryEntry {
-  timestamp: Date
-  description: string
-  content: string
-}
+import ChatPanel from '../components/chat/ChatPanel.vue'
+import DiffModal from '../components/chat/DiffModal.vue'
 
 const message = useMessage()
 
@@ -147,13 +86,9 @@ const editingTitle = ref(false)
 const titleInputRef = ref<HTMLInputElement | null>(null)
 const isPreview = ref(false)
 const saveStatus = ref<'idle' | 'saving' | 'saved'>('idle')
-const aiInstruction = ref('')
-const aiLoading = ref(false)
 const showDiffModal = ref(false)
 const originalContent = ref('')
 const revisedContent = ref('')
-const history = ref<HistoryEntry[]>([])
-const maxHistorySize = 20
 
 // 自动保存
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -236,102 +171,43 @@ function exportScript() {
   message.success('导出成功')
 }
 
-// AI 修改
-async function executeAI() {
-  if (!script.value || !aiInstruction.value.trim()) return
-
-  pushHistory('执行 AI 指令: ' + aiInstruction.value)
-  originalContent.value = content.value
-  aiLoading.value = true
-
-  try {
-    const res = await api.post(`/scripts/${script.value.id}/ai-revise`, {
-      content: content.value,
-      instruction: aiInstruction.value
-    })
-    revisedContent.value = res.revisedContent
-    showDiffModal.value = true
-  } catch {
-    message.error('AI 修改失败')
-  } finally {
-    aiLoading.value = false
-    aiInstruction.value = ''
-  }
+// 预览切换
+function togglePreview() {
+  isPreview.value = !isPreview.value
 }
 
-function acceptRevision() {
+// 处理 AI 修改应用
+function handleApplyChanges(newContent: string) {
+  originalContent.value = content.value
+  revisedContent.value = newContent
+  showDiffModal.value = true
+}
+
+function handleAcceptRevision() {
   content.value = revisedContent.value
-  showDiffModal.value = false
   pushHistory('接受了 AI 修改')
   autoSave()
 }
 
-function rejectRevision() {
-  showDiffModal.value = false
+function handleRejectRevision() {
   pushHistory('拒绝了 AI 修改')
 }
 
-// 快捷指令
-function setInstruction(text: string) {
-  aiInstruction.value = text
-}
-
-function setToneInstruction(tone: string) {
-  const selected = getSelectedText()
-  if (selected) {
-    aiInstruction.value = `将以下台词改为${tone}的语气：\n${selected}`
-  } else {
-    aiInstruction.value = `整体语气改为${tone}`
-  }
-}
-
-function getSelectedText() {
-  const textarea = document.querySelector('.script-editor') as HTMLTextAreaElement
-  if (!textarea) return ''
-  const start = textarea.selectionStart
-  const end = textarea.selectionEnd
-  if (start === end) return ''
-  return content.value.substring(start, end)
-}
-
-// 操作历史
+// 操作历史（简化版，用于 undo 提示）
+const history: string[] = []
 function pushHistory(description: string) {
-  history.value.unshift({
-    timestamp: new Date(),
-    description,
-    content: content.value
-  })
-  if (history.value.length > maxHistorySize) {
-    history.value = history.value.slice(0, maxHistorySize)
+  history.unshift(description)
+  if (history.length > 20) {
+    history.length = 20
   }
-}
-
-function restoreHistory(index: number) {
-  const item = history.value[index]
-  content.value = item.content
-  pushHistory(`回退到：${item.description}`)
-}
-
-function formatTime(date: Date) {
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return '刚才'
-  if (minutes < 60) return `${minutes}分钟前`
-  return `${Math.floor(minutes / 60)}小时前`
-}
-
-// 预览切换
-function togglePreview() {
-  isPreview.value = !isPreview.value
 }
 
 // 加载草稿
 async function loadDraft() {
   try {
     const res = await api.get('/scripts/latest')
-    script.value = res
-    content.value = res.content || ''
+    script.value = res.data
+    content.value = res.data?.content || ''
   } catch {
     message.error('加载草稿失败')
   }
@@ -428,108 +304,9 @@ loadDraft()
 }
 
 .ai-panel {
-  width: 320px;
-  background: var(--color-bg-white);
+  width: 480px;
   border-left: 1px solid #e5e7eb;
-  overflow: auto;
+  overflow: hidden;
   display: flex;
-  flex-direction: column;
-}
-
-.ai-input-area {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.ai-execute-btn {
-  align-self: flex-end;
-}
-
-.quick-commands,
-.tone-commands {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.history-panel {
-  flex: 1;
-  overflow: auto;
-  padding: 0 16px 16px;
-}
-
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.history-item {
-  padding: 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.history-item:hover {
-  background: var(--color-bg-secondary);
-}
-
-.history-desc {
-  display: block;
-  font-size: 13px;
-  color: var(--color-text-primary);
-}
-
-.history-time {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-}
-
-.empty-hint {
-  text-align: center;
-  padding: 16px;
-  color: var(--color-text-tertiary);
-  font-size: 13px;
-}
-
-.diff-container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  max-height: 60vh;
-  overflow: auto;
-}
-
-.diff-panel h4 {
-  margin: 0 0 8px;
-  font-size: 14px;
-}
-
-.diff-text {
-  padding: 12px;
-  background: #f9fafb;
-  border-radius: 4px;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 400px;
-  overflow: auto;
-}
-
-.diff-old {
-  border-left: 3px solid #ef4444;
-}
-
-.diff-new {
-  border-left: 3px solid #22c55e;
-}
-
-.diff-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
 }
 </style>

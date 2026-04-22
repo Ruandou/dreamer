@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest } from 'fastify'
+import { FastifyInstance } from 'fastify'
 import { prisma } from '../lib/prisma.js'
 import { getRequestUserId } from '../plugins/auth.js'
 import { logInfo, logError } from '../lib/error-logger.js'
@@ -69,12 +69,14 @@ Scene 2. 破旧屋内 - 夜
 `
           }
         })
-        logInfo('自动创建默认草稿', { userId, scriptId: script.id })
+        logInfo('Scripts', '自动创建默认草稿', { userId, scriptId: script.id })
       }
 
       return script
     } catch (error) {
-      logError('获取最新草稿失败', { error })
+      logError('Scripts', '获取最新草稿失败', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return reply.status(500).send({ error: '获取最新草稿失败' })
     }
   })
@@ -92,10 +94,12 @@ Scene 2. 破旧屋内 - 夜
           data: { userId, title, content }
         })
 
-        logInfo('创建新剧本', { userId, scriptId: script.id })
+        logInfo('Scripts', '创建新剧本', { userId, scriptId: script.id })
         return reply.status(201).send(script)
       } catch (error) {
-        logError('创建剧本失败', { error })
+        logError('Scripts', '创建剧本失败', {
+          error: error instanceof Error ? error.message : String(error)
+        })
         return reply.status(500).send({ error: '创建剧本失败' })
       }
     }
@@ -150,14 +154,16 @@ Scene 2. 破旧屋内 - 夜
           data: {
             ...(title !== undefined && { title }),
             ...(content !== undefined && { content }),
-            ...(status !== undefined && { status: status as any })
+            ...(status !== undefined && { status })
           }
         })
 
-        logInfo('更新剧本', { userId, scriptId: id })
+        logInfo('Scripts', '更新剧本', { userId, scriptId: id })
         return updated
       } catch (error) {
-        logError('更新剧本失败', { error })
+        logError('Scripts', '更新剧本失败', {
+          error: error instanceof Error ? error.message : String(error)
+        })
         return reply.status(500).send({ error: '更新剧本失败' })
       }
     }
@@ -181,10 +187,12 @@ Scene 2. 破旧屋内 - 夜
         }
 
         await prisma.script.delete({ where: { id } })
-        logInfo('删除剧本', { userId, scriptId: id })
+        logInfo('Scripts', '删除剧本', { userId, scriptId: id })
         return reply.status(204).send()
       } catch (error) {
-        logError('删除剧本失败', { error })
+        logError('Scripts', '删除剧本失败', {
+          error: error instanceof Error ? error.message : String(error)
+        })
         return reply.status(500).send({ error: '删除剧本失败' })
       }
     }
@@ -198,7 +206,7 @@ Scene 2. 破旧屋内 - 夜
       const startTime = Date.now()
       try {
         const userId = getRequestUserId(request)
-        const { id } = request.params
+        const { id } = request.params as { id: string }
         const { content, instruction } = request.body
 
         // 验证剧本存在且属于当前用户
@@ -266,15 +274,16 @@ Scene 2. 破旧屋内 - 夜
           model: 'deepseek-v3',
           provider: 'ark',
           prompt: instruction,
-          requestParams: JSON.stringify({ contentLength: content.length }),
-          status: 'completed',
-          duration
+          requestParams: { contentLength: content.length, duration },
+          status: 'completed'
         }).catch(() => {}) // 静默失败，不影响主流程
 
-        logInfo('AI 修改成功', { userId, scriptId: id, duration })
+        logInfo('Scripts', 'AI 修改成功', { userId, scriptId: id, duration })
         return { revisedContent }
       } catch (error) {
-        logError('AI 修改异常', { error })
+        logError('Scripts', 'AI 修改异常', {
+          error: error instanceof Error ? error.message : String(error)
+        })
         return reply.status(500).send({ error: 'AI 修改异常' })
       }
     }

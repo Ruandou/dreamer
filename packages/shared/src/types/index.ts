@@ -568,3 +568,27 @@ export interface PipelineResult {
   storyboard?: StoryboardSegment[]
   seedanceConfigs?: SeedanceSegmentConfig[]
 }
+
+// ============ Chat / AI Screenwriter Assistant Types ============
+
+export interface ChatConversation {
+  id: string
+  scriptId?: string | null
+  title: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ChatMessage {
+  id: string
+  conversationId: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  status: string
+  metadata?: {
+    quickCommand?: string
+    suggestedEdit?: { type: string; content: string; description: string }
+    model?: string
+  }
+  createdAt: string
+}

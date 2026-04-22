@@ -333,3 +333,35 @@ export async function getModelApiCalls(q?: {
 }
 
 export { api }
+
+// ============ Chat / AI Screenwriter Assistant ============
+
+import type { ChatConversation, ChatMessage } from '@dreamer/shared/types'
+
+export async function getConversations(scriptId?: string, limit = 50, offset = 0) {
+  const params = new URLSearchParams()
+  if (scriptId) params.set('scriptId', scriptId)
+  params.set('limit', String(limit))
+  params.set('offset', String(offset))
+  const res = await api.get<{ items: ChatConversation[]; total: number }>(
+    `/chat/conversations?${params}`
+  )
+  return res.data
+}
+
+export async function createConversation(data: { scriptId?: string; title?: string }) {
+  const res = await api.post<ChatConversation>('/chat/conversations', data)
+  return res.data
+}
+
+export async function getConversationWithMessages(conversationId: string, limit = 50) {
+  const res = await api.get<{
+    conversation: ChatConversation
+    messages: ChatMessage[]
+  }>(`/chat/conversations/${conversationId}?limit=${limit}`)
+  return res.data
+}
+
+export async function deleteConversation(conversationId: string) {
+  return api.delete(`/chat/conversations/${conversationId}`)
+}
