@@ -6,6 +6,7 @@
 import type { ScriptContent } from '@dreamer/shared/types'
 import type { ModelCallLogContext } from '../ai/model-call-log.js'
 import { getMemoryService } from './memory-service.js'
+import { logError } from '../../lib/error-logger.js'
 
 /**
  * 安全提取并保存记忆（不抛出异常）
@@ -22,7 +23,10 @@ export async function safeExtractAndSaveMemories(
     const memoryService = getMemoryService()
     await memoryService.extractAndSaveMemories(projectId, episodeNum, episodeId, script, logCtx)
   } catch (error) {
-    console.error(`[memory] 第 ${episodeNum} 集记忆提取失败 (projectId=${projectId}):`, error)
+    logError('Memory', `第 ${episodeNum} 集记忆提取失败`, {
+      projectId,
+      error: error instanceof Error ? error.message : String(error)
+    })
     // 不阻断流程
   }
 }

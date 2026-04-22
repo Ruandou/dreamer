@@ -2,6 +2,7 @@
 
 import type { Prisma } from '@prisma/client'
 import { modelApiCallRepository } from '../../repositories/model-api-call-repository.js'
+import { logInfo, logError } from '../../lib/error-logger.js'
 
 /** 业务侧传入：标识「谁在什么操作里」触发了模型调用，写入 requestParams.op */
 export interface ModelCallLogContext {
@@ -47,14 +48,16 @@ export async function recordModelApiCall(input: RecordModelApiCallInput): Promis
         : ''
 
     // 终端摘要日志 - 包含关键信息
-    const costStr = input.cost ? ` ¥${input.cost.toFixed(4)}` : ''
     const promptLen = input.prompt?.length || 0
     const responseLen = input.responseData ? JSON.stringify(input.responseData).length : 0
-    const errorPreview = input.errorMsg ? ` ERROR: ${input.errorMsg.substring(0, 100)}` : ''
 
-    console.log(
-      `[model-api] ${input.provider} ${input.model} ${input.status}${op ? ` op=${op}` : ''}${costStr} | prompt: ${promptLen} chars, response: ${responseLen} chars${errorPreview}`
-    )
+    logInfo('ModelAPI', `${input.provider} ${input.model} ${input.status}`, {
+      op,
+      cost: input.cost,
+      promptLength: promptLen,
+      responseLength: responseLen,
+      errorPreview: input.errorMsg ? input.errorMsg.substring(0, 100) : undefined
+    })
 
     await modelApiCallRepository.create({
       userId: input.userId,
@@ -70,7 +73,9 @@ export async function recordModelApiCall(input: RecordModelApiCallInput): Promis
       takeId: input.takeId ?? null
     })
   } catch (e) {
-    console.error('[model-api] recordModelApiCall failed（本条不会出现在模型日志页）', e)
+    logError('ModelAPI', 'recordModelApiCall failed（本条不会出现在模型日志页）', {
+      error: e instanceof Error ? e.message : String(e)
+    })
   }
 }
 

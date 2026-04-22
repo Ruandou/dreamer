@@ -2,6 +2,7 @@
 // 使用 Seedance 2.0-fast 模型，默认 720p 分辨率
 
 import type { VoiceConfig } from '@dreamer/shared'
+import { logError } from '../../lib/error-logger.js'
 
 const ARK_API_KEY = process.env.ARK_API_KEY || ''
 const ARK_API_URL = process.env.ARK_API_URL || 'https://ark.cn-beijing.volces.com/api/v3'
@@ -22,7 +23,9 @@ export async function imageUrlToBase64(url: string): Promise<string> {
     const mimeType = response.headers.get('content-type') || 'image/jpeg'
     return `data:${mimeType};base64,${buffer.toString('base64')}`
   } catch (error) {
-    console.error('Failed to convert image to base64:', error)
+    logError('Seedance', 'Failed to convert image to base64', {
+      error: error instanceof Error ? error.message : String(error)
+    })
     throw error
   }
 }

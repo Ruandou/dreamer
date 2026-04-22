@@ -4,6 +4,7 @@
  */
 
 import type { VoiceConfig } from '@dreamer/shared/types'
+import { logWarning } from '../../lib/error-logger.js'
 
 // 阿里云 Qwen3-TTS 映射表
 const ALIYUN_VOICE_MAP: Record<string, Record<string, Record<string, string>>> = {
@@ -129,6 +130,6 @@ export function getVoiceIdFromConfig(
   }
 
   // 最终降级
-  console.warn(`Voice mapping failed for ${gender}/${age}/${timbre}, using default voice`)
+  logWarning('TTS', `Voice mapping failed for ${gender}/${age}/${timbre}, using default voice`)
   return DEFAULT_VOICE[platform]
 }

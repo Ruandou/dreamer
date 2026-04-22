@@ -4,6 +4,7 @@ import {
   MODEL_LOG_RESPONSE_MAX,
   type ModelCallLogContext
 } from './api-logger.js'
+import { logWarning } from '../../lib/error-logger.js'
 
 export type { ModelCallLogContext }
 
@@ -29,8 +30,9 @@ export async function logDeepSeekChat(
   options?: LogDeepSeekChatOptions
 ): Promise<void> {
   if (!log) {
-    console.warn(
-      '[model-api] DeepSeek 调用未写入 ModelApiCall：缺少 ModelCallLogContext（成功/失败均不落库）。请检查调用方是否传入 userId + op。'
+    logWarning(
+      'ModelAPI',
+      'DeepSeek 调用未写入 ModelApiCall：缺少 ModelCallLogContext（成功/失败均不落库）。请检查调用方是否传入 userId + op。'
     )
     return
   }
