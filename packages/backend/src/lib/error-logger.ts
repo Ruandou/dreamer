@@ -43,6 +43,21 @@ export function logError(
 }
 
 /**
+ * 记录信息日志（一般操作信息）
+ */
+export function logInfo(
+  context: string,
+  message: string,
+  metadata?: Record<string, unknown>
+): void {
+  console.log(`[${context}] ${message}`, {
+    timestamp: new Date().toISOString(),
+    context,
+    ...metadata
+  })
+}
+
+/**
  * 记录警告日志（非致命错误）
  */
 export function logWarning(

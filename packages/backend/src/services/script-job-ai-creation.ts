@@ -12,7 +12,7 @@ import {
   generateEpisodeOutline
 } from './script-writer.js'
 import { getMemoryService, safeExtractAndSaveMemories } from './memory/index.js'
-import { logError, logWarning } from '../lib/error-logger.js'
+import { logError, logWarning, logInfo } from '../lib/error-logger.js'
 import {
   updateJob,
   scriptFromJson,
@@ -61,9 +61,14 @@ export async function generateAllOutlines(
     completedBatches++
     const batchProgress = Math.round((completedBatches / totalBatches) * 100)
 
-    console.log(
-      `[outline-generation] 生成第 ${batchStart}-${batchEnd} 集大纲... (批次 ${completedBatches}/${totalBatches}, ${batchProgress}%)`
-    )
+    logInfo('OutlineGeneration', '生成批次大纲', {
+      batchStart,
+      batchEnd,
+      currentBatch: completedBatches,
+      totalBatches,
+      progress: batchProgress,
+      projectId
+    })
 
     await Promise.all(
       Array.from({ length: batchEnd - batchStart + 1 }, async (_, index) => {
@@ -86,9 +91,11 @@ export async function generateAllOutlines(
             }
 
             outlines.set(episodeNumber, outline)
-            console.log(
-              `[outline-generation] 第 ${episodeNumber} 集大纲生成成功 (${outline.length} 字)`
-            )
+            logInfo('OutlineGeneration', '单集大纲生成成功', {
+              episodeNumber,
+              length: outline.length,
+              projectId
+            })
             break
           } catch (error) {
             retries++
@@ -102,9 +109,13 @@ export async function generateAllOutlines(
               throw error
             }
             const delay = OUTLINE_BASE_DELAY_MS * Math.pow(2, retries - 1)
-            console.log(
-              `[outline-generation] 第 ${episodeNumber} 集大纲生成失败，${delay / 1000}秒后重试 (${retries}/${OUTLINE_MAX_RETRIES})...`
-            )
+            logWarning('OutlineGeneration', '大纲生成失败，准备重试', {
+              episodeNumber,
+              delaySeconds: delay / 1000,
+              retryCount: retries,
+              maxRetries: OUTLINE_MAX_RETRIES,
+              projectId
+            })
             await new Promise((resolve) => setTimeout(resolve, delay))
           }
         }
@@ -163,7 +174,11 @@ async function generateEpisodesSerial(
       continue
     }
 
-    console.log(`[script-batch] 开始生成第 ${episodeNumber}/${targetEpisodes} 集剧本...`)
+    logInfo('ScriptBatch', '开始生成剧集剧本', {
+      episodeNumber,
+      targetEpisodes,
+      projectId
+    })
 
     // Build enhanced context: memories + future outlines (three-phase only)
     let episodeContext = rolling
@@ -228,7 +243,11 @@ async function generateEpisodesSerial(
       }
     })
 
-    console.log(`[script-batch] 第 ${episodeNumber}/${targetEpisodes} 集生成完成`)
+    logInfo('ScriptBatch', '单集剧本生成完成', {
+      episodeNumber,
+      targetEpisodes,
+      projectId
+    })
   }
 }
 
@@ -238,7 +257,11 @@ async function generateEpisodesSerial(
 export async function runAiCreationThreePhase(context: AiCreationContext): Promise<void> {
   const { jobId, projectId, targetEpisodes, project, synopsis, modelLogContext } = context
 
-  console.log('[script-batch] 开始三阶段生成：大纲 → 审核 → 剧本')
+  logInfo('AiCreationThreePhase', '开始三阶段AI创作', {
+    projectId,
+    targetEpisodes,
+    phases: ['outline-generation', 'showrunner-review', 'script-writing']
+  })
 
   // 阶段 1：并行生成所有大纲
   await updateJob(jobId, {
@@ -247,7 +270,10 @@ export async function runAiCreationThreePhase(context: AiCreationContext): Promi
     progressMeta: { message: '正在生成所有集的大纲...' }
   })
 
-  console.log('[script-batch] 阶段 1：开始生成大纲（30分钟超时保护）')
+  logInfo('AiCreationThreePhase', '阶段1：开始生成大纲', {
+    timeoutMs: OUTLINE_GENERATION_TIMEOUT_MS,
+    projectId
+  })
   let allOutlines = await withTimeout(
     generateAllOutlines(
       projectId,
@@ -260,7 +286,10 @@ export async function runAiCreationThreePhase(context: AiCreationContext): Promi
     OUTLINE_GENERATION_TIMEOUT_MS,
     timeoutErrorMessage('大纲生成', OUTLINE_GENERATION_TIMEOUT_MS)
   )
-  console.log(`[script-batch] 阶段 1 完成：已生成 ${allOutlines.size} 集大纲`)
+  logInfo('AiCreationThreePhase', '阶段1：大纲生成完成', {
+    outlineCount: allOutlines.size,
+    projectId
+  })
 
   // 阶段 2：AI 总编剧审核大纲
   await updateJob(jobId, {
@@ -269,7 +298,10 @@ export async function runAiCreationThreePhase(context: AiCreationContext): Promi
     progressMeta: { message: 'AI 总编剧审核大纲一致性...' }
   })
 
-  console.log('[script-batch] 阶段 2：开始 AI 总编剧审核（15分钟超时保护）...')
+  logInfo('AiCreationThreePhase', '阶段2：开始AI总编剧审核', {
+    timeoutMs: SHOWRUNNER_REVIEW_TIMEOUT_MS,
+    projectId
+  })
   let review = await withTimeout(
     showrunnerReviewOutlines(synopsis, allOutlines, modelLogContext),
     SHOWRUNNER_REVIEW_TIMEOUT_MS,
@@ -279,7 +311,11 @@ export async function runAiCreationThreePhase(context: AiCreationContext): Promi
   let revisionRound = 0
   while (!review.approved && revisionRound < MAX_REVISION_ROUNDS) {
     revisionRound++
-    console.log(`[showrunner] 审核未通过，开始第 ${revisionRound} 轮自动修正...`)
+    logWarning('ShowrunnerReview', '审核未通过，开始自动修正', {
+      revisionRound,
+      maxRounds: MAX_REVISION_ROUNDS,
+      projectId
+    })
 
     await updateJob(jobId, {
       progressMeta: {
@@ -294,20 +330,31 @@ export async function runAiCreationThreePhase(context: AiCreationContext): Promi
       review.feedback,
       modelLogContext
     )
-    console.log(`[showrunner] 第 ${revisionRound} 轮修正完成，重新审核...`)
+    logInfo('ShowrunnerReview', '修正完成，重新审核', {
+      revisionRound,
+      projectId
+    })
     review = await showrunnerReviewOutlines(synopsis, allOutlines, modelLogContext)
 
     if (review.approved) {
-      console.log('[showrunner] 大纲审核通过 ✅')
+      logInfo('ShowrunnerReview', '大纲审核通过', {
+        revisionRounds: revisionRound,
+        projectId
+      })
       break
     }
   }
 
   if (review.approved) {
-    console.log('[script-batch] 大纲审核通过，进入阶段 3')
+    logInfo('AiCreationThreePhase', '大纲审核通过，进入阶段3', {
+      projectId
+    })
   } else {
-    console.log('[script-batch] ⚠️ 2 轮修正后仍有问题，但仍继续生成')
-    console.log('[script-batch] 审核意见：', review.feedback.substring(0, 200))
+    logWarning('AiCreationThreePhase', '大纲审核未通过但仍继续生成', {
+      revisionRounds: revisionRound,
+      feedbackPreview: review.feedback.substring(0, 200),
+      projectId
+    })
   }
 
   // 阶段 3：基于大纲串行生成完整剧本
@@ -324,6 +371,9 @@ export async function runAiCreationThreePhase(context: AiCreationContext): Promi
  * Legacy serial generation (compatibility mode).
  */
 export async function runAiCreationLegacy(context: AiCreationContext): Promise<void> {
-  console.log('[script-batch] 使用旧版串行生成模式')
+  const { projectId } = context
+  logInfo('AiCreationLegacy', '使用旧版串行生成模式', {
+    projectId
+  })
   await generateEpisodesSerial(context, 2, null, mapLegacyProgress)
 }
