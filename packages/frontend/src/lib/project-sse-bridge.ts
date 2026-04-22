@@ -44,7 +44,7 @@ export function emitProjectUpdateForProject(payload: ProjectSsePayload): void {
     try {
       fn(payload)
     } catch (e) {
-      console.warn('project SSE listener error', e)
+      console.warn('[project-sse-bridge] SSE listener error', e)
     }
   })
 }

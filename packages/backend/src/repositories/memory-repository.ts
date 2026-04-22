@@ -42,6 +42,8 @@ export interface MemoryFilter {
   episodeId?: string
   tags?: string[]
   category?: string
+  limit?: number
+  offset?: number
 }
 
 export interface SnapshotData {
@@ -110,9 +112,14 @@ export class MemoryRepository {
       if (filters.category) where.category = filters.category
     }
 
+    const limit = filters?.limit ? Math.min(filters.limit, 500) : 500
+    const offset = filters?.offset ?? 0
+
     return prisma.memoryItem.findMany({
       where,
-      orderBy: [{ importance: 'desc' }, { createdAt: 'asc' }]
+      orderBy: [{ importance: 'desc' }, { createdAt: 'asc' }],
+      take: limit,
+      skip: offset
     })
   }
 

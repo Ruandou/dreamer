@@ -93,6 +93,17 @@ async function addAudio(
 }
 
 /**
+ * Escape a file path for use inside FFmpeg's subtitles filter.
+ * FFmpeg uses single quotes around the path, and requires escaping:
+ *   ' -> '\''  (end quote, escaped quote, reopen quote)
+ *   : and \ are passed as-is on Unix but we normalize backslashes
+ */
+function escapeSubtitlePath(rawPath: string): string {
+  const normalized = rawPath.replace(/\\/g, '/')
+  return normalized.replace(/'/g, "'\\''")
+}
+
+/**
  * Burn subtitles into video
  */
 async function burnSubtitles(
@@ -100,11 +111,12 @@ async function burnSubtitles(
   subtitlePath: string,
   outputPath: string
 ): Promise<void> {
+  const safePath = escapeSubtitlePath(subtitlePath)
   const result = await executeFFmpeg([
     '-i',
     videoPath,
     '-vf',
-    `subtitles='${subtitlePath}'`,
+    `subtitles='${safePath}'`,
     '-c:a',
     'copy',
     outputPath

@@ -2,6 +2,7 @@ import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
 import { getPipelineJobHandler } from './pipeline-job-strategies.js'
 import { pipelineRepository } from '../repositories/pipeline-repository.js'
+import { logInfo, logError } from '../lib/error-logger.js'
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379'
 
@@ -54,14 +55,16 @@ export const pipelineWorker = new Worker<PipelineJobData>(
     const data = job.data
     const { jobId, jobType } = data
 
-    console.log(
-      `[pipeline-worker] Starting job ${job.id} (pipelineJobId=${jobId}, type=${jobType})`
-    )
+    logInfo('pipeline-worker', 'Starting job', {
+      bullJobId: job.id,
+      pipelineJobId: jobId,
+      jobType
+    })
 
     const handler = getPipelineJobHandler(jobType)
     await handler(data)
 
-    console.log(`[pipeline-worker] Job ${job.id} (pipelineJobId=${jobId}) completed`)
+    logInfo('pipeline-worker', 'Job completed', { bullJobId: job.id, pipelineJobId: jobId })
   },
   {
     connection,
@@ -73,11 +76,11 @@ export const pipelineWorker = new Worker<PipelineJobData>(
 )
 
 pipelineWorker.on('completed', (job) => {
-  console.log(`[pipeline-worker] Job ${job.id} completed`)
+  logInfo('pipeline-worker', 'Job completed', { bullJobId: job.id })
 })
 
 pipelineWorker.on('failed', async (job, error) => {
-  console.error(`[pipeline-worker] Job ${job?.id} failed:`, error?.message)
+  logError('pipeline-worker', error, { bullJobId: job?.id })
   // Fallback: update Prisma PipelineJob status if the handler did not do it.
   try {
     const data = job?.data as PipelineJobData | undefined
@@ -88,7 +91,7 @@ pipelineWorker.on('failed', async (job, error) => {
       })
     }
   } catch (updateError) {
-    console.error('[pipeline-worker] 无法更新 PipelineJob 失败状态:', updateError)
+    logError('pipeline-worker', updateError, { msg: '无法更新 PipelineJob 失败状态' })
   }
 })
 

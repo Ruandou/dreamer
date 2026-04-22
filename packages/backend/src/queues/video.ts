@@ -16,6 +16,7 @@ import {
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { sendTaskUpdate } from '../plugins/sse.js'
 import { logApiCall, updateApiCall } from '../services/ai/api-logger.js'
+import { logInfo, logError, logWarning } from '../lib/error-logger.js'
 
 const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null
@@ -39,7 +40,10 @@ export const videoWorker = new Worker<VideoJobData>(
     const { sceneId, taskId, prompt, model, referenceImage, imageUrls, duration, aspectRatio } =
       job.data
 
-    console.log(`Processing video job ${job.id} for scene ${sceneId}, model: ${model}`)
+    logInfo('video-worker', `Processing job for scene ${sceneId}`, {
+      jobId: job.id,
+      model
+    })
 
     const effectiveDuration = duration || 5
 
@@ -67,7 +71,7 @@ export const videoWorker = new Worker<VideoJobData>(
 
       if (model === 'wan2.6') {
         // Wan 2.6 API call
-        console.log(`Submitting Wan 2.6 task for scene ${sceneId}`)
+        logInfo('video-worker', 'Submitting Wan 2.6 task', { sceneId })
 
         // Log API call
         if (userId) {
@@ -123,9 +127,10 @@ export const videoWorker = new Worker<VideoJobData>(
         }
       } else {
         // Seedance 2.0 API call
-        console.log(
-          `Submitting Seedance 2.0 task for scene ${sceneId}, reference images: ${imageUrls?.length || 0}`
-        )
+        logInfo('video-worker', 'Submitting Seedance 2.0 task', {
+          sceneId,
+          refImageCount: imageUrls?.length || 0
+        })
 
         // Log API call
         if (userId) {
@@ -189,7 +194,7 @@ export const videoWorker = new Worker<VideoJobData>(
       }
 
       // Download video and thumbnail in parallel, then upload to MinIO
-      console.log(`Downloading video from ${videoUrl} and uploading to MinIO`)
+      logInfo('video-worker', 'Downloading and uploading video to MinIO', { sceneId })
       const videoDownloadPromise = fetch(videoUrl).then(async (res) =>
         Buffer.from(await res.arrayBuffer())
       )
@@ -232,9 +237,12 @@ export const videoWorker = new Worker<VideoJobData>(
         })
       }
 
-      console.log(`Video job ${job.id} completed successfully with URL: ${uploadedVideoUrl}`)
+      logInfo('video-worker', 'Job completed successfully', {
+        jobId: job.id,
+        url: uploadedVideoUrl
+      })
     } catch (error) {
-      console.error(`Video job ${job.id} failed:`, error)
+      logError('video-worker', error, { jobId: job.id, sceneId })
 
       // Update api call log if we have externalTaskId
       if (externalTaskId && apiCallId) {
@@ -270,16 +278,16 @@ export const videoWorker = new Worker<VideoJobData>(
 )
 
 videoWorker.on('completed', (job) => {
-  console.log(`Job ${job.id} has completed`)
+  logInfo('video-worker', 'Job completed', { jobId: job.id })
 })
 
 videoWorker.on('failed', (job, err) => {
-  console.log(`Job ${job?.id} has failed with error: ${err.message}`)
+  logWarning('video-worker', 'Job failed', { jobId: job?.id, error: err.message })
 })
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('Shutting down video worker...')
+  logInfo('video-worker', 'Shutting down video worker')
   await videoWorker.close()
   await connection.quit()
 })

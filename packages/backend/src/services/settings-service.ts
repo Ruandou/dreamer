@@ -18,10 +18,7 @@ export class SettingsService {
     let balanceError = null
     if (dbUser.apiKey) {
       try {
-        const originalKey = process.env.DEEPSEEK_API_KEY
-        process.env.DEEPSEEK_API_KEY = dbUser.apiKey
-        balance = await getDeepSeekBalance()
-        process.env.DEEPSEEK_API_KEY = originalKey
+        balance = await getDeepSeekBalance(dbUser.apiKey)
       } catch (error: unknown) {
         balanceError = error instanceof Error ? error.message : String(error)
         balance = null
@@ -39,11 +36,11 @@ export class SettingsService {
       balance,
       balanceError,
       apiKeys: {
-        deepseekApiUrl: dbUser.deepseekApiUrl,
-        atlasApiKey: dbUser.atlasApiKey,
-        atlasApiUrl: dbUser.atlasApiUrl,
-        arkApiKey: dbUser.arkApiKey,
-        arkApiUrl: dbUser.arkApiUrl
+        hasDeepseekApiUrl: !!dbUser.deepseekApiUrl,
+        hasAtlasApiKey: !!dbUser.atlasApiKey,
+        hasAtlasApiUrl: !!dbUser.atlasApiUrl,
+        hasArkApiKey: !!dbUser.arkApiKey,
+        hasArkApiUrl: !!dbUser.arkApiUrl
       }
     }
   }
@@ -96,14 +93,9 @@ export class SettingsService {
     }
 
     try {
-      const originalKey = process.env.DEEPSEEK_API_KEY
-      process.env.DEEPSEEK_API_KEY = apiKey
-      const balance = await getDeepSeekBalance()
-      process.env.DEEPSEEK_API_KEY = originalKey
-
+      const balance = await getDeepSeekBalance(apiKey)
       return { ok: true as const, balance }
     } catch (error: unknown) {
-      process.env.DEEPSEEK_API_KEY = ''
       return {
         ok: false as const,
         empty: false as const,

@@ -11,6 +11,7 @@ import {
 import { recordModelApiCall } from '../services/ai/api-logger.js'
 import { sendProjectUpdate } from '../plugins/sse.js'
 import { imageQueueService } from '../services/image-queue-service.js'
+import { logInfo, logWarning, logError } from '../lib/error-logger.js'
 
 const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null
@@ -31,7 +32,9 @@ function notify(userId: string, projectId: string, payload: Record<string, unkno
   try {
     sendProjectUpdate(userId, projectId, 'image-generation', payload)
   } catch (e) {
-    console.warn('image job SSE notify failed', e)
+    logWarning('image-worker', 'SSE notify failed', {
+      error: e instanceof Error ? e.message : String(e)
+    })
   }
 }
 
@@ -289,11 +292,11 @@ const imageWorker = new Worker<ImageGenerationJobData>(
 )
 
 imageWorker.on('completed', (job) => {
-  console.log(`[image-generation] job ${job.id} completed`)
+  logInfo('image-worker', 'Job completed', { bullJobId: job.id })
 })
 
 imageWorker.on('failed', (job, err) => {
-  console.error(`[image-generation] job ${job?.id} failed:`, err?.message)
+  logError('image-worker', err, { bullJobId: job?.id })
 })
 
 export async function closeImageWorker(): Promise<void> {

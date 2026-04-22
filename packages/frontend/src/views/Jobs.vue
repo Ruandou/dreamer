@@ -356,14 +356,14 @@ const fetchJobs = async () => {
     const list: Job[] = (data.jobs || []).map((j: any) => ({ ...j }))
     jobs.value = list
   } catch (error) {
-    console.error('Failed to fetch jobs:', error)
+    console.error('[Jobs] Failed to fetch jobs:', error)
   } finally {
     isLoading.value = false
   }
 }
 
 const handleRetry = (job: Job) => {
-  console.log('Retry job:', job.id)
+  console.info('[Jobs] Retry job:', job.id)
 }
 
 const copyError = async (msg: string) => {

@@ -8,10 +8,14 @@ export interface DeepSeekBalance {
   }>
 }
 
-export async function getDeepSeekBalance(): Promise<DeepSeekBalance> {
+export async function getDeepSeekBalance(apiKey?: string): Promise<DeepSeekBalance> {
+  const key = apiKey ?? process.env.DEEPSEEK_API_KEY
+  if (!key) {
+    throw new Error('DEEPSEEK_API_KEY is not configured')
+  }
   const response = await fetch('https://api.deepseek.com/user/balance', {
     headers: {
-      Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`
+      Authorization: `Bearer ${key}`
     }
   })
 

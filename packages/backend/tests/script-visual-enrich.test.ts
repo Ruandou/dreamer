@@ -26,7 +26,8 @@ const {
   mockCharacterImageAggregate,
   mockFetchScriptVisualEnrichmentJson,
   mockGenerateCharacterSlotImagePrompt,
-  mockProjectFindUnique
+  mockProjectFindUnique,
+  mockRepairJsonWithAI
 } = vi.hoisted(() => ({
   mockLocationFindMany: vi.fn(),
   mockCharacterFindMany: vi.fn(),
@@ -39,7 +40,8 @@ const {
     prompt: '兜底定妆提示词',
     cost: { costCNY: 0, inputTokens: 0, outputTokens: 0 }
   }),
-  mockProjectFindUnique: vi.fn()
+  mockProjectFindUnique: vi.fn(),
+  mockRepairJsonWithAI: vi.fn()
 }))
 
 vi.mock('../src/services/ai/deepseek.js', () => ({
@@ -47,6 +49,10 @@ vi.mock('../src/services/ai/deepseek.js', () => ({
     mockFetchScriptVisualEnrichmentJson(...args),
   generateCharacterSlotImagePrompt: (...args: unknown[]) =>
     mockGenerateCharacterSlotImagePrompt(...args)
+}))
+
+vi.mock('../src/services/ai/json-repair.js', () => ({
+  repairJsonWithAI: (...args: unknown[]) => mockRepairJsonWithAI(...args)
 }))
 
 // Mock recordModelApiCall to prevent Prisma errors
@@ -325,6 +331,10 @@ describe('applyScriptVisualEnrichment', () => {
       jsonText: 'not json at all',
       cost: { costCNY: 0, totalTokens: 1, inputTokens: 0, outputTokens: 1 }
     })
+
+    // Mock repairJsonWithAI to throw, simulating AI repair failure
+    mockRepairJsonWithAI.mockRejectedValue(new Error('AI repair failed'))
+
     await expect(applyScriptVisualEnrichment('p1', script)).rejects.toThrow(/视觉补全失败/)
   })
 })

@@ -44,15 +44,26 @@ const fastify = Fastify({
 async function start() {
   try {
     // Register plugins
-    // CORS 配置：生产环境应设置具体域名
-    const corsOrigin = process.env.CORS_ORIGIN || true
+    // CORS 配置：生产环境必须设置 CORS_ORIGIN 环境变量，否则拒绝请求
+    const corsOrigin = process.env.CORS_ORIGIN
+    if (!corsOrigin && process.env.NODE_ENV === 'production') {
+      fastify.log.warn(
+        'CORS_ORIGIN not set in production. Allowing all origins — this is a security risk.'
+      )
+    }
     await fastify.register(cors, {
-      origin: corsOrigin,
+      origin: corsOrigin || (process.env.NODE_ENV === 'production' ? false : true),
       credentials: true
     })
 
+    const jwtSecret = process.env.JWT_SECRET
+    if (!jwtSecret && process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'JWT_SECRET environment variable is required in production. Do not use the default value.'
+      )
+    }
     await fastify.register(jwt, {
-      secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key'
+      secret: jwtSecret || 'dev-only-not-for-production'
     })
 
     await fastify.register(multipart, {

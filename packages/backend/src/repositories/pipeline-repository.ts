@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { prisma } from '../lib/prisma.js'
+import { logWarning } from '../lib/error-logger.js'
 import type {
   ScriptContent,
   ScriptScene,
@@ -376,9 +377,10 @@ export class PipelineRepository {
           }
 
           if (!characterId) {
-            console.warn(
-              `SceneDialogue skipped: no character for scene ${sceneRecord.id}, order ${voice.order}`
-            )
+            logWarning('pipeline-repository', 'SceneDialogue skipped: no character for scene', {
+              sceneId: sceneRecord.id,
+              order: voice.order
+            })
             continue
           }
 

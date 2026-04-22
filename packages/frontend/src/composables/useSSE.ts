@@ -28,7 +28,6 @@ export function useSSE() {
 
     eventSource.addEventListener('connected', () => {
       connected.value = true
-      console.log('SSE connected')
     })
 
     eventSource.addEventListener('task-update', (event) => {
@@ -45,7 +44,6 @@ export function useSSE() {
       connected.value = false
       eventSource?.close()
       eventSource = null
-      console.log('SSE disconnected, reconnecting...')
       setTimeout(connect, 5000)
     }
   }
@@ -68,7 +66,6 @@ export function useSSE() {
         })
         break
       case 'processing':
-        console.log('Task processing:', data.taskId)
         break
     }
   }

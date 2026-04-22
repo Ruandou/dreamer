@@ -370,7 +370,7 @@ async function loadCharacters() {
       flatItems.value = items
     }
   } catch (e) {
-    console.error('加载角色失败', e)
+    console.error('[StoryboardScriptEditor] 加载角色失败', e)
   }
 }
 
@@ -380,7 +380,7 @@ async function loadLocations() {
     const res = await api.get<ProjectLocation[]>(`/locations?projectId=${props.projectId}`)
     locations.value = res.data
   } catch (e) {
-    console.error('加载场景失败', e)
+    console.error('[StoryboardScriptEditor] 加载场景失败', e)
   }
 }
 

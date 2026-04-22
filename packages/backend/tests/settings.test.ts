@@ -78,8 +78,8 @@ describe('Settings Routes', () => {
       expect(data.user.id).toBe('user-1')
       expect(data.user.email).toBe('test@example.com')
       expect(data.hasApiKey).toBe(true)
-      expect(data.apiKeys.deepseekApiUrl).toBe('https://api.deepseek.com/v1')
-      expect(data.apiKeys.atlasApiKey).toBe('atlas-key')
+      expect(data.apiKeys.hasDeepseekApiUrl).toBe(true)
+      expect(data.apiKeys.hasAtlasApiKey).toBe(true)
     })
 
     it('should return user without API key', async () => {
@@ -105,7 +105,7 @@ describe('Settings Routes', () => {
       expect(response.statusCode).toBe(200)
       const data = JSON.parse(response.payload)
       expect(data.hasApiKey).toBe(false)
-      expect(data.apiKeys.deepseekApiUrl).toBeNull()
+      expect(data.apiKeys.hasDeepseekApiUrl).toBe(false)
     })
   })
 

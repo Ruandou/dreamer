@@ -6,6 +6,7 @@ import { importWorkerService } from '../services/import-worker-service.js'
 import { projectRepository } from '../repositories/project-repository.js'
 import { mergeEpisodesToScriptContent } from '../services/project-script-jobs.js'
 import { applyScriptVisualEnrichment } from '../services/script-visual-enrich.js'
+import { logInfo, logError, logWarning } from '../lib/error-logger.js'
 
 // Connection - lazy init
 let _connection: IORedis | null = null
@@ -43,7 +44,7 @@ export const importWorker = new Worker<ImportJobData>(
   'import',
   async (job) => {
     const { taskId, projectId, userId, content, type } = job.data
-    console.log(`Processing import job ${job.id}, taskId: ${taskId}`)
+    logInfo('import-worker', 'Processing import job', { bullJobId: job.id, taskId })
 
     try {
       await importWorkerService.markProcessing(taskId)
@@ -81,10 +82,10 @@ export const importWorker = new Worker<ImportJobData>(
 
       await importWorkerService.markCompleted(taskId, results)
 
-      console.log(`Import job ${job.id} completed successfully`)
+      logInfo('import-worker', 'Import job completed successfully', { bullJobId: job.id })
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : '未知错误'
-      console.error(`Import job ${job.id} failed:`, message)
+      logError('import-worker', error, { bullJobId: job.id, taskId })
 
       await importWorkerService.markFailed(taskId, message)
 
@@ -98,11 +99,11 @@ export const importWorker = new Worker<ImportJobData>(
 )
 
 importWorker.on('completed', (job) => {
-  console.log(`Import job ${job.id} has completed`)
+  logInfo('import-worker', 'Job completed', { bullJobId: job.id })
 })
 
 importWorker.on('failed', (job, err) => {
-  console.log(`Import job ${job?.id} has failed with error: ${err.message}`)
+  logWarning('import-worker', 'Job failed', { bullJobId: job?.id, error: err.message })
 })
 
 // Graceful shutdown

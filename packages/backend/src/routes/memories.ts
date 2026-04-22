@@ -9,6 +9,7 @@ import { FastifyInstance } from 'fastify'
 import { verifyProjectOwnership, getRequestUserId } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { getMemoryService } from '../services/memory/index.js'
+import { logError } from '../lib/error-logger.js'
 import type { MemoryType } from '../repositories/memory-repository.js'
 import type { ScriptContent } from '@dreamer/shared'
 
@@ -31,19 +32,28 @@ export async function memoryRoutes(fastify: FastifyInstance) {
   }>('/:projectId/memories', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const userId = getRequestUserId(request)
     const { projectId } = request.params
-    const { type, isActive, episodeId, tags, minImportance, category } = request.query
+    const { type, isActive, episodeId, tags, minImportance, category, limit, offset } =
+      request.query
 
     if (!(await verifyProjectOwnership(userId, projectId))) {
       return reply.status(403).send(permissionDeniedBody)
     }
+
+    const parsedLimit = limit ? parseInt(limit, 10) : 50
+    const parsedOffset = offset ? parseInt(offset, 10) : 0
 
     const filters: Record<string, unknown> = {}
     if (type) filters.type = type
     if (isActive !== undefined) filters.isActive = isActive === 'true'
     if (episodeId) filters.episodeId = episodeId
     if (tags) filters.tags = tags.split(',').map((t) => t.trim())
-    if (minImportance) filters.minImportance = parseInt(minImportance, 10)
+    if (minImportance) {
+      const val = parseInt(minImportance, 10)
+      if (val >= 1 && val <= 5) filters.minImportance = val
+    }
     if (category) filters.category = category
+    filters.limit = Math.min(parsedLimit, 500)
+    filters.offset = Math.max(0, parsedOffset)
 
     const memories = await memoryService.queryMemories(
       projectId,
@@ -268,7 +278,8 @@ export async function memoryRoutes(fastify: FastifyInstance) {
         })
       }
 
-      const memories = await memoryService.searchMemories(projectId, query, limit || 10)
+      const cappedLimit = Math.min(Math.max(1, limit || 10), 100)
+      const memories = await memoryService.searchMemories(projectId, query, cappedLimit)
 
       return {
         success: true,
@@ -367,7 +378,7 @@ export async function memoryRoutes(fastify: FastifyInstance) {
           message: `Extracted ${result.extracted} memories, saved ${result.saved}`
         }
       } catch (error: unknown) {
-        console.error('Memory extraction failed:', error)
+        logError('memory-route', error, { op: 'manual_memory_extraction' })
         return reply.status(500).send({
           success: false,
           error: 'Memory extraction failed',

@@ -58,7 +58,11 @@ export async function tasksUnifiedRoutes(fastify: FastifyInstance) {
     }
   }>('/all', { preHandler: [fastify.authenticate] }, async (request) => {
     const userId = getRequestUserId(request)
-    const { type, status, limit = 200, offset = 0 } = request.query
+    const { type, status } = request.query
+    const rawLimit = request.query.limit ?? 200
+    const rawOffset = request.query.offset ?? 0
+    const limit = Math.min(Math.max(1, rawLimit), 1000)
+    const offset = Math.max(0, rawOffset)
 
     const jobs: UnifiedJob[] = []
 

@@ -46,7 +46,7 @@ function buildProjectCostStats(
   imageCost: number,
   recentSlice: number
 ): ProjectCostStats {
-  const tasks = project.episodes.flatMap((e) => e.scenes.flatMap((s) => s.takes))
+  const tasks = project.takes
   const completedTasks = tasks.filter((t) => t.status === 'completed')
   const failedTasks = tasks.filter((t) => t.status === 'failed')
 
@@ -54,10 +54,7 @@ function buildProjectCostStats(
   const seedanceTasks = completedTasks.filter((t) => t.model === 'seedance2.0')
 
   const videoCost = completedTasks.reduce((sum, t) => sum + (t.cost || 0), 0)
-  const aiCost = project.importTasks.reduce((sum, t) => {
-    const result = t.result as { aiCost?: number } | null
-    return sum + (result?.aiCost || 0)
-  }, 0)
+  const aiCost = project.importAiCosts
 
   return {
     projectId: project.id,
@@ -84,7 +81,7 @@ function buildProjectCostStats(
       .slice(0, recentSlice)
       .map((t) => ({
         id: t.id,
-        model: t.model,
+        model: t.model ?? 'unknown',
         cost: t.cost || 0,
         status: t.status,
         createdAt: t.createdAt
@@ -114,9 +111,7 @@ export class StatsService {
   async getUserCostStats(userId: string): Promise<UserCostStats> {
     const projects = await this.repo.findManyProjectsForUserCostStats(userId)
 
-    const allTasks = projects.flatMap((p) =>
-      p.episodes.flatMap((e) => e.scenes.flatMap((s) => s.takes))
-    )
+    const allTasks = projects.flatMap((p) => p.takes)
     const completedTasks = allTasks.filter((t) => t.status === 'completed')
 
     const projectStats: ProjectCostStats[] = await Promise.all(
@@ -127,15 +122,7 @@ export class StatsService {
     )
 
     const totalVideoCost = completedTasks.reduce((sum, t) => sum + (t.cost || 0), 0)
-    const totalAiCost = projects.reduce((sum, p) => {
-      return (
-        sum +
-        p.importTasks.reduce((s, t) => {
-          const result = t.result as { aiCost?: number } | null
-          return s + (result?.aiCost || 0)
-        }, 0)
-      )
-    }, 0)
+    const totalAiCost = projects.reduce((sum, p) => sum + p.importAiCosts, 0)
     const totalImageCost = projectStats.reduce((sum, p) => sum + p.imageCost, 0)
 
     return {

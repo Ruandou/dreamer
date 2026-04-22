@@ -189,7 +189,7 @@ model SceneDialogue {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([sceneId])
+  @@index([sceneId, startTimeMs])
   @@index([characterId])
 }
 
@@ -410,6 +410,7 @@ model MemoryItem {
   @@index([projectId, type])
   @@index([projectId, isActive])
   @@index([projectId, importance])
+  @@index([projectId, episodeId, type])
   @@index([episodeId])
 }
 

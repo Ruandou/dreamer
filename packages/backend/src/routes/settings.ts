@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify'
 import { settingsService } from '../services/settings-service.js'
 import { getRequestUser } from '../plugins/auth.js'
+import { logError } from '../lib/error-logger.js'
 
 export async function settingsRoutes(fastify: FastifyInstance) {
   // Get user settings
@@ -28,7 +29,7 @@ export async function settingsRoutes(fastify: FastifyInstance) {
     try {
       return await settingsService.updateMe(user.id, request.body)
     } catch (error) {
-      console.error('Failed to update user settings:', error)
+      logError('settings-route', error, { op: 'update_me' })
       return reply.status(500).send({ error: '更新设置失败' })
     }
   })

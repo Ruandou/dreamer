@@ -6,6 +6,7 @@ const {
   mockProjectFindUnique,
   mockProjectFindMany,
   mockTakeFindMany,
+  mockImportTaskFindMany,
   mockCharacterImageAggregate,
   mockLocationAggregate,
   mockCharacterImageFindMany,
@@ -15,6 +16,7 @@ const {
     mockProjectFindUnique: vi.fn(),
     mockProjectFindMany: vi.fn(),
     mockTakeFindMany: vi.fn(),
+    mockImportTaskFindMany: vi.fn().mockResolvedValue([]),
     mockCharacterImageAggregate: vi.fn().mockResolvedValue({ _sum: { imageCost: null } }),
     mockLocationAggregate: vi.fn().mockResolvedValue({ _sum: { imageCost: null } }),
     mockCharacterImageFindMany: vi.fn().mockResolvedValue([]),
@@ -39,6 +41,9 @@ vi.mock('../src/lib/prisma.js', () => ({
     },
     take: {
       findMany: mockTakeFindMany
+    },
+    importTask: {
+      findMany: mockImportTaskFindMany
     },
     characterImage: {
       aggregate: mockCharacterImageAggregate,
@@ -83,26 +88,18 @@ describe('Stats Routes', () => {
     it('should return project stats', async () => {
       mockProjectFindUnique.mockResolvedValue({
         id: 'proj-1',
-        name: 'Test Project',
-        episodes: [
-          {
-            scenes: [
-              {
-                takes: [
-                  {
-                    id: 'task-1',
-                    model: 'wan2.6',
-                    status: 'completed',
-                    cost: 0.5,
-                    createdAt: new Date()
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        importTasks: [{ status: 'completed', result: { aiCost: 0.1 } }]
+        name: 'Test Project'
       })
+      mockTakeFindMany.mockResolvedValue([
+        {
+          id: 'task-1',
+          model: 'wan2.6',
+          status: 'completed',
+          cost: 0.5,
+          createdAt: new Date()
+        }
+      ])
+      mockImportTaskFindMany.mockResolvedValue([{ result: { aiCost: 0.1 } }])
 
       const response = await app.inject({
         method: 'GET',
@@ -132,27 +129,20 @@ describe('Stats Routes', () => {
       mockProjectFindMany.mockResolvedValue([
         {
           id: 'proj-1',
-          name: 'Test Project',
-          episodes: [
-            {
-              scenes: [
-                {
-                  takes: [
-                    {
-                      id: 'task-1',
-                      model: 'wan2.6',
-                      status: 'completed',
-                      cost: 0.5,
-                      createdAt: new Date()
-                    }
-                  ]
-                }
-              ]
-            }
-          ],
-          importTasks: []
+          name: 'Test Project'
         }
       ])
+      mockTakeFindMany.mockResolvedValue([
+        {
+          id: 'task-1',
+          model: 'wan2.6',
+          status: 'completed',
+          cost: 0.5,
+          createdAt: new Date(),
+          scene: { episode: { projectId: 'proj-1' } }
+        }
+      ])
+      mockImportTaskFindMany.mockResolvedValue([])
 
       const response = await app.inject({
         method: 'GET',

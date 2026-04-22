@@ -2,9 +2,21 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
-  NButton, NSpace, NModal, NForm, NFormItem, NInput,
-  NSpin, NAlert, NCollapse, NCollapseItem, NTag, NUpload, useMessage,
-  NTooltip, NScrollbar
+  NButton,
+  NSpace,
+  NModal,
+  NForm,
+  NFormItem,
+  NInput,
+  NSpin,
+  NAlert,
+  NCollapse,
+  NCollapseItem,
+  NTag,
+  NUpload,
+  useMessage,
+  NTooltip,
+  NScrollbar
 } from 'naive-ui'
 import { useEpisodeStore } from '@/stores/episode'
 import { importScript } from '@/api'
@@ -53,7 +65,7 @@ watch(
         })
         lastSaved.value = new Date()
       } catch (error) {
-        console.error('Auto-save failed:', error)
+        console.error('[ProjectScript] Auto-save failed:', error)
       } finally {
         isAutoSaving.value = false
       }
@@ -118,7 +130,9 @@ const handleImportScript = async () => {
   isImporting.value = true
   try {
     const result = await importScript(projectId.value, importContent.value, 'markdown')
-    message.success(`导入成功！创建了 ${result.episodesCreated} 集，更新了 ${result.episodesUpdated} 集`)
+    message.success(
+      `导入成功！创建了 ${result.episodesCreated} 集，更新了 ${result.episodesUpdated} 集`
+    )
     showImportModal.value = false
     importContent.value = ''
     await episodeStore.fetchEpisodes(projectId.value)
@@ -134,7 +148,7 @@ const handleFileChange = (file: File) => {
 
   const reader = new FileReader()
   reader.onload = (e) => {
-    importContent.value = e.target?.result as string || ''
+    importContent.value = (e.target?.result as string) || ''
     message.info(`已读取文件: ${file.name}`)
   }
   reader.onerror = () => {
@@ -167,11 +181,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
             <template #icon>+</template>
             新建剧本
           </NButton>
-          <NButton
-            type="primary"
-            @click="showExpandModal = true"
-            :disabled="!selectedEpisodeId"
-          >
+          <NButton type="primary" @click="showExpandModal = true" :disabled="!selectedEpisodeId">
             <template #icon>✨</template>
             AI扩写
           </NButton>
@@ -202,20 +212,12 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
               <span class="episode-item__num">#{{ episode.episodeNum }}</span>
             </div>
             <div class="episode-item__status">
-              <StatusBadge
-                :status="episode.script ? 'completed' : 'draft'"
-                size="small"
-              />
+              <StatusBadge :status="episode.script ? 'completed' : 'draft'" size="small" />
             </div>
           </div>
         </NScrollbar>
 
-        <EmptyState
-          v-else
-          title="暂无剧本"
-          description="创建第一集开始创作"
-          icon=""
-        >
+        <EmptyState v-else title="暂无剧本" description="创建第一集开始创作" icon="">
           <template #action>
             <NButton size="small" type="primary" @click="showCreateModal = true">
               新建剧本
@@ -228,11 +230,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
       <main class="script-main">
         <!-- No Episode Selected -->
         <div v-if="!selectedEpisodeId" class="script-empty">
-          <EmptyState
-            title="选择一集开始"
-            description="从左侧列表选择剧本，或新建一集"
-            icon="📝"
-          />
+          <EmptyState title="选择一集开始" description="从左侧列表选择剧本，或新建一集" icon="📝" />
         </div>
 
         <!-- Loading -->
@@ -249,9 +247,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
             icon="✨"
           >
             <template #action>
-              <NButton type="primary" @click="showExpandModal = true">
-                使用 AI 生成剧本
-              </NButton>
+              <NButton type="primary" @click="showExpandModal = true"> 使用 AI 生成剧本 </NButton>
             </template>
           </EmptyState>
         </div>
@@ -322,11 +318,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
                       <div v-if="scene.characters?.length" class="scene-section">
                         <h4 class="scene-section__title">👥 角色</h4>
                         <NSpace>
-                          <NTag
-                            v-for="char in scene.characters"
-                            :key="char"
-                            size="small"
-                          >
+                          <NTag v-for="char in scene.characters" :key="char" size="small">
                             {{ char }}
                           </NTag>
                         </NSpace>
@@ -373,12 +365,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
     </div>
 
     <!-- Create Episode Modal -->
-    <NModal
-      v-model:show="showCreateModal"
-      preset="card"
-      title="新建剧本"
-      style="width: 450px"
-    >
+    <NModal v-model:show="showCreateModal" preset="card" title="新建剧本" style="width: 450px">
       <NForm :model="newEpisode" label-placement="top">
         <NFormItem label="集数" path="episodeNum">
           <NInputNumber
@@ -389,10 +376,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
           />
         </NFormItem>
         <NFormItem label="标题（可选）" path="title">
-          <NInput
-            v-model:value="newEpisode.title"
-            placeholder="给这一集起个名字"
-          />
+          <NInput v-model:value="newEpisode.title" placeholder="给这一集起个名字" />
         </NFormItem>
       </NForm>
       <template #footer>
@@ -404,12 +388,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
     </NModal>
 
     <!-- Expand Script Modal -->
-    <NModal
-      v-model:show="showExpandModal"
-      preset="card"
-      title="AI 扩写剧本"
-      style="width: 600px"
-    >
+    <NModal v-model:show="showExpandModal" preset="card" title="AI 扩写剧本" style="width: 600px">
       <NAlert type="info" class="modal-alert">
         <template #icon>💡</template>
         输入故事梗概，AI 将为你扩展为结构化的短剧剧本。越详细的梗概，生成效果越好。
@@ -427,11 +406,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
       <template #footer>
         <NSpace justify="end">
           <NButton @click="showExpandModal = false">取消</NButton>
-          <NButton
-            type="primary"
-            :loading="episodeStore.isExpanding"
-            @click="handleExpandScript"
-          >
+          <NButton type="primary" :loading="episodeStore.isExpanding" @click="handleExpandScript">
             开始生成
           </NButton>
         </NSpace>
@@ -439,12 +414,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
     </NModal>
 
     <!-- Import Modal -->
-    <NModal
-      v-model:show="showImportModal"
-      preset="card"
-      title="导入剧本文档"
-      style="width: 800px"
-    >
+    <NModal v-model:show="showImportModal" preset="card" title="导入剧本文档" style="width: 800px">
       <NAlert type="info" class="modal-alert">
         <template #icon>📥</template>
         选择文件或粘贴完整的剧本文档，AI 将自动解析并导入。
@@ -473,11 +443,7 @@ const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
       <template #footer>
         <NSpace justify="end">
           <NButton @click="showImportModal = false">取消</NButton>
-          <NButton
-            type="primary"
-            :loading="isImporting"
-            @click="handleImportScript"
-          >
+          <NButton type="primary" :loading="isImporting" @click="handleImportScript">
             开始导入
           </NButton>
         </NSpace>

@@ -2,8 +2,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NCard, NButton, NStatistic,
-  NDataTable, NTag, NEmpty, NSpin, NSelect, NSpace
+  NCard,
+  NButton,
+  NStatistic,
+  NDataTable,
+  NTag,
+  NEmpty,
+  NSpin,
+  NSelect,
+  NSpace
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { useStatsStore } from '@/stores/stats'
@@ -25,7 +32,7 @@ onMounted(async () => {
   try {
     aiBalance.value = await getAiBalance()
   } catch (e) {
-    console.error('Failed to fetch AI balance', e)
+    console.error('[Stats] Failed to fetch AI balance:', e)
   }
 })
 
@@ -40,7 +47,7 @@ const formatCurrency = (amount: number) => {
 
 // Simple bar chart for daily costs
 const maxDailyCost = computed(() => {
-  return Math.max(...statsStore.dailyCosts.map(d => d.total), 1)
+  return Math.max(...statsStore.dailyCosts.map((d) => d.total), 1)
 })
 
 // Project table columns
@@ -49,13 +56,17 @@ const projectColumns: DataTableColumns<ProjectCostStats> = [
     title: '项目',
     key: 'projectName',
     render(row) {
-      return h('a', {
-        href: '#',
-        onClick: (e: Event) => {
-          e.preventDefault()
-          router.push(`/project/${row.projectId}`)
-        }
-      }, row.projectName)
+      return h(
+        'a',
+        {
+          href: '#',
+          onClick: (e: Event) => {
+            e.preventDefault()
+            router.push(`/project/${row.projectId}`)
+          }
+        },
+        row.projectName
+      )
     }
   },
   {
@@ -135,8 +146,10 @@ const recentTaskColumns = [
     title: '状态',
     key: 'status',
     render(row: any) {
-      const type = row.status === 'completed' ? 'success' : row.status === 'failed' ? 'error' : 'default'
-      const label = row.status === 'completed' ? '完成' : row.status === 'failed' ? '失败' : '进行中'
+      const type =
+        row.status === 'completed' ? 'success' : row.status === 'failed' ? 'error' : 'default'
+      const label =
+        row.status === 'completed' ? '完成' : row.status === 'failed' ? '失败' : '进行中'
       return h(NTag, { size: 'small', type }, () => label)
     }
   }
@@ -146,7 +159,7 @@ const recentTaskColumns = [
 const allRecentTasks = computed(() => {
   if (!statsStore.userStats) return []
   return statsStore.userStats.projects
-    .flatMap(p => p.recentTasks.map(t => ({ ...t, projectName: p.projectName })))
+    .flatMap((p) => p.recentTasks.map((t) => ({ ...t, projectName: p.projectName })))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 10)
 })
@@ -174,9 +187,7 @@ import { h } from 'vue'
       <div class="stats-header__right">
         <NSpace>
           <NButton @click="router.push('/model-calls')">模型调用日志</NButton>
-          <NButton @click="router.push('/projects')">
-            返回项目
-          </NButton>
+          <NButton @click="router.push('/projects')"> 返回项目 </NButton>
         </NSpace>
       </div>
     </header>
@@ -201,7 +212,10 @@ import { h } from 'vue'
         </NCard>
 
         <NCard class="stat-card">
-          <NStatistic label="视频成本" :value="formatCurrency(statsStore.userStats?.videoCost || 0)">
+          <NStatistic
+            label="视频成本"
+            :value="formatCurrency(statsStore.userStats?.videoCost || 0)"
+          >
             <template #suffix>
               <span class="stat-suffix">元</span>
             </template>
@@ -209,7 +223,10 @@ import { h } from 'vue'
         </NCard>
 
         <NCard class="stat-card">
-          <NStatistic label="图片成本" :value="formatCurrency(statsStore.userStats?.imageCost || 0)">
+          <NStatistic
+            label="图片成本"
+            :value="formatCurrency(statsStore.userStats?.imageCost || 0)"
+          >
             <template #suffix>
               <span class="stat-suffix">元</span>
             </template>
@@ -219,7 +236,11 @@ import { h } from 'vue'
         <NCard class="stat-card">
           <NStatistic label="DeepSeek 余额">
             <template #default>
-              {{ aiBalance?.balanceInfos.find(b => b.currency === 'CNY')?.totalBalance.toFixed(2) || '--' }}
+              {{
+                aiBalance?.balanceInfos
+                  .find((b) => b.currency === 'CNY')
+                  ?.totalBalance.toFixed(2) || '--'
+              }}
             </template>
             <template #suffix>
               <span class="stat-suffix">元</span>
@@ -254,10 +275,23 @@ import { h } from 'vue'
                 <span class="model-stat__label">试错模式</span>
               </div>
               <div class="model-stat__value">
-                {{ statsStore.userStats?.projects.reduce((sum, p) => sum + p.tasksByModel.wan2dot6.count, 0) || 0 }} 次
+                {{
+                  statsStore.userStats?.projects.reduce(
+                    (sum, p) => sum + p.tasksByModel.wan2dot6.count,
+                    0
+                  ) || 0
+                }}
+                次
               </div>
               <div class="model-stat__cost">
-                ¥{{ (statsStore.userStats?.projects.reduce((sum, p) => sum + p.tasksByModel.wan2dot6.cost, 0) || 0).toFixed(2) }}
+                ¥{{
+                  (
+                    statsStore.userStats?.projects.reduce(
+                      (sum, p) => sum + p.tasksByModel.wan2dot6.cost,
+                      0
+                    ) || 0
+                  ).toFixed(2)
+                }}
               </div>
             </div>
 
@@ -267,10 +301,23 @@ import { h } from 'vue'
                 <span class="model-stat__label">高光模式</span>
               </div>
               <div class="model-stat__value">
-                {{ statsStore.userStats?.projects.reduce((sum, p) => sum + p.tasksByModel.seedance2dot0.count, 0) || 0 }} 次
+                {{
+                  statsStore.userStats?.projects.reduce(
+                    (sum, p) => sum + p.tasksByModel.seedance2dot0.count,
+                    0
+                  ) || 0
+                }}
+                次
               </div>
               <div class="model-stat__cost">
-                ¥{{ (statsStore.userStats?.projects.reduce((sum, p) => sum + p.tasksByModel.seedance2dot0.cost, 0) || 0).toFixed(2) }}
+                ¥{{
+                  (
+                    statsStore.userStats?.projects.reduce(
+                      (sum, p) => sum + p.tasksByModel.seedance2dot0.cost,
+                      0
+                    ) || 0
+                  ).toFixed(2)
+                }}
               </div>
             </div>
 
@@ -291,9 +338,7 @@ import { h } from 'vue'
       <!-- Daily Cost Trend -->
       <div class="stats-section">
         <NCard title="每日成本趋势">
-          <div v-if="statsStore.dailyCosts.length === 0" class="empty-chart">
-            暂无数据
-          </div>
+          <div v-if="statsStore.dailyCosts.length === 0" class="empty-chart">暂无数据</div>
           <div v-else class="bar-chart">
             <div
               v-for="day in statsStore.dailyCosts.slice(-14)"
