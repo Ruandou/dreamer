@@ -57,12 +57,16 @@ export { generateAllOutlines } from './script-job-ai-creation.js'
 
 // 导出新模块（保持向后兼容）
 export { firstEpisodeGenerator, scriptModeRouter } from './script-processing/index.js'
+export { batchEpisodeGenerator, scriptParser } from './script-processing/index.js'
 
 /**
  * 生成第一集（向后兼容的包装函数）
  * @deprecated 直接使用 firstEpisodeGenerator.generate()
  */
 export async function runGenerateFirstEpisode(projectId: string, targetEpisodes?: number) {
+  console.warn(
+    'runGenerateFirstEpisode is deprecated. Use firstEpisodeGenerator.generate() instead.'
+  )
   const result = await firstEpisodeGenerator.generate({
     projectId,
     targetEpisodes
@@ -296,7 +300,7 @@ export async function ensureAllEpisodeScripts(
 ) {
   const ep1 = await projectRepository.findEpisodeByProjectNum(projectId, 1)
   if (!ep1 || !scriptFromJson(ep1.script)) {
-    await runGenerateFirstEpisode(projectId, targetEpisodes)
+    await firstEpisodeGenerator.generate({ projectId, targetEpisodes })
     if (reusePipelineJobId) {
       await updateJob(reusePipelineJobId, {
         progress: 7,

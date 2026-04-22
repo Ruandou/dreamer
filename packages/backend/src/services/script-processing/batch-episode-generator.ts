@@ -6,7 +6,8 @@
 import { projectRepository } from '../../repositories/project-repository.js'
 import { pipelineRepository } from '../../repositories/pipeline-repository.js'
 import { scriptFromJson } from '../script-job-helpers.js'
-import { runGenerateFirstEpisode, runScriptBatchJob } from '../project-script-jobs.js'
+import { runScriptBatchJob } from '../project-script-jobs.js'
+import { firstEpisodeGenerator } from './first-episode-generator.js'
 import type { BatchEpisodeOptions, BatchEpisodeResult } from './types.js'
 
 export class BatchEpisodeGenerator {
@@ -23,7 +24,7 @@ export class BatchEpisodeGenerator {
     // 1. 检查第一集
     const ep1 = await projectRepository.findEpisodeByProjectNum(projectId, 1)
     if (!ep1 || !scriptFromJson(ep1.script)) {
-      await runGenerateFirstEpisode(projectId, targetEpisodes)
+      await firstEpisodeGenerator.generate({ projectId, targetEpisodes })
       if (reusePipelineJobId) {
         await pipelineRepository.updateJob(reusePipelineJobId, {
           progress: 7,
