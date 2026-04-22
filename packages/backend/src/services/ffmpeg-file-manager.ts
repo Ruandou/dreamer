@@ -33,5 +33,11 @@ export function createTempPath(prefix: string, ext: string): string {
  * 批量清理临时文件
  */
 export async function cleanupFiles(filePaths: string[]): Promise<void> {
-  await Promise.all(filePaths.map((file) => fs.unlink(file).catch(() => {})))
+  for (const file of filePaths) {
+    try {
+      await fs.unlink(file)
+    } catch {
+      // 忽略删除失败（文件可能已不存在）
+    }
+  }
 }

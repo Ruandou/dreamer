@@ -73,7 +73,7 @@ describe('FFmpeg File Manager', () => {
   })
 
   describe('cleanupFiles', () => {
-    it.skip('should delete all files - TODO: mock reset issue', async () => {
+    it('should delete all files', async () => {
       const files = ['/tmp/file1.mp4', '/tmp/file2.mp4', '/tmp/file3.mp4']
 
       await cleanupFiles(files)
@@ -84,7 +84,7 @@ describe('FFmpeg File Manager', () => {
       })
     })
 
-    it.skip('should handle errors gracefully - TODO: mock reset issue', async () => {
+    it('should handle errors gracefully', async () => {
       vi.mocked(fs.unlink).mockRejectedValueOnce(new Error('ENOENT'))
 
       await expect(cleanupFiles(['/tmp/nonexistent'])).resolves.not.toThrow()

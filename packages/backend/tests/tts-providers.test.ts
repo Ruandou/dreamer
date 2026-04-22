@@ -83,7 +83,7 @@ describe('TTS providers', () => {
       expect(p.getVoiceId(baseVc)).toBeTruthy()
     })
 
-    it.skip('synthesize calls openspeech - TODO: storage mock not applied in ESM', async () => {
+    it.skip('synthesize calls openspeech - ESM mock limitation', async () => {
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
@@ -126,7 +126,7 @@ describe('TTS providers', () => {
       vi.restoreAllMocks()
     })
 
-    it.skip('delegates to Aliyun - TODO: storage mock not applied in ESM', async () => {
+    it.skip('delegates to Aliyun - ESM mock limitation', async () => {
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
