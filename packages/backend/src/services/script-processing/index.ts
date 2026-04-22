@@ -6,6 +6,8 @@
 // 新模块导出
 export { scriptModeRouter } from './script-mode-router.js'
 export { firstEpisodeGenerator } from './first-episode-generator.js'
+export { batchEpisodeGenerator } from './batch-episode-generator.js'
+export { scriptParser } from './script-parser.js'
 export type {
   FirstEpisodeOptions,
   FirstEpisodeResult,
