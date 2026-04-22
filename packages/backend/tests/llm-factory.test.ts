@@ -15,22 +15,22 @@ describe('llm-factory', () => {
       expect(provider.name).toBe('deepseek')
     })
 
-    it('throws for OpenAI provider (not implemented)', () => {
+    it('throws for OpenAI provider (not registered)', () => {
       expect(() =>
         createLLMProvider({
           provider: 'openai',
           apiKey: 'test-key'
         })
-      ).toThrow('OpenAI provider not yet implemented')
+      ).toThrow(/Unknown LLM provider: openai/)
     })
 
-    it('throws for Claude provider (not implemented)', () => {
+    it('throws for Claude provider (not registered)', () => {
       expect(() =>
         createLLMProvider({
           provider: 'claude',
           apiKey: 'test-key'
         })
-      ).toThrow('Claude provider not yet implemented')
+      ).toThrow(/Unknown LLM provider: claude/)
     })
 
     it('throws for unsupported provider', () => {
@@ -39,7 +39,7 @@ describe('llm-factory', () => {
           provider: 'unknown',
           apiKey: 'test-key'
         })
-      ).toThrow('Unsupported LLM provider')
+      ).toThrow(/Unknown LLM provider: unknown/)
     })
   })
 
