@@ -103,9 +103,17 @@ export async function sendMessage(
   if (!conversation || conversation.userId !== userId) return null
 
   // Auto-update title from first user message
-  if (conversation.title === '新对话' && params.content) {
-    const title = params.content.slice(0, 30) + (params.content.length > 30 ? '...' : '')
-    await chatRepository.updateConversation(params.conversationId, { title })
+  if (conversation.title === '新对话') {
+    // Generate title from content or quick command
+    let titleText = params.content
+    if (params.quickCommand) {
+      const command = QUICK_COMMAND_MAP[params.quickCommand]
+      titleText = command ? `[${command.label}]` : params.quickCommand
+    }
+    if (titleText) {
+      const title = titleText.slice(0, 30) + (titleText.length > 30 ? '...' : '')
+      await chatRepository.updateConversation(params.conversationId, { title })
+    }
   }
 
   // Build user message content
