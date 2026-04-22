@@ -5,7 +5,12 @@
 
 import type { PipelineStep } from '@dreamer/shared/types'
 import type { PipelineStepHandler, StepRegistry } from './types.js'
+import { scriptWritingHandler } from './script-writing.js'
 import { episodeSplittingHandler } from './episode-splitting.js'
+import { actionExtractionHandler } from './action-extraction.js'
+import { assetMatchingHandler } from './asset-matching.js'
+import { storyboardGenerationHandler } from './storyboard-generation.js'
+import { seedanceParametrizationHandler } from './seedance-parametrization.js'
 
 class PipelineStepRegistry {
   private registry: StepRegistry = new Map()
@@ -50,10 +55,12 @@ class PipelineStepRegistry {
 export const pipelineStepRegistry = new PipelineStepRegistry()
 
 // 注册所有步骤处理器
+pipelineStepRegistry.register(scriptWritingHandler)
 pipelineStepRegistry.register(episodeSplittingHandler)
-// 未来添加新步骤只需在这里注册：
-// pipelineStepRegistry.register(actionExtractionHandler)
-// pipelineStepRegistry.register(assetMatchingHandler)
+pipelineStepRegistry.register(actionExtractionHandler)
+pipelineStepRegistry.register(assetMatchingHandler)
+pipelineStepRegistry.register(storyboardGenerationHandler)
+pipelineStepRegistry.register(seedanceParametrizationHandler)
 
 /**
  * 获取步骤处理器（便捷函数）
