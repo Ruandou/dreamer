@@ -40,6 +40,7 @@ export class ScriptParser {
         )
 
         await projectRepository.update(options.projectId, {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           visualStyleConfig: config as any
         })
 
