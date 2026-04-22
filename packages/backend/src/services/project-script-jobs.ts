@@ -10,7 +10,6 @@ import { pipelineRepository } from '../repositories/pipeline-repository.js'
 import { projectRepository } from '../repositories/project-repository.js'
 import { recordModelApiCall } from './ai/api-logger.js'
 import { generateVisualStyleConfig } from './ai/visual-style-generator.js'
-import { writeScriptFromIdea, formatScriptToJSON } from './script-writer.js'
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
 import { runParseScriptEntityPipeline } from './parse-script-entity-pipeline.js'
 
@@ -33,13 +32,10 @@ import { updateJob, scriptFromJson } from './script-job-helpers.js'
 import { detectScriptMode } from './script-mode-detector.js'
 import { runFaithfulParse } from './script-job-faithful-parse.js'
 import { runMixedMode } from './script-job-mixed-mode.js'
-import { safeExtractAndSaveMemories } from './memory/index.js'
 import { withTimeout, timeoutErrorMessage } from '../lib/with-timeout.js'
 import { runAiCreationThreePhase, runAiCreationLegacy } from './script-job-ai-creation.js'
-import {
-  VISUAL_ENRICHMENT_TIMEOUT_MS,
-  STORY_CONTEXT_MAX_LENGTH
-} from './project-script-jobs.constants.js'
+import { VISUAL_ENRICHMENT_TIMEOUT_MS } from './project-script-jobs.constants.js'
+import { firstEpisodeGenerator } from './script-processing/index.js'
 
 /**
  * 是否存在进行中的批量剧本或解析任务，用于避免与另一路并发写同一项目。
@@ -59,137 +55,22 @@ export async function getActiveOutlinePipelineJob(projectId: string) {
 
 export { generateAllOutlines } from './script-job-ai-creation.js'
 
+// 导出新模块（保持向后兼容）
+export { firstEpisodeGenerator, scriptModeRouter } from './script-processing/index.js'
+
+/**
+ * 生成第一集（向后兼容的包装函数）
+ * @deprecated 直接使用 firstEpisodeGenerator.generate()
+ */
 export async function runGenerateFirstEpisode(projectId: string, targetEpisodes?: number) {
-  const project = await projectRepository.findUniqueById(projectId)
-  if (!project) throw new Error('PROJECT_NOT_FOUND')
-
-  const idea = project.description?.trim() || project.name
-
-  // 检测是否为完整剧本
-  const detectionResult = detectScriptMode(project.description || '')
-
-  if (detectionResult.mode === 'faithful-parse') {
-    // 完整剧本 → 解析所有集
-    console.log('[generate-first] 检测到完整剧本，解析所有集')
-    await projectRepository.update(projectId, {
-      synopsis: project.description,
-      storyContext: (project.description || '').slice(0, STORY_CONTEXT_MAX_LENGTH)
-    })
-
-    const allEpisodes = detectionResult.episodes || []
-    // 尊重 targetEpisodes 限制
-    const maxEp = targetEpisodes ?? allEpisodes.length
-    const episodesToParse = allEpisodes.filter((ep) => ep.episodeNum <= maxEp)
-
-    console.log(
-      `[generate-first] 将解析 ${episodesToParse.length}/${allEpisodes.length} 集（目标：${maxEp}）`
-    )
-
-    let parsedCount = 0
-    let failedCount = 0
-
-    for (const ep of episodesToParse) {
-      if (!ep.content) continue
-
-      try {
-        console.log(`[generate-first] 解析第 ${ep.episodeNum} 集...`)
-        const script = await formatScriptToJSON(ep.content, {
-          userId: project.userId,
-          projectId,
-          op: 'parse_all_episodes_from_complete_script'
-        })
-
-        const episode = await projectRepository.upsertEpisodeBatchFromScript(
-          projectId,
-          ep.episodeNum,
-          script
-        )
-
-        await safeExtractAndSaveMemories(projectId, ep.episodeNum, episode.id, script, {
-          userId: project.userId,
-          projectId,
-          op: 'extract_complete_script_memories'
-        })
-
-        parsedCount++
-        console.log(
-          `[generate-first] 第 ${ep.episodeNum} 集解析完成 (${parsedCount}/${episodesToParse.length})`
-        )
-      } catch (error) {
-        failedCount++
-        console.error(`[generate-first] 第 ${ep.episodeNum} 集解析失败:`, error)
-        // 继续处理下一集，不因单集失败而中断
-      }
-    }
-
-    console.log(
-      `[generate-first] 完整剧本解析完成：成功 ${parsedCount} 集，失败 ${failedCount} 集，共 ${episodesToParse.length} 集`
-    )
-
-    if (parsedCount === 0) {
-      throw new Error('完整剧本解析失败，未能成功解析任何集')
-    }
-
-    return
-  }
-
-  if (detectionResult.mode === 'mixed') {
-    // 混合模式 → 只创建第一集，其余交给 script-batch
-    console.log('[generate-first] 检测到混合模式，创建第一集')
-    await projectRepository.update(projectId, {
-      synopsis: project.description,
-      storyContext: (project.description || '').slice(0, STORY_CONTEXT_MAX_LENGTH)
-    })
-
-    const episodes = detectionResult.episodes
-    if (!episodes) {
-      console.log('[generate-first] 混合模式缺少 episodes 数据')
-      return
-    }
-
-    const ep1 = episodes.find((e) => e.episodeNum === 1)
-    if (ep1?.content) {
-      const script = await formatScriptToJSON(ep1.content, {
-        userId: project.userId,
-        projectId,
-        op: 'parse_first_episode_mixed'
-      })
-      const episode = await projectRepository.upsertEpisodeFirstFromScript(projectId, script)
-      console.log(`[generate-first] 混合模式第一集已创建: episodeId=${episode.id}`)
-    } else {
-      // 第一集内容缺失，由后续 script-batch 的 AI 创作流程处理
-      console.log('[generate-first] 混合模式第一集内容缺失，将由 script-batch 处理')
-    }
-    return
-  }
-
-  // 创意 → 正常AI生成
-  const { script } = await writeScriptFromIdea(idea, {
-    modelLog: {
-      userId: project.userId,
-      projectId,
-      op: 'generate_first_episode'
-    }
-  })
-
-  const storyContext = [project.synopsis || script.summary, script.summary]
-    .filter(Boolean)
-    .join('\n')
-    .slice(0, STORY_CONTEXT_MAX_LENGTH)
-
-  await projectRepository.update(projectId, {
-    synopsis: script.summary,
-    storyContext
-  })
-
-  const episode = await projectRepository.upsertEpisodeFirstFromScript(projectId, script)
-
-  // 提取第一集的记忆
-  await safeExtractAndSaveMemories(projectId, 1, episode.id, script, {
-    userId: project.userId,
+  const result = await firstEpisodeGenerator.generate({
     projectId,
-    op: 'extract_first_episode_memories'
+    targetEpisodes
   })
+
+  console.log(
+    `[generate-first] 完成：共 ${result.episodeCount} 集，成功 ${result.parsedCount} 集，失败 ${result.failedCount} 集`
+  )
 }
 
 /**

@@ -4,7 +4,7 @@
  */
 
 import { projectRepository } from '../../repositories/project-repository.js'
-import { formatScriptToJSON } from '../script-writer.js'
+import { formatScriptToJSON, writeScriptFromIdea } from '../script-writer.js'
 import { safeExtractAndSaveMemories } from '../memory/index.js'
 import { scriptModeRouter } from './script-mode-router.js'
 import { STORY_CONTEXT_MAX_LENGTH } from '../project-script-jobs.constants.js'
@@ -36,8 +36,8 @@ export class FirstEpisodeGenerator {
       return this.handleMixedMode(project, detectionResult)
     }
 
-    // AI 创作模式由其他处理器处理
-    return { episodeCount: 0, parsedCount: 0, failedCount: 0 }
+    // AI 创作模式
+    return this.handleAICreation(project, detectionResult)
   }
 
   /**
@@ -129,6 +129,52 @@ export class FirstEpisodeGenerator {
     }
 
     console.log('[generate-first] 混合模式第一集创建完成')
+    return { episodeCount: 1, parsedCount: 1, failedCount: 0 }
+  }
+
+  /**
+   * 处理 AI 创作模式
+   */
+  private async handleAICreation(
+    project: {
+      userId: string
+      id: string
+      description: string | null
+      name: string
+      synopsis: string | null
+    },
+    _detectionResult: unknown
+  ): Promise<FirstEpisodeResult> {
+    const idea = project.description?.trim() || project.name
+
+    const { script } = await writeScriptFromIdea(idea, {
+      modelLog: {
+        userId: project.userId,
+        projectId: project.id,
+        op: 'generate_first_episode'
+      }
+    })
+
+    const storyContext = [project.synopsis || script.summary, script.summary]
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, STORY_CONTEXT_MAX_LENGTH)
+
+    await projectRepository.update(project.id, {
+      synopsis: script.summary,
+      storyContext
+    })
+
+    const episode = await projectRepository.upsertEpisodeFirstFromScript(project.id, script)
+
+    // 提取第一集的记忆
+    await safeExtractAndSaveMemories(project.id, 1, episode.id, script, {
+      userId: project.userId,
+      projectId: project.id,
+      op: 'extract_first_episode_memories'
+    })
+
+    console.log(`[generate-first] AI 创作第一集已生成: episodeId=${episode.id}`)
     return { episodeCount: 1, parsedCount: 1, failedCount: 0 }
   }
 
