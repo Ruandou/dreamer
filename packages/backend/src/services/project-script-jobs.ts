@@ -12,6 +12,7 @@ import { recordModelApiCall } from './ai/api-logger.js'
 import { generateVisualStyleConfig } from './ai/visual-style-generator.js'
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
 import { runParseScriptEntityPipeline } from './parse-script-entity-pipeline.js'
+import { logInfo, logWarning, logError } from '../lib/error-logger.js'
 
 // 从拆分后的模块导入
 export {
@@ -64,7 +65,8 @@ export { batchEpisodeGenerator, scriptParser } from './script-processing/index.j
  * @deprecated 直接使用 firstEpisodeGenerator.generate()
  */
 export async function runGenerateFirstEpisode(projectId: string, targetEpisodes?: number) {
-  console.warn(
+  logWarning(
+    'FirstEpisodeGeneration',
     'runGenerateFirstEpisode is deprecated. Use firstEpisodeGenerator.generate() instead.'
   )
   const result = await firstEpisodeGenerator.generate({
@@ -72,9 +74,11 @@ export async function runGenerateFirstEpisode(projectId: string, targetEpisodes?
     targetEpisodes
   })
 
-  console.log(
-    `[generate-first] 完成：共 ${result.episodeCount} 集，成功 ${result.parsedCount} 集，失败 ${result.failedCount} 集`
-  )
+  logInfo('FirstEpisodeGeneration', '完成', {
+    episodeCount: result.episodeCount,
+    parsedCount: result.parsedCount,
+    failedCount: result.failedCount
+  })
 }
 
 /**
@@ -156,9 +160,9 @@ export async function runScriptBatchJob(
 
   try {
     // ====== 智能模式检测 ======
-    console.log(`[script-batch] 开始检测剧本模式, projectId=${projectId}`)
+    logInfo('ScriptBatch', '开始检测剧本模式', { projectId })
     const detectionResult = detectScriptMode(synopsis)
-    console.log(`[script-batch] 检测结果: ${detectionResult.mode}`)
+    logInfo('ScriptBatch', '检测结果', { mode: detectionResult.mode })
 
     // 记录决策结果到 Job progressMeta
     const decisionDetails: Record<string, unknown> = {
@@ -191,7 +195,7 @@ export async function runScriptBatchJob(
       }
     })
 
-    console.log('[script-batch] 决策详情:', JSON.stringify(decisionDetails, null, 2))
+    logInfo('ScriptBatch', '决策详情', { details: decisionDetails })
 
     // 记录决策到 ModelApiCall（审计追溯）
     try {
@@ -205,12 +209,14 @@ export async function runScriptBatchJob(
         status: 'completed'
       })
     } catch (error) {
-      console.error('[script-batch] 记录决策失败:', error)
+      logError('ScriptBatch', '记录决策失败', {
+        error: error instanceof Error ? error.message : String(error)
+      })
     }
 
     // ====== 模式 A：忠实解析完整剧本 ======
     if (detectionResult.mode === 'faithful-parse') {
-      console.log('[script-batch] 使用忠实解析模式')
+      logInfo('ScriptBatch', '使用忠实解析模式')
       const episodes = detectionResult.episodes
       if (!episodes) {
         throw new Error('忠实解析模式缺少 episodes 数据')
@@ -221,7 +227,7 @@ export async function runScriptBatchJob(
 
     // ====== 模式 B：混合模式 ======
     if (detectionResult.mode === 'mixed') {
-      console.log('[script-batch] 使用混合模式')
+      logInfo('ScriptBatch', '使用混合模式')
       const episodes = detectionResult.episodes
       if (!episodes) {
         throw new Error('混合模式缺少 episodes 数据')
@@ -272,7 +278,7 @@ export async function runScriptBatchJob(
     }
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : '批量生成失败'
-    console.error('[script-batch] 任务执行失败:', {
+    logError('ScriptBatch', '任务执行失败', {
       jobId,
       projectId,
       error: message,
@@ -316,9 +322,10 @@ export async function ensureAllEpisodeScripts(
       (ep) => ep.episodeNum >= 1 && ep.episodeNum <= targetEpisodes && scriptFromJson(ep.script)
     )
     if (existingEpisodes.length >= targetEpisodes) {
-      console.log(
-        `[ensureAllEpisodeScripts] 已存在 ${existingEpisodes.length}/${targetEpisodes} 集剧本，跳过批量生成`
-      )
+      logInfo('EnsureEpisodeScripts', '已存在足够剧本，跳过批量生成', {
+        existingCount: existingEpisodes.length,
+        targetCount: targetEpisodes
+      })
       return
     }
   }
@@ -374,9 +381,10 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
   })
 
   try {
-    console.log(
-      `[parse-script] 开始解析剧本, projectId=${projectId}, targetEpisodes=${targetEpisodes}`
-    )
+    logInfo('ParseScript', '开始解析剧本', {
+      projectId,
+      targetEpisodes
+    })
 
     await ensureAllEpisodeScripts(projectId, targetEpisodes, jobId)
 
@@ -388,7 +396,7 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
 
     // 自动生成 visualStyleConfig（如果没有）
     if (!project.visualStyleConfig) {
-      console.log('[parse-script] 基于完整梗概自动生成 visualStyleConfig')
+      logInfo('ParseScript', '基于完整梗概自动生成 visualStyleConfig')
       try {
         const config = await generateVisualStyleConfig(
           {
@@ -406,9 +414,11 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
         await projectRepository.update(projectId, {
           visualStyleConfig: config as unknown as Prisma.InputJsonValue
         })
-        console.log('[parse-script] visualStyleConfig 已生成并保存')
+        logInfo('ParseScript', 'visualStyleConfig 已生成并保存')
       } catch (error) {
-        console.error('[parse-script] 自动生成 visualStyleConfig 失败:', error)
+        logError('ParseScript', '自动生成 visualStyleConfig 失败', {
+          error: error instanceof Error ? error.message : String(error)
+        })
         // 不阻断流程，继续解析
       }
     }
@@ -424,7 +434,7 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
       progressMeta: { message: '提取角色与场景…' }
     })
 
-    console.log('[parse-script] 开始执行实体提取Pipeline')
+    logInfo('ParseScript', '开始执行实体提取Pipeline')
     const merged = await runParseScriptEntityPipeline(projectId, project.userId, targetEpisodes)
 
     await updateJob(jobId, {
@@ -432,14 +442,14 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
       progressMeta: { message: '生成形象与场地提示词…' }
     })
 
-    console.log('[parse-script] 开始应用视觉增强（20分钟超时保护）')
+    logInfo('ParseScript', '开始应用视觉增强（20分钟超时保护）')
     await withTimeout(
       applyScriptVisualEnrichment(projectId, merged),
       VISUAL_ENRICHMENT_TIMEOUT_MS,
       timeoutErrorMessage('视觉增强', VISUAL_ENRICHMENT_TIMEOUT_MS)
     )
 
-    console.log('[parse-script] 填充分集简介')
+    logInfo('ParseScript', '填充分集简介')
     const { fillEpisodeSynopses } = await import('./script-job-helpers.js')
     await fillEpisodeSynopses(projectId)
 
@@ -450,10 +460,10 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
       progressMeta: { message: '解析完成' }
     })
 
-    console.log('[parse-script] 解析任务完成')
+    logInfo('ParseScript', '解析任务完成')
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : '解析失败'
-    console.error('[parse-script] 解析任务失败:', {
+    logError('ParseScript', '解析任务失败', {
       jobId,
       projectId,
       error: message,
