@@ -6,8 +6,9 @@ import json
 import re
 import subprocess
 
-PROGRESS_FILE = ".long-task-harness/long-task-progress.md"
-FEATURES_FILE = ".long-task-harness/features.json"
+SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROGRESS_FILE = os.path.join(SKILL_DIR, ".long-task-harness/long-task-progress.md")
+FEATURES_FILE = os.path.join(SKILL_DIR, ".long-task-harness/features.json")
 
 def get_session_count():
     if not os.path.exists(PROGRESS_FILE):

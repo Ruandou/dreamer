@@ -5,7 +5,11 @@ import os
 import json
 from datetime import datetime
 
-HARNESS_DIR = ".long-task-harness"
+import sys
+
+# Get skill directory (where this script is)
+SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HARNESS_DIR = os.path.join(SKILL_DIR, ".long-task-harness")
 PROGRESS_FILE = os.path.join(HARNESS_DIR, "long-task-progress.md")
 FEATURES_FILE = os.path.join(HARNESS_DIR, "features.json")
 INIT_FILE = os.path.join(HARNESS_DIR, "init.sh")

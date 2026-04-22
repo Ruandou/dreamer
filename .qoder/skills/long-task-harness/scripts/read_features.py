@@ -5,7 +5,9 @@ import os
 import json
 import argparse
 
-FEATURES_FILE = ".long-task-harness/features.json"
+import os
+SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FEATURES_FILE = os.path.join(SKILL_DIR, ".long-task-harness/features.json")
 
 def read_features():
     if not os.path.exists(FEATURES_FILE):

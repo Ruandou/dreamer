@@ -1,0 +1,12 @@
+{
+  "version": "2.0",
+  "description": "功能清单与历史追踪",
+  "metadata": {
+    "project_name": "Your Project",
+    "created": "2026-04-22",
+    "last_updated": "2026-04-22",
+    "total_features": 0,
+    "completed_features": 0
+  },
+  "features": []
+}

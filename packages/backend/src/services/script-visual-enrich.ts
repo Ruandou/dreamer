@@ -13,6 +13,7 @@ import type { ModelCallLogContext } from './ai/api-logger.js'
 import { extractJsonObject } from './visual-enrich/json-extractor.js'
 import { processLocationImagePrompts } from './visual-enrich/location-processor.js'
 import { processCharacterImageSlots } from './visual-enrich/character-processor.js'
+import { logInfo, logError, logWarning } from '../lib/error-logger.js'
 
 interface ParsedLocation {
   name: string
@@ -126,11 +127,11 @@ async function fillMissingCharacterImagePrompts(
             })
           }
         } catch (e) {
-          console.warn('[fillMissingCharacterImagePrompts] 失败', {
+          logWarning('VisualEnrich', 'fillMissingCharacterImagePrompts 失败', {
             projectId,
             characterId: slot.characterId,
             imageId: slot.imageId,
-            error: e
+            error: e instanceof Error ? e.message : String(e)
           })
         }
       })
@@ -139,7 +140,7 @@ async function fillMissingCharacterImagePrompts(
     // 记录失败情况
     results.forEach((result, idx) => {
       if (result.status === 'rejected') {
-        console.error('[fillMissingCharacterImagePrompts] 批量处理失败', {
+        logError('VisualEnrich', 'fillMissingCharacterImagePrompts 批量处理失败', {
           batchStart: i,
           index: idx,
           error: result.reason
@@ -153,7 +154,7 @@ export async function applyScriptVisualEnrichment(
   projectId: string,
   script: ScriptContent
 ): Promise<void> {
-  console.log(`[visual-enrich] 开始视觉增强, projectId=${projectId}`)
+  logInfo('VisualEnrich', '开始视觉增强', { projectId })
 
   const projectRow = await projectRepository.findUserIdAndVisualStyle(projectId)
   if (!projectRow) {
@@ -168,7 +169,10 @@ export async function applyScriptVisualEnrichment(
   const locations = await locationRepository.findManyByProjectOrdered(projectId)
   const characters = await characterRepository.findManyByProjectNameAscWithImages(projectId)
 
-  console.log(`[visual-enrich] 场地数: ${locations.length}, 角色数: ${characters.length}`)
+  logInfo('VisualEnrich', '场地和角色数量', {
+    locationCount: locations.length,
+    characterCount: characters.length
+  })
 
   // visualStyle 已废弃，只使用 visualStyleConfig
   const projectRowWithConfig = projectRow as { visualStyleConfig?: unknown }
@@ -185,9 +189,10 @@ export async function applyScriptVisualEnrichment(
     .map((c) => `${c.name} | ${(c.description || '').slice(0, 200)}`)
     .join('\n')
 
-  console.log(
-    `[visual-enrich] 即将请求 DeepSeek（落库 op=script_visual_enrichment） projectId=${projectId}`
-  )
+  logInfo('VisualEnrich', '即将请求 DeepSeek', {
+    projectId,
+    op: 'script_visual_enrichment'
+  })
 
   let jsonText: string
   try {
@@ -203,10 +208,10 @@ export async function applyScriptVisualEnrichment(
       visualLog
     )
     jsonText = result.jsonText
-    console.log(`[visual-enrich] DeepSeek 返回成功, 内容长度: ${jsonText.length} chars`)
+    logInfo('VisualEnrich', 'DeepSeek 返回成功', { contentLength: jsonText.length })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : '未知错误'
-    console.error('[visual-enrich] DeepSeek 调用失败:', {
+    logError('VisualEnrich', 'DeepSeek 调用失败', {
       error: message,
       projectId
     })
@@ -217,12 +222,13 @@ export async function applyScriptVisualEnrichment(
   try {
     const raw = extractJsonObject(jsonText)
     payload = JSON.parse(raw) as VisualPayload
-    console.log(
-      `[visual-enrich] JSON 解析成功, locations: ${payload.locations?.length || 0}, characters: ${payload.characters?.length || 0}`
-    )
+    logInfo('VisualEnrich', 'JSON 解析成功', {
+      locationCount: payload.locations?.length || 0,
+      characterCount: payload.characters?.length || 0
+    })
   } catch (e) {
     // 尝试 AI 修复 JSON
-    console.warn('[visual-enrich] JSON 解析失败，尝试 AI 自动修复...')
+    logWarning('VisualEnrich', 'JSON 解析失败，尝试 AI 自动修复...')
     try {
       const fixedJson = await repairJsonWithAI(jsonText, {
         userId: projectRow.userId,
@@ -231,11 +237,11 @@ export async function applyScriptVisualEnrichment(
       })
       const raw = extractJsonObject(fixedJson)
       payload = JSON.parse(raw) as VisualPayload
-      console.log('[visual-enrich] JSON 修复成功')
+      logInfo('VisualEnrich', 'JSON 修复成功')
     } catch {
       const err = e as Error
-      console.error('[visual-enrich] JSON 解析和修复均失败:', {
-        error: err?.message || err,
+      logError('VisualEnrich', 'JSON 解析和修复均失败', {
+        error: err?.message || String(err),
         jsonTextPreview: jsonText.substring(0, 500)
       })
       throw new Error(
@@ -250,13 +256,10 @@ export async function applyScriptVisualEnrichment(
     locations.length > 0 &&
     (!Array.isArray(payload.locations) || payload.locations.length === 0)
   ) {
-    console.warn(
-      '[applyScriptVisualEnrichment] 项目场地库有场地但未收到模型返回的 locations 条目',
-      {
-        projectId,
-        dbLocationNames
-      }
-    )
+    logWarning('VisualEnrich', '项目场地库有场地但未收到模型返回的 locations 条目', {
+      projectId,
+      dbLocationNames
+    })
   }
 
   const locationPromptWrites = await processLocationImagePrompts(
@@ -273,9 +276,14 @@ export async function applyScriptVisualEnrichment(
     payload.locations.length > 0
   ) {
     const returnedNames = payload.locations.map((l) => l?.name).filter(Boolean)
-    console.warn(
-      '[applyScriptVisualEnrichment] 未能写入任何定场图 imagePrompt：请核对模型返回的 locations[].name 是否与场地库名称完全一致',
-      { projectId, dbLocationNames, returnedNames }
+    logWarning(
+      'VisualEnrich',
+      '未能写入任何定场图 imagePrompt：请核对模型返回的 locations[].name 是否与场地库名称完全一致',
+      {
+        projectId,
+        dbLocationNames,
+        returnedNames
+      }
     )
   }
 

@@ -5,7 +5,9 @@ import os
 import re
 import argparse
 
-PROGRESS_FILE = ".long-task-harness/long-task-progress.md"
+import os
+SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROGRESS_FILE = os.path.join(SKILL_DIR, ".long-task-harness/long-task-progress.md")
 
 def read_file(path):
     if not os.path.exists(path):
