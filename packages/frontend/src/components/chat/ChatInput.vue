@@ -12,16 +12,12 @@
     </div>
     <div class="input-actions">
       <NButton
-        size="large"
+        text
         :type="isStreaming ? 'error' : 'primary'"
         :loading="isStreaming && !disabled"
         :disabled="!inputValue.trim() && !isStreaming"
         @click="handleAction"
       >
-        <template #icon>
-          <span v-if="!isStreaming">➤</span>
-          <span v-else>◼</span>
-        </template>
         {{ isStreaming ? '停止' : sendLabel }}
       </NButton>
     </div>
@@ -101,21 +97,7 @@ function handleAction() {
 }
 
 .input-actions :deep(.n-button) {
-  border-radius: 10px;
-  padding: 0 24px;
-  height: 44px;
   font-weight: 500;
-  font-size: 15px;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
-  transition: all 0.2s;
-}
-
-.input-actions :deep(.n-button:hover) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-}
-
-.input-actions :deep(.n-button:active) {
-  transform: translateY(0);
+  font-size: 14px;
 }
 </style>
