@@ -4,6 +4,7 @@
 
 import { compositionRepository } from '../repositories/composition-repository.js'
 import { composeVideo, type CompositionClip } from './ffmpeg.js'
+import { logError } from '../lib/error-logger.js'
 
 export type CompositionExportResult =
   | { ok: true; outputUrl: string; duration: number }
@@ -50,7 +51,10 @@ export async function runCompositionExport(
 
     return { ok: true, outputUrl: result.outputUrl, duration: result.duration }
   } catch (error) {
-    console.error('Export failed:', error)
+    logError('CompositionExport', 'Export failed', {
+      error: error instanceof Error ? error.message : String(error),
+      compositionId
+    })
 
     await compositionRepository.update(compositionId, { status: 'failed' })
 

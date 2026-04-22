@@ -213,10 +213,10 @@ async function executeStep(
   const startTime = Date.now()
 
   try {
-    console.log(`开始执行步骤: ${step}`)
+    logInfo('PipelineStep', `开始执行步骤: ${step}`)
     const data = await fn()
     const duration = Date.now() - startTime
-    console.log(`步骤完成: ${step}，耗时: ${duration}ms`)
+    logInfo('PipelineStep', `步骤完成: ${step}，耗时: ${duration}ms`)
 
     return {
       step,
@@ -228,7 +228,7 @@ async function executeStep(
     const duration = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 
-    console.error(`步骤失败: ${step}，耗时: ${duration}ms，错误: ${errorMessage}`)
+    logError('PipelineStep', `步骤失败: ${step}，耗时: ${duration}ms，错误: ${errorMessage}`)
 
     return {
       step,

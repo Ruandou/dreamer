@@ -15,6 +15,7 @@ import {
 } from './project-script-jobs.js'
 import { runParseScriptEntityPipeline } from './parse-script-entity-pipeline.js'
 import { applyScriptVisualEnrichment } from './script-visual-enrich.js'
+import { logInfo, logError } from '../lib/error-logger.js'
 
 import type { ScriptContent, EpisodePlan, StoryboardSegment } from '@dreamer/shared/types'
 
@@ -64,7 +65,7 @@ async function updateStepResult(
 export async function executePipelineJob(jobId: string, options: PipelineJobOptions) {
   const { projectId, idea, targetEpisodes, targetDuration, defaultAspectRatio } = options
 
-  console.log(`Starting Pipeline Job ${jobId} for project ${projectId}`)
+  logInfo('PipelineExecutor', `Starting Pipeline Job ${jobId} for project ${projectId}`)
 
   let currentStep = 'script-writing'
 
@@ -195,9 +196,11 @@ export async function executePipelineJob(jobId: string, options: PipelineJobOpti
       currentStep
     })
 
-    console.log(`Pipeline Job ${jobId} completed successfully`)
+    logInfo('PipelineExecutor', `Pipeline Job ${jobId} completed successfully`)
   } catch (error) {
-    console.error(`Pipeline Job ${jobId} failed:`, error)
+    logError('PipelineExecutor', `Pipeline Job ${jobId} failed`, {
+      error: error instanceof Error ? error.message : String(error)
+    })
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 
