@@ -7,11 +7,18 @@ import { recordModelApiCall } from '../services/ai/api-logger.js'
 interface CreateScriptBody {
   title?: string
   content?: string
+  tags?: string[]
 }
 
 interface UpdateScriptBody {
   title?: string
   content?: string
+  status?: 'DRAFT' | 'READY' | 'ARCHIVED'
+  tags?: string[]
+}
+
+interface ListScriptsQuery {
+  tag?: string
   status?: 'DRAFT' | 'READY' | 'ARCHIVED'
 }
 
@@ -22,19 +29,37 @@ interface AIReviseBody {
 
 export async function scriptsRoutes(fastify: FastifyInstance) {
   // 获取用户所有剧本
-  fastify.get('/', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    try {
-      const userId = getRequestUserId(request)
-      const scripts = await prisma.script.findMany({
-        where: { userId },
-        orderBy: { updatedAt: 'desc' }
-      })
-      return scripts
-    } catch (error) {
-      logError('获取剧本列表失败', { error })
-      return reply.status(500).send({ error: '获取剧本列表失败' })
+  fastify.get<{ Querystring: ListScriptsQuery }>(
+    '/',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      try {
+        const userId = getRequestUserId(request)
+        const { tag, status } = request.query
+
+        const where: {
+          userId: string
+          tags?: { hasSome: string[] }
+          status?: 'DRAFT' | 'READY' | 'ARCHIVED'
+        } = { userId }
+        if (tag) {
+          where.tags = { hasSome: [tag] }
+        }
+        if (status) {
+          where.status = status
+        }
+
+        const scripts = await prisma.script.findMany({
+          where,
+          orderBy: { updatedAt: 'desc' }
+        })
+        return scripts
+      } catch (error) {
+        logError('获取剧本列表失败', { error })
+        return reply.status(500).send({ error: '获取剧本列表失败' })
+      }
     }
-  })
+  )
 
   // 获取用户最新草稿（无则自动创建）
   fastify.get('/latest', { preHandler: [fastify.authenticate] }, async (request, reply) => {
@@ -88,10 +113,10 @@ Scene 2. 破旧屋内 - 夜
     async (request, reply) => {
       try {
         const userId = getRequestUserId(request)
-        const { title = '未命名剧本', content = '' } = request.body
+        const { title = '未命名剧本', content = '', tags } = request.body
 
         const script = await prisma.script.create({
-          data: { userId, title, content }
+          data: { userId, title, content, tags: tags ?? [] }
         })
 
         logInfo('Scripts', '创建新剧本', { userId, scriptId: script.id })
@@ -138,7 +163,7 @@ Scene 2. 破旧屋内 - 夜
       try {
         const userId = getRequestUserId(request)
         const { id } = request.params
-        const { title, content, status } = request.body
+        const { title, content, status, tags } = request.body
 
         // 验证剧本存在且属于当前用户
         const existing = await prisma.script.findFirst({
@@ -154,7 +179,8 @@ Scene 2. 破旧屋内 - 夜
           data: {
             ...(title !== undefined && { title }),
             ...(content !== undefined && { content }),
-            ...(status !== undefined && { status })
+            ...(status !== undefined && { status }),
+            ...(tags !== undefined && { tags })
           }
         })
 

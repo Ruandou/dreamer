@@ -452,6 +452,7 @@ model Script {
   title       String       @default("未命名剧本")
   content     String       @db.Text   // 剧本全文，纯文本
   status      ScriptStatus @default(DRAFT)
+  tags        String[]     @default([])
 
   // 版本预留（暂不启用版本表）
   version     Int          @default(1)

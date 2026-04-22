@@ -1,17 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  NCard,
-  NButton,
-  NStatistic,
-  NDataTable,
-  NTag,
-  NEmpty,
-  NSpin,
-  NSelect,
-  NSpace
-} from 'naive-ui'
+import { NCard, NStatistic, NDataTable, NTag, NEmpty, NSpin, NSelect } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { useStatsStore } from '@/stores/stats'
 import { getAiBalance } from '@/api'

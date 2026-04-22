@@ -38,8 +38,18 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Projects.vue')
       },
       {
+        path: 'scripts',
+        name: 'Scripts',
+        component: () => import('@/views/Scripts.vue')
+      },
+      {
         path: 'studio',
         name: 'Studio',
+        component: () => import('@/views/Studio.vue')
+      },
+      {
+        path: 'studio/:id',
+        name: 'StudioDetail',
         component: () => import('@/views/Studio.vue')
       },
       {

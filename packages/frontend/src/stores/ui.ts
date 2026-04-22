@@ -25,9 +25,9 @@ export const useUIStore = defineStore('ui', () => {
 
   async function fetchUserInfo() {
     try {
-      const user = await api.get('/auth/me')
-      userName.value = user.name || ''
-      userEmail.value = user.email || ''
+      const res = await api.get<{ name?: string; email?: string }>('/auth/me')
+      userName.value = res.data.name || ''
+      userEmail.value = res.data.email || ''
     } catch {
       // 静默失败
     }

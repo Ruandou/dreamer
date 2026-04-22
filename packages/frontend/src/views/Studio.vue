@@ -18,6 +18,7 @@
         }}</span>
       </div>
       <div class="toolbar-right">
+        <NButton @click="router.push('/scripts')">📜 剧本列表</NButton>
         <NButton :type="isPreview ? 'primary' : 'default'" @click="togglePreview">
           {{ isPreview ? '✏️ 编辑' : '👁️ 预览' }}
         </NButton>
@@ -58,6 +59,32 @@
       </div>
     </div>
 
+    <!-- 标签编辑区 -->
+    <div class="studio-tags-bar">
+      <NSpace align="center" size="small">
+        <span class="tags-label">标签：</span>
+        <template v-if="!editingTags">
+          <NTag v-for="tag in script?.tags || []" :key="tag" size="small" type="info">
+            {{ tag }}
+          </NTag>
+          <NButton text size="small" @click="startEditTags">+ 编辑标签</NButton>
+        </template>
+        <template v-else>
+          <NTag
+            v-for="tag in PREDEFINED_TAGS"
+            :key="tag"
+            size="small"
+            :type="(script?.tags || []).includes(tag) ? 'primary' : 'default'"
+            style="cursor: pointer"
+            @click="toggleTag(tag)"
+          >
+            {{ tag }}
+          </NTag>
+          <NButton text size="small" @click="saveTags">完成</NButton>
+        </template>
+      </NSpace>
+    </div>
+
     <!-- 差异对比 Modal -->
     <DiffModal
       v-model:show="showDiffModal"
@@ -71,15 +98,19 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { NButton, useMessage } from 'naive-ui'
+import { useRoute, useRouter } from 'vue-router'
+import { NButton, useMessage, NTag, NSpace } from 'naive-ui'
 import { api } from '../api'
 import ChatPanel from '../components/chat/ChatPanel.vue'
 import DiffModal from '../components/chat/DiffModal.vue'
+import type { Script } from '@dreamer/shared/types'
 
 const message = useMessage()
+const route = useRoute()
+const router = useRouter()
 
 // 状态
-const script = ref<any>(null)
+const script = ref<Script | null>(null)
 const content = ref('')
 const titleInput = ref('')
 const editingTitle = ref(false)
@@ -89,6 +120,46 @@ const saveStatus = ref<'idle' | 'saving' | 'saved'>('idle')
 const showDiffModal = ref(false)
 const originalContent = ref('')
 const revisedContent = ref('')
+const editingTags = ref(false)
+
+const PREDEFINED_TAGS = [
+  // 受众
+  '男频',
+  '女频',
+  // 时代背景
+  '古代',
+  '现代',
+  '民国',
+  '未来',
+  // 题材
+  '历史',
+  '穿越',
+  '重生',
+  '都市',
+  '玄幻',
+  '仙侠',
+  '武侠',
+  '科幻',
+  '悬疑',
+  '惊悚',
+  '恐怖',
+  // 情感
+  '甜宠',
+  '虐恋',
+  '复仇',
+  '逆袭',
+  '先婚后爱',
+  '霸道总裁',
+  '宫斗',
+  '宅斗',
+  // 风格
+  '轻松',
+  '热血',
+  '暗黑',
+  '治愈',
+  '搞笑',
+  '正能量'
+]
 
 // 自动保存
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -202,12 +273,46 @@ function pushHistory(description: string) {
   }
 }
 
+// 标签编辑
+function startEditTags() {
+  editingTags.value = true
+}
+
+function toggleTag(tag: string) {
+  if (!script.value) return
+  const current = new Set(script.value.tags)
+  if (current.has(tag)) {
+    current.delete(tag)
+  } else {
+    current.add(tag)
+  }
+  script.value = { ...script.value, tags: Array.from(current) }
+}
+
+async function saveTags() {
+  if (!script.value) return
+  editingTags.value = false
+  try {
+    await api.put(`/scripts/${script.value.id}`, { tags: script.value.tags })
+    message.success('标签已更新')
+  } catch {
+    message.error('标签保存失败')
+  }
+}
+
 // 加载草稿
 async function loadDraft() {
   try {
-    const res = await api.get('/scripts/latest')
-    script.value = res.data
-    content.value = res.data?.content || ''
+    const scriptId = route.params.id as string | undefined
+    if (scriptId) {
+      const res = await api.get<Script>(`/scripts/${scriptId}`)
+      script.value = res.data
+      content.value = res.data?.content || ''
+    } else {
+      const res = await api.get<Script>('/scripts/latest')
+      script.value = res.data
+      content.value = res.data?.content || ''
+    }
   } catch {
     message.error('加载草稿失败')
   }
@@ -319,5 +424,17 @@ loadDraft()
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.studio-tags-bar {
+  padding: 8px 24px;
+  background: var(--color-bg-white);
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.tags-label {
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }
 </style>

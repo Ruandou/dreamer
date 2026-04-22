@@ -45,6 +45,7 @@ const currentRoute = computed(() => route.path)
 const menuOptions: MenuOption[] = [
   { label: '工作台', key: '/dashboard', icon: () => h('span', {}, '🏠') },
   { label: '项目列表', key: '/projects', icon: () => h('span', {}, '📁') },
+  { label: '剧本列表', key: '/scripts', icon: () => h('span', {}, '📜') },
   { label: 'AI 写作工作室', key: '/studio', icon: () => h('span', {}, '✍️') },
   { label: '导入剧本', key: '/import', icon: () => h('span', {}, '📥') },
   { label: '任务中心', key: '/jobs', icon: () => h('span', {}, '⏳') },

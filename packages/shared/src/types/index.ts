@@ -10,6 +10,19 @@ export interface User {
   updatedAt: Date
 }
 
+export interface Script {
+  id: string
+  userId: string
+  projectId?: string | null
+  title: string
+  content: string
+  status: 'DRAFT' | 'READY' | 'ARCHIVED'
+  tags: string[]
+  version: number
+  createdAt: Date
+  updatedAt: Date
+}
+
 export interface Project {
   id: string
   name: string
