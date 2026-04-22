@@ -83,7 +83,7 @@ describe('BatchEpisodeGenerator', () => {
       expect(runScriptBatchJob).not.toHaveBeenCalled()
     })
 
-    it.skip('should create batch job when episodes missing', async () => {
+    it('should create batch job when episodes missing', async () => {
       vi.mocked(projectRepository.findEpisodeByProjectNum).mockResolvedValue({
         id: 'ep-1',
         episodeNum: 1,

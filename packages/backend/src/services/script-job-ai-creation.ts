@@ -12,6 +12,7 @@ import {
   generateEpisodeOutline
 } from './script-writer.js'
 import { getMemoryService, safeExtractAndSaveMemories } from './memory/index.js'
+import { logError, logWarning } from '../lib/error-logger.js'
 import {
   updateJob,
   scriptFromJson,
@@ -92,15 +93,12 @@ export async function generateAllOutlines(
           } catch (error) {
             retries++
             if (retries >= OUTLINE_MAX_RETRIES) {
-              console.error(
-                `[outline-generation] 第 ${episodeNumber} 集大纲生成失败（已重试 ${OUTLINE_MAX_RETRIES} 次）`,
-                {
-                  projectId,
-                  episodeNum: episodeNumber,
-                  error: error instanceof Error ? error.message : 'Unknown error',
-                  stack: error instanceof Error ? error.stack : undefined
-                }
-              )
+              logError('OutlineGeneration', error, {
+                projectId,
+                episodeNum: episodeNumber,
+                retries,
+                operation: 'generate_episode_outline'
+              })
               throw error
             }
             const delay = OUTLINE_BASE_DELAY_MS * Math.pow(2, retries - 1)
@@ -180,7 +178,14 @@ async function generateEpisodesSerial(
         }
       }
     } catch (error) {
-      console.error('Failed to build memory context, falling back to rolling context:', error)
+      logWarning(
+        'MemoryContextBuild',
+        'Failed to build memory context, falling back to rolling context',
+        {
+          projectId,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      )
     }
 
     const { script } = await writeEpisodeForProject(

@@ -29,30 +29,141 @@ export type ImageGenerationJobRow = {
   returnvalue?: unknown
 }
 
+/** 绑定映射策略：将 job data 转换为 UI binding */
+const BINDING_STRATEGIES: Record<
+  string,
+  ((data: ImageGenerationJobData) => ImageGenerationJobBinding | undefined) | undefined
+> = {
+  location_establishing: (data) => {
+    if (data.kind !== 'location_establishing') return undefined
+    const typedData = data as ImageGenerationJobData & {
+      kind: 'location_establishing'
+      locationId: string
+    }
+    return {
+      kind: 'location',
+      locationId: typedData.locationId
+    }
+  },
+  character_base_regenerate: (data) => {
+    if (data.kind !== 'character_base_regenerate') return undefined
+    const typedData = data as ImageGenerationJobData & {
+      kind: 'character_base_regenerate'
+      characterImageId: string
+    }
+    return {
+      kind: 'character_image',
+      characterImageId: typedData.characterImageId
+    }
+  },
+  character_derived_regenerate: (data) => {
+    if (data.kind !== 'character_derived_regenerate') return undefined
+    const typedData = data as ImageGenerationJobData & {
+      kind: 'character_derived_regenerate'
+      characterImageId: string
+    }
+    return {
+      kind: 'character_image',
+      characterImageId: typedData.characterImageId
+    }
+  },
+  character_base_create: (data) => {
+    if (data.kind !== 'character_base_create') return undefined
+    const typedData = data as ImageGenerationJobData & {
+      kind: 'character_base_create'
+      characterId: string
+      name: string
+    }
+    return {
+      kind: 'character_new_image',
+      characterId: typedData.characterId,
+      createKind: 'character_base_create',
+      name: typedData.name
+    }
+  },
+  character_derived_create: (data) => {
+    if (data.kind !== 'character_derived_create') return undefined
+    const typedData = data as ImageGenerationJobData & {
+      kind: 'character_derived_create'
+      characterId: string
+      name: string
+      parentImageId?: string
+    }
+    return {
+      kind: 'character_new_image',
+      characterId: typedData.characterId,
+      createKind: 'character_derived_create',
+      name: typedData.name,
+      parentImageId: typedData.parentImageId
+    }
+  }
+}
+
 function bindingFromData(data: ImageGenerationJobData): ImageGenerationJobBinding | undefined {
-  switch (data.kind) {
-    case 'location_establishing':
-      return { kind: 'location', locationId: data.locationId }
-    case 'character_base_regenerate':
-    case 'character_derived_regenerate':
-      return { kind: 'character_image', characterImageId: data.characterImageId }
-    case 'character_base_create':
-      return {
-        kind: 'character_new_image',
-        characterId: data.characterId,
-        createKind: 'character_base_create',
-        name: data.name
-      }
-    case 'character_derived_create':
-      return {
-        kind: 'character_new_image',
-        characterId: data.characterId,
-        createKind: 'character_derived_create',
-        name: data.name,
-        parentImageId: data.parentImageId
-      }
-    default:
-      return undefined
+  const strategy = BINDING_STRATEGIES[data.kind]
+  return strategy?.(data)
+}
+
+/** 行数据扩展策略：根据 job kind 添加额外字段 */
+const ROW_EXTENSION_STRATEGIES: Record<
+  string,
+  | ((data: ImageGenerationJobData, base: Record<string, unknown>) => ImageGenerationJobRow)
+  | undefined
+> = {
+  location_establishing: (data, base) => {
+    if (data.kind !== 'location_establishing') return base as ImageGenerationJobRow
+    const typedData = data as ImageGenerationJobData & {
+      kind: 'location_establishing'
+      locationId: string
+    }
+    return {
+      ...base,
+      locationId: typedData.locationId
+    } as ImageGenerationJobRow
+  },
+  character_base_create: (data, base) => {
+    if (data.kind !== 'character_base_create') return base as ImageGenerationJobRow
+    const typedData = data as ImageGenerationJobData & {
+      kind: 'character_base_create'
+      characterId: string
+    }
+    return {
+      ...base,
+      characterId: typedData.characterId
+    } as ImageGenerationJobRow
+  },
+  character_derived_create: (data, base) => {
+    if (data.kind !== 'character_derived_create') return base as ImageGenerationJobRow
+    const typedData = data as ImageGenerationJobData & {
+      kind: 'character_derived_create'
+      characterId: string
+    }
+    return {
+      ...base,
+      characterId: typedData.characterId
+    } as ImageGenerationJobRow
+  },
+  character_base_regenerate: (data, base) => {
+    if (data.kind !== 'character_base_regenerate') return base as ImageGenerationJobRow
+    const typedData = data as ImageGenerationJobData & {
+      kind: 'character_base_regenerate'
+      characterImageId: string
+    }
+    return {
+      ...base,
+      characterImageId: typedData.characterImageId
+    } as ImageGenerationJobRow
+  },
+  character_derived_regenerate: (data, base) => {
+    if (data.kind !== 'character_derived_regenerate') return base as ImageGenerationJobRow
+    const typedData = data as ImageGenerationJobData & {
+      kind: 'character_derived_regenerate'
+      characterImageId: string
+    }
+    return {
+      ...base,
+      characterImageId: typedData.characterImageId
+    } as ImageGenerationJobRow
   }
 }
 
@@ -104,23 +215,8 @@ export async function listImageGenerationJobsForUser(
       ...(binding ? { binding } : {})
     }
 
-    switch (data.kind) {
-      case 'location_establishing':
-        rows.push({ ...base, locationId: data.locationId })
-        break
-      case 'character_base_create':
-        rows.push({ ...base, characterId: data.characterId })
-        break
-      case 'character_derived_create':
-        rows.push({ ...base, characterId: data.characterId })
-        break
-      case 'character_base_regenerate':
-      case 'character_derived_regenerate':
-        rows.push({ ...base, characterImageId: data.characterImageId })
-        break
-      default:
-        rows.push(base)
-    }
+    const extendStrategy = ROW_EXTENSION_STRATEGIES[data.kind]
+    rows.push(extendStrategy ? extendStrategy(data, base) : (base as ImageGenerationJobRow))
   }
 
   rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())

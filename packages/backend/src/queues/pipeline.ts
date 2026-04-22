@@ -1,12 +1,6 @@
 import { Queue, Worker } from 'bullmq'
 import IORedis from 'ioredis'
-import { executePipelineJob } from '../services/pipeline-executor.js'
-import {
-  runGenerateFirstEpisodePipelineJob,
-  runScriptBatchJob,
-  runParseScriptJob
-} from '../services/project-script-jobs.js'
-import { runEpisodeStoryboardPipelineJob } from '../services/episode-storyboard-job.js'
+import { getPipelineJobHandler } from './pipeline-job-strategies.js'
 import { pipelineRepository } from '../repositories/pipeline-repository.js'
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379'
@@ -58,53 +52,14 @@ export const pipelineWorker = new Worker<PipelineJobData>(
   'pipeline',
   async (job) => {
     const data = job.data
-    const { jobId, jobType, projectId } = data
+    const { jobId, jobType } = data
 
     console.log(
       `[pipeline-worker] Starting job ${job.id} (pipelineJobId=${jobId}, type=${jobType})`
     )
 
-    switch (jobType) {
-      case 'full-pipeline': {
-        if (!data.idea) throw new Error('full-pipeline 缺少 idea 参数')
-        await executePipelineJob(jobId, {
-          projectId,
-          idea: data.idea,
-          targetEpisodes: data.targetEpisodes,
-          targetDuration: data.targetDuration,
-          defaultAspectRatio: data.defaultAspectRatio ?? '9:16',
-          defaultResolution: data.defaultResolution ?? '720p'
-        })
-        break
-      }
-
-      case 'script-first': {
-        await runGenerateFirstEpisodePipelineJob(jobId, projectId)
-        break
-      }
-
-      case 'script-batch': {
-        const targetEpisodes = data.targetEpisodes ?? 36
-        await runScriptBatchJob(jobId, projectId, targetEpisodes, data.options)
-        break
-      }
-
-      case 'parse-script': {
-        const targetEpisodes = data.targetEpisodes ?? 36
-        await runParseScriptJob(jobId, projectId, targetEpisodes)
-        break
-      }
-
-      case 'episode-storyboard-script': {
-        if (!data.userId) throw new Error('episode-storyboard-script 缺少 userId')
-        if (!data.episodeId) throw new Error('episode-storyboard-script 缺少 episodeId')
-        await runEpisodeStoryboardPipelineJob(jobId, data.userId, data.episodeId, data.hint)
-        break
-      }
-
-      default:
-        throw new Error(`未知的 Pipeline jobType: ${jobType}`)
-    }
+    const handler = getPipelineJobHandler(jobType)
+    await handler(data)
 
     console.log(`[pipeline-worker] Job ${job.id} (pipelineJobId=${jobId}) completed`)
   },

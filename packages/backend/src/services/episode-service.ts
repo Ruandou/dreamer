@@ -13,6 +13,8 @@ import { sceneRepository } from '../repositories/scene-repository.js'
 import { safeExtractAndSaveMemories } from './memory/index.js'
 import { DEFAULT_SHOT_DURATION_MS, MAX_SCENE_DURATION_MS } from './episode-service.constants.js'
 import { classifyAIError, buildProjectContext } from './ai/error-classifier.js'
+import { PromptBuilder } from './prompts/prompt-builder.js'
+import { logError } from '../lib/error-logger.js'
 
 const DEFAULT_VOICE_CONFIG: Prisma.InputJsonValue = {
   gender: 'male',
@@ -54,16 +56,17 @@ function buildScenePrompt(
   },
   scriptTitle: string
 ): string {
-  const parts = [
-    scriptTitle,
-    scene.location,
-    scene.timeOfDay,
-    scene.description,
-    scene.actions?.join(' ') ?? '',
-    scene.dialogues?.map((dialogue) => `${dialogue.character}: ${dialogue.content}`).join(' ') ?? ''
-  ].filter(Boolean)
-
-  return parts.join(', ')
+  return new PromptBuilder(', ')
+    .add(scriptTitle)
+    .add(scene.location)
+    .add(scene.timeOfDay)
+    .add(scene.description)
+    .addList(scene.actions, ' ')
+    .addList(
+      scene.dialogues?.map((dialogue) => `${dialogue.character}: ${dialogue.content}`),
+      ' '
+    )
+    .build()
 }
 
 export type ComposeEpisodeResult =
@@ -477,7 +480,10 @@ export class EpisodeService {
         aiCost: cost.costCNY
       }
     } catch (error) {
-      console.error('Script expansion failed:', error)
+      logError('ScriptExpansion', error, {
+        episodeId,
+        operation: 'expand_episode_script'
+      })
       return classifyAIError(error, '剧本生成失败')
     }
   }
@@ -532,7 +538,10 @@ export class EpisodeService {
         aiCost: cost.costCNY
       }
     } catch (error) {
-      console.error('Storyboard script generation failed:', error)
+      logError('StoryboardScriptGeneration', error, {
+        episodeId,
+        operation: 'generate_storyboard_script'
+      })
       return classifyAIError(error, '分镜剧本生成失败')
     }
   }

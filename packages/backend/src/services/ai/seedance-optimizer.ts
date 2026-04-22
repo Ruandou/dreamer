@@ -8,22 +8,22 @@ import type {
   SeedanceSegmentConfig,
   CharacterImage
 } from '@dreamer/shared/types'
+import {
+  SEEDANCE_DURATION,
+  SEEDANCE_PROMPT,
+  SEEDANCE_MAX_REFERENCE_IMAGES,
+  SEEDANCE_COST_PER_SECOND,
+  REFERENCE_IMAGE_ALLOCATION,
+  MutableAllocation,
+  QUALITY_ANCHORS,
+  TIME_OF_DAY_LIGHTING
+} from './seedance-optimizer.constants.js'
 
 export interface SeedanceOptimizerOptions {
   defaultResolution?: '480p' | '720p'
   defaultAspectRatio?: '16:9' | '9:16' | '1:1'
-  maxReferenceImages?: number // 最大参考图数量，默认9
+  maxReferenceImages?: number
   generateAudio?: boolean
-}
-
-// 参考图配额分配策略
-const REFERENCE_IMAGE_ALLOCATION = {
-  character: { min: 2, max: 3, priority: 3 },
-  background: { min: 1, max: 2, priority: 2 },
-  atmosphere: { min: 1, max: 2, priority: 1 },
-  style: { min: 0, max: 1, priority: 1 },
-  action: { min: 1, max: 2, priority: 2 },
-  reserve: { count: 1 } // 预留位
 }
 
 /**
@@ -33,7 +33,7 @@ export function buildSeedanceConfig(
   segment: StoryboardSegment,
   options?: SeedanceOptimizerOptions
 ): SeedanceSegmentConfig {
-  const maxImages = options?.maxReferenceImages || 9
+  const maxImages = options?.maxReferenceImages ?? SEEDANCE_MAX_REFERENCE_IMAGES
 
   // 1. 选择参考图（最多9张）
   const selectedImages = selectReferenceImages(segment, maxImages)
@@ -65,7 +65,14 @@ export function buildSeedanceConfig(
  */
 function selectReferenceImages(segment: StoryboardSegment, maxImages: number): string[] {
   const selected: string[] = []
-  const allocations = { ...REFERENCE_IMAGE_ALLOCATION }
+  const allocations: MutableAllocation = {
+    character: { ...REFERENCE_IMAGE_ALLOCATION.character },
+    background: { ...REFERENCE_IMAGE_ALLOCATION.background },
+    atmosphere: { ...REFERENCE_IMAGE_ALLOCATION.atmosphere },
+    style: { ...REFERENCE_IMAGE_ALLOCATION.style },
+    action: { ...REFERENCE_IMAGE_ALLOCATION.action },
+    reserve: { ...REFERENCE_IMAGE_ALLOCATION.reserve }
+  }
 
   // 1. 首先添加角色参考图（最高优先级）
   for (const char of segment.characters) {
@@ -133,9 +140,9 @@ function selectReferenceImages(segment: StoryboardSegment, maxImages: number): s
 function determineDuration(segment: StoryboardSegment): SeedanceSegmentConfig['duration'] {
   const duration = segment.duration
 
-  // 限制在 4-15 秒范围内
-  if (duration < 4) return 4
-  if (duration > 15) return 15
+  // 限制在合理范围内
+  if (duration < SEEDANCE_DURATION.MIN) return SEEDANCE_DURATION.MIN
+  if (duration > SEEDANCE_DURATION.MAX) return SEEDANCE_DURATION.MAX
 
   return duration as SeedanceSegmentConfig['duration']
 }
@@ -153,12 +160,11 @@ function enhancePrompt(segment: StoryboardSegment): string {
   parts.push(visualStyle)
 
   // 2. 添加画质锚定词
-  if (
-    visualStyle.includes('电影') ||
-    visualStyle.includes('史诗') ||
-    visualStyle.includes('大片')
-  ) {
-    parts.push('8K超高清', 'cinematic film grain')
+  const hasCinematicKeywords = QUALITY_ANCHORS.cinematic.some((keyword) =>
+    visualStyle.includes(keyword)
+  )
+  if (hasCinematicKeywords) {
+    parts.push(...QUALITY_ANCHORS.keywords)
   }
 
   // 3. 主体描述（角色 + 动作）
@@ -177,12 +183,8 @@ function enhancePrompt(segment: StoryboardSegment): string {
   parts.push(segment.cameraMovement)
 
   // 6. 环境/光影
-  if (segment.timeOfDay === '夜') {
-    parts.push('月光/灯光氛围，神秘暗调')
-  } else if (segment.timeOfDay === '日') {
-    parts.push('自然采光，明亮氛围')
-  } else if (segment.timeOfDay === '昏') {
-    parts.push('黄昏暖调，柔和光线')
+  if (segment.timeOfDay in TIME_OF_DAY_LIGHTING) {
+    parts.push(TIME_OF_DAY_LIGHTING[segment.timeOfDay as keyof typeof TIME_OF_DAY_LIGHTING])
   }
 
   // 7. 特效
@@ -216,21 +218,21 @@ export function validateSeedanceConfig(config: SeedanceSegmentConfig): {
   const errors: string[] = []
 
   // 检查提示词长度
-  if (config.prompt.length < 10) {
+  if (config.prompt.length < SEEDANCE_PROMPT.MIN_LENGTH) {
     errors.push('提示词太短')
   }
 
-  if (config.prompt.length > 1000) {
+  if (config.prompt.length > SEEDANCE_PROMPT.MAX_LENGTH) {
     errors.push('提示词太长，建议控制在1000字以内')
   }
 
   // 检查参考图数量
-  if (config.imageUrls.length > 9) {
+  if (config.imageUrls.length > SEEDANCE_MAX_REFERENCE_IMAGES) {
     errors.push('参考图数量不能超过9张')
   }
 
   // 检查时长
-  if (config.duration < 4 || config.duration > 15) {
+  if (config.duration < SEEDANCE_DURATION.MIN || config.duration > SEEDANCE_DURATION.MAX) {
     errors.push('时长必须在4-15秒之间')
   }
 
@@ -254,12 +256,11 @@ export function optimizePromptForSeedance(prompt: string): string {
   optimized = optimized.replace(/@image(\d+)/gi, '@图片$1')
 
   // 添加默认质量锚定（如果没有）
-  if (
-    !optimized.includes('cinematic') &&
-    !optimized.includes('电影') &&
-    !optimized.includes('4K') &&
-    !optimized.includes('8K')
-  ) {
+  const hasQualityKeyword = ['cinematic', '电影', '4K', '8K'].some((keyword) =>
+    optimized.includes(keyword)
+  )
+
+  if (!hasQualityKeyword) {
     optimized += '，cinematic film grain'
   }
 
@@ -270,9 +271,7 @@ export function optimizePromptForSeedance(prompt: string): string {
  * 计算预估成本
  */
 export function estimateSeedanceCost(duration: number): number {
-  // Seedance 2.0-fast 定价：约 ¥1/秒
-  const CNY_PER_SECOND = 1.0
-  return duration * CNY_PER_SECOND
+  return duration * SEEDANCE_COST_PER_SECOND
 }
 
 /**
