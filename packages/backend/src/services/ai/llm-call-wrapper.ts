@@ -17,6 +17,7 @@ import {
   RATE_LIMIT_STATUS_CODE,
   API_CALL_TIMEOUT_MS
 } from './ai.constants.js'
+import { logInfo, logWarning, logError } from '../../lib/error-logger.js'
 
 export interface LLMCallOptions {
   /** LLM 提供者实例 */
@@ -68,9 +69,9 @@ export async function callLLMWithRetry<T>(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(
-        `[llm-call] 调用 LLM, attempt ${attempt}/${maxRetries}, op=${modelLog?.op || 'unknown'}`
-      )
+      logInfo('LLM', `调用 LLM, attempt ${attempt}/${maxRetries}`, {
+        op: modelLog?.op || 'unknown'
+      })
 
       const completion = await withTimeout(
         provider.complete(messages, {
@@ -127,7 +128,7 @@ export async function callLLMWithRetry<T>(
       ) {
         if (attempt < maxRetries) {
           const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1) // 指数退避：1s, 2s, 4s
-          console.log(`[llm-call] 遇到限流, ${delay / 1000}秒后重试...`)
+          logWarning('LLM', `遇到限流, ${delay / 1000}秒后重试...`)
           await sleep(delay)
           continue
         }
@@ -143,7 +144,7 @@ export async function callLLMWithRetry<T>(
       // 其他错误 - 使用指数退避重试
       if (attempt < maxRetries) {
         const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1) // 指数退避：1s, 2s, 4s
-        console.log(`[llm-call] 其他错误 (${errStatus || errMsg}), ${delay / 1000}秒后重试...`)
+        logWarning('LLM', `其他错误 (${errStatus || errMsg}), ${delay / 1000}秒后重试...`)
         await sleep(delay)
         continue
       }
@@ -151,7 +152,8 @@ export async function callLLMWithRetry<T>(
   }
 
   // 所有重试都失败了
-  console.error(`[llm-call] 所有重试失败, op=${modelLog?.op || 'unknown'}`, {
+  logError('LLM', '所有重试失败', {
+    op: modelLog?.op || 'unknown',
     error: lastError?.message,
     attempts: maxRetries
   })
@@ -232,19 +234,20 @@ export function parseJsonResponse<T>(content: string, cleanMarkdown = true): T {
   try {
     return JSON.parse(cleanContent) as T
   } catch (firstError) {
-    console.warn('[parseJsonResponse] 直接解析失败，尝试修复 JSON...')
+    logWarning('LLM', 'parseJsonResponse 直接解析失败，尝试修复 JSON...')
 
     // 尝试修复
     const fixed = tryFixJson(cleanContent)
     try {
       const result = JSON.parse(fixed) as T
-      console.log('[parseJsonResponse] JSON 修复成功')
+      logInfo('LLM', 'parseJsonResponse JSON 修复成功')
       return result
     } catch (secondError) {
-      console.error('[parseJsonResponse] JSON 修复失败')
-      console.error('[parseJsonResponse] 原始错误:', firstError)
-      console.error('[parseJsonResponse] 修复后错误:', secondError)
-      console.error('[parseJsonResponse] 内容前 500 字符:', cleanContent.substring(0, 500))
+      logError('LLM', 'parseJsonResponse JSON 修复失败', {
+        originalError: firstError instanceof Error ? firstError.message : String(firstError),
+        fixedError: secondError instanceof Error ? secondError.message : String(secondError),
+        contentPreview: cleanContent.substring(0, 500)
+      })
       throw firstError // 抛出原始错误
     }
   }

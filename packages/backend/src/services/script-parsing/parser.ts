@@ -3,6 +3,7 @@
  */
 
 import type { ScriptContent, ScriptScene, ScriptDialogueLine } from '@dreamer/shared/types'
+import { logWarning, logError, logInfo } from '../../lib/error-logger.js'
 
 /**
  * Parse a raw LLM response string into ScriptContent.
@@ -30,25 +31,20 @@ export function parseScriptResponse(
     const parsed = JSON.parse(unquoted)
     return convertToScriptContent(parsed)
   } catch (error) {
-    console.warn('[script-parsing] Direct JSON parse failed, attempting extraction...')
+    logWarning('ScriptParsing', 'Direct JSON parse failed, attempting extraction...')
 
     // Try extracting JSON block
     const jsonMatch = unquoted.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
       try {
-        console.log('[script-parsing] Extracted JSON block, parsing...')
+        logInfo('ScriptParsing', 'Extracted JSON block, parsing...')
         return convertToScriptContent(JSON.parse(jsonMatch[0]))
       } catch (innerError) {
-        console.error('[script-parsing] JSON extract failed')
-        console.error(
-          '[script-parsing] Raw content (first 1000 chars):',
-          unquoted.substring(0, 1000)
-        )
-        console.error(
-          '[script-parsing] Extracted JSON (first 1000 chars):',
-          jsonMatch[0].substring(0, 1000)
-        )
-        console.error('[script-parsing] Error position:', (innerError as Error)?.message)
+        logError('ScriptParsing', 'JSON extract failed', {
+          rawContentPreview: unquoted.substring(0, 1000),
+          extractedJsonPreview: jsonMatch[0].substring(0, 1000),
+          errorMessage: innerError instanceof Error ? innerError.message : String(innerError)
+        })
         throw new Error(
           `剧本JSON格式不正确: ${innerError instanceof Error ? innerError.message : '未知错误'}`,
           { cause: innerError }
@@ -56,8 +52,9 @@ export function parseScriptResponse(
       }
     }
 
-    console.error('[script-parsing] No JSON found in response')
-    console.error('[script-parsing] Content (first 500 chars):', unquoted.substring(0, 500))
+    logError('ScriptParsing', 'No JSON found in response', {
+      contentPreview: unquoted.substring(0, 500)
+    })
     throw new Error('剧本格式不正确，无法解析', { cause: error })
   }
 }
