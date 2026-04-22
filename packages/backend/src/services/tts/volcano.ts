@@ -5,6 +5,7 @@
 import type { VoiceConfig } from '@dreamer/shared/types'
 import type { TTSOptions, TTSProvider } from './base.js'
 import { getVoiceIdFromConfig } from './mapper.js'
+import { uploadFile, generateFileKey } from '../storage.js'
 
 const VOLCANO_APP_ID = process.env.VOLCANO_APP_ID || ''
 const VOLCANO_ACCESS_TOKEN = process.env.VOLCANO_ACCESS_TOKEN || ''
@@ -43,11 +44,13 @@ export class VolcanoTTSProvider implements TTSProvider {
     }
 
     // 火山引擎返回音频数据
-    // TODO: 实现音频存储逻辑，将 arrayBuffer 上传到 OSS/S3 并返回 URL
-    await response.arrayBuffer() // 消费响应流
+    const audioBuffer = Buffer.from(await response.arrayBuffer())
 
-    // 暂时返回空字符串，实际使用时需要实现存储逻辑
-    console.warn('Volcano TTS audio storage not implemented, returning empty URL')
-    return ''
+    // 上传音频到存储
+    const filename = `tts_volcano_${Date.now()}.mp3`
+    const fileKey = generateFileKey('assets', filename)
+    const audioUrl = await uploadFile('assets', fileKey, audioBuffer, 'audio/mpeg')
+
+    return audioUrl
   }
 }
