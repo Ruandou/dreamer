@@ -9,6 +9,19 @@ import {
 } from '../api'
 import { useChatStream } from '../composables/useChatStream'
 
+// Quick command labels
+const QUICK_COMMAND_LABELS: Record<string, string> = {
+  continue: '续写',
+  polish: '润色',
+  expand: '扩写',
+  shorten: '缩写'
+}
+
+function getQuickCommandLabel(commandId?: string): string {
+  if (!commandId) return ''
+  return QUICK_COMMAND_LABELS[commandId] || commandId
+}
+
 export const useChatStore = defineStore('chat', () => {
   // State
   const conversations = ref<ChatConversation[]>([])
@@ -130,12 +143,15 @@ export const useChatStore = defineStore('chat', () => {
 
     const convId = activeConversationId.value
 
+    // Generate display content for quick commands
+    const displayContent = content || getQuickCommandLabel(options.quickCommand)
+
     // Optimistic: add user message immediately
     const userMsg: ChatMessage = {
       id: `local-${Date.now()}`,
       conversationId: convId,
       role: 'user',
-      content,
+      content: displayContent,
       status: 'completed',
       createdAt: new Date().toISOString()
     }
