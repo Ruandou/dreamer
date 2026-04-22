@@ -229,6 +229,7 @@ async function executeStep(
 
 /**
  * 执行指定步骤（用于断点续传）
+ * 使用 Strategy 模式 + Registry 替代 switch 语句
  */
 export async function executeSingleStep(
   step: PipelineStep,
@@ -236,84 +237,21 @@ export async function executeSingleStep(
   context: PipelineContext,
   options?: PipelineExecuteOptions
 ): Promise<PipelineStepResult> {
-  switch (step) {
-    case 'script-writing':
-      // 需要从头开始，需要 idea，这里不支持
-      return {
-        step,
-        status: 'failed',
-        error: 'script-writing 步骤需要原始 idea，无法单独执行'
-      }
+  // 导入注册表（延迟导入避免循环依赖）
+  const { getPipelineStepHandler } = await import('./pipeline-steps/index.js')
 
-    case 'episode-splitting': {
-      const script = previousResults.script
-      if (!script) {
-        return { step, status: 'failed', error: '缺少 script 数据' }
-      }
-      return executeStep(step, () => Promise.resolve(splitIntoEpisodes(script)))
-    }
-
-    case 'action-extraction': {
-      const script = previousResults.script
-      if (!script) {
-        return { step, status: 'failed', error: '缺少 script 数据' }
-      }
-      return executeStep(step, () =>
-        Promise.resolve(extractActionsFromScenes(script.scenes, context.characters))
-      )
-    }
-
-    case 'asset-matching': {
-      const script = previousResults.script
-      const sceneActions = previousResults.sceneActions
-      if (!script || !sceneActions) {
-        return { step, status: 'failed', error: '缺少必要数据' }
-      }
-      const projectAssets = [
-        ...convertCharacterImagesToAssets(context.characterImages),
-        ...context.projectAssets
-      ]
-      return executeStep(step, () =>
-        Promise.resolve(matchAssetsForScenes(script.scenes, projectAssets, sceneActions))
-      )
-    }
-
-    case 'storyboard-generation':
-      if (!previousResults.episodes || !previousResults.assetRecommendations) {
-        return { step, status: 'failed', error: '缺少必要数据' }
-      }
-      return executeStep(step, () => {
-        const allSegments: StoryboardSegment[] = []
-        const episodes = previousResults.episodes
-        const script = previousResults.script
-        if (!episodes || !script) {
-          return Promise.resolve([])
-        }
-        for (const episode of episodes) {
-          const segments = generateStoryboard(
-            episode,
-            script.scenes,
-            previousResults.assetRecommendations,
-            {
-              defaultAspectRatio: options?.customOptions?.defaultAspectRatio || '9:16'
-            }
-          )
-          allSegments.push(...segments)
-        }
-        return Promise.resolve(allSegments)
-      })
-
-    case 'seedance-parametrization': {
-      const storyboard = previousResults.storyboard
-      if (!storyboard) {
-        return { step, status: 'failed', error: '缺少 storyboard 数据' }
-      }
-      return executeStep(step, () => Promise.resolve(buildSeedanceConfigs(storyboard)))
-    }
-
-    default:
-      return { step, status: 'failed', error: `未知步骤: ${step}` }
+  const handler = getPipelineStepHandler(step)
+  if (!handler) {
+    return { step, status: 'failed', error: `未知步骤: ${step}` }
   }
+
+  // 验证依赖
+  if (!handler.validateDependencies(previousResults)) {
+    return { step, status: 'failed', error: '缺少必要数据' }
+  }
+
+  // 执行步骤
+  return handler.execute(previousResults, context, options)
 }
 
 /**
