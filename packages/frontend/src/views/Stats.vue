@@ -184,12 +184,7 @@ import { h } from 'vue'
           @update:value="handleDaysChange"
         />
       </div>
-      <div class="stats-header__right">
-        <NSpace>
-          <NButton @click="router.push('/model-calls')">模型调用日志</NButton>
-          <NButton @click="router.push('/projects')"> 返回项目 </NButton>
-        </NSpace>
-      </div>
+      <div class="stats-header__right"></div>
     </header>
 
     <NSpin :show="statsStore.isLoading">

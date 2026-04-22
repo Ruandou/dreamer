@@ -226,12 +226,6 @@ const handleDropdownSelect = (key: string, projectId: string) => {
               <span class="search-icon">🔍</span>
             </template>
           </NInput>
-          <NButtonGroup>
-            <NButton @click="router.push('/jobs')"> 📋 任务 </NButton>
-            <NButton @click="router.push('/stats')"> 📊 统计 </NButton>
-            <NButton @click="router.push('/model-calls')"> 📡 模型日志 </NButton>
-            <NButton @click="router.push('/settings')"> ⚙️ 设置 </NButton>
-          </NButtonGroup>
         </NSpace>
       </div>
     </header>

@@ -23,6 +23,7 @@ model User {
 
   projects Project[]
   apiCalls ModelApiCall[]
+  scripts  Script[]
 }
 
 model Project {
@@ -429,4 +430,34 @@ model MemorySnapshot {
 
   @@unique([projectId, upToEpisode])
   @@index([projectId])
+}
+
+// AI 写作工作室剧本（独立于 Episode，暂时关联 User，后续可扩展关联 Project）
+enum ScriptStatus {
+  DRAFT     // 草稿，编辑中
+  READY     // 定稿，可用于解析骨架和生成视频
+  ARCHIVED  // 已归档
+}
+
+model Script {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 未来可扩展：关联到 Project（从 Script 立项）
+  projectId   String?
+  // project   Project?     @relation(fields: [projectId], references: [id])
+
+  title       String       @default("未命名剧本")
+  content     String       @db.Text   // 剧本全文，纯文本
+  status      ScriptStatus @default(DRAFT)
+
+  // 版本预留（暂不启用版本表）
+  version     Int          @default(1)
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }

@@ -398,9 +398,6 @@ onUnmounted(() => {
         <h1>任务中心</h1>
         <p class="jobs-subtitle">查看所有任务进度和历史记录</p>
       </div>
-      <NSpace>
-        <NButton @click="router.push('/projects')"> 返回项目 </NButton>
-      </NSpace>
     </header>
 
     <NCard class="jobs-card">

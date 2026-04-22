@@ -10,7 +10,7 @@ function safeInternalRedirect(fullPath: string): string | undefined {
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: '/projects'
+    redirect: '/dashboard'
   },
   {
     path: '/login',
@@ -22,40 +22,57 @@ const routes: RouteRecordRaw[] = [
     name: 'Register',
     component: () => import('@/views/Register.vue')
   },
+  // 需要侧边栏的路由（DashboardLayout）
   {
-    path: '/import',
-    name: 'Import',
-    component: () => import('@/views/Import.vue')
-  },
-  {
-    path: '/generate',
-    name: 'Generate',
-    component: () => import('@/views/Generate.vue')
-  },
-  {
-    path: '/stats',
-    name: 'Stats',
-    component: () => import('@/views/Stats.vue')
-  },
-  {
-    path: '/model-calls',
-    name: 'ModelCalls',
-    component: () => import('@/views/ModelCalls.vue')
-  },
-  {
-    path: '/jobs',
-    name: 'Jobs',
-    component: () => import('@/views/Jobs.vue')
-  },
-  {
-    path: '/settings',
-    name: 'Settings',
-    component: () => import('@/views/Settings.vue')
-  },
-  {
-    path: '/projects',
-    name: 'Projects',
-    component: () => import('@/views/Projects.vue')
+    path: '/',
+    component: () => import('@/layouts/DashboardLayout.vue'),
+    children: [
+      {
+        path: 'dashboard',
+        name: 'Dashboard',
+        component: () => import('@/views/Dashboard.vue')
+      },
+      {
+        path: 'projects',
+        name: 'Projects',
+        component: () => import('@/views/Projects.vue')
+      },
+      {
+        path: 'studio',
+        name: 'Studio',
+        component: () => import('@/views/Studio.vue')
+      },
+      {
+        path: 'import',
+        name: 'Import',
+        component: () => import('@/views/Import.vue')
+      },
+      {
+        path: 'generate',
+        name: 'Generate',
+        component: () => import('@/views/Generate.vue')
+      },
+      {
+        path: 'stats',
+        name: 'Stats',
+        component: () => import('@/views/Stats.vue')
+      },
+      {
+        path: 'model-calls',
+        name: 'ModelCalls',
+        component: () => import('@/views/ModelCalls.vue')
+      },
+      {
+        path: 'jobs',
+        name: 'Jobs',
+        component: () => import('@/views/Jobs.vue')
+      },
+      {
+        path: 'settings',
+        name: 'Settings',
+        component: () => import('@/views/Settings.vue')
+      }
+    ]
   },
   {
     path: '/project/:id',
@@ -133,10 +150,10 @@ router.beforeEach((to) => {
   const isPublic = to.name != null && PUBLIC_ROUTE_NAMES.has(String(to.name))
 
   if (token && isPublic) {
-    return { path: '/projects' }
+    return { path: '/dashboard' }
   }
   if (!token && !isPublic) {
-    const redirect = safeInternalRedirect(to.fullPath) || '/projects'
+    const redirect = safeInternalRedirect(to.fullPath) || '/dashboard'
     return { name: 'Login', query: { redirect } }
   }
 })

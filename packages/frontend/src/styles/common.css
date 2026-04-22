@@ -328,3 +328,21 @@ a:hover {
 .animate-slide-up {
   animation: slideUp var(--transition-normal);
 }
+
+/* Dashboard Layout 适配 */
+.dashboard-layout .page-shell {
+  max-width: none;
+  padding: var(--spacing-lg);
+}
+
+/* Dashboard 页面全局样式 */
+.dashboard-page {
+  padding: var(--spacing-lg);
+}
+
+/* Studio 页面 */
+.studio-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
