@@ -53,9 +53,8 @@ describe('ScriptParser', () => {
       vi.mocked(generateVisualStyleConfig).mockResolvedValue({
         era: 'modern',
         artStyle: ['photorealistic'],
-        colorTone: ['warm'],
-        lighting: 'natural',
-        camera: 'handheld'
+        colorMood: ['warm'],
+        quality: 'high'
       })
 
       const result = await scriptParser.parseAndSync({
@@ -79,9 +78,8 @@ describe('ScriptParser', () => {
         visualStyleConfig: {
           era: 'modern',
           artStyle: ['anime'],
-          colorTone: ['warm'],
-          lighting: 'studio',
-          camera: 'static'
+          colorMood: ['warm'],
+          quality: 'high'
         },
         episodes: [
           { id: 'ep-1', episodeNum: 1, script: { title: 'Ep1', summary: 'S1', scenes: [] } },
@@ -113,10 +111,9 @@ describe('ScriptParser', () => {
         synopsis: 'Synopsis',
         visualStyleConfig: {
           era: 'modern',
-          artStyle: ['realistic'],
-          colorTone: ['cool'],
-          lighting: 'natural',
-          camera: 'tripod'
+          artStyle: ['photorealistic'],
+          colorMood: ['cool'],
+          quality: 'high'
         },
         episodes: [
           { id: 'ep-1', episodeNum: 1, script: { title: 'Ep1', summary: 'S1', scenes: [] } },
