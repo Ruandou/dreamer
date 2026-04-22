@@ -8,6 +8,7 @@ import { pipelineRepository } from '../../repositories/pipeline-repository.js'
 import { scriptFromJson } from '../script-job-helpers.js'
 import { runScriptBatchJob } from '../project-script-jobs.js'
 import { firstEpisodeGenerator } from './first-episode-generator.js'
+import { logInfo } from '../../lib/error-logger.js'
 import type { BatchEpisodeOptions, BatchEpisodeResult } from './types.js'
 
 export class BatchEpisodeGenerator {
@@ -40,8 +41,9 @@ export class BatchEpisodeGenerator {
         (ep) => ep.episodeNum >= 1 && ep.episodeNum <= targetEpisodes && scriptFromJson(ep.script)
       )
       if (existingEpisodes.length >= targetEpisodes) {
-        console.log(
-          `[ensureAllScripts] 已存在 ${existingEpisodes.length}/${targetEpisodes} 集剧本，跳过批量生成`
+        logInfo(
+          'BatchEpisode',
+          `已存在 ${existingEpisodes.length}/${targetEpisodes} 集剧本，跳过批量生成`
         )
         return
       }
@@ -107,9 +109,9 @@ export class BatchEpisodeGenerator {
     const startEpisode = options.startEpisode ?? 2
     const targetEpisodes = options.targetEpisodes ?? 10
 
-    console.log(
-      `[batch-generate] 开始批量生成剧集 ${startEpisode}-${targetEpisodes}, projectId=${options.projectId}`
-    )
+    logInfo('BatchEpisode', `开始批量生成剧集 ${startEpisode}-${targetEpisodes}`, {
+      projectId: options.projectId
+    })
 
     // 这里调用现有的 runScriptBatchJob 逻辑
     // 实际应该拆分 runFaithfulParse/runMixedMode/runAiCreationThreePhase

@@ -8,6 +8,7 @@ import { formatScriptToJSON, writeScriptFromIdea } from '../script-writer.js'
 import { safeExtractAndSaveMemories } from '../memory/index.js'
 import { scriptModeRouter } from './script-mode-router.js'
 import { STORY_CONTEXT_MAX_LENGTH } from '../project-script-jobs.constants.js'
+import { logInfo, logError } from '../../lib/error-logger.js'
 import type { FirstEpisodeOptions, FirstEpisodeResult } from './types.js'
 
 export class FirstEpisodeGenerator {
@@ -52,8 +53,9 @@ export class FirstEpisodeGenerator {
     const maxEp = targetEpisodes ?? allEpisodes.length
     const episodesToParse = allEpisodes.filter((ep) => ep.episodeNum <= maxEp)
 
-    console.log(
-      `[generate-first] 将解析 ${episodesToParse.length}/${allEpisodes.length} 集（目标：${maxEp}）`
+    logInfo(
+      'FirstEpisode',
+      `将解析 ${episodesToParse.length}/${allEpisodes.length} 集（目标：${maxEp}）`
     )
 
     let parsedCount = 0
@@ -63,7 +65,7 @@ export class FirstEpisodeGenerator {
       if (!ep.content) continue
 
       try {
-        console.log(`[generate-first] 解析第 ${ep.episodeNum} 集...`)
+        logInfo('FirstEpisode', `解析第 ${ep.episodeNum} 集...`)
         const script = await formatScriptToJSON(ep.content, {
           userId: project.userId,
           projectId: project.id,
@@ -83,18 +85,23 @@ export class FirstEpisodeGenerator {
         })
 
         parsedCount++
-        console.log(
-          `[generate-first] 第 ${ep.episodeNum} 集解析完成 (${parsedCount}/${episodesToParse.length})`
-        )
+        logInfo('FirstEpisode', `第 ${ep.episodeNum} 集解析完成`, {
+          parsed: parsedCount,
+          total: episodesToParse.length
+        })
       } catch (error) {
         failedCount++
-        console.error(`[generate-first] 第 ${ep.episodeNum} 集解析失败:`, error)
+        logError('FirstEpisode', `第 ${ep.episodeNum} 集解析失败`, {
+          error: error instanceof Error ? error.message : String(error)
+        })
       }
     }
 
-    console.log(
-      `[generate-first] 完整剧本解析完成：成功 ${parsedCount} 集，失败 ${failedCount} 集，共 ${episodesToParse.length} 集`
-    )
+    logInfo('FirstEpisode', '完整剧本解析完成', {
+      success: parsedCount,
+      failed: failedCount,
+      total: episodesToParse.length
+    })
 
     if (parsedCount === 0) {
       throw new Error('完整剧本解析失败，未能成功解析任何集')
@@ -114,21 +121,21 @@ export class FirstEpisodeGenerator {
     project: { id: string },
     detectionResult: { episodes?: Array<{ episodeNum: number }> }
   ): Promise<FirstEpisodeResult> {
-    console.log('[generate-first] 检测到混合模式，创建第一集')
+    logInfo('FirstEpisode', '检测到混合模式，创建第一集')
 
     const episodes = detectionResult.episodes
     if (!episodes) {
-      console.log('[generate-first] 混合模式缺少 episodes 数据')
+      logInfo('FirstEpisode', '混合模式缺少 episodes 数据')
       return { episodeCount: 0, parsedCount: 0, failedCount: 0 }
     }
 
     const ep1 = episodes.find((e) => e.episodeNum === 1)
     if (!ep1) {
-      console.log('[generate-first] 混合模式缺少第 1 集数据')
+      logInfo('FirstEpisode', '混合模式缺少第 1 集数据')
       return { episodeCount: 0, parsedCount: 0, failedCount: 0 }
     }
 
-    console.log('[generate-first] 混合模式第一集创建完成')
+    logInfo('FirstEpisode', '混合模式第一集创建完成')
     return { episodeCount: 1, parsedCount: 1, failedCount: 0 }
   }
 
@@ -174,7 +181,7 @@ export class FirstEpisodeGenerator {
       op: 'extract_first_episode_memories'
     })
 
-    console.log(`[generate-first] AI 创作第一集已生成: episodeId=${episode.id}`)
+    logInfo('FirstEpisode', 'AI 创作第一集已生成', { episodeId: episode.id })
     return { episodeCount: 1, parsedCount: 1, failedCount: 0 }
   }
 

@@ -3,6 +3,8 @@
  * 支持变量插值、模板注册、版本控制和环境覆盖
  */
 
+import { logWarning } from '../../lib/error-logger.js'
+
 export interface PromptTemplate {
   /** 模板唯一标识 */
   id: string
@@ -255,7 +257,7 @@ export class PromptTemplateEngine {
     return template.replace(/\{\{([^#/}][^}]*)\}\}/g, (match, path) => {
       const value = this.resolvePath(variables, path.trim())
       if (value === undefined || value === null) {
-        console.warn(`[PromptTemplateEngine] Variable "${path}" not found in variables`)
+        logWarning('PromptTemplateEngine', `Variable "${path}" not found in variables`)
         return ''
       }
       return String(value)

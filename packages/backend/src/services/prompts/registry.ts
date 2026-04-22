@@ -8,6 +8,7 @@ import { SCRIPT_TEMPLATES } from './script-templates.js'
 import { CHARACTER_TEMPLATES } from './character-templates.js'
 import { LOCATION_TEMPLATES } from './location-templates.js'
 import { MEMORY_TEMPLATES } from './memory-templates.js'
+import { logInfo, logWarning } from '../../lib/error-logger.js'
 
 export class PromptRegistry {
   private static instance: PromptRegistry
@@ -39,7 +40,7 @@ export class PromptRegistry {
     engine.registerMany(MEMORY_TEMPLATES)
 
     this.initialized = true
-    console.log(`[PromptRegistry] Registered ${this.getAllTemplates().length} templates`)
+    logInfo('PromptRegistry', `Registered ${this.getAllTemplates().length} templates`)
   }
 
   /**
@@ -113,7 +114,7 @@ export class PromptRegistry {
     engine.register(template)
 
     if (!this.initialized) {
-      console.warn(`[PromptRegistry] Registering template "${template.id}" before initialization`)
+      logWarning('PromptRegistry', `Registering template "${template.id}" before initialization`)
     }
   }
 
