@@ -105,6 +105,6 @@ function handleUserMenu(key: string) {
 }
 
 .dashboard-content {
-  overflow-y: auto;
+  overflow: hidden;
 }
 </style>

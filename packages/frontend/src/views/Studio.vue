@@ -220,8 +220,9 @@ loadDraft()
 .studio-page {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100vh - 56px);
   background: #f5f5f5;
+  overflow: hidden;
 }
 
 .studio-toolbar {
@@ -231,6 +232,7 @@ loadDraft()
   padding: 12px 24px;
   background: var(--color-bg-white);
   border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
 }
 
 .studio-title {
@@ -267,17 +269,21 @@ loadDraft()
   display: flex;
   flex: 1;
   overflow: hidden;
+  min-height: 0;
 }
 
 .editor-panel {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   padding: 24px;
-  overflow: auto;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .script-editor {
+  flex: 1;
   width: 100%;
-  height: 100%;
   padding: 16px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -286,6 +292,7 @@ loadDraft()
   line-height: 1.6;
   resize: none;
   outline: none;
+  overflow: auto;
 }
 
 .script-editor:focus {
@@ -293,10 +300,12 @@ loadDraft()
 }
 
 .script-preview {
+  flex: 1;
   padding: 16px;
   background: var(--color-bg-white);
   border-radius: 8px;
   line-height: 1.6;
+  overflow: auto;
 }
 
 .scene-title {
@@ -308,5 +317,7 @@ loadDraft()
   border-left: 1px solid #e5e7eb;
   overflow: hidden;
   display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 </style>

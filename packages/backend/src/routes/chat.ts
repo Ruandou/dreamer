@@ -113,7 +113,8 @@ export async function chatRoutes(fastify: FastifyInstance) {
       const { id } = request.params
       const { content, scriptContent, scriptTitle, quickCommand } = request.body
 
-      if (!content?.trim()) {
+      // Allow empty content if quickCommand is provided
+      if (!content?.trim() && !quickCommand) {
         return reply.status(400).send({ error: '消息内容不能为空' })
       }
 
