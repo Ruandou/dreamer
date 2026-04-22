@@ -19,6 +19,8 @@ export interface EpisodeCompleteness {
   content?: string
 }
 
+import { logInfo } from '../lib/error-logger.js'
+
 // ── Scoring constants ──
 
 const SCORE_EPISODE_MATCHES_3PLUS = 3
@@ -67,7 +69,9 @@ export function detectScriptMode(
     const episodesMode = detectEpisodesMode(script)
 
     if (episodesMode.length === 0) {
-      console.log(`[detect] 全剧本得分 ${overallScore}/8，但无法分集，降级为 AI 创作`)
+      logInfo('ScriptModeDetector', '全剧本得分达到阈值但无法分集，降级为 AI 创作', {
+        overallScore
+      })
       return { mode: 'ai-create' }
     }
 
@@ -80,17 +84,23 @@ export function detectScriptMode(
       const expandCount = episodesMode.filter((episode) => episode.mode === 'expand').length
       const createCount = episodesMode.filter((episode) => episode.mode === 'ai-create').length
 
-      console.log(
-        `[detect] 检测到混合模式：${faithfulCount} 集忠实解析，${expandCount} 集扩展生成，${createCount} 集 AI 创作`
-      )
+      logInfo('ScriptModeDetector', '检测到混合模式', {
+        faithfulCount,
+        expandCount,
+        createCount
+      })
       return { mode: 'mixed', episodes: episodesMode }
     }
 
-    console.log(`[detect] 检测到完整剧本（${episodesMode.length} 集），使用忠实解析模式`)
+    logInfo('ScriptModeDetector', '检测到完整剧本，使用忠实解析模式', {
+      episodeCount: episodesMode.length
+    })
     return { mode: 'faithful-parse', episodes: episodesMode }
   }
 
-  console.log(`[detect] 全剧本得分 ${overallScore}/8，检测到创意想法，使用 AI 创作模式`)
+  logInfo('ScriptModeDetector', '检测到创意想法，使用 AI 创作模式', {
+    overallScore
+  })
   return { mode: 'ai-create' }
 }
 

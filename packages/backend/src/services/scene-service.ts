@@ -4,6 +4,7 @@ import { optimizePrompt } from './ai/deepseek.js'
 import { stitchScenePrompt } from './scene-prompt.js'
 import { sceneRepository, type SceneRepository } from '../repositories/scene-repository.js'
 import { buildSeedanceScenePayload } from './ai/seedance-scene-request.js'
+import { logError } from '../lib/error-logger.js'
 
 export interface VideoQueueLike {
   add(name: string, data: VideoJobData): Promise<unknown>
@@ -264,7 +265,9 @@ export class SceneService {
 
       return { ok: true, optimizedPrompt: optimized, aiCost: cost.costCNY }
     } catch (error) {
-      console.error('Prompt optimization failed:', error)
+      logError('ScenePromptOptimization', 'Prompt optimization failed', {
+        error: error instanceof Error ? error.message : String(error)
+      })
 
       if (error instanceof Error && error.name === 'DeepSeekAuthError') {
         return { ok: false, reason: 'deepseek_auth', message: error.message }

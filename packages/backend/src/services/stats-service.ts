@@ -1,5 +1,6 @@
 import { getDeepSeekBalance } from './ai/deepseek.js'
 import { statsRepository, type StatsRepository } from '../repositories/stats-repository.js'
+import { logError } from '../lib/error-logger.js'
 
 export interface ProjectCostStats {
   projectId: string
@@ -246,7 +247,9 @@ export class StatsService {
       const balance = await getDeepSeekBalance()
       return balance
     } catch (error) {
-      console.error('Failed to get DeepSeek balance:', error)
+      logError('StatsService', 'Failed to get DeepSeek balance', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return { isAvailable: false, balanceInfos: [], error: 'Failed to fetch balance' }
     }
   }

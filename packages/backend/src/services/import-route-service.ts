@@ -1,6 +1,7 @@
 import { importQueue } from '../queues/import.js'
 import { parseScriptDocument } from './ai/parser.js'
 import { ImportRepository, importRepository } from '../repositories/import-repository.js'
+import { logError } from '../lib/error-logger.js'
 
 export type PreviewImportResult =
   | {
@@ -57,7 +58,9 @@ export class ImportRouteService {
         aiCost: cost?.costCNY || 0
       }
     } catch (error) {
-      console.error('Preview failed:', error)
+      logError('ImportPreview', 'Preview failed', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return {
         ok: false,
         status: 400,

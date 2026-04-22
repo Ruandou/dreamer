@@ -8,6 +8,7 @@ import { episodeRepository } from '../repositories/episode-repository.js'
 import { characterRepository } from '../repositories/character-repository.js'
 import { projectRepository } from '../repositories/project-repository.js'
 import { saveCharacters, saveLocations } from './script-entities.js'
+import { logWarning } from '../lib/error-logger.js'
 import { normalizeScriptContent } from './character-identity-normalize.js'
 import { fetchCharacterIdentityMerge } from './ai/character-identity-merge.js'
 import { collectUniqueCharacterNamesFromScript } from './script-entities.js'
@@ -54,10 +55,10 @@ async function deleteAliasCharacterRows(
     try {
       await characterRepository.deleteManyCharacters(idsToDelete)
     } catch (e) {
-      console.warn('[parse_script_entity] 无法批量删除别名角色（可能存在关联数据）', {
+      logWarning('ParseScriptEntity', '无法批量删除别名角色（可能存在关联数据）', {
         projectId,
         count: idsToDelete.length,
-        err: e
+        err: e instanceof Error ? e.message : String(e)
       })
     }
   }

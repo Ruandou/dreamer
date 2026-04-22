@@ -8,6 +8,7 @@ import { projectRepository } from '../repositories/project-repository.js'
 import { formatScriptToJSON, expandEpisodeFromOutline } from './script-writer.js'
 import { safeExtractAndSaveMemories } from './memory/index.js'
 import { updateJob } from './script-job-helpers.js'
+import { logInfo } from '../lib/error-logger.js'
 
 export async function runMixedMode(
   jobId: string,
@@ -91,7 +92,7 @@ export async function runMixedMode(
 
   // Phase 3: AI creation (placeholder – full three-phase logic not yet implemented for subsets)
   if (createEpisodes.length > 0) {
-    console.log(`[mixed] 剩余 ${createEpisodes.length} 集使用 AI 创作`)
+    logInfo('MixedMode', '剩余集使用 AI 创作', { count: createEpisodes.length })
     await updateJob(jobId, {
       progressMeta: {
         message: `已完成 ${completed} 集，剩余 ${createEpisodes.length} 集需要 AI 创作`

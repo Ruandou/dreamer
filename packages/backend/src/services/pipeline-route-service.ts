@@ -1,6 +1,7 @@
 import { pipelineQueue } from '../queues/pipeline.js'
 import { pipelineAspectRatioFromProjectDefault } from '../lib/project-aspect.js'
 import { pipelineRepository, PipelineRepository } from '../repositories/pipeline-repository.js'
+import { logError } from '../lib/error-logger.js'
 
 export class PipelineRouteService {
   constructor(private readonly repo: PipelineRepository) {}
@@ -83,7 +84,9 @@ export class PipelineRouteService {
 
       return { ok: true, jobId: job.id }
     } catch (error) {
-      console.error('Failed to create pipeline job:', error)
+      logError('PipelineRoute', 'Failed to create pipeline job', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return {
         ok: false,
         status: 500,
