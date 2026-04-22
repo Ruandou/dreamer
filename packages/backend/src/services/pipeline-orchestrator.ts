@@ -31,6 +31,12 @@ import {
 import { generateStoryboard } from './storyboard-generator.js'
 
 import { buildSeedanceConfigs, validateSeedanceConfig } from './ai/seedance-optimizer.js'
+import {
+  DEFAULT_TARGET_DURATION_SEC,
+  DEFAULT_ASPECT_RATIO,
+  DEFAULT_RESOLUTION
+} from './pipeline.constants.js'
+import { logWarning, logError, logInfo } from '../lib/error-logger.js'
 
 export interface PipelineContext {
   projectId: string
@@ -93,7 +99,7 @@ export async function executePipeline(
     const script = results['script-writing'].data as ScriptContent
     results['episode-splitting'] = await executeStep('episode-splitting', async () => {
       return splitIntoEpisodes(script, {
-        targetDuration: options?.customOptions?.targetDuration || 60
+        targetDuration: options?.customOptions?.targetDuration || DEFAULT_TARGET_DURATION_SEC
       })
     })
 
@@ -133,7 +139,7 @@ export async function executePipeline(
 
       for (const episode of episodes) {
         const segments = generateStoryboard(episode, script.scenes, assetRecommendations, {
-          defaultAspectRatio: options?.customOptions?.defaultAspectRatio || '9:16'
+          defaultAspectRatio: options?.customOptions?.defaultAspectRatio || DEFAULT_ASPECT_RATIO
         })
         allSegments.push(...segments)
       }
@@ -151,15 +157,17 @@ export async function executePipeline(
       'seedance-parametrization',
       async () => {
         const configs = buildSeedanceConfigs(storyboard, {
-          defaultResolution: options?.customOptions?.defaultResolution || '720p',
-          defaultAspectRatio: options?.customOptions?.defaultAspectRatio || '9:16'
+          defaultResolution: options?.customOptions?.defaultResolution || DEFAULT_RESOLUTION,
+          defaultAspectRatio: options?.customOptions?.defaultAspectRatio || DEFAULT_ASPECT_RATIO
         })
 
         // 验证配置
         for (const config of configs) {
           const validation = validateSeedanceConfig(config)
           if (!validation.valid) {
-            console.warn(`配置验证警告: ${validation.errors.join(', ')}`)
+            logWarning('SeedanceValidation', '配置验证警告', {
+              errors: validation.errors.join(', ')
+            })
           }
         }
 
@@ -173,7 +181,9 @@ export async function executePipeline(
 
     // 汇总结果
     const totalDuration = Date.now() - startTime
-    console.log(`流水线执行完成，总耗时: ${totalDuration}ms`)
+    logInfo('PipelineExecution', '流水线执行完成', {
+      totalDurationMs: totalDuration
+    })
 
     return {
       script,
@@ -186,7 +196,9 @@ export async function executePipeline(
         | undefined
     }
   } catch (error) {
-    console.error('流水线执行失败:', error)
+    logError('PipelineExecution', '流水线执行失败', {
+      error: error instanceof Error ? error.message : String(error)
+    })
     throw error
   }
 }
