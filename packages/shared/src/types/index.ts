@@ -1,5 +1,7 @@
 // ============ Base Types ============
 
+export { type ModelCallLogContext, createModelCallContext } from './operation-context.js'
+
 export interface User {
   id: string
   email: string
