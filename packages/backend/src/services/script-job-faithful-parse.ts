@@ -8,6 +8,7 @@ import { formatScriptToJSON } from './script-writer.js'
 import { safeExtractAndSaveMemories } from './memory/index.js'
 import { updateJob } from './script-job-helpers.js'
 import { mapBatchProgressToParseRange } from './progress-mappers.js'
+import { logInfo } from '../lib/error-logger.js'
 
 /** Default project name returned when parsing fails to extract one. */
 const DEFAULT_PROJECT_NAME = '未命名项目'
@@ -24,7 +25,7 @@ export async function runFaithfulParse(
 
   // Extract and update project name from script content
   try {
-    console.log('[faithful-parse] 正在从剧本中提取项目名称...')
+    logInfo('FaithfulParse', '正在从剧本中提取项目名称...')
     const firstEpisodeContent = episodes.find((episode) => episode.content)?.content ?? ''
 
     const { parseScriptDocument } = await import('./ai/parser.js')
@@ -36,11 +37,13 @@ export async function runFaithfulParse(
 
     if (parsed.projectName && parsed.projectName !== DEFAULT_PROJECT_NAME) {
       await projectRepository.update(projectId, { name: parsed.projectName })
-      console.log(`[faithful-parse] 项目名已更新: ${parsed.projectName}`)
+      logInfo('FaithfulParse', '项目名已更新', { projectName: parsed.projectName })
     }
   } catch (error) {
     // Extraction failure is non-fatal; continue with the existing project name
-    console.warn('[faithful-parse] 项目名提取失败，使用原有项目名:', error)
+    logInfo('FaithfulParse', '项目名提取失败，使用原有项目名', {
+      error: error instanceof Error ? error.message : String(error)
+    })
   }
 
   const totalEpisodes = episodes.length
@@ -62,7 +65,7 @@ export async function runFaithfulParse(
       }
     })
 
-    console.log(`[faithful-parse] 格式化第 ${episode.episodeNum} 集...`)
+    logInfo('FaithfulParse', '格式化集', { episodeNum: episode.episodeNum })
 
     const script = await formatScriptToJSON(episode.content, {
       userId: project.userId,
