@@ -13,7 +13,9 @@
     <div class="sider-content">
       <!-- Logo -->
       <div class="sider-logo">
-        <span class="logo-icon">🎭</span>
+        <span class="logo-icon">
+          <NIcon :component="CreateOutline" :size="24" />
+        </span>
         <span v-if="!uiStore.sidebarCollapsed" class="logo-text">AI短剧工作台</span>
       </div>
 
@@ -33,7 +35,18 @@
 <script setup lang="ts">
 import { computed, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { NLayoutSider, NMenu, type MenuOption } from 'naive-ui'
+import { NLayoutSider, NMenu, NIcon, type MenuOption } from 'naive-ui'
+import {
+  HomeOutline,
+  FolderOpenOutline,
+  DocumentTextOutline,
+  CreateOutline,
+  DownloadOutline,
+  TimeOutline,
+  BarChartOutline,
+  RadioOutline,
+  SettingsOutline
+} from '@vicons/ionicons5'
 import { useUIStore } from '../stores/ui'
 
 const router = useRouter()
@@ -42,16 +55,20 @@ const uiStore = useUIStore()
 
 const currentRoute = computed(() => route.path)
 
+function renderIcon(component: any) {
+  return () => h(NIcon, { component, size: 20 })
+}
+
 const menuOptions: MenuOption[] = [
-  { label: '工作台', key: '/dashboard', icon: () => h('span', {}, '🏠') },
-  { label: '项目列表', key: '/projects', icon: () => h('span', {}, '📁') },
-  { label: '剧本列表', key: '/scripts', icon: () => h('span', {}, '📜') },
-  { label: 'AI 写作工作室', key: '/studio', icon: () => h('span', {}, '✍️') },
-  { label: '导入剧本', key: '/import', icon: () => h('span', {}, '📥') },
-  { label: '任务中心', key: '/jobs', icon: () => h('span', {}, '⏳') },
-  { label: '统计分析', key: '/stats', icon: () => h('span', {}, '📊') },
-  { label: '模型日志', key: '/model-calls', icon: () => h('span', {}, '📡') },
-  { label: '设置', key: '/settings', icon: () => h('span', {}, '⚙️') }
+  { label: '工作台', key: '/dashboard', icon: renderIcon(HomeOutline) },
+  { label: '项目列表', key: '/projects', icon: renderIcon(FolderOpenOutline) },
+  { label: '剧本列表', key: '/scripts', icon: renderIcon(DocumentTextOutline) },
+  { label: 'AI 写作工作室', key: '/studio', icon: renderIcon(CreateOutline) },
+  { label: '导入剧本', key: '/import', icon: renderIcon(DownloadOutline) },
+  { label: '任务中心', key: '/jobs', icon: renderIcon(TimeOutline) },
+  { label: '统计分析', key: '/stats', icon: renderIcon(BarChartOutline) },
+  { label: '模型日志', key: '/model-calls', icon: renderIcon(RadioOutline) },
+  { label: '设置', key: '/settings', icon: renderIcon(SettingsOutline) }
 ]
 
 function handleMenuClick(key: string) {
@@ -84,7 +101,14 @@ function handleMenuClick(key: string) {
 }
 
 .logo-icon {
-  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
   flex-shrink: 0;
 }
 

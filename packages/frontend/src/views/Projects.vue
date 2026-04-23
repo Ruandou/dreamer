@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NButton, NSpace, NInput, NDropdown, useMessage, useDialog } from 'naive-ui'
+import { NCard, NButton, NSpace, NInput, NDropdown, NIcon, useMessage, useDialog } from 'naive-ui'
+import { SearchOutline, FilmOutline, EllipsisVerticalOutline } from '@vicons/ionicons5'
 import { useProjectStore } from '@/stores/project'
 import type { Project } from '@dreamer/shared/types'
 import { normalizeProjectName } from '@dreamer/shared'
@@ -223,7 +224,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
             style="width: 200px"
           >
             <template #prefix>
-              <span class="search-icon">🔍</span>
+              <NIcon :component="SearchOutline" :size="16" />
             </template>
           </NInput>
         </NSpace>
@@ -255,7 +256,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         <NInput
           v-model:value="quickIdea"
           type="textarea"
-          placeholder="✨ 输入想法，快速创建短剧... 或 拖拽剧本文件到此处 (⌘N)"
+          placeholder="输入想法，快速创建短剧... 或 拖拽剧本文件到此处 (⌘N)"
           :rows="3"
           @keydown.enter.ctrl="handleQuickCreate"
         />
@@ -289,7 +290,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         v-if="!projectStore.projects.length && !loading"
         title="暂无项目"
         description="在上方快速创建区输入想法、导入剧本或拖入文件，生成大纲后即可开始创作"
-        icon="🎬"
+        :icon-size="48"
         :show-background="true"
         variant="large"
       >
@@ -303,7 +304,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         v-else-if="!filteredProjects.length"
         title="未找到项目"
         :description="`未找到包含「${searchQuery}」的项目`"
-        icon="🔍"
+        :icon-size="48"
         :show-background="true"
       >
         <template #action>
@@ -322,7 +323,9 @@ const handleDropdownSelect = (key: string, projectId: string) => {
             @click="handleProjectClick(project)"
           >
             <div class="project-card__cover">
-              <div class="project-card__cover-placeholder">🎬</div>
+              <div class="project-card__cover-placeholder">
+                <NIcon :component="FilmOutline" :size="48" />
+              </div>
               <StatusBadge status="draft" class="project-card__status" />
             </div>
 
@@ -341,7 +344,11 @@ const handleDropdownSelect = (key: string, projectId: string) => {
                 trigger="click"
                 @click.stop
               >
-                <NButton text size="small" @click.stop> ⋮ </NButton>
+                <NButton text size="small" @click.stop>
+                  <template #icon>
+                    <NIcon :component="EllipsisVerticalOutline" :size="16" />
+                  </template>
+                </NButton>
               </NDropdown>
             </div>
           </NCard>

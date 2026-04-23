@@ -11,13 +11,20 @@
       />
     </div>
     <div class="input-actions">
+      <span class="input-hint">
+        <NIcon :component="ReturnDownBackOutline" :size="12" />
+        Enter 发送 · Shift+Enter 换行
+      </span>
       <NButton
-        text
         :type="isStreaming ? 'error' : 'primary'"
         :loading="isStreaming && !disabled"
         :disabled="!inputValue.trim() && !isStreaming"
+        size="small"
         @click="handleAction"
       >
+        <template #icon>
+          <NIcon :component="isStreaming ? StopCircleOutline : SendOutline" :size="16" />
+        </template>
         {{ isStreaming ? '停止' : sendLabel }}
       </NButton>
     </div>
@@ -26,7 +33,8 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { NInput, NButton } from 'naive-ui'
+import { NInput, NButton, NIcon } from 'naive-ui'
+import { SendOutline, StopCircleOutline, ReturnDownBackOutline } from '@vicons/ionicons5'
 
 const props = defineProps<{
   disabled?: boolean
@@ -65,39 +73,46 @@ function handleAction() {
 
 <style scoped>
 .chat-input {
-  padding: 16px;
+  padding: 12px 16px;
   border-top: 1px solid var(--color-border-light, #e5e7eb);
   background: var(--color-bg-white, #fff);
 }
 
 .input-wrapper {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .input-wrapper :deep(.n-input) {
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 2px solid var(--color-border-light, #e5e7eb);
-  transition: border-color 0.2s;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .input-wrapper :deep(.n-input:focus-within) {
   border-color: var(--color-primary, #6366f1);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
 .input-wrapper :deep(.n-input .n-input-wrapper) {
-  padding: 12px 16px;
+  padding: 10px 14px;
   font-size: 14px;
   line-height: 1.6;
 }
 
 .input-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
 }
 
-.input-actions :deep(.n-button) {
-  font-weight: 500;
-  font-size: 14px;
+.input-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  user-select: none;
 }
 </style>

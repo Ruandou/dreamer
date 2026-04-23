@@ -11,9 +11,18 @@ import {
   NDataTable,
   NTabs,
   NTabPane,
+  NIcon,
   type DataTableColumns,
   useMessage
 } from 'naive-ui'
+import {
+  VideocamOutline,
+  DocumentTextOutline,
+  LayersOutline,
+  ImageOutline,
+  SyncOutline,
+  CopyOutline
+} from '@vicons/ionicons5'
 import { api } from '@/api'
 import { usePolling } from '@/composables/usePolling'
 
@@ -67,10 +76,10 @@ function imageKindLabel(kind: string | undefined): string {
   return k || '图片'
 }
 
-const typeTagMap: Record<string, { type: string; label: string }> = {
-  video: { type: 'info', label: '🎬 视频' },
-  import: { type: 'warning', label: '📄 导入' },
-  image: { type: 'success', label: '🖼️ 图片' }
+const typeTagMap: Record<string, { type: string; label: string; icon: any }> = {
+  video: { type: 'info', label: '视频', icon: VideocamOutline },
+  import: { type: 'warning', label: '导入', icon: DocumentTextOutline },
+  image: { type: 'success', label: '图片', icon: ImageOutline }
 }
 
 /** PipelineJob.jobType → 任务中心「类型」列（仅中文，避免与步骤英文 id 混排） */
@@ -138,7 +147,12 @@ const columns: DataTableColumns<Job> = [
         )
       }
       const config = typeTagMap[row.type] || typeTagMap.video
-      return h(NTag, { type: config.type as any, size: 'small' }, () => config.label)
+      return h(NTag, { type: config.type as any, size: 'small' }, () =>
+        h('span', { style: { display: 'flex', alignItems: 'center', gap: '4px' } }, [
+          h(NIcon, { component: config.icon, size: 12 }),
+          config.label
+        ])
+      )
     }
   },
   {
@@ -253,7 +267,7 @@ const columns: DataTableColumns<Job> = [
                 copyError(msg)
               }
             },
-            () => '📋'
+            () => h(NIcon, { component: CopyOutline, size: 14 })
           )
         ])
       }
@@ -412,32 +426,36 @@ onUnmounted(() => {
         </NTabPane>
         <NTabPane name="video" tab="视频生成">
           <template #tab>
-            <NSpace :size="8">
-              <span>🎬 视频</span>
+            <NSpace :size="8" align="center">
+              <NIcon :component="VideocamOutline" :size="14" />
+              <span>视频</span>
               <NTag v-if="videoCount" size="small" round type="info">{{ videoCount }}</NTag>
             </NSpace>
           </template>
         </NTabPane>
         <NTabPane name="import" tab="剧本导入">
           <template #tab>
-            <NSpace :size="8">
-              <span>📄 导入</span>
+            <NSpace :size="8" align="center">
+              <NIcon :component="DocumentTextOutline" :size="14" />
+              <span>导入</span>
               <NTag v-if="importCount" size="small" round type="warning">{{ importCount }}</NTag>
             </NSpace>
           </template>
         </NTabPane>
         <NTabPane name="pipeline" tab="Pipeline">
           <template #tab>
-            <NSpace :size="8">
-              <span>🔄 Pipeline</span>
+            <NSpace :size="8" align="center">
+              <NIcon :component="LayersOutline" :size="14" />
+              <span>Pipeline</span>
               <NTag v-if="pipelineCount" size="small" round type="error">{{ pipelineCount }}</NTag>
             </NSpace>
           </template>
         </NTabPane>
         <NTabPane name="image" tab="图片生成">
           <template #tab>
-            <NSpace :size="8">
-              <span>🖼️ 图片</span>
+            <NSpace :size="8" align="center">
+              <NIcon :component="ImageOutline" :size="14" />
+              <span>图片</span>
               <NTag v-if="imageCount" size="small" round type="success">{{ imageCount }}</NTag>
             </NSpace>
           </template>
@@ -467,7 +485,12 @@ onUnmounted(() => {
         v-if="jobs.some((j) => j.status === 'processing' || j.status === 'queued')"
         class="jobs-footer"
       >
-        <NTag type="info" size="small">🔄 实时更新中...</NTag>
+        <NTag type="info" size="small">
+          <NSpace :size="4" align="center">
+            <NIcon :component="SyncOutline" :size="12" class="spin-icon" />
+            <span>实时更新中...</span>
+          </NSpace>
+        </NTag>
       </div>
     </NCard>
   </div>
@@ -511,5 +534,18 @@ onUnmounted(() => {
   padding-top: var(--spacing-md);
   border-top: 1px solid var(--color-border-light);
   text-align: center;
+}
+
+.spin-icon {
+  animation: spin 1.5s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

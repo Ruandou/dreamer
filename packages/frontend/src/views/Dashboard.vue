@@ -8,18 +8,24 @@
 
     <!-- 快捷操作 -->
     <div class="dashboard-quick-actions">
-      <NCard hoverable class="action-card" @click="navigateTo('/projects')">
-        <div class="action-icon">✨</div>
+      <NCard hoverable class="action-card action-card--primary" @click="navigateTo('/projects')">
+        <div class="action-icon">
+          <NIcon :component="AddCircleOutline" :size="32" />
+        </div>
         <h3>新建项目</h3>
         <p>从零创建短剧项目</p>
       </NCard>
-      <NCard hoverable class="action-card" @click="navigateTo('/studio')">
-        <div class="action-icon">✍️</div>
+      <NCard hoverable class="action-card action-card--secondary" @click="navigateTo('/studio')">
+        <div class="action-icon">
+          <NIcon :component="CreateOutline" :size="32" />
+        </div>
         <h3>AI 写作工作室</h3>
         <p>AI 辅助剧本创作</p>
       </NCard>
-      <NCard hoverable class="action-card" @click="navigateTo('/import')">
-        <div class="action-icon">📥</div>
+      <NCard hoverable class="action-card action-card--tertiary" @click="navigateTo('/import')">
+        <div class="action-icon">
+          <NIcon :component="DownloadOutline" :size="32" />
+        </div>
         <h3>导入剧本</h3>
         <p>上传并解析现有剧本</p>
       </NCard>
@@ -101,7 +107,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NStatistic, NButton, NTag } from 'naive-ui'
+import { NCard, NStatistic, NButton, NTag, NIcon } from 'naive-ui'
+import { AddCircleOutline, CreateOutline, DownloadOutline } from '@vicons/ionicons5'
 import { useUIStore } from '../stores/ui'
 import { api } from '../api'
 
@@ -215,8 +222,33 @@ onMounted(async () => {
 }
 
 .action-icon {
-  font-size: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
   margin-bottom: 12px;
+  transition: all var(--transition-normal);
+}
+
+.action-card--primary .action-icon {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.action-card--secondary .action-icon {
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--color-secondary);
+}
+
+.action-card--tertiary .action-icon {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--color-success);
+}
+
+.action-card:hover .action-icon {
+  transform: scale(1.08);
 }
 
 .action-card h3 {

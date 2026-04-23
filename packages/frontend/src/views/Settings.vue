@@ -2,9 +2,25 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NCard, NButton, NForm, NFormItem, NInput, NSpace, NSpin,
-  NAlert, useMessage, NTag
+  NCard,
+  NButton,
+  NForm,
+  NFormItem,
+  NInput,
+  NSpace,
+  NSpin,
+  NAlert,
+  useMessage,
+  NTag,
+  NIcon
 } from 'naive-ui'
+import {
+  KeyOutline,
+  VideocamOutline,
+  FlameOutline,
+  CheckmarkOutline,
+  ArrowBackOutline
+} from '@vicons/ionicons5'
 
 const router = useRouter()
 const message = useMessage()
@@ -35,7 +51,7 @@ onMounted(async () => {
   try {
     const res = await fetch('/api/settings/me', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        Authorization: `Bearer ${localStorage.getItem('token')}`
       }
     })
     const data = await res.json()
@@ -89,7 +105,7 @@ const verifyApiKey = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        Authorization: `Bearer ${localStorage.getItem('token')}`
       },
       body: JSON.stringify({ apiKey: apiKeyInput.value })
     })
@@ -134,7 +150,7 @@ const saveSettings = async () => {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        Authorization: `Bearer ${localStorage.getItem('token')}`
       },
       body: JSON.stringify(body)
     })
@@ -172,6 +188,9 @@ const formatBalance = (amount: number) => {
       </div>
       <div class="settings-header__right">
         <NButton @click="router.push('/projects')">
+          <template #icon>
+            <NIcon :component="ArrowBackOutline" :size="16" />
+          </template>
           返回项目
         </NButton>
       </div>
@@ -189,7 +208,13 @@ const formatBalance = (amount: number) => {
         </NCard>
 
         <!-- DeepSeek API -->
-        <NCard title="🤖 DeepSeek（AI 编剧）" class="settings-card">
+        <NCard class="settings-card">
+          <template #header>
+            <NSpace :size="8" align="center">
+              <NIcon :component="KeyOutline" :size="18" />
+              <span>DeepSeek（AI 编剧）</span>
+            </NSpace>
+          </template>
           <template #header-extra>
             <NTag v-if="hasApiKey" type="success" size="small">已配置</NTag>
             <NTag v-else type="warning" size="small">未配置</NTag>
@@ -206,7 +231,11 @@ const formatBalance = (amount: number) => {
             </NAlert>
 
             <NAlert v-if="verifySuccess && balance" type="success" class="mb-4">
-              验证成功！余额：¥{{ formatBalance(balance.balanceInfos.find((b: any) => b.currency === 'CNY')?.totalBalance || 0) }}
+              验证成功！余额：¥{{
+                formatBalance(
+                  balance.balanceInfos.find((b: any) => b.currency === 'CNY')?.totalBalance || 0
+                )
+              }}
             </NAlert>
 
             <NAlert v-if="verifyError" type="error" class="mb-4">
@@ -243,11 +272,7 @@ const formatBalance = (amount: number) => {
           <template #footer>
             <div class="balance-info" v-if="balance">
               <span class="balance-label">当前余额：</span>
-              <span
-                v-for="info in balance.balanceInfos"
-                :key="info.currency"
-                class="balance-item"
-              >
+              <span v-for="info in balance.balanceInfos" :key="info.currency" class="balance-item">
                 {{ info.currency === 'CNY' ? '¥' : '$' }}{{ formatBalance(info.totalBalance) }}
               </span>
             </div>
@@ -255,7 +280,13 @@ const formatBalance = (amount: number) => {
         </NCard>
 
         <!-- Atlas API (Wan 2.6) -->
-        <NCard title="🎬 Atlas（视频生成 Wan 2.6）" class="settings-card">
+        <NCard class="settings-card">
+          <template #header>
+            <NSpace :size="8" align="center">
+              <NIcon :component="VideocamOutline" :size="18" />
+              <span>Atlas（视频生成 Wan 2.6）</span>
+            </NSpace>
+          </template>
           <template #header-extra>
             <NTag v-if="atlasApiKey" type="success" size="small">已配置</NTag>
             <NTag v-else type="warning" size="small">未配置</NTag>
@@ -263,7 +294,12 @@ const formatBalance = (amount: number) => {
 
           <NForm label-placement="left" label-width="120">
             <NFormItem label="API Key">
-              <NInput v-model:value="atlasApiKey" type="password" placeholder="Atlas API Key" show-password-on="click" />
+              <NInput
+                v-model:value="atlasApiKey"
+                type="password"
+                placeholder="Atlas API Key"
+                show-password-on="click"
+              />
             </NFormItem>
             <NFormItem label="API URL">
               <NInput v-model:value="atlasApiUrl" placeholder="https://api.atlascloud.com" />
@@ -272,7 +308,13 @@ const formatBalance = (amount: number) => {
         </NCard>
 
         <!-- Volcano Engine API (Seedance 2.0) -->
-        <NCard title="🎥 火山方舟（视频生成 Seedance 2.0）" class="settings-card">
+        <NCard class="settings-card">
+          <template #header>
+            <NSpace :size="8" align="center">
+              <NIcon :component="FlameOutline" :size="18" />
+              <span>火山方舟（视频生成 Seedance 2.0）</span>
+            </NSpace>
+          </template>
           <template #header-extra>
             <NTag v-if="arkApiKey" type="success" size="small">已配置</NTag>
             <NTag v-else type="warning" size="small">未配置</NTag>
@@ -280,13 +322,19 @@ const formatBalance = (amount: number) => {
 
           <NForm label-placement="left" label-width="120">
             <NFormItem label="API Key">
-              <NInput v-model:value="arkApiKey" type="password" placeholder="火山方舟 API Key" show-password-on="click" />
+              <NInput
+                v-model:value="arkApiKey"
+                type="password"
+                placeholder="火山方舟 API Key"
+                show-password-on="click"
+              />
             </NFormItem>
             <NFormItem label="API URL">
-              <NInput v-model:value="arkApiUrl" placeholder="https://ark.cn-beijing.volces.com/api/v3" />
-              <template #feedback>
-                默认地址：https://ark.cn-beijing.volces.com/api/v3
-              </template>
+              <NInput
+                v-model:value="arkApiUrl"
+                placeholder="https://ark.cn-beijing.volces.com/api/v3"
+              />
+              <template #feedback> 默认地址：https://ark.cn-beijing.volces.com/api/v3 </template>
             </NFormItem>
           </NForm>
         </NCard>
@@ -294,6 +342,9 @@ const formatBalance = (amount: number) => {
         <!-- Save Button -->
         <div class="settings-actions">
           <NButton type="primary" size="large" :loading="saving" @click="saveSettings">
+            <template #icon>
+              <NIcon :component="CheckmarkOutline" :size="18" />
+            </template>
             保存设置
           </NButton>
         </div>

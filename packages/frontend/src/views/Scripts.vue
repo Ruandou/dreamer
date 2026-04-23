@@ -9,9 +9,11 @@ import {
   NTag,
   NTabs,
   NTabPane,
+  NIcon,
   useMessage,
   useDialog
 } from 'naive-ui'
+import { SearchOutline, AddOutline } from '@vicons/ionicons5'
 import { api } from '@/api'
 import type { Script } from '@dreamer/shared/types'
 import EmptyState from '@/components/EmptyState.vue'
@@ -202,10 +204,15 @@ const contentPreview = (content: string) => {
             style="width: 200px"
           >
             <template #prefix>
-              <span class="search-icon">🔍</span>
+              <NIcon :component="SearchOutline" :size="16" />
             </template>
           </NInput>
-          <NButton type="primary" @click="handleCreate" :loading="isCreating"> + 新建剧本 </NButton>
+          <NButton type="primary" @click="handleCreate" :loading="isCreating">
+            <template #icon>
+              <NIcon :component="AddOutline" :size="16" />
+            </template>
+            新建剧本
+          </NButton>
         </NSpace>
       </div>
     </header>
@@ -271,7 +278,7 @@ const contentPreview = (content: string) => {
         v-if="!scripts.length && !loading"
         title="暂无剧本"
         description="点击右上角「新建剧本」开始创作"
-        icon="📜"
+        :icon-size="48"
         :show-background="true"
         variant="large"
       >
@@ -287,7 +294,7 @@ const contentPreview = (content: string) => {
         v-else-if="!filteredScripts.length"
         title="未找到剧本"
         :description="`未找到包含「${searchQuery}」的剧本`"
-        icon="🔍"
+        :icon-size="48"
         :show-background="true"
       >
         <template #action>

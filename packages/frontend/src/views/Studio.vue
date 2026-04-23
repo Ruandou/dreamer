@@ -3,7 +3,11 @@
     <!-- 顶部工具栏 -->
     <div class="studio-toolbar">
       <div class="toolbar-left">
-        <h2 class="studio-title">✍️ AI 写作工作室</h2>
+        <div class="studio-brand">
+          <NIcon :component="CreateOutline" :size="20" />
+          <h2 class="studio-title">AI 写作工作室</h2>
+        </div>
+        <div class="title-divider"></div>
         <input
           v-if="editingTitle"
           v-model="titleInput"
@@ -13,23 +17,54 @@
           @keyup.escape="cancelEditTitle"
           ref="titleInputRef"
         />
-        <span v-else class="script-title" @click="startEditTitle">{{
-          script?.title || '未命名剧本'
-        }}</span>
+        <NTooltip v-else trigger="hover">
+          <template #trigger>
+            <span class="script-title" @click="startEditTitle">
+              {{ script?.title || '未命名剧本' }}
+              <NIcon :component="PencilOutline" :size="14" class="title-edit-icon" />
+            </span>
+          </template>
+          点击编辑标题
+        </NTooltip>
       </div>
       <div class="toolbar-right">
-        <NButton @click="router.push('/scripts')">📜 剧本列表</NButton>
-        <NButton :type="isPreview ? 'primary' : 'default'" @click="togglePreview">
-          {{ isPreview ? '✏️ 编辑' : '👁️ 预览' }}
+        <NButton secondary size="small" @click="router.push('/scripts')">
+          <template #icon>
+            <NIcon :component="ListOutline" :size="16" />
+          </template>
+          剧本列表
         </NButton>
-        <NButton @click="exportScript">📥 导出</NButton>
+        <NButton :type="isPreview ? 'primary' : 'default'" size="small" @click="togglePreview">
+          <template #icon>
+            <NIcon :component="isPreview ? CreateOutline : EyeOutline" :size="16" />
+          </template>
+          {{ isPreview ? '编辑' : '预览' }}
+        </NButton>
+        <NButton secondary size="small" @click="exportScript">
+          <template #icon>
+            <NIcon :component="DownloadOutline" :size="16" />
+          </template>
+          导出
+        </NButton>
         <NButton
           :type="saveStatus === 'saved' ? 'success' : 'default'"
           :disabled="saveStatus === 'saving'"
+          size="small"
+          @click="autoSave"
         >
-          {{
-            saveStatus === 'saving' ? '保存中...' : saveStatus === 'saved' ? '已保存' : '💾 保存'
-          }}
+          <template #icon>
+            <NIcon
+              :component="
+                saveStatus === 'saving'
+                  ? TimeOutline
+                  : saveStatus === 'saved'
+                    ? CheckmarkOutline
+                    : SaveOutline
+              "
+              :size="16"
+            />
+          </template>
+          {{ saveStatus === 'saving' ? '保存中' : saveStatus === 'saved' ? '已保存' : '保存' }}
         </NButton>
       </div>
     </div>
@@ -38,13 +73,18 @@
     <div class="studio-content">
       <!-- 左侧编辑/预览区 -->
       <div class="editor-panel">
-        <textarea
-          v-if="!isPreview"
-          v-model="content"
-          class="script-editor"
-          @input="onContentChange"
-          placeholder="开始编写剧本..."
-        ></textarea>
+        <div v-if="!isPreview" class="editor-wrapper">
+          <div class="line-numbers" aria-hidden="true">
+            <span v-for="n in lineCount" :key="n" class="line-number">{{ n }}</span>
+          </div>
+          <textarea
+            v-model="content"
+            class="script-editor"
+            @input="onContentChange"
+            placeholder="开始编写剧本..."
+            spellcheck="false"
+          ></textarea>
+        </div>
         <div v-else class="script-preview" v-html="renderedContent"></div>
       </div>
 
@@ -64,10 +104,16 @@
       <NSpace align="center" size="small">
         <span class="tags-label">标签：</span>
         <template v-if="!editingTags">
-          <NTag v-for="tag in script?.tags || []" :key="tag" size="small" type="info">
+          <NTag v-for="tag in script?.tags || []" :key="tag" size="small" type="info" round>
             {{ tag }}
           </NTag>
-          <NButton text size="small" @click="startEditTags">+ 编辑标签</NButton>
+          <span v-if="!(script?.tags || []).length" class="no-tags">无标签</span>
+          <NButton text size="small" @click="startEditTags">
+            <template #icon>
+              <NIcon :component="PencilOutline" :size="14" />
+            </template>
+            编辑标签
+          </NButton>
         </template>
         <template v-else>
           <NTag
@@ -75,12 +121,18 @@
             :key="tag"
             size="small"
             :type="(script?.tags || []).includes(tag) ? 'primary' : 'default'"
+            round
             style="cursor: pointer"
             @click="toggleTag(tag)"
           >
             {{ tag }}
           </NTag>
-          <NButton text size="small" @click="saveTags">完成</NButton>
+          <NButton text size="small" @click="saveTags">
+            <template #icon>
+              <NIcon :component="CheckmarkOutline" :size="14" />
+            </template>
+            完成
+          </NButton>
         </template>
       </NSpace>
     </div>
@@ -99,7 +151,17 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NButton, useMessage, NTag, NSpace } from 'naive-ui'
+import { NButton, useMessage, NTag, NSpace, NIcon, NTooltip } from 'naive-ui'
+import {
+  CreateOutline,
+  PencilOutline,
+  ListOutline,
+  EyeOutline,
+  DownloadOutline,
+  SaveOutline,
+  CheckmarkOutline,
+  TimeOutline
+} from '@vicons/ionicons5'
 import { api } from '../api'
 import ChatPanel from '../components/chat/ChatPanel.vue'
 import DiffModal from '../components/chat/DiffModal.vue'
@@ -121,6 +183,11 @@ const showDiffModal = ref(false)
 const originalContent = ref('')
 const revisedContent = ref('')
 const editingTags = ref(false)
+
+const lineCount = computed(() => {
+  if (!content.value) return 1
+  return content.value.split('\n').length
+})
 
 const PREDEFINED_TAGS = [
   // 受众
@@ -326,7 +393,7 @@ loadDraft()
   display: flex;
   flex-direction: column;
   height: calc(100vh - 56px);
-  background: #f5f5f5;
+  background: var(--color-bg-base);
   overflow: hidden;
 }
 
@@ -334,35 +401,75 @@ loadDraft()
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px;
+  padding: 10px 20px;
   background: var(--color-bg-white);
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.studio-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-primary);
+}
+
 .studio-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   margin: 0;
+  color: var(--color-text-primary);
+}
+
+.title-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
 }
 
 .script-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background 0.2s;
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
 }
 
 .script-title:hover {
   background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+}
+
+.script-title:hover .title-edit-icon {
+  opacity: 1;
+}
+
+.title-edit-icon {
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  color: var(--color-text-tertiary);
 }
 
 .title-input {
-  font-size: 16px;
-  padding: 4px 8px;
+  font-size: 15px;
+  padding: 4px 10px;
   border: 1px solid var(--color-primary);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   outline: none;
+  font-weight: 500;
+  min-width: 200px;
 }
 
 .toolbar-right {
@@ -381,60 +488,109 @@ loadDraft()
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 24px;
+  padding: 20px;
   overflow: hidden;
   min-height: 0;
+}
+
+.editor-wrapper {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-white);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.editor-wrapper:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.line-numbers {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 8px;
+  background: var(--color-bg-gray);
+  border-right: 1px solid var(--color-border-light);
+  color: var(--color-text-tertiary);
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: right;
+  user-select: none;
+  overflow: hidden;
+  min-width: 40px;
+}
+
+.line-number {
+  display: block;
+  min-height: calc(14px * 1.6);
 }
 
 .script-editor {
   flex: 1;
-  width: 100%;
   padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  font-family: monospace;
+  border: none;
+  outline: none;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
   font-size: 14px;
   line-height: 1.6;
   resize: none;
-  outline: none;
   overflow: auto;
+  background: transparent;
+  color: var(--color-text-primary);
+  tab-size: 2;
 }
 
-.script-editor:focus {
-  border-color: var(--color-primary);
+.script-editor::placeholder {
+  color: var(--color-text-tertiary);
 }
 
 .script-preview {
   flex: 1;
-  padding: 16px;
+  padding: 20px;
   background: var(--color-bg-white);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
   line-height: 1.6;
   overflow: auto;
+  font-size: 14px;
 }
 
 .scene-title {
   color: var(--color-primary);
+  font-size: 15px;
 }
 
 .ai-panel {
   width: 480px;
-  border-left: 1px solid #e5e7eb;
+  border-left: 1px solid var(--color-border);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  background: var(--color-bg-white);
 }
 
 .studio-tags-bar {
-  padding: 8px 24px;
+  padding: 8px 20px;
   background: var(--color-bg-white);
-  border-bottom: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
 .tags-label {
   font-size: 13px;
   color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.no-tags {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
 }
 </style>
