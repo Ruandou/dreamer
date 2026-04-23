@@ -47,11 +47,11 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): strin
 
   // Edit suggestion format instruction
   parts.push(
-    '\n\n---\n当用户要求修改剧本内容时，请在回复中包含一个 `[EDIT_SUGGESTION]` 代码块，格式如下：\n\n' +
+    '\n\n---\n当用户要求修改剧本内容或创作新剧本时，请在回复中包含一个 `[EDIT_SUGGESTION]` 代码块，格式如下：\n\n' +
       `[EDIT_SUGGESTION]\n` +
-      `{"type": "replace_all", "content": "修改后的完整剧本内容", "description": "简要描述修改了什么"}\n` +
+      `{"type": "replace_all", "content": "修改或创作后的完整剧本内容", "description": "简要描述修改或创作了什么"}\n` +
       `[EDIT_SUGGESTION]\n\n` +
-      `如果没有涉及剧本修改，则不需要包含此代码块。` +
+      `如果用户只是在聊天讨论、提问或寻求建议，而没有要求实际修改/创作剧本，则不需要包含此代码块。` +
       `请确保 JSON 格式正确，可以被正常解析。`
   )
 

@@ -132,6 +132,11 @@ const handleTagClick = (tag: string) => {
   void fetchScripts()
 }
 
+const clearTagFilter = () => {
+  activeTag.value = null
+  void fetchScripts()
+}
+
 const handleStatusChange = (tab: string) => {
   activeStatus.value = tab
   void fetchScripts()
@@ -231,17 +236,7 @@ const contentPreview = (content: string) => {
         >
           {{ tag }}
         </NTag>
-        <NButton
-          v-if="activeTag"
-          text
-          size="small"
-          @click="
-            activeTag = null
-            void fetchScripts()
-          "
-        >
-          清除筛选
-        </NButton>
+        <NButton v-if="activeTag" text size="small" @click="clearTagFilter"> 清除筛选 </NButton>
       </NSpace>
     </div>
 
@@ -455,7 +450,7 @@ const contentPreview = (content: string) => {
   color: var(--color-text-secondary);
   line-height: var(--line-height-normal);
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   min-height: 60px;

@@ -34,12 +34,14 @@ export interface StreamChatParams {
 
 /** Parse [EDIT_SUGGESTION] JSON blocks from the full response */
 function parseSuggestedEdit(fullContent: string): ChatStreamEventDone['suggestedEdit'] {
-  const pattern = /\[EDIT_SUGGESTION\]\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}\s*\[EDIT_SUGGESTION\]/s
+  // More robust pattern that handles nested braces and multiline content
+  const pattern = /\[EDIT_SUGGESTION\]\s*([\s\S]*?)\[EDIT_SUGGESTION\]/s
   const match = fullContent.match(pattern)
   if (!match) return null
 
   try {
-    const jsonStr = `{${match[1]}}`
+    // Extract JSON from the matched content (might have extra whitespace/newlines)
+    const jsonStr = match[1].trim()
     const parsed = JSON.parse(jsonStr) as {
       type: string
       content: string
