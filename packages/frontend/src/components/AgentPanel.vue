@@ -284,6 +284,10 @@ async function handleSend() {
         },
         onStepComplete: (data) => {
           messages.value[agentMessageIndex].isStreaming = false
+          // Set message content from result if available
+          if (data.result?.summary) {
+            messages.value[agentMessageIndex].content = data.result.summary
+          }
           if (data.requiresUserAction) {
             messages.value[agentMessageIndex].actions = [
               { type: 'confirm', label: `✅ ${data.actionLabel || '确认'}`, primary: true },
@@ -294,6 +298,11 @@ async function handleSend() {
         },
         onPause: (data) => {
           messages.value[agentMessageIndex].isStreaming = false
+          isLoading.value = false
+          // Set message content from result if available
+          if (data.result?.summary) {
+            messages.value[agentMessageIndex].content = data.result.summary
+          }
           if (data.requiresUserAction) {
             messages.value[agentMessageIndex].actions = [
               { type: 'confirm', label: `✅ ${data.actionLabel || '确认'}`, primary: true },

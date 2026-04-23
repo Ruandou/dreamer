@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '../../lib/prisma.js'
+import type { Prisma } from '@prisma/client'
 import { intentParser } from './intent-parser.js'
 import { contextLoader } from './context-loader.js'
 import { outlineAgent } from './outline-agent.js'
@@ -305,7 +306,7 @@ export class WritingOrchestrator {
             memories: this.state.memories.length,
             updatedAt: new Date().toISOString()
           })
-        )
+        ) as Prisma.InputJsonValue
       }
     })
   }
@@ -344,15 +345,25 @@ export class WritingOrchestrator {
     }
 
     // 步骤 2: 解析意图
+    let intentConfirmed = false
     for await (const event of intentParser.parseStream(command, this.state.context)) {
       yield event
       if (event.type === 'step_complete') {
         this.state.intent = event.result.content as ParsedIntent
         this.state.currentStep = 'intent_parsed'
+        // Check if user confirmation is required
+        if ('requiresUserAction' in event && event.requiresUserAction) {
+          intentConfirmed = true
+        }
       }
     }
 
-    // 步骤 3: 生成大纲
+    // Stop here and wait for user confirmation before generating outline
+    if (intentConfirmed) {
+      return
+    }
+
+    // 步骤 3: 生成大纲 (only after user confirms via continueStream)
     if (!this.state.intent) {
       throw new Error('意图未解析')
     }
@@ -379,9 +390,34 @@ export class WritingOrchestrator {
   }
 
   /**
-   * 流式继续：生成草稿 + 审核 + 修改
+   * 流式继续：根据当前状态继续执行
+   * - intent_parsed → 生成大纲 → 生成草稿 + 审核 + 修改
+   * - outline_generated → 生成草稿 + 审核 + 修改
    */
   async *continueStream(targetEpisode?: number): AsyncGenerator<AgentStreamEvent> {
+    // 如果还在意图解析阶段，先生成大纲
+    if (this.state.currentStep === 'intent_parsed' && this.state.intent && this.state.context) {
+      for await (const event of outlineAgent.generateStream(
+        this.state.userId,
+        this.state.intent,
+        this.state.context
+      )) {
+        yield event
+        if (event.type === 'step_complete') {
+          this.state.outline = event.result.content as OutlineOutput
+          this.state.currentStep = 'outline_generated'
+
+          // 提取大纲记忆
+          const memories = await memoryExtractor.extractFromOutline(
+            this.state.userId,
+            this.state.scriptId,
+            this.state.outline
+          )
+          this.state.memories = memories
+        }
+      }
+    }
+
     if (!this.state.outline || !this.state.context) {
       throw new Error('大纲或上下文未加载')
     }
@@ -423,7 +459,19 @@ export class WritingOrchestrator {
         }
       }
 
-      critique = this.state.critique!
+      critique = this.state.critique ?? {
+        overallScore: 0,
+        scores: {
+          coherence: 0,
+          characterConsistency: 0,
+          sceneQuality: 0,
+          dramaticConflict: 0,
+          format: 0
+        },
+        feedback: '',
+        strengths: '',
+        weaknesses: ''
+      }
 
       if (critique.overallScore < 75 && revisionCount < 3) {
         for await (const event of revisionAgent.reviseStream(this.state.userId, draft, critique)) {

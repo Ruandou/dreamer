@@ -98,6 +98,7 @@ export class IntentParser {
     if (!userId) {
       // 无上下文，直接返回规则解析
       const intent = this.parseWithRules(command)
+      const formattedSummary = this.buildIntentSummary(intent, command)
       yield {
         type: 'step_complete',
         step: 'intent_parsing',
@@ -106,7 +107,7 @@ export class IntentParser {
         result: {
           type: 'intent_confirm',
           content: intent,
-          summary: command
+          summary: formattedSummary
         },
         requiresUserAction: true,
         actionLabel: '确认意图'
@@ -148,6 +149,7 @@ export class IntentParser {
 
       // 收集 JSON 输出
       const parsedIntent = await collectStreamedJSON<ParsedIntent>(stream)
+      const formattedSummary = this.buildIntentSummary(parsedIntent, command)
 
       // 发送完成事件
       yield {
@@ -161,7 +163,7 @@ export class IntentParser {
             ...parsedIntent,
             rawCommand: command
           },
-          summary: command
+          summary: formattedSummary
         },
         requiresUserAction: true,
         actionLabel: '确认意图'
@@ -169,6 +171,7 @@ export class IntentParser {
     } catch {
       // 回退到规则解析
       const intent = this.parseWithRules(command)
+      const formattedSummary = this.buildIntentSummary(intent, command)
       yield {
         type: 'step_complete',
         step: 'intent_parsing',
@@ -177,7 +180,7 @@ export class IntentParser {
         result: {
           type: 'intent_confirm',
           content: intent,
-          summary: command
+          summary: formattedSummary
         },
         requiresUserAction: true,
         actionLabel: '确认意图'
@@ -251,6 +254,28 @@ export class IntentParser {
       rawCommand: command,
       confidence: 0.3
     }
+  }
+
+  /**
+   * 构建意图确认消息
+   */
+  private buildIntentSummary(intent: ParsedIntent, _command: string): string {
+    const params = intent.parameters
+    const summary =
+      [
+        params.genre && `类型：${params.genre}`,
+        params.theme && `主题：${params.theme}`,
+        params.characters &&
+          params.characters.length > 0 &&
+          `角色：${params.characters.join('、')}`,
+        params.setting && `背景：${params.setting}`,
+        params.episodeCount && `集数：${params.episodeCount}`,
+        params.tone && `基调：${params.tone}`
+      ]
+        .filter(Boolean)
+        .join('\n') || intent.rawCommand
+
+    return `我理解你想创作：\n\n${summary}\n\n请问这个理解正确吗？确认后我将开始生成大纲。`
   }
 
   /**

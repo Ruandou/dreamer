@@ -256,9 +256,12 @@ export async function scriptAgentRoutes(fastify: FastifyInstance) {
           return reply.status(404).send({ error: '剧本不存在或无权访问' })
         }
 
-        // 创建协调器
-        const orchestrator = createWritingOrchestrator(id, userId)
-        orchestrators.set(id, orchestrator)
+        // 创建或复用协调器
+        let orchestrator = orchestrators.get(id)
+        if (!orchestrator) {
+          orchestrator = createWritingOrchestrator(id, userId)
+          orchestrators.set(id, orchestrator)
+        }
 
         const raw = reply.raw
         raw.writeHead(200, {
@@ -276,14 +279,13 @@ export async function scriptAgentRoutes(fastify: FastifyInstance) {
           const sseData = `event: agent-${event.type}\ndata: ${JSON.stringify(event)}\n\n`
           raw.write(sseData)
 
-          // 如果需要用户操作，暂停并等待确认
+          // 如果需要用户操作，发送暂停事件（generator会在内部处理暂停）
           if (
             event.type === 'step_complete' &&
             'requiresUserAction' in event &&
             event.requiresUserAction
           ) {
             raw.write(`event: agent-pause\ndata: ${JSON.stringify(event)}\n\n`)
-            break
           }
         }
       } catch (error) {
