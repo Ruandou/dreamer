@@ -31,10 +31,10 @@
 
 **目标**：功能高度模块化、**职责单一**、**易于测试与扩展**；代码读起来像文档（**名字即注释**）。
 
-| 常见假设 | Dreamer 实际 |
-|----------|----------------|
-| Express | **Fastify**（`packages/backend/src/index.ts`） |
-| `app.ts` 集中配置 | 可在 `index.ts` 或抽 `buildApp.ts` 仅做 `register` |
+| 常见假设               | Dreamer 实际                                                        |
+| ---------------------- | ------------------------------------------------------------------- |
+| Express                | **Fastify**（`packages/backend/src/index.ts`）                      |
+| `app.ts` 集中配置      | 可在 `index.ts` 或抽 `buildApp.ts` 仅做 `register`                  |
 | Prisma 在 `src/prisma` | Schema 在 [`packages/backend/prisma/`](../packages/backend/prisma/) |
 
 可选 HTTP 适配层：`routes/*.ts` 内导出 `xxxRoutes(fastify)`；或增加 `handlers/`，导出接收 `FastifyRequest` / `FastifyReply` 的函数。**不要**按 Express 的 `req/res` 写法硬套。
@@ -81,6 +81,83 @@ packages/backend/src/
 
 **模型调用**：任何 LLM / 文生图等外部模型调用须遵守 AGENTS.md：**`ModelApiCall` 落库**与 **`ModelCallLogContext`**（`userId`、`op`、可选 `projectId`）。
 
+### ⚠️ 禁止直接使用 `fetch()` 调用 LLM API
+
+**关键规则**：项目中**已有完善的 LLM 调用架构**，新代码必须使用标准 wrapper，**不得**直接用 `fetch()` 调用 LLM API。
+
+#### ❌ 错误示例（不要这样做）
+
+```typescript
+// 错误：直接 fetch + 检查 Ark API Key
+const user = await prisma.user.findUnique({
+  where: { id: userId },
+  select: { arkApiKey: true }
+})
+
+if (!user?.arkApiKey) {
+  throw new Error('请先在设置中配置方舟 API Key')
+}
+
+const response = await fetch(apiUrl, {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${user.arkApiKey}` },
+  body: JSON.stringify({ model: 'deepseek-v3', messages })
+})
+```
+
+#### ✅ 正确示例
+
+```typescript
+import { getDefaultProvider } from '../ai/llm-factory.js'
+import { callLLMWithRetry } from '../ai/llm-call-wrapper.js'
+import type { LLMMessage } from '../ai/llm-provider.js'
+
+const provider = getDefaultProvider()
+
+const messages: LLMMessage[] = [
+  { role: 'system', content: SYSTEM_PROMPT },
+  { role: 'user', content: userPrompt }
+]
+
+const result = await callLLMWithRetry(
+  {
+    provider,
+    messages,
+    temperature: 0.8,
+    maxTokens: 4000,
+    modelLog: {
+      userId,
+      op: 'operation_name'
+    }
+  },
+  (content) => JSON.parse(content)
+)
+
+return result.content
+```
+
+#### 为什么必须用 wrapper？
+
+| 特性          | 直接 `fetch()` | `callLLMWithRetry()` |
+| ------------- | -------------- | -------------------- |
+| 自动重试      | ❌ 需手写      | ✅ 指数退避          |
+| 超时处理      | ❌ 需手写      | ✅ 默认 10 分钟      |
+| 错误检测      | ❌ 需手写      | ✅ Auth/RateLimit    |
+| 成本计算      | ❌ 需手写      | ✅ 自动计价          |
+| 审计日志      | ❌ 需手写      | ✅ 自动落库          |
+| Provider 切换 | ❌ 硬编码      | ✅ 接口抽象          |
+
+#### 架构说明
+
+```
+services/ai/
+├── llm-factory.ts          # getDefaultProvider() - 获取配置的 LLM Provider
+├── llm-call-wrapper.ts     # callLLMWithRetry() - 重试 + 日志 + 超时
+├── llm-provider.ts         # LLMProvider 接口定义
+├── deepseek-provider.ts    # DeepSeek 实现
+└── api-logger.ts           # recordModelApiCall() - 仅用于非 LLM 调用
+```
+
 **依赖与数据流**：`routes → services → repositories → Prisma`；避免 `services` 再依赖 `routes`。
 
 ---
@@ -89,39 +166,39 @@ packages/backend/src/
 
 ### 3.1 通用规则
 
-| 规则 | 示例 | 说明 |
-|------|------|------|
-| 完整单词，不无故缩写 | `generateImage` | `genImg` 除非团队共识 |
-| 业务术语优先 | `imagePrompt`、`basePrompt` | 避免无义名如 `promptStr` |
-| 布尔：`is` / `has` / `should` | `isSelected`、`hasAvatar` | 见名知真假 |
-| 数组用复数 | `characters`、`imageUrls` | |
-| 常量 `UPPER_SNAKE` | `MAX_RETRY_COUNT` | 表示不可变配置 |
-| TypeScript `private` | 优先语言特性 | `_foo` 仅作可选视觉提示 |
+| 规则                          | 示例                        | 说明                     |
+| ----------------------------- | --------------------------- | ------------------------ |
+| 完整单词，不无故缩写          | `generateImage`             | `genImg` 除非团队共识    |
+| 业务术语优先                  | `imagePrompt`、`basePrompt` | 避免无义名如 `promptStr` |
+| 布尔：`is` / `has` / `should` | `isSelected`、`hasAvatar`   | 见名知真假               |
+| 数组用复数                    | `characters`、`imageUrls`   |                          |
+| 常量 `UPPER_SNAKE`            | `MAX_RETRY_COUNT`           | 表示不可变配置           |
+| TypeScript `private`          | 优先语言特性                | `_foo` 仅作可选视觉提示  |
 
 ### 3.2 函数 / 方法：动词 + 名词
 
-| 前缀 | 含义 | 示例 |
-|------|------|------|
-| `get` | 同步、无副作用读取 | `getCharacterById` |
-| `fetch` | 异步从外部拉取 | `fetchProjectList` |
-| `find` | 查找，可能为 `null` | `findLocationByName` |
-| `generate` | 生成（含 AI） | `generateLocationImagePrompt` |
-| `generatePrompt` | 生成给下游模型的提示词 | `generateCharacterOutfitPrompt` |
-| `call` | 调用外部模型 API | `callSeedreamGenerate` |
-| `create` / `update` / `delete` | 持久化生命周期 | `updateLocationImageUrl` |
-| `handle` | 事件入口 | `handleGenerateClick` |
-| `validate` | 校验 | `validateProjectName` |
-| `build` | 组装复杂对象 | `buildSeedanceRequest` |
+| 前缀                           | 含义                   | 示例                            |
+| ------------------------------ | ---------------------- | ------------------------------- |
+| `get`                          | 同步、无副作用读取     | `getCharacterById`              |
+| `fetch`                        | 异步从外部拉取         | `fetchProjectList`              |
+| `find`                         | 查找，可能为 `null`    | `findLocationByName`            |
+| `generate`                     | 生成（含 AI）          | `generateLocationImagePrompt`   |
+| `generatePrompt`               | 生成给下游模型的提示词 | `generateCharacterOutfitPrompt` |
+| `call`                         | 调用外部模型 API       | `callSeedreamGenerate`          |
+| `create` / `update` / `delete` | 持久化生命周期         | `updateLocationImageUrl`        |
+| `handle`                       | 事件入口               | `handleGenerateClick`           |
+| `validate`                     | 校验                   | `validateProjectName`           |
+| `build`                        | 组装复杂对象           | `buildSeedanceRequest`          |
 
 ### 3.3 类与类型后缀
 
-| 职责 | 后缀 | 示例 |
-|------|------|------|
-| 业务编排 | `Service` | `LocationService` |
-| 外部 HTTP/SDK | `Client` | `DeepSeekClient` |
-| 数据访问 | `Repository` | `LocationRepository` |
-| HTTP 适配 | `Controller` 或 Handler | `LocationController` |
-| 入参 / 出参 | `Input` / `Response` / `Dto`（团队统一一词） | `GenerateImageInput` |
+| 职责          | 后缀                                         | 示例                 |
+| ------------- | -------------------------------------------- | -------------------- |
+| 业务编排      | `Service`                                    | `LocationService`    |
+| 外部 HTTP/SDK | `Client`                                     | `DeepSeekClient`     |
+| 数据访问      | `Repository`                                 | `LocationRepository` |
+| HTTP 适配     | `Controller` 或 Handler                      | `LocationController` |
+| 入参 / 出参   | `Input` / `Response` / `Dto`（团队统一一词） | `GenerateImageInput` |
 
 ### 3.4 文件命名
 
@@ -285,17 +362,17 @@ request.log.info(
 
 ## 15. 代码审查清单
 
-| 检查项 | 说明 |
-|--------|------|
-| 命名 | 变量/函数是否自解释 |
-| 单一职责 | 函数是否过长、是否做多件事 |
-| 类型 | 是否避免无理由 `any` |
-| 错误 | 是否吞错；日志是否有上下文 |
-| 魔法值 | 是否提取常量 |
-| 注释 | 是否解释 why；无大块死代码 |
-| 日志 | 关键路径是否可排障；是否泄露敏感信息 |
-| 异步 | 可并行是否使用 `Promise.all` |
-| 可观测性 | 模型调用是否仍满足 AGENTS.md |
+| 检查项   | 说明                                 |
+| -------- | ------------------------------------ |
+| 命名     | 变量/函数是否自解释                  |
+| 单一职责 | 函数是否过长、是否做多件事           |
+| 类型     | 是否避免无理由 `any`                 |
+| 错误     | 是否吞错；日志是否有上下文           |
+| 魔法值   | 是否提取常量                         |
+| 注释     | 是否解释 why；无大块死代码           |
+| 日志     | 关键路径是否可排障；是否泄露敏感信息 |
+| 异步     | 可并行是否使用 `Promise.all`         |
+| 可观测性 | 模型调用是否仍满足 AGENTS.md         |
 
 ---
 
@@ -303,15 +380,15 @@ request.log.info(
 
 采用[约定式提交](https://www.conventionalcommits.org/)（Conventional Commits），便于生成 Changelog 和语义化版本。
 
-| 前缀 | 说明 | 示例 |
-|------|------|------|
-| `feat` | 新功能 | `feat: 添加场景图一键生成接口` |
-| `fix` | Bug 修复 | `fix: 修复角色形象提示词未保存问题` |
-| `refactor` | 重构（不改变功能） | `refactor: 将提示词生成抽离为独立服务` |
-| `docs` | 文档更新 | `docs: 更新编码规范至 v1.1` |
-| `style` | 代码格式（不影响逻辑） | `style: 统一缩进` |
-| `test` | 测试相关 | `test: 补充图片生成服务的单元测试` |
-| `chore` | 构建/工具/依赖 | `chore: 升级 Prisma 至 5.x` |
+| 前缀       | 说明                   | 示例                                   |
+| ---------- | ---------------------- | -------------------------------------- |
+| `feat`     | 新功能                 | `feat: 添加场景图一键生成接口`         |
+| `fix`      | Bug 修复               | `fix: 修复角色形象提示词未保存问题`    |
+| `refactor` | 重构（不改变功能）     | `refactor: 将提示词生成抽离为独立服务` |
+| `docs`     | 文档更新               | `docs: 更新编码规范至 v1.1`            |
+| `style`    | 代码格式（不影响逻辑） | `style: 统一缩进`                      |
+| `test`     | 测试相关               | `test: 补充图片生成服务的单元测试`     |
+| `chore`    | 构建/工具/依赖         | `chore: 升级 Prisma 至 5.x`            |
 
 ---
 
@@ -331,7 +408,7 @@ request.log.info(
 
 ### 修订记录
 
-| 版本 | 日期 | 说明 |
-|------|------|------|
-| 1.0 | — | 初始版本 |
-| 1.1 | 2026-04-14 | 新增 AI 服务子目录、命名前缀（含 `generatePrompt` / `call`）、错误分类、日志字段、前端状态约定、Git Commit 规范、Prisma 使用规范 |
+| 版本 | 日期       | 说明                                                                                                                             |
+| ---- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0  | —          | 初始版本                                                                                                                         |
+| 1.1  | 2026-04-14 | 新增 AI 服务子目录、命名前缀（含 `generatePrompt` / `call`）、错误分类、日志字段、前端状态约定、Git Commit 规范、Prisma 使用规范 |

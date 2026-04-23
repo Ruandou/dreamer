@@ -31,6 +31,7 @@ import { memoryRoutes } from './routes/memories.js'
 import { tasksUnifiedRoutes } from './routes/tasks-unified.js'
 import { scriptsRoutes } from './routes/scripts.js'
 import { chatRoutes } from './routes/chat.js'
+import { scriptAgentRoutes } from './routes/script-agent.js'
 
 export { prisma } from './lib/prisma.js'
 
@@ -129,6 +130,7 @@ async function start() {
     await fastify.register(tasksUnifiedRoutes, { prefix: '/api/tasks' })
     await fastify.register(scriptsRoutes, { prefix: '/api/scripts' })
     await fastify.register(chatRoutes, { prefix: '/api/chat' })
+    await fastify.register(scriptAgentRoutes, { prefix: '/api/scripts' })
 
     // Health check
     fastify.get('/health', async () => ({ status: 'ok' }))

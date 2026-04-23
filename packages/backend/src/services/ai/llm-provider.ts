@@ -62,6 +62,16 @@ export interface LLMCompletionOptions {
   extra?: Record<string, unknown>
 }
 
+/** LLM 流式数据块 */
+export interface LLMStreamChunk {
+  /** 增量内容 */
+  delta: string
+  /** 使用量统计（仅在最后一个 chunk 中提供） */
+  usage?: LLMUsage
+  /** 是否为最后一个 chunk */
+  done: boolean
+}
+
 /** LLM 提供者接口 */
 export interface LLMProvider {
   /** 提供者名称 */
@@ -74,6 +84,14 @@ export interface LLMProvider {
    * @returns 完成结果
    */
   complete(messages: LLMMessage[], options?: LLMCompletionOptions): Promise<LLMCompletion>
+
+  /**
+   * 流式执行对话完成请求
+   * @param messages 消息数组
+   * @param options 完成选项
+   * @returns 异步迭代器，逐个返回数据块
+   */
+  stream(messages: LLMMessage[], options?: LLMCompletionOptions): AsyncIterable<LLMStreamChunk>
 
   /**
    * 获取提供者配置

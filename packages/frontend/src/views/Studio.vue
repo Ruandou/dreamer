@@ -66,6 +66,19 @@
           </template>
           {{ saveStatus === 'saving' ? '保存中' : saveStatus === 'saved' ? '已保存' : '保存' }}
         </NButton>
+        <NButton
+          :type="panelMode === 'agent' ? 'primary' : 'default'"
+          size="small"
+          @click="togglePanelMode"
+        >
+          <template #icon>
+            <NIcon
+              :component="panelMode === 'agent' ? ConstructOutline : ChatbubbleEllipsesOutline"
+              :size="16"
+            />
+          </template>
+          {{ panelMode === 'agent' ? 'Agent' : '对话' }}
+        </NButton>
       </div>
     </div>
 
@@ -91,10 +104,16 @@
       <!-- 右侧 AI 编剧助手 -->
       <div class="ai-panel">
         <ChatPanel
+          v-if="panelMode === 'chat'"
           :script-id="script?.id"
           :script-content="content"
           :script-title="script?.title"
           @apply-changes="handleApplyChanges"
+        />
+        <AgentPanel
+          v-else-if="panelMode === 'agent' && script?.id"
+          :script-id="script.id"
+          @apply-content="handleApplyContent"
         />
       </div>
     </div>
@@ -160,11 +179,14 @@ import {
   DownloadOutline,
   SaveOutline,
   CheckmarkOutline,
-  TimeOutline
+  TimeOutline,
+  ConstructOutline,
+  ChatbubbleEllipsesOutline
 } from '@vicons/ionicons5'
 import { api } from '../api'
 import ChatPanel from '../components/chat/ChatPanel.vue'
 import DiffModal from '../components/chat/DiffModal.vue'
+import AgentPanel from '../components/AgentPanel.vue'
 import type { Script } from '@dreamer/shared/types'
 
 const message = useMessage()
@@ -183,6 +205,7 @@ const showDiffModal = ref(false)
 const originalContent = ref('')
 const revisedContent = ref('')
 const editingTags = ref(false)
+const panelMode = ref<'chat' | 'agent'>('chat') // 面板模式切换
 
 const lineCount = computed(() => {
   if (!content.value) return 1
@@ -312,6 +335,18 @@ function exportScript() {
 // 预览切换
 function togglePreview() {
   isPreview.value = !isPreview.value
+}
+
+// 面板模式切换
+function togglePanelMode() {
+  panelMode.value = panelMode.value === 'chat' ? 'agent' : 'chat'
+}
+
+// 处理 Agent 内容应用
+function handleApplyContent(newContent: string) {
+  originalContent.value = content.value
+  revisedContent.value = newContent
+  showDiffModal.value = true
 }
 
 // 处理 AI 修改应用

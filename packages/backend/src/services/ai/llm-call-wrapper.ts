@@ -4,7 +4,7 @@
  * 封装通用的重试逻辑、错误处理和日志记录
  */
 
-import type { LLMProvider, LLMMessage } from './llm-provider.js'
+import type { LLMProvider, LLMMessage, LLMStreamChunk } from './llm-provider.js'
 import type { DeepSeekCost } from './deepseek-client.js'
 import { DeepSeekAuthError, DeepSeekRateLimitError } from './deepseek-client.js'
 import { withTimeout } from '../../lib/with-timeout.js'
@@ -165,6 +165,133 @@ export async function callLLMWithRetry<T>(
     /* ignore */
   })
   throw lastError || new Error('LLM API 调用失败')
+}
+
+/**
+ * 流式 LLM 调用函数，带重试和错误处理
+ * 返回 AsyncGenerator，逐个产出 token
+ * @param options 调用选项
+ * @returns 异步生成器，产出 LLMStreamChunk 和累积内容
+ */
+export async function* streamLLMWithRetry(
+  options: LLMCallOptions
+): AsyncGenerator<LLMStreamChunk & { accumulated: string }> {
+  const {
+    provider,
+    messages,
+    temperature,
+    maxTokens,
+    modelLog,
+    maxRetries = DEFAULT_RETRY_ATTEMPTS,
+    model
+  } = options
+
+  let lastError: Error | null = null
+  const userPrompt = messages.find((m) => m.role === 'user')?.content || ''
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      logInfo('LLM', `流式调用 LLM, attempt ${attempt}/${maxRetries}`, {
+        op: modelLog?.op || 'unknown'
+      })
+
+      let accumulated = ''
+
+      for await (const chunk of provider.stream(messages, {
+        temperature,
+        maxTokens,
+        model
+      })) {
+        accumulated += chunk.delta
+        yield { ...chunk, accumulated }
+      }
+
+      // 流式完成，记录日志
+      await logDeepSeekChat(modelLog, userPrompt, {
+        status: 'completed',
+        costCNY: 0
+      })
+
+      return
+    } catch (error: unknown) {
+      lastError = error instanceof Error ? error : null
+
+      const errStatus = (error as { status?: number })?.status
+      if (
+        error instanceof DeepSeekAuthError ||
+        (errStatus !== undefined &&
+          (AUTH_ERROR_STATUS_CODES as readonly number[]).includes(errStatus))
+      ) {
+        logDeepSeekChat(modelLog, userPrompt, {
+          status: 'failed',
+          errorMsg: lastError?.message || 'auth'
+        }).catch(() => {
+          /* ignore */
+        })
+        throw error instanceof DeepSeekAuthError ? error : new DeepSeekAuthError()
+      }
+
+      const errMsg = lastError?.message || ''
+      if (
+        error instanceof DeepSeekRateLimitError ||
+        errStatus === RATE_LIMIT_STATUS_CODE ||
+        errMsg.includes('rate_limit')
+      ) {
+        if (attempt < maxRetries) {
+          const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1)
+          logWarning('LLM', `流式遇到限流, ${delay / 1000}秒后重试...`)
+          await sleep(delay)
+          continue
+        }
+        logDeepSeekChat(modelLog, userPrompt, {
+          status: 'failed',
+          errorMsg: 'rate_limit'
+        }).catch(() => {
+          /* ignore */
+        })
+        throw error instanceof DeepSeekRateLimitError ? error : new DeepSeekRateLimitError()
+      }
+
+      if (attempt < maxRetries) {
+        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1)
+        logWarning('LLM', `流式遇到其他错误 (${errStatus || errMsg}), ${delay / 1000}秒后重试...`)
+        await sleep(delay)
+        continue
+      }
+    }
+  }
+
+  logError('LLM', '流式所有重试失败', {
+    op: modelLog?.op || 'unknown',
+    error: lastError?.message,
+    attempts: maxRetries
+  })
+
+  logDeepSeekChat(modelLog, userPrompt, {
+    status: 'failed',
+    errorMsg: lastError?.message || 'LLM API 流式调用失败'
+  }).catch(() => {
+    /* ignore */
+  })
+  throw lastError || new Error('LLM API 流式调用失败')
+}
+
+/**
+ * 收集流式 JSON 输出，等待完整内容后解析
+ * 用于需要 JSON 输出的场景（如 IntentParser, OutlineAgent, CriticAgent）
+ */
+export async function collectStreamedJSON<T>(
+  stream: AsyncGenerator<LLMStreamChunk & { accumulated: string }>,
+  cleanMarkdown = true
+): Promise<T> {
+  let finalAccumulated = ''
+
+  for await (const chunk of stream) {
+    finalAccumulated = chunk.accumulated
+  }
+
+  // 解析 JSON
+  return parseJsonResponse<T>(finalAccumulated, cleanMarkdown)
 }
 
 /**

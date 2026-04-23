@@ -6,6 +6,7 @@ import { extractMemoriesWithLLM, formatExistingMemories } from './extractor.js'
 import { buildEpisodeWritingContext, buildStoryboardContext } from './context-builder.js'
 import type { ScriptContent } from '@dreamer/shared/types'
 import type { ModelCallLogContext } from '../ai/model-call-log.js'
+import { prisma } from '../../lib/prisma.js'
 
 export class MemoryService {
   constructor(private repo: MemoryRepository) {}
@@ -97,6 +98,70 @@ export class MemoryService {
    */
   async searchMemories(projectId: string, query: string, limit: number = 10) {
     return this.repo.findSimilar(projectId, query, limit)
+  }
+
+  /**
+   * 同步剧本记忆到项目记忆
+   * 幂等操作：按 type + title 进行 upsert
+   */
+  async syncScriptMemoriesToProject(
+    scriptId: string,
+    projectId: string
+  ): Promise<{ synced: number }> {
+    // 查询剧本记忆
+    const scriptMemories = await prisma.scriptMemoryItem.findMany({
+      where: {
+        scriptId,
+        isActive: true
+      }
+    })
+
+    let syncedCount = 0
+
+    for (const sm of scriptMemories) {
+      // 查找是否已存在相同 type + title 的项目记忆
+      const existing = await prisma.memoryItem.findFirst({
+        where: {
+          projectId,
+          type: sm.type as any,
+          title: sm.title
+        }
+      })
+
+      if (existing) {
+        // 更新现有记忆
+        await prisma.memoryItem.update({
+          where: { id: existing.id },
+          data: {
+            content: sm.content,
+            metadata: sm.metadata as any,
+            tags: sm.tags,
+            importance: sm.importance,
+            category: sm.category,
+            updatedAt: new Date()
+          }
+        })
+      } else {
+        // 创建新记忆
+        await prisma.memoryItem.create({
+          data: {
+            projectId,
+            type: sm.type as any,
+            title: sm.title,
+            content: sm.content,
+            metadata: sm.metadata as any,
+            tags: sm.tags,
+            importance: sm.importance,
+            category: sm.category,
+            isActive: sm.isActive
+          }
+        })
+      }
+
+      syncedCount++
+    }
+
+    return { synced: syncedCount }
   }
 }
 

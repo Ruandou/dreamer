@@ -45,6 +45,24 @@ import 'dotenv/config' // 太晚了
 - **查询**：`GET /api/model-api-calls`（需登录，`limit` / `offset` / `model` 查询参数）返回当前用户的调用记录。
 - **终端**：`recordModelApiCall` 会输出一行 `[model-api] <provider> <model> <status> op=<op>`。
 
+### ⚠️ LLM 调用必须使用标准 Wrapper
+
+**禁止**在新增代码中使用 `fetch()` 直接调用 LLM API。必须使用：
+
+```typescript
+import { getDefaultProvider } from './services/ai/llm-factory.js'
+import { callLLMWithRetry } from './services/ai/llm-call-wrapper.js'
+
+const provider = getDefaultProvider()
+const result = await callLLMWithRetry({
+  provider,
+  messages: [...],
+  modelLog: { userId, op: 'xxx' }
+}, (content) => JSON.parse(content))
+```
+
+**详见**：[docs/CODING_STANDARDS.md](docs/CODING_STANDARDS.md) 第 2 节「禁止直接使用 fetch() 调用 LLM API」
+
 ## 启动命令
 
 后端必须在项目根目录运行：

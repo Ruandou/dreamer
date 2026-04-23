@@ -10,7 +10,8 @@ import type {
   LLMMessage,
   LLMCompletion,
   LLMCompletionOptions,
-  LLMUsage
+  LLMUsage,
+  LLMStreamChunk
 } from './llm-provider.js'
 import {
   calculateDeepSeekCost,
@@ -76,6 +77,50 @@ export class DeepSeekProvider implements LLMProvider {
 
   getConfig(): LLMProviderConfig {
     return { ...this.config }
+  }
+
+  async *stream(
+    messages: LLMMessage[],
+    options?: LLMCompletionOptions
+  ): AsyncIterable<LLMStreamChunk> {
+    const model = options?.model || this.config.defaultModel || 'deepseek-chat'
+
+    try {
+      const stream = await this.client.chat.completions.create({
+        model,
+        messages: messages.map((m) => ({
+          role: m.role,
+          content: m.content
+        })),
+        temperature: options?.temperature ?? 0.7,
+        max_tokens: options?.maxTokens ?? 4000,
+        stream: true,
+        ...(options?.extra || {})
+      })
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content ?? ''
+        const finishReason = chunk.choices[0]?.finish_reason
+
+        // 最后一个 chunk 包含 usage
+        if (finishReason) {
+          const usage = this.calculateUsage(chunk.usage)
+          yield { delta, usage, done: true }
+        } else {
+          yield { delta, done: false }
+        }
+      }
+    } catch (error: unknown) {
+      const errStatus = (error as { status?: number })?.status
+      const errMsg = error instanceof Error ? error.message : ''
+      if (errStatus === 401 || errStatus === 403) {
+        throw new DeepSeekAuthError()
+      }
+      if (errStatus === 429 || errMsg.includes('rate_limit')) {
+        throw new DeepSeekRateLimitError()
+      }
+      throw error
+    }
   }
 
   private calculateUsage(usage: unknown): LLMUsage {

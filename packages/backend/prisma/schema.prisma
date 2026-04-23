@@ -457,10 +457,15 @@ model Script {
   // 版本预留（暂不启用版本表）
   version     Int          @default(1)
 
+  // Agent 相关字段
+  targetEpisode     Int?               // 目标集数
+  generationStatus  Json?              // { step, outline, draft, memories }
+
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
   chatConversations ChatConversation[]
+  memories          ScriptMemoryItem[]
 
   @@index([userId])
   @@index([status])
@@ -498,4 +503,45 @@ model ChatMessage {
 
   @@index([conversationId])
   @@index([conversationId, createdAt])
+}
+
+// 剧本独立记忆（草稿阶段使用，定稿后可同步到项目记忆）
+model ScriptMemoryItem {
+  id          String       @id @default(cuid())
+  scriptId    String
+  script      Script       @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+
+  // 分类（与 MemorySystem 对齐）
+  type        MemoryType
+  category    String?      // 细分：major_character, minor_location 等
+
+  // 内容
+  title       String       // 简短标题
+  content     String       @db.Text  // 详细描述
+  metadata    Json?        // { episodeNum, characters, location, importance }
+
+  // 管理
+  tags        String[]     @default([])
+  importance  Int          @default(3)  // 1-5
+  isActive    Boolean      @default(true)
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([scriptId, type])
+  @@index([scriptId, isActive])
+}
+
+// Agent 检查点（用于状态持久化和故障恢复）
+model AgentCheckpoint {
+  id        String   @id @default(cuid())
+  scriptId  String
+  agentType String   // "outline", "draft", "critic", "revision"
+  phase     String   // "generating", "reviewing", "revising"
+  state     Json     // Serialized agent state
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+
+  @@index([scriptId])
+  @@index([agentType])
 }
