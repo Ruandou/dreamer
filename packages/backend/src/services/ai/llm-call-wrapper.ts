@@ -34,6 +34,8 @@ export interface LLMCallOptions {
   maxRetries?: number
   /** 模型名称（可选） */
   model?: string
+  /** 额外的提供商特定选项 */
+  extra?: Record<string, unknown>
 }
 
 export interface LLMCallResult<T> {
@@ -61,7 +63,8 @@ export async function callLLMWithRetry<T>(
     maxTokens,
     modelLog,
     maxRetries = DEFAULT_RETRY_ATTEMPTS,
-    model
+    model,
+    extra
   } = options
 
   let lastError: Error | null = null
@@ -77,7 +80,8 @@ export async function callLLMWithRetry<T>(
         provider.complete(messages, {
           temperature,
           maxTokens,
-          model
+          model,
+          extra
         }),
         API_CALL_TIMEOUT_MS,
         `LLM API 调用超时 (${API_CALL_TIMEOUT_MS / 1000 / 60}分钟)`
@@ -183,7 +187,8 @@ export async function* streamLLMWithRetry(
     maxTokens,
     modelLog,
     maxRetries = DEFAULT_RETRY_ATTEMPTS,
-    model
+    model,
+    extra
   } = options
 
   let lastError: Error | null = null
@@ -200,7 +205,8 @@ export async function* streamLLMWithRetry(
       for await (const chunk of provider.stream(messages, {
         temperature,
         maxTokens,
-        model
+        model,
+        extra
       })) {
         accumulated += chunk.delta
         yield { ...chunk, accumulated }

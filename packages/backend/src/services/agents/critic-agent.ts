@@ -88,6 +88,9 @@ export class CriticAgent {
           modelLog: {
             userId,
             op: 'critique'
+          },
+          extra: {
+            response_format: { type: 'json_object' }
           }
         },
         (content) => {
@@ -141,6 +144,9 @@ export class CriticAgent {
         modelLog: {
           userId,
           op: 'critique'
+        },
+        extra: {
+          response_format: { type: 'json_object' }
         }
       })
 
