@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NStatistic, NDataTable, NTag, NEmpty, NSpin, NSelect } from 'naive-ui'
+import { NCard, NStatistic, NDataTable, NTag, NSelect } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { useStatsStore } from '@/stores/stats'
 import { getAiBalance } from '@/api'
 import type { ProjectCostStats, AiBalance } from '@/api'
+import EmptyState from '@/components/EmptyState.vue'
+import SkeletonLoader from '@/components/SkeletonLoader.vue'
+import { formatCurrency } from '@/lib/currency-formatting'
 
 const router = useRouter()
 const statsStore = useStatsStore()
@@ -28,11 +31,6 @@ onMounted(async () => {
 
 const handleDaysChange = async (days: number) => {
   await statsStore.fetchCostTrend(undefined, days)
-}
-
-// Format currency
-const formatCurrency = (amount: number) => {
-  return `¥${amount.toFixed(2)}`
 }
 
 // Simple bar chart for daily costs
@@ -153,8 +151,6 @@ const allRecentTasks = computed(() => {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 10)
 })
-
-import { h } from 'vue'
 </script>
 
 <template>
@@ -177,7 +173,10 @@ import { h } from 'vue'
       <div class="stats-header__right"></div>
     </header>
 
-    <NSpin :show="statsStore.isLoading">
+    <div v-if="statsStore.isLoading" class="stats-loading">
+      <SkeletonLoader variant="grid" :rows="4" />
+    </div>
+    <template v-else>
       <!-- Overview Stats -->
       <div class="stats-overview">
         <NCard class="stat-card">
@@ -367,7 +366,14 @@ import { h } from 'vue'
       <!-- Recent Tasks -->
       <div class="stats-section">
         <NCard title="最近任务">
-          <NEmpty v-if="allRecentTasks.length === 0" description="暂无任务记录" />
+          <EmptyState
+            v-if="allRecentTasks.length === 0"
+            title="暂无任务记录"
+            description="生成视频或导入剧本后，任务记录会显示在这里"
+            icon="📊"
+            :icon-size="48"
+            variant="compact"
+          />
           <NDataTable
             v-else
             :columns="recentTaskColumns"
@@ -377,7 +383,7 @@ import { h } from 'vue'
           />
         </NCard>
       </div>
-    </NSpin>
+    </template>
   </div>
 </template>
 
@@ -387,6 +393,10 @@ import { h } from 'vue'
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-lg);
+}
+
+.stats-loading {
+  padding: var(--spacing-xl) 0;
 }
 
 .stats-header__left {

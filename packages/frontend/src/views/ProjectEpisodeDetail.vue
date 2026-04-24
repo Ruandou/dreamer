@@ -8,19 +8,21 @@ import {
   NSpin,
   NEmpty,
   NTooltip,
-  NDivider,
   NSelect,
   NDropdown
 } from 'naive-ui'
-import type { SelectOption, DropdownOption } from 'naive-ui'
+import type { DropdownOption } from 'naive-ui'
 import { CaretForwardOutline, ChevronDownOutline, HelpCircleOutline } from '@vicons/ionicons5'
 import { useEpisodeStore, type EpisodeDetailPayload } from '@/stores/episode'
 import { useEpisodeStoryboardPipelineJob } from '@/composables/useEpisodeStoryboardPipelineJob'
 import { api } from '@/api'
 import { parseEditorDocToScene } from '@/lib/storyboard-editor/script-to-doc'
-import type { ScriptContent, ScriptScene, Character, VideoModel } from '@dreamer/shared/types'
+import type { ScriptContent, ScriptScene, VideoModel } from '@dreamer/shared/types'
 import { useSceneStore } from '@/stores/scene'
 import StoryboardScriptEditor from '@/components/storyboard/StoryboardScriptEditor.vue'
+import EpisodeVideoPreview from '@/components/episode/EpisodeVideoPreview.vue'
+import EpisodeAssetLibrary from '@/components/episode/EpisodeAssetLibrary.vue'
+import { useEpisodeVideoGeneration } from '@/composables/useEpisodeVideoGeneration'
 
 const route = useRoute()
 const router = useRouter()
@@ -39,21 +41,6 @@ const selectedSceneId = ref<string | null>(null)
 const scriptEditing = ref(false)
 const scriptSaving = ref(false)
 const selectedShotId = ref<string | null>(null)
-const projectCharacters = ref<Character[]>([])
-
-const VIDEO_MODEL_LS = 'dreamer.episodeWorkbench.videoModel'
-/** UI 选项；提交 API 时映射为 `VideoModel`（仅 wan2.6 / seedance2.0） */
-const videoModel = ref<string>('seedance2.0-fast')
-const videoModelOptions: SelectOption[] = [
-  { label: 'Seedance 2.0 · Fast', value: 'seedance2.0-fast' },
-  { label: 'Seedance 2.0', value: 'seedance2.0' },
-  { label: 'Wan 2.6', value: 'wan2.6' }
-]
-
-function toApiVideoModel(ui: string): VideoModel {
-  if (ui === 'wan2.6') return 'wan2.6'
-  return 'seedance2.0'
-}
 
 const episode = computed(() => detail.value?.episode ?? null)
 const scenes = computed(() => (detail.value?.scenes as EpisodeDetailScene[]) ?? [])
@@ -116,119 +103,28 @@ const selectedScene = computed(() => {
   return scenes.value.find((s) => s.id === id) ?? null
 })
 
-const canGenerateSceneVideo = computed(() => {
-  const sc = selectedScene.value
-  if (!sc) return false
-  if (storyboardJobRunning.value) return false
-  if (sc.status === 'processing') return false
-  return true
-})
-
-async function generateSceneVideo() {
-  const sc = selectedScene.value
-  if (!sc) {
-    message.warning('暂无入库场次，请先在分镜控制台生成分镜或导入剧本')
-    return
-  }
-  if (storyboardJobRunning.value) {
-    message.warning('分镜剧本任务运行中，请稍候再试')
-    return
-  }
-  if (sc.status === 'processing') {
-    message.warning('当前场次视频生成中，请稍候')
-    return
-  }
-
-  // 二次确认
-  const confirmed = await new Promise<boolean>((resolve) => {
-    dialog.warning({
-      title: '确认生成视频',
-      content: `即将为场次「${sc.name || sc.id}」生成视频，是否继续？`,
-      positiveText: '确认生成',
-      negativeText: '取消',
-      onPositiveClick: () => resolve(true),
-      onNegativeClick: () => resolve(false)
-    })
-  })
-
-  if (!confirmed) return
-
-  try {
-    const model = toApiVideoModel(videoModel.value)
-    await sceneStore.generateVideo(sc.id, model, {})
-    message.success('视频生成任务已提交，成片就绪后预览区将自动更新（亦可稍候手动刷新）')
-    await load()
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { error?: string } } }
-    message.error(err?.response?.data?.error || '提交失败')
-  }
+// Video generation composable (must be after selectedScene)
+async function doGenerateVideo(sceneId: string, model: VideoModel) {
+  await sceneStore.generateVideo(sceneId, model, {})
 }
 
-/** 优先已选 Take，否则第一个有视频的成片 */
-const previewTake = computed(() => {
-  const sc = selectedScene.value
-  if (!sc?.takes?.length) return null
-  const list = sc.takes
-  const sel = list.find((t) => t.isSelected && t.videoUrl)
-  if (sel) return sel
-  const done = list.find((t) => t.status === 'completed' && t.videoUrl)
-  return done ?? list[0]
-})
-
-/**
- * 本集关联资产：来自入库场次
- * - 场地：各场绑定的 locationId
- * - 角色：台词 SceneDialogue + 分镜 CharacterShot 中出现的角色；分镜若指定形象则只展示对应形象卡，仅有台词则展示该角色全部形象
- */
-const characterAssetTiles = computed(() => {
-  const list = scenes.value
-  const characterIds = new Set<string>()
-  const imageIdsByCharacter = new Map<string, Set<string>>()
-
-  for (const sc of list) {
-    for (const d of sc.dialogues ?? []) {
-      const id = d.character?.id
-      if (id) characterIds.add(id)
-    }
-    for (const sh of sc.shots ?? []) {
-      for (const cs of sh.characterShots ?? []) {
-        const img = cs.characterImage
-        const cid = img?.character?.id
-        if (!cid || !img?.id) continue
-        characterIds.add(cid)
-        if (!imageIdsByCharacter.has(cid)) imageIdsByCharacter.set(cid, new Set())
-        imageIdsByCharacter.get(cid)!.add(img.id)
-      }
-    }
-  }
-
-  const out: { key: string; avatarUrl?: string; label: string }[] = []
-  for (const c of projectCharacters.value) {
-    if (!characterIds.has(c.id)) continue
-    const used = imageIdsByCharacter.get(c.id)
-    const imgs = c.images ?? []
-    const pick = used && used.size > 0 ? imgs.filter((im) => used.has(im.id)) : imgs
-    for (const img of pick) {
-      out.push({
-        key: `${c.id}-${img.id}`,
-        avatarUrl: img.avatarUrl ?? undefined,
-        label: `${c.name}-${img.name}`
-      })
-    }
-  }
-  return out
-})
-
-const episodeLocations = computed(() => {
-  const map = new Map<string, { id: string; name: string; imageUrl?: string | null }>()
-  for (const sc of scenes.value) {
-    const loc = sc.location
-    if (loc?.id && !map.has(loc.id)) {
-      map.set(loc.id, { id: loc.id, name: loc.name, imageUrl: loc.imageUrl })
-    }
-  }
-  return [...map.values()]
-})
+const { videoModel, videoModelOptions, canGenerateSceneVideo, generateSceneVideo } =
+  useEpisodeVideoGeneration({
+    canGenerate: computed(() => {
+      const sc = selectedScene.value
+      if (!sc) return false
+      if (sc.status === 'processing') return false
+      return true
+    }),
+    storyboardJobRunning: storyboardJobRunning.value,
+    selectedScene: computed(() => {
+      const sc = selectedScene.value
+      if (!sc) return null
+      return { id: sc.id, name: sc.name, status: sc.status }
+    }),
+    generateVideo: doGenerateVideo,
+    reload: load
+  })
 
 const sceneDurationLabel = computed(() => {
   const ms = selectedScene.value?.duration ?? 0
@@ -253,23 +149,12 @@ function exportEpisodeScript() {
   message.success('已导出本集剧本 JSON（含 editorDoc）')
 }
 
-/** 仅拉角色库用于按 id 解析形象；左侧列表由本集 scenes 筛选 */
-async function loadProjectCharacters() {
-  try {
-    const ch = await api.get<Character[]>(`/characters?projectId=${projectId.value}`)
-    projectCharacters.value = ch.data
-  } catch {
-    projectCharacters.value = []
-  }
-}
-
 async function load() {
   notFound.value = false
   detail.value = null
   selectedSceneId.value = null
   selectedShotId.value = null
   try {
-    void loadProjectCharacters()
     const data = await episodeStore.fetchEpisodeDetail(episodeId.value)
     if (data.episode.projectId !== projectId.value) {
       notFound.value = true
@@ -297,23 +182,7 @@ watch(selectedScene, (sc) => {
 })
 
 onMounted(() => {
-  try {
-    const saved = localStorage.getItem(VIDEO_MODEL_LS)
-    if (saved && videoModelOptions.some((o) => o.value === saved)) {
-      videoModel.value = saved as string
-    }
-  } catch {
-    /* ignore */
-  }
   void load()
-})
-
-watch(videoModel, (v) => {
-  try {
-    localStorage.setItem(VIDEO_MODEL_LS, v)
-  } catch {
-    /* ignore */
-  }
 })
 
 watch(
@@ -417,16 +286,6 @@ const moreMenuOptions = computed<DropdownOption[]>(() => [
   { type: 'divider', key: 'd-tools' },
   { label: '导出剧本 JSON', key: 'export' }
 ])
-
-const assetMenuOptions = [
-  { label: '角色', key: 'characters' },
-  { label: '场景', key: 'locations' }
-]
-
-function onAssetMenuSelect(key: string | number) {
-  if (key === 'characters') router.push(`/project/${projectId.value}/characters`)
-  if (key === 'locations') router.push(`/project/${projectId.value}/locations`)
-}
 
 function onMoreSelect(key: string | number) {
   if (key === 'storyboard') openStoryboard()
@@ -573,82 +432,7 @@ function onCancelScriptEdit() {
 
               <div class="episode-detail__body">
                 <aside class="episode-detail__assets">
-                  <div class="episode-detail__assets-head">
-                    <span class="episode-detail__assets-title">资产库</span>
-                    <NDropdown
-                      trigger="click"
-                      :options="assetMenuOptions"
-                      @select="onAssetMenuSelect"
-                    >
-                      <NButton size="tiny" quaternary circle>+</NButton>
-                    </NDropdown>
-                  </div>
-
-                  <div class="episode-detail__assets-content">
-                    <section class="episode-detail__asset-block">
-                      <div class="episode-detail__asset-label">
-                        本集角色（{{ characterAssetTiles.length }}）
-                      </div>
-                      <div class="episode-detail__asset-grid">
-                        <div
-                          v-for="tile in characterAssetTiles"
-                          :key="tile.key"
-                          class="episode-detail__asset-tile"
-                        >
-                          <div class="episode-detail__asset-thumb-wrap">
-                            <img
-                              v-if="tile.avatarUrl"
-                              :src="tile.avatarUrl"
-                              alt=""
-                              class="episode-detail__asset-thumb"
-                            />
-                            <div v-else class="episode-detail__asset-placeholder" />
-                          </div>
-                          <div class="episode-detail__asset-name">{{ tile.label }}</div>
-                        </div>
-                        <p
-                          v-if="!characterAssetTiles.length"
-                          class="episode-detail__muted episode-detail__asset-empty"
-                        >
-                          本集暂未出现角色（台词或分镜出镜后会显示）
-                        </p>
-                      </div>
-                    </section>
-
-                    <NDivider class="episode-detail__divider" />
-
-                    <section class="episode-detail__asset-block">
-                      <div class="episode-detail__asset-label">
-                        本集场景（{{ episodeLocations.length }}）
-                      </div>
-                      <div class="episode-detail__asset-grid episode-detail__asset-grid--loc">
-                        <div
-                          v-for="loc in episodeLocations"
-                          :key="loc.id"
-                          class="episode-detail__asset-tile"
-                        >
-                          <div
-                            class="episode-detail__asset-thumb-wrap episode-detail__asset-thumb-wrap--loc"
-                          >
-                            <img
-                              v-if="loc.imageUrl"
-                              :src="loc.imageUrl"
-                              alt=""
-                              class="episode-detail__asset-thumb"
-                            />
-                            <div v-else class="episode-detail__asset-placeholder" />
-                          </div>
-                          <div class="episode-detail__asset-name">{{ loc.name }}</div>
-                        </div>
-                        <p
-                          v-if="!episodeLocations.length"
-                          class="episode-detail__muted episode-detail__asset-empty"
-                        >
-                          本集场次尚未绑定场地库场景
-                        </p>
-                      </div>
-                    </section>
-                  </div>
+                  <EpisodeAssetLibrary :scenes="scenes" />
                 </aside>
 
                 <div class="episode-detail__work">
@@ -698,31 +482,7 @@ function onCancelScriptEdit() {
                     </main>
 
                     <aside class="episode-detail__preview-col">
-                      <div class="episode-detail__preview-label">预览</div>
-                      <div class="episode-detail__preview-frame" aria-label="竖屏 9:16 预览区域">
-                        <div class="episode-detail__preview-box">
-                          <video
-                            v-if="previewTake?.videoUrl"
-                            class="episode-detail__preview-video"
-                            controls
-                            playsinline
-                            :src="previewTake.videoUrl"
-                            :poster="previewTake.thumbnailUrl ?? undefined"
-                          />
-                          <img
-                            v-else-if="previewTake?.thumbnailUrl"
-                            :src="previewTake.thumbnailUrl"
-                            alt=""
-                            class="episode-detail__preview-poster"
-                          />
-                          <div v-else class="episode-detail__preview-empty">
-                            <span class="episode-detail__preview-empty-icon" aria-hidden="true"
-                              >🎬</span
-                            >
-                            <span>未生成内容</span>
-                          </div>
-                        </div>
-                      </div>
+                      <EpisodeVideoPreview :scene="selectedScene" />
                     </aside>
                   </div>
 

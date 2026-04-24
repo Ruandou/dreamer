@@ -8,8 +8,6 @@ import {
   NGrid,
   NGi,
   NInput,
-  NEmpty,
-  NSpin,
   NTooltip,
   useMessage,
   useDialog
@@ -17,6 +15,8 @@ import {
 import { useEpisodeStore } from '@/stores/episode'
 import { useEpisodeStoryboardPipelineJob } from '@/composables/useEpisodeStoryboardPipelineJob'
 import type { Episode } from '@dreamer/shared/types'
+import EmptyState from '@/components/EmptyState.vue'
+import SkeletonLoader from '@/components/SkeletonLoader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,8 +29,10 @@ const searchQuery = ref('')
 /** 二次确认弹窗打开中：禁止操作其他集；与 PipelineJob 无关，不显示卡片 loading */
 const storyboardDialogEpisodeId = ref<string | null>(null)
 
-const { runningByEpisodeId: storyboardJobRunningByEpisode, refresh: refreshStoryboardPipelineJobs } =
-  useEpisodeStoryboardPipelineJob(projectId)
+const {
+  runningByEpisodeId: storyboardJobRunningByEpisode,
+  refresh: refreshStoryboardPipelineJobs
+} = useEpisodeStoryboardPipelineJob(projectId)
 
 const filteredEpisodes = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
@@ -48,7 +50,10 @@ const episodeBannerColors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b98
 
 function episodeBannerStyle(ep: Episode) {
   const c = episodeBannerColors[ep.episodeNum % episodeBannerColors.length]
-  return { background: `linear-gradient(135deg, ${c}22 0%, var(--color-bg-gray) 100%)`, borderBottom: `3px solid ${c}44` }
+  return {
+    background: `linear-gradient(135deg, ${c}22 0%, var(--color-bg-gray) 100%)`,
+    borderBottom: `3px solid ${c}44`
+  }
 }
 
 function episodeCardTitle(ep: Episode): string {
@@ -185,99 +190,98 @@ watch(
       </template>
 
       <p class="ep-lib-hint">
-        点击卡片进入分集详情；提交「AI 生成分镜」后任务在后台运行，对应集卡片会显示加载直至任务结束。视频生成、选 Take 请在「分镜控制台」中操作。
+        点击卡片进入分集详情；提交「AI
+        生成分镜」后任务在后台运行，对应集卡片会显示加载直至任务结束。视频生成、选 Take
+        请在「分镜控制台」中操作。
       </p>
 
-      <NSpin
-        :show="episodeStore.isLoading && episodeStore.episodes.length === 0"
+      <div
+        v-if="episodeStore.isLoading && episodeStore.episodes.length === 0"
         class="ep-lib-loading"
-        description="加载分集…"
       >
-        <div class="ep-lib-body">
-          <NEmpty
-            v-if="!episodeStore.isLoading && episodeStore.episodes.length === 0"
-            description="暂无分集，请先在剧本侧新建或导入"
-          />
+        <SkeletonLoader variant="grid" :rows="3" />
+      </div>
+      <div v-else class="ep-lib-body">
+        <EmptyState
+          v-if="episodeStore.episodes.length === 0"
+          title="暂无分集"
+          description="请先在剧本侧新建或导入剧本以生成分集"
+          icon="📺"
+          :icon-size="48"
+          variant="large"
+        />
 
-          <NEmpty
-            v-else-if="episodeStore.episodes.length > 0 && filteredEpisodes.length === 0"
-            description="没有匹配的分集"
-            class="ep-lib-search-empty"
-          >
-            <template #extra>
-              <NButton size="small" @click="searchQuery = ''">清空搜索</NButton>
-            </template>
-          </NEmpty>
+        <EmptyState
+          v-else-if="filteredEpisodes.length === 0"
+          title="没有匹配的分集"
+          :description="`未找到包含「${searchQuery}」的分集`"
+          icon="🔍"
+          :icon-size="48"
+        >
+          <template #action>
+            <NButton size="small" @click="searchQuery = ''">清空搜索</NButton>
+          </template>
+        </EmptyState>
 
-          <NGrid
-            v-else-if="episodeStore.episodes.length > 0"
-            cols="1 s:2 m:3"
-            responsive="screen"
-            x-gap="16"
-            y-gap="16"
-            class="ep-lib-grid"
-          >
-            <NGi v-for="ep in filteredEpisodes" :key="ep.id">
-              <NSpin
-                :class="{ 'episode-card-spin--busy': isStoryboardJobRunning(ep) }"
-                :show="isStoryboardJobRunning(ep)"
-                size="small"
-                description="分镜剧本生成中…"
-                class="episode-card-spin"
-              >
-                <NCard
-                  size="small"
-                  class="episode-card"
-                  hoverable
-                  :segmented="{ footer: 'soft' }"
-                  role="link"
-                  tabindex="0"
-                  @click="onEpisodeCardClick(ep)"
-                  @keydown.enter.prevent="onEpisodeCardEnter(ep)"
-                >
-                  <div class="episode-card__inner">
-                    <div class="episode-card__banner" :style="episodeBannerStyle(ep)">
-                      <span class="episode-card__num">第 {{ ep.episodeNum }} 集</span>
-                    </div>
-                    <div class="episode-card__info">
-                      <h3 class="episode-card__name">{{ episodeCardTitle(ep) }}</h3>
-                      <p
-                        v-if="ep.synopsis?.trim()"
-                        class="episode-card__desc"
-                      >{{ ep.synopsis }}</p>
-                    <p v-else class="episode-card__desc episode-card__desc--placeholder">暂无梗概</p>
-                    <p v-if="episodeStatsLine(ep)" class="episode-card__stats">{{ episodeStatsLine(ep) }}</p>
-                  </div>
+        <NGrid
+          v-else-if="episodeStore.episodes.length > 0"
+          cols="1 s:2 m:3"
+          responsive="screen"
+          x-gap="16"
+          y-gap="16"
+          class="ep-lib-grid"
+        >
+          <NGi v-for="ep in filteredEpisodes" :key="ep.id">
+            <NCard
+              size="small"
+              class="episode-card"
+              hoverable
+              :segmented="{ footer: 'soft' }"
+              role="link"
+              tabindex="0"
+              @click="onEpisodeCardClick(ep)"
+              @keydown.enter.prevent="onEpisodeCardEnter(ep)"
+            >
+              <div class="episode-card__inner">
+                <div class="episode-card__banner" :style="episodeBannerStyle(ep)">
+                  <span class="episode-card__num">第 {{ ep.episodeNum }} 集</span>
                 </div>
-                  <template #footer>
-                    <div class="episode-card__footer" @click.stop>
-                      <NSpace justify="end">
-                        <NTooltip
-                          :disabled="!ep.listStats?.storyboardScriptJobCompleted"
-                          placement="top"
+                <div class="episode-card__info">
+                  <h3 class="episode-card__name">{{ episodeCardTitle(ep) }}</h3>
+                  <p v-if="ep.synopsis?.trim()" class="episode-card__desc">{{ ep.synopsis }}</p>
+                  <p v-else class="episode-card__desc episode-card__desc--placeholder">暂无梗概</p>
+                  <p v-if="episodeStatsLine(ep)" class="episode-card__stats">
+                    {{ episodeStatsLine(ep) }}
+                  </p>
+                </div>
+              </div>
+              <template #footer>
+                <div class="episode-card__footer" @click.stop>
+                  <NSpace justify="end">
+                    <NTooltip
+                      :disabled="!ep.listStats?.storyboardScriptJobCompleted"
+                      placement="top"
+                    >
+                      <template #trigger>
+                        <NButton
+                          size="small"
+                          type="info"
+                          :loading="isStoryboardJobRunning(ep)"
+                          :disabled="isStoryboardAiDisabled(ep)"
+                          @click="openGenerateStoryboardDialog(ep)"
                         >
-                          <template #trigger>
-                            <NButton
-                              size="small"
-                              type="info"
-                              :loading="isStoryboardJobRunning(ep)"
-                              :disabled="isStoryboardAiDisabled(ep)"
-                              @click="openGenerateStoryboardDialog(ep)"
-                            >
-                              AI 生成分镜
-                            </NButton>
-                          </template>
-                          本集已使用 AI 生成分镜脚本，仅支持操作一次
-                        </NTooltip>
-                      </NSpace>
-                    </div>
-                  </template>
-                </NCard>
-              </NSpin>
-            </NGi>
-          </NGrid>
-        </div>
-      </NSpin>
+                          AI 生成分镜
+                        </NButton>
+                      </template>
+                      本集已使用 AI 生成分镜脚本，仅支持操作一次
+                    </NTooltip>
+                  </NSpace>
+                </div>
+              </template>
+            </NCard>
+          </NGi>
+        </NGrid>
+      </div>
     </NCard>
   </div>
 </template>
@@ -348,7 +352,9 @@ watch(
   overflow: hidden;
   cursor: pointer;
   outline: none;
-  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+  transition:
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
   border: 1px solid var(--color-border-light);
 }
 .episode-card:hover {
