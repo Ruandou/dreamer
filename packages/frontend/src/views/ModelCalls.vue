@@ -289,7 +289,19 @@ onMounted(load)
   font-size: 12px;
   padding: 0 4px;
   border-radius: 4px;
-  background: rgba(128, 128, 128, 0.12);
+  background: var(--color-bg-gray, rgba(128, 128, 128, 0.12));
+}
+
+@media (max-width: 768px) {
+  .model-calls-page :deep(.n-data-table) {
+    font-size: 12px;
+  }
+  .model-calls-page :deep(th:nth-child(3)),
+  .model-calls-page :deep(td:nth-child(3)),
+  .model-calls-page :deep(th:nth-child(7)),
+  .model-calls-page :deep(td:nth-child(7)) {
+    display: none;
+  }
 }
 .model-calls-filters {
   margin-bottom: 16px;

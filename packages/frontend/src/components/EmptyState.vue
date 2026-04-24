@@ -22,7 +22,12 @@ withDefaults(defineProps<Props>(), {
 
 <template>
   <div :class="['empty-state', `empty-state--${variant}`, { 'empty-state--bg': showBackground }]">
-    <div class="empty-state__icon" :style="{ fontSize: `${iconSize}px` }">
+    <div
+      class="empty-state__icon"
+      role="img"
+      :aria-label="title"
+      :style="{ fontSize: `${iconSize}px` }"
+    >
       <slot name="icon">{{ icon }}</slot>
     </div>
     <h3 class="empty-state__title">{{ title }}</h3>

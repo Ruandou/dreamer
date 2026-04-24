@@ -25,8 +25,10 @@ import { api } from '@/api'
 import { usePolling } from '@/composables/usePolling'
 import EmptyState from '@/components/EmptyState.vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
+import SearchFilterBar from '@/components/SearchFilterBar.vue'
 
 const message = useMessage()
+const searchQuery = ref('')
 
 // 统一任务类型
 interface Job {
@@ -358,8 +360,21 @@ const pipelineCount = computed(() => jobs.value.filter((j) => j.type === 'pipeli
 const imageCount = computed(() => jobs.value.filter((j) => j.type === 'image').length)
 
 const filteredJobs = computed(() => {
-  if (activeTab.value === 'all') return jobs.value
-  return jobs.value.filter((j) => j.type === activeTab.value)
+  let list = jobs.value
+  if (activeTab.value !== 'all') {
+    list = list.filter((j) => j.type === activeTab.value)
+  }
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.toLowerCase()
+    list = list.filter(
+      (j) =>
+        (j.prompt || '').toLowerCase().includes(q) ||
+        (j.projectName || '').toLowerCase().includes(q) ||
+        (j.segmentDescription || '').toLowerCase().includes(q) ||
+        (j.jobType || '').toLowerCase().includes(q)
+    )
+  }
+  return list
 })
 
 const fetchJobs = async () => {
@@ -412,6 +427,7 @@ onUnmounted(() => {
         <h1>任务中心</h1>
         <p class="jobs-subtitle">查看所有任务进度和历史记录</p>
       </div>
+      <SearchFilterBar v-model="searchQuery" placeholder="搜索任务..." search-width="200px" />
     </header>
 
     <NCard class="jobs-card">

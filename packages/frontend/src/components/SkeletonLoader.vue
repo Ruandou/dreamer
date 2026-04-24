@@ -26,7 +26,12 @@ const skeletonRows = computed(() => Array.from({ length: props.rows }))
 </script>
 
 <template>
-  <div :class="['skeleton-loader', `skeleton-loader--${variant}`]">
+  <div
+    :class="['skeleton-loader', `skeleton-loader--${variant}`]"
+    role="status"
+    aria-live="polite"
+    aria-label="加载中"
+  >
     <!-- Avatar/ Image Skeleton -->
     <div v-if="showAvatar" class="skeleton-loader__avatar skeleton-animate" />
 

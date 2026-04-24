@@ -96,6 +96,7 @@
             @input="onContentChange"
             placeholder="开始编写剧本..."
             spellcheck="false"
+            aria-label="剧本编辑器"
           ></textarea>
         </div>
         <div v-else class="script-preview" v-html="renderedContent"></div>
