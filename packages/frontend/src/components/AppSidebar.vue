@@ -137,7 +137,7 @@ function handleUserMenu(key: string) {
       <div class="sidebar-footer">
         <NDropdown :options="userMenuOptions" @select="handleUserMenu" placement="top-start">
           <div class="user-section">
-            <NAvatar round size="small" :style="{ backgroundColor: '#6366f1' }">
+            <NAvatar round size="medium" :style="{ backgroundColor: '#6366f1' }">
               {{ userName.charAt(0) || 'U' }}
             </NAvatar>
             <span v-if="!uiStore.sidebarCollapsed" class="user-name">{{ userName }}</span>
@@ -167,8 +167,8 @@ function handleUserMenu(key: string) {
   gap: 8px;
   padding: 12px 16px;
   margin-bottom: 8px;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
 }
 
@@ -220,10 +220,14 @@ function handleUserMenu(key: string) {
 }
 
 .user-name {
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.user-section :deep(.n-avatar) {
+  flex-shrink: 0;
 }
 </style>

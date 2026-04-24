@@ -1,14 +1,16 @@
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest'
 import Fastify, { FastifyInstance } from 'fastify'
 
-const { mockFindMany } = vi.hoisted(() => ({
-  mockFindMany: vi.fn()
+const { mockFindMany, mockCount } = vi.hoisted(() => ({
+  mockFindMany: vi.fn(),
+  mockCount: vi.fn()
 }))
 
 vi.mock('../src/lib/prisma.js', () => ({
   prisma: {
     modelApiCall: {
-      findMany: mockFindMany
+      findMany: mockFindMany,
+      count: mockCount
     },
     $connect: vi.fn(),
     $disconnect: vi.fn()
@@ -36,6 +38,7 @@ describe('Model API calls routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockFindMany.mockResolvedValue([])
+    mockCount.mockResolvedValue(0)
   })
 
   it('GET / returns items for current user', async () => {

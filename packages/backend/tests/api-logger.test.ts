@@ -6,7 +6,8 @@ vi.mock('../src/lib/prisma.js', () => ({
     modelApiCall: {
       create: vi.fn(),
       updateMany: vi.fn(),
-      findMany: vi.fn()
+      findMany: vi.fn(),
+      count: vi.fn()
     }
   }
 }))
@@ -193,6 +194,7 @@ describe('ApiLogger Service', () => {
       ]
 
       prisma.modelApiCall.findMany.mockResolvedValue(mockLogs)
+      prisma.modelApiCall.count.mockResolvedValue(2)
 
       const result = await getApiCalls(userId)
 
@@ -202,7 +204,10 @@ describe('ApiLogger Service', () => {
         take: 50,
         skip: 0
       })
-      expect(result).toEqual(mockLogs)
+      expect(prisma.modelApiCall.count).toHaveBeenCalledWith({
+        where: { AND: [{ userId }] }
+      })
+      expect(result).toEqual({ items: mockLogs, total: 2 })
     })
 
     it('should filter by model', async () => {
@@ -210,8 +215,9 @@ describe('ApiLogger Service', () => {
       const model = 'seedance2.0'
 
       prisma.modelApiCall.findMany.mockResolvedValue([])
+      prisma.modelApiCall.count.mockResolvedValue(0)
 
-      await getApiCalls(userId, { model })
+      const result = await getApiCalls(userId, { model })
 
       expect(prisma.modelApiCall.findMany).toHaveBeenCalledWith({
         where: { AND: [{ userId }, { model: 'seedance2.0' }] },
@@ -219,14 +225,19 @@ describe('ApiLogger Service', () => {
         take: 50,
         skip: 0
       })
+      expect(prisma.modelApiCall.count).toHaveBeenCalledWith({
+        where: { AND: [{ userId }, { model: 'seedance2.0' }] }
+      })
+      expect(result).toEqual({ items: [], total: 0 })
     })
 
     it('should handle pagination options', async () => {
       const userId = 'user-1'
 
       prisma.modelApiCall.findMany.mockResolvedValue([])
+      prisma.modelApiCall.count.mockResolvedValue(0)
 
-      await getApiCalls(userId, { limit: 10, offset: 20 })
+      const result = await getApiCalls(userId, { limit: 10, offset: 20 })
 
       expect(prisma.modelApiCall.findMany).toHaveBeenCalledWith({
         where: { AND: [{ userId }] },
@@ -234,6 +245,10 @@ describe('ApiLogger Service', () => {
         take: 10,
         skip: 20
       })
+      expect(prisma.modelApiCall.count).toHaveBeenCalledWith({
+        where: { AND: [{ userId }] }
+      })
+      expect(result).toEqual({ items: [], total: 0 })
     })
   })
 

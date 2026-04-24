@@ -457,8 +457,8 @@ loadDraft()
 }
 
 .studio-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
   margin: 0;
   color: var(--color-text-primary);
 }
@@ -476,8 +476,8 @@ loadDraft()
   cursor: pointer;
   padding: 4px 10px;
   border-radius: var(--radius-md);
-  font-size: 15px;
-  font-weight: 500;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
   transition: all var(--transition-fast);
   border: 1px solid transparent;

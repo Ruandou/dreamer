@@ -36,7 +36,7 @@ export function useProjectScript() {
         isAutoSaving.value = true
         try {
           await episodeStore.updateEpisode(selectedEpisodeId.value, {
-            title: episode.title,
+            title: episode.title ?? undefined,
             script: episode.script as ScriptContent
           })
           lastSaved.value = new Date()
@@ -137,7 +137,7 @@ export function useProjectScript() {
   }
 
   const script = computed(
-    () => episodeStore.currentEpisode?.script as Record<string, unknown> | null
+    () => (episodeStore.currentEpisode?.script as ScriptContent | undefined) ?? null
   )
   const hasEpisodes = computed(() => episodeStore.episodes.length > 0)
   const currentEpisodeTitle = computed(() => episodeStore.currentEpisode?.title ?? null)

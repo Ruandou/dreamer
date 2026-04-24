@@ -10,6 +10,7 @@ import {
   NTabs,
   NTabPane,
   NIcon,
+  NPagination,
   type DataTableColumns,
   useMessage
 } from 'naive-ui'
@@ -29,6 +30,8 @@ import SearchFilterBar from '@/components/SearchFilterBar.vue'
 
 const message = useMessage()
 const searchQuery = ref('')
+const page = ref(1)
+const pageSize = ref(10)
 
 // 统一任务类型
 interface Job {
@@ -52,14 +55,14 @@ interface Job {
   projectName?: string
   content?: string
   contentPreview?: string
-  result?: any
+  result?: { projectId?: string; episodesCreated?: number; charactersCreated?: number }
   errorMsg?: string
   // pipeline task fields
   jobType?: string
   currentStep?: string
   progress?: number
   progressMeta?: { message?: string } | null
-  stepResults?: any[]
+  stepResults?: unknown[]
   // image-generation (BullMQ) fields
   kind?: string
   characterId?: string
@@ -340,7 +343,7 @@ const columns: DataTableColumns<Job> = [
             {
               size: 'small',
               type: 'primary',
-              onClick: () => router.push(`/project/${row.result.projectId}`)
+              onClick: () => router.push(`/project/${row.result!.projectId}`)
             },
             () => '查看项目'
           )
@@ -377,12 +380,24 @@ const filteredJobs = computed(() => {
   return list
 })
 
+const paginatedJobs = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filteredJobs.value.slice(start, start + pageSize.value)
+})
+
+const totalPages = computed(() => Math.ceil(filteredJobs.value.length / pageSize.value))
+
+// Reset page when filters change
+watch([activeTab, searchQuery], () => {
+  page.value = 1
+})
+
 const fetchJobs = async () => {
   isLoading.value = true
   try {
     const res = await api.get('/tasks/all')
     const data = res.data || {}
-    const list: Job[] = (data.jobs || []).map((j: any) => ({ ...j }))
+    const list = (data.jobs || []) as Job[]
     jobs.value = list
   } catch (error) {
     console.error('[Jobs] Failed to fetch jobs:', error)
@@ -496,11 +511,21 @@ onUnmounted(() => {
         <NDataTable
           v-else
           :columns="columns"
-          :data="filteredJobs"
+          :data="paginatedJobs"
           :loading="isLoading"
           :bordered="false"
           :row-key="(row: Job) => row.id + row.type"
         />
+        <div v-if="totalPages > 1 || pageSize !== 10" class="jobs-pagination">
+          <NPagination
+            v-model:page="page"
+            :page-count="totalPages"
+            :page-size="pageSize"
+            :page-sizes="[10, 20, 50]"
+            show-size-picker
+            @update:page-size="page = 1"
+          />
+        </div>
       </div>
 
       <div
@@ -524,7 +549,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
   background: var(--color-bg-white);
   border-radius: var(--radius-lg);
 }
@@ -560,6 +585,12 @@ onUnmounted(() => {
   padding-top: var(--spacing-md);
   border-top: 1px solid var(--color-border-light);
   text-align: center;
+}
+
+.jobs-pagination {
+  margin-top: var(--spacing-lg);
+  display: flex;
+  justify-content: center;
 }
 
 .spin-icon {

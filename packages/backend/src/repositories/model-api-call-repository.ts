@@ -26,6 +26,10 @@ export class ModelApiCallRepository {
       skip
     })
   }
+
+  count(where: Prisma.ModelApiCallWhereInput) {
+    return this.prisma.modelApiCall.count({ where })
+  }
 }
 
 export const modelApiCallRepository = new ModelApiCallRepository(prisma)

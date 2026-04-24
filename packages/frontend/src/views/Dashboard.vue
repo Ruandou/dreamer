@@ -216,14 +216,14 @@ onMounted(() => {
 }
 
 .greeting {
-  font-size: 28px;
-  font-weight: 600;
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
   margin: 0 0 8px;
 }
 
 .sub-title {
-  font-size: 16px;
+  font-size: var(--font-size-base);
   color: var(--color-text-secondary);
   margin: 0;
 }
@@ -276,14 +276,14 @@ onMounted(() => {
 }
 
 .action-card h3 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
   margin: 0 0 4px;
   color: var(--color-text-primary);
 }
 
 .action-card p {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   margin: 0;
 }
@@ -332,13 +332,13 @@ onMounted(() => {
 
 .project-info h4 {
   margin: 0 0 4px;
-  font-size: 15px;
+  font-size: var(--font-size-sm);
   color: var(--color-text-primary);
 }
 
 .project-info p {
   margin: 0 0 4px;
-  font-size: 13px;
+  font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -365,12 +365,12 @@ onMounted(() => {
 
 .task-type {
   flex: 1;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   color: var(--color-text-primary);
 }
 
 .task-date {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
 }
 

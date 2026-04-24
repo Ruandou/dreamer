@@ -181,5 +181,10 @@ export async function getApiCalls(
   if (st && ['completed', 'failed', 'processing'].includes(st)) {
     ands.push({ status: st })
   }
-  return modelApiCallRepository.findMany({ AND: ands }, options?.limit || 50, options?.offset || 0)
+  const where = { AND: ands }
+  const [items, total] = await Promise.all([
+    modelApiCallRepository.findMany(where, options?.limit || 50, options?.offset || 0),
+    modelApiCallRepository.count(where)
+  ])
+  return { items, total }
 }

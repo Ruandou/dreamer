@@ -103,7 +103,7 @@ function handleSelect(char: { images?: { avatarUrl?: string }[] }) {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
 }
 

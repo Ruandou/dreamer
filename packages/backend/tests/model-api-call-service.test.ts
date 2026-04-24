@@ -81,13 +81,16 @@ describe('model-api-call-service', () => {
 
   describe('listModelApiCallsForUser', () => {
     it('calls getApiCalls with correct query', async () => {
-      mockGetApiCalls.mockResolvedValue([
-        {
-          id: 'call-1',
-          model: 'gpt-4',
-          status: 'completed'
-        }
-      ])
+      mockGetApiCalls.mockResolvedValue({
+        items: [
+          {
+            id: 'call-1',
+            model: 'gpt-4',
+            status: 'completed'
+          }
+        ],
+        total: 1
+      })
 
       const result = await listModelApiCallsForUser('user-1', {
         limit: '10',
@@ -101,7 +104,7 @@ describe('model-api-call-service', () => {
     })
 
     it('filters by model when provided', async () => {
-      mockGetApiCalls.mockResolvedValue([])
+      mockGetApiCalls.mockResolvedValue({ items: [], total: 0 })
 
       await listModelApiCallsForUser('user-1', {
         limit: '10',
@@ -118,7 +121,7 @@ describe('model-api-call-service', () => {
     })
 
     it('returns empty array when no results', async () => {
-      mockGetApiCalls.mockResolvedValue([])
+      mockGetApiCalls.mockResolvedValue({ items: [], total: 0 })
 
       const result = await listModelApiCallsForUser('user-1', {
         limit: '10',
@@ -129,7 +132,7 @@ describe('model-api-call-service', () => {
     })
 
     it('uses custom limit and offset', async () => {
-      mockGetApiCalls.mockResolvedValue([])
+      mockGetApiCalls.mockResolvedValue({ items: [], total: 0 })
 
       const result = await listModelApiCallsForUser('user-1', {
         limit: '50',

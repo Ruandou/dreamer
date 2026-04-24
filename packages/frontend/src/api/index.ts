@@ -326,9 +326,12 @@ export async function getModelApiCalls(q?: {
   if (q?.op?.trim()) params.set('op', q.op.trim())
   if (q?.projectId?.trim()) params.set('projectId', q.projectId.trim())
   if (q?.status?.trim()) params.set('status', q.status.trim())
-  const res = await api.get<{ items: ModelApiCallRow[]; limit: number; offset: number }>(
-    `/model-api-calls?${params.toString()}`
-  )
+  const res = await api.get<{
+    items: ModelApiCallRow[]
+    total: number
+    limit: number
+    offset: number
+  }>(`/model-api-calls?${params.toString()}`)
   return res.data
 }
 

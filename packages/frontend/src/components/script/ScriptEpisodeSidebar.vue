@@ -49,7 +49,7 @@ const emit = defineEmits<{
       </div>
     </NScrollbar>
 
-    <EmptyState v-else title="暂无剧本" description="创建第一集开始创作" icon="">
+    <EmptyState v-else title="暂无剧本" description="创建第一集开始创作" icon="📝">
       <template #action>
         <NButton size="small" type="primary" @click="emit('create')"> 新建剧本 </NButton>
       </template>

@@ -10,6 +10,7 @@ import {
   NDataTable,
   NTag,
   NModal,
+  NPagination,
   useMessage,
   type DataTableColumns
 } from 'naive-ui'
@@ -22,12 +23,36 @@ const message = useMessage()
 
 const loading = ref(false)
 const items = ref<ModelApiCallRow[]>([])
+const page = ref(1)
+const pageSize = ref(10)
+const totalItems = ref(0)
 
 const filterOp = ref('')
 const filterProjectId = ref('')
 const filterModel = ref('')
 /** null 表示不筛状态 */
 const filterStatus = ref<'completed' | 'failed' | null>(null)
+
+function filterByOp(op: string) {
+  page.value = 1
+  filterOp.value = op
+  load()
+}
+
+function clearFilters() {
+  page.value = 1
+  filterOp.value = ''
+  filterProjectId.value = ''
+  filterModel.value = ''
+  filterStatus.value = null
+  load()
+}
+
+/** Reset page and load from server (for filter changes) */
+function reload() {
+  page.value = 1
+  load()
+}
 
 const promptVisible = ref(false)
 const promptTitle = ref('')
@@ -42,21 +67,28 @@ async function load() {
   loading.value = true
   try {
     const opRaw = filterOp.value.trim()
+    const offset = (page.value - 1) * pageSize.value
     const r = await getModelApiCalls({
-      limit: 200,
-      offset: 0,
+      limit: pageSize.value,
+      offset,
       op: opRaw ? normalizeOpQuery(opRaw) : undefined,
       projectId: filterProjectId.value.trim() || undefined,
       model: filterModel.value.trim() || undefined,
       status: filterStatus.value ?? undefined
     })
     items.value = r.items
+    totalItems.value = r.total
   } catch (e: unknown) {
     const err = e as { response?: { data?: { error?: string } }; message?: string }
     message.error(err?.response?.data?.error || err?.message || '加载失败')
   } finally {
     loading.value = false
   }
+}
+
+function handlePageSizeChange() {
+  page.value = 1
+  load()
 }
 
 function openPrompt(row: ModelApiCallRow) {
@@ -171,21 +203,21 @@ onMounted(load)
             placeholder="op，如 script_visual_enrichment"
             clearable
             style="width: 260px"
-            @keyup.enter="load"
+            @keyup.enter="reload"
           />
           <NInput
             v-model:value="filterProjectId"
             placeholder="projectId（项目 cuid）"
             clearable
             style="width: 280px"
-            @keyup.enter="load"
+            @keyup.enter="reload"
           />
           <NInput
             v-model:value="filterModel"
             placeholder="模型，如 deepseek-chat"
             clearable
             style="width: 200px"
-            @keyup.enter="load"
+            @keyup.enter="reload"
           />
           <NSelect
             v-model:value="filterStatus"
@@ -196,38 +228,12 @@ onMounted(load)
               { label: '成功', value: 'completed' },
               { label: '失败', value: 'failed' }
             ]"
-            @update:value="load"
+            @update:value="reload"
           />
-          <NButton type="primary" :loading="loading" @click="load">查询</NButton>
-          <NButton
-            secondary
-            @click="
-              filterOp = 'script_visual_enrichment'
-              load()
-            "
-          >
-            定场/定妆
-          </NButton>
-          <NButton
-            secondary
-            @click="
-              filterOp = 'import_parse_script'
-              load()
-            "
-          >
-            导入解析
-          </NButton>
-          <NButton
-            @click="
-              filterOp = ''
-              filterProjectId = ''
-              filterModel = ''
-              filterStatus = null
-              load()
-            "
-          >
-            清空条件
-          </NButton>
+          <NButton type="primary" :loading="loading" @click="reload">查询</NButton>
+          <NButton secondary @click="filterByOp('script_visual_enrichment')"> 定场/定妆 </NButton>
+          <NButton secondary @click="filterByOp('import_parse_script')"> 导入解析 </NButton>
+          <NButton @click="clearFilters"> 清空条件 </NButton>
           <NButton @click="router.push('/projects')">返回项目</NButton>
         </NSpace>
       </NSpace>
@@ -254,6 +260,17 @@ onMounted(load)
           :icon-size="48"
           variant="compact"
         />
+        <div v-if="totalItems > pageSize || pageSize !== 10" class="model-calls-pagination">
+          <NPagination
+            v-model:page="page"
+            v-model:page-size="pageSize"
+            :item-count="totalItems"
+            :page-sizes="[10, 20, 50]"
+            show-size-picker
+            @update:page="load()"
+            @update:page-size="handlePageSizeChange"
+          />
+        </div>
       </NCard>
     </div>
 
@@ -290,6 +307,12 @@ onMounted(load)
   padding: 0 4px;
   border-radius: 4px;
   background: var(--color-bg-gray, rgba(128, 128, 128, 0.12));
+}
+
+.model-calls-pagination {
+  margin-top: var(--spacing-md);
+  display: flex;
+  justify-content: center;
 }
 
 @media (max-width: 768px) {

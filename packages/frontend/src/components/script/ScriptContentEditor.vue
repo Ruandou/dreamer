@@ -13,11 +13,12 @@ import {
 } from 'naive-ui'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import type { ScriptContent } from '@dreamer/shared/types'
 
 interface Props {
   selectedEpisodeId: string | null
   isLoading: boolean
-  script: Record<string, unknown> | null
+  script: ScriptContent | null
   currentEpisodeTitle: string | null
   isAutoSaving: boolean
   lastSaved: Date | null
@@ -80,22 +81,22 @@ const emit = defineEmits<{
       </div>
 
       <!-- Summary -->
-      <NAlert v-if="(script as any).summary" type="info" class="script-summary">
+      <NAlert v-if="script.summary" type="info" class="script-summary">
         <template #icon>📖</template>
-        {{ (script as any).summary }}
+        {{ script.summary }}
       </NAlert>
 
       <!-- Scenes -->
       <div class="scenes-section">
         <h3 class="scenes-section__title">
-          <span>📼</span> 分镜场景 ({{ (script as any).scenes?.length || 0 }})
+          <span>📼</span> 分镜场景 ({{ script.scenes?.length || 0 }})
         </h3>
 
         <NScrollbar x-scrollable>
           <div class="scenes-list">
             <NCollapse>
               <NCollapseItem
-                v-for="scene in (script as any).scenes"
+                v-for="scene in script.scenes"
                 :key="scene.sceneNum"
                 :name="scene.sceneNum"
               >

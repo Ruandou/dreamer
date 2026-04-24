@@ -31,10 +31,10 @@ export async function listModelApiCallsForUser(
   query: Parameters<typeof parseListQuery>[0]
 ) {
   const { lim, off, filters } = parseListQuery(query)
-  const rows = await getApiCalls(userId, filters)
+  const { items: rows, total } = await getApiCalls(userId, filters)
   const items = rows.map((row) => ({
     ...row,
     meta: parseModelApiRequestParams(row.requestParams)
   }))
-  return { items, limit: lim, offset: off }
+  return { items, total, limit: lim, offset: off }
 }

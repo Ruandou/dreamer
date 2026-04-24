@@ -358,7 +358,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
   background: var(--color-bg-white);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
