@@ -27,6 +27,7 @@ import { settingsRoutes } from './routes/settings.js'
 import { pipelineRoutes } from './routes/pipeline.js'
 import { imageGenerationJobRoutes } from './routes/image-generation-jobs.js'
 import { modelApiCallRoutes } from './routes/model-api-calls.js'
+import { modelRoutes } from './routes/models.js'
 import { memoryRoutes } from './routes/memories.js'
 import { tasksUnifiedRoutes } from './routes/tasks-unified.js'
 import { scriptsRoutes } from './routes/scripts.js'
@@ -126,6 +127,7 @@ async function start() {
     await fastify.register(modelApiCallRoutes, {
       prefix: '/api/model-api-calls'
     })
+    await fastify.register(modelRoutes, { prefix: '/api/models' })
     await fastify.register(memoryRoutes, { prefix: '/api/projects' })
     await fastify.register(tasksUnifiedRoutes, { prefix: '/api/tasks' })
     await fastify.register(scriptsRoutes, { prefix: '/api/scripts' })

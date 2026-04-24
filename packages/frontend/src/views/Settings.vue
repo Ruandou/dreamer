@@ -8,7 +8,6 @@ import {
   NFormItem,
   NInput,
   NSpace,
-  NSpin,
   NAlert,
   useMessage,
   NTag,
@@ -21,6 +20,7 @@ import {
   CheckmarkOutline,
   ArrowBackOutline
 } from '@vicons/ionicons5'
+import SkeletonLoader from '../components/SkeletonLoader.vue'
 
 const router = useRouter()
 const message = useMessage()
@@ -196,160 +196,161 @@ const formatBalance = (amount: number) => {
       </div>
     </header>
 
-    <NSpin :show="loading">
-      <div class="settings-content">
-        <!-- Account Info -->
-        <NCard title="账户信息" class="settings-card">
-          <NForm label-placement="left" label-width="100">
-            <NFormItem label="用户名">
-              <NInput v-model:value="userName" placeholder="输入用户名" />
-            </NFormItem>
-          </NForm>
-        </NCard>
+    <div v-if="loading" class="settings-loading">
+      <SkeletonLoader variant="card" :rows="8" />
+    </div>
+    <div v-else class="settings-content">
+      <!-- Account Info -->
+      <NCard title="账户信息" class="settings-card">
+        <NForm label-placement="left" label-width="100">
+          <NFormItem label="用户名">
+            <NInput v-model:value="userName" placeholder="输入用户名" />
+          </NFormItem>
+        </NForm>
+      </NCard>
 
-        <!-- DeepSeek API -->
-        <NCard class="settings-card">
-          <template #header>
-            <NSpace :size="8" align="center">
-              <NIcon :component="KeyOutline" :size="18" />
-              <span>DeepSeek（AI 编剧）</span>
-            </NSpace>
-          </template>
-          <template #header-extra>
-            <NTag v-if="hasApiKey" type="success" size="small">已配置</NTag>
-            <NTag v-else type="warning" size="small">未配置</NTag>
-          </template>
+      <!-- DeepSeek API -->
+      <NCard class="settings-card">
+        <template #header>
+          <NSpace :size="8" align="center">
+            <NIcon :component="KeyOutline" :size="18" />
+            <span>DeepSeek（AI 编剧）</span>
+          </NSpace>
+        </template>
+        <template #header-extra>
+          <NTag v-if="hasApiKey" type="success" size="small">已配置</NTag>
+          <NTag v-else type="warning" size="small">未配置</NTag>
+        </template>
 
-          <div v-if="hasApiKey && !apiKeyInput" class="api-key-display">
-            <NInput :value="apiKey" disabled placeholder="已配置的 API Key" />
-            <NButton @click="apiKeyInput = ''" type="primary" tertiary>更换</NButton>
-          </div>
-
-          <div v-else class="api-key-form">
-            <NAlert v-if="balanceError" type="warning" class="mb-4">
-              {{ balanceError }}
-            </NAlert>
-
-            <NAlert v-if="verifySuccess && balance" type="success" class="mb-4">
-              验证成功！余额：¥{{
-                formatBalance(
-                  balance.balanceInfos.find((b: any) => b.currency === 'CNY')?.totalBalance || 0
-                )
-              }}
-            </NAlert>
-
-            <NAlert v-if="verifyError" type="error" class="mb-4">
-              {{ verifyError }}
-            </NAlert>
-
-            <NForm label-placement="left" label-width="100">
-              <NFormItem label="API Key">
-                <NInput
-                  v-model:value="apiKeyInput"
-                  type="password"
-                  placeholder="sk-xxxxxxxxxxxxxxxx"
-                  show-password-on="click"
-                />
-              </NFormItem>
-              <NFormItem label="API URL">
-                <NInput
-                  v-model:value="deepseekApiUrl"
-                  placeholder="https://api.deepseek.com/v1（可选）"
-                />
-              </NFormItem>
-            </NForm>
-
-            <div class="api-key-actions">
-              <NSpace>
-                <NButton @click="verifyApiKey" :loading="verifying" :disabled="!apiKeyInput">
-                  验证
-                </NButton>
-                <NButton @click="apiKeyInput = ''" tertiary>取消</NButton>
-              </NSpace>
-            </div>
-          </div>
-
-          <template #footer>
-            <div class="balance-info" v-if="balance">
-              <span class="balance-label">当前余额：</span>
-              <span v-for="info in balance.balanceInfos" :key="info.currency" class="balance-item">
-                {{ info.currency === 'CNY' ? '¥' : '$' }}{{ formatBalance(info.totalBalance) }}
-              </span>
-            </div>
-          </template>
-        </NCard>
-
-        <!-- Atlas API (Wan 2.6) -->
-        <NCard class="settings-card">
-          <template #header>
-            <NSpace :size="8" align="center">
-              <NIcon :component="VideocamOutline" :size="18" />
-              <span>Atlas（视频生成 Wan 2.6）</span>
-            </NSpace>
-          </template>
-          <template #header-extra>
-            <NTag v-if="atlasApiKey" type="success" size="small">已配置</NTag>
-            <NTag v-else type="warning" size="small">未配置</NTag>
-          </template>
-
-          <NForm label-placement="left" label-width="120">
-            <NFormItem label="API Key">
-              <NInput
-                v-model:value="atlasApiKey"
-                type="password"
-                placeholder="Atlas API Key"
-                show-password-on="click"
-              />
-            </NFormItem>
-            <NFormItem label="API URL">
-              <NInput v-model:value="atlasApiUrl" placeholder="https://api.atlascloud.com" />
-            </NFormItem>
-          </NForm>
-        </NCard>
-
-        <!-- Volcano Engine API (Seedance 2.0) -->
-        <NCard class="settings-card">
-          <template #header>
-            <NSpace :size="8" align="center">
-              <NIcon :component="FlameOutline" :size="18" />
-              <span>火山方舟（视频生成 Seedance 2.0）</span>
-            </NSpace>
-          </template>
-          <template #header-extra>
-            <NTag v-if="arkApiKey" type="success" size="small">已配置</NTag>
-            <NTag v-else type="warning" size="small">未配置</NTag>
-          </template>
-
-          <NForm label-placement="left" label-width="120">
-            <NFormItem label="API Key">
-              <NInput
-                v-model:value="arkApiKey"
-                type="password"
-                placeholder="火山方舟 API Key"
-                show-password-on="click"
-              />
-            </NFormItem>
-            <NFormItem label="API URL">
-              <NInput
-                v-model:value="arkApiUrl"
-                placeholder="https://ark.cn-beijing.volces.com/api/v3"
-              />
-              <template #feedback> 默认地址：https://ark.cn-beijing.volces.com/api/v3 </template>
-            </NFormItem>
-          </NForm>
-        </NCard>
-
-        <!-- Save Button -->
-        <div class="settings-actions">
-          <NButton type="primary" size="large" :loading="saving" @click="saveSettings">
-            <template #icon>
-              <NIcon :component="CheckmarkOutline" :size="18" />
-            </template>
-            保存设置
-          </NButton>
+        <div v-if="hasApiKey && !apiKeyInput" class="api-key-display">
+          <NInput :value="apiKey" disabled placeholder="已配置的 API Key" />
+          <NButton @click="apiKeyInput = ''" type="primary" tertiary>更换</NButton>
         </div>
+
+        <div v-else class="api-key-form">
+          <NAlert v-if="balanceError" type="warning" class="mb-4">
+            {{ balanceError }}
+          </NAlert>
+
+          <NAlert v-if="verifySuccess && balance" type="success" class="mb-4">
+            验证成功！余额：¥{{
+              formatBalance(
+                balance.balanceInfos.find((b: any) => b.currency === 'CNY')?.totalBalance || 0
+              )
+            }}
+          </NAlert>
+
+          <NAlert v-if="verifyError" type="error" class="mb-4">
+            {{ verifyError }}
+          </NAlert>
+
+          <NForm label-placement="left" label-width="100">
+            <NFormItem label="API Key">
+              <NInput
+                v-model:value="apiKeyInput"
+                type="password"
+                placeholder="sk-xxxxxxxxxxxxxxxx"
+                show-password-on="click"
+              />
+            </NFormItem>
+            <NFormItem label="API URL">
+              <NInput
+                v-model:value="deepseekApiUrl"
+                placeholder="https://api.deepseek.com/v1（可选）"
+              />
+            </NFormItem>
+          </NForm>
+
+          <div class="api-key-actions">
+            <NSpace>
+              <NButton @click="verifyApiKey" :loading="verifying" :disabled="!apiKeyInput">
+                验证
+              </NButton>
+              <NButton @click="apiKeyInput = ''" tertiary>取消</NButton>
+            </NSpace>
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="balance-info" v-if="balance">
+            <span class="balance-label">当前余额：</span>
+            <span v-for="info in balance.balanceInfos" :key="info.currency" class="balance-item">
+              {{ info.currency === 'CNY' ? '¥' : '$' }}{{ formatBalance(info.totalBalance) }}
+            </span>
+          </div>
+        </template>
+      </NCard>
+
+      <!-- Atlas API (Wan 2.6) -->
+      <NCard class="settings-card">
+        <template #header>
+          <NSpace :size="8" align="center">
+            <NIcon :component="VideocamOutline" :size="18" />
+            <span>Atlas（视频生成 Wan 2.6）</span>
+          </NSpace>
+        </template>
+        <template #header-extra>
+          <NTag v-if="atlasApiKey" type="success" size="small">已配置</NTag>
+          <NTag v-else type="warning" size="small">未配置</NTag>
+        </template>
+
+        <NForm label-placement="left" label-width="120">
+          <NFormItem label="API Key">
+            <NInput
+              v-model:value="atlasApiKey"
+              type="password"
+              placeholder="Atlas API Key"
+              show-password-on="click"
+            />
+          </NFormItem>
+          <NFormItem label="API URL">
+            <NInput v-model:value="atlasApiUrl" placeholder="https://api.atlascloud.com" />
+          </NFormItem>
+        </NForm>
+      </NCard>
+
+      <!-- Volcano Engine API (Seedance 2.0) -->
+      <NCard class="settings-card">
+        <template #header>
+          <NSpace :size="8" align="center">
+            <NIcon :component="FlameOutline" :size="18" />
+            <span>火山方舟（视频生成 Seedance 2.0）</span>
+          </NSpace>
+        </template>
+        <template #header-extra>
+          <NTag v-if="arkApiKey" type="success" size="small">已配置</NTag>
+          <NTag v-else type="warning" size="small">未配置</NTag>
+        </template>
+
+        <NForm label-placement="left" label-width="120">
+          <NFormItem label="API Key">
+            <NInput
+              v-model:value="arkApiKey"
+              type="password"
+              placeholder="火山方舟 API Key"
+              show-password-on="click"
+            />
+          </NFormItem>
+          <NFormItem label="API URL">
+            <NInput
+              v-model:value="arkApiUrl"
+              placeholder="https://ark.cn-beijing.volces.com/api/v3"
+            />
+            <template #feedback> 默认地址：https://ark.cn-beijing.volces.com/api/v3 </template>
+          </NFormItem>
+        </NForm>
+      </NCard>
+
+      <!-- Save Button -->
+      <div class="settings-actions">
+        <NButton type="primary" size="large" :loading="saving" @click="saveSettings">
+          <template #icon>
+            <NIcon :component="CheckmarkOutline" :size="18" />
+          </template>
+          保存设置
+        </NButton>
       </div>
-    </NSpin>
+    </div>
   </div>
 </template>
 
@@ -371,6 +372,10 @@ const formatBalance = (amount: number) => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
+}
+
+.settings-loading {
+  padding: var(--spacing-xl) 0;
 }
 
 .settings-card {

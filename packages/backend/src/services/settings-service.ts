@@ -30,7 +30,8 @@ export class SettingsService {
         id: dbUser.id,
         email: dbUser.email,
         name: dbUser.name,
-        createdAt: dbUser.createdAt
+        createdAt: dbUser.createdAt,
+        modelPreferences: dbUser.modelPreferences
       },
       hasApiKey,
       balance,
@@ -57,9 +58,10 @@ export class SettingsService {
         arkApiKey?: string
         arkApiUrl?: string
       }
+      modelPreferences?: Record<string, unknown>
     }
   ) {
-    const { name, apiKey, apiKeys } = body
+    const { name, apiKey, apiKeys, modelPreferences } = body
 
     const updateData: Prisma.UserUpdateInput = {}
     if (name) updateData.name = name
@@ -73,6 +75,9 @@ export class SettingsService {
       if (apiKeys.arkApiKey !== undefined) updateData.arkApiKey = apiKeys.arkApiKey || null
       if (apiKeys.arkApiUrl !== undefined) updateData.arkApiUrl = apiKeys.arkApiUrl || null
     }
+    if (modelPreferences !== undefined) {
+      updateData.modelPreferences = modelPreferences as Prisma.InputJsonValue
+    }
 
     const updatedUser = await this.repo.updateUser(userId, updateData)
 
@@ -82,7 +87,8 @@ export class SettingsService {
         id: updatedUser.id,
         email: updatedUser.email,
         name: updatedUser.name,
-        hasApiKey: !!updatedUser.apiKey
+        hasApiKey: !!updatedUser.apiKey,
+        modelPreferences: updatedUser.modelPreferences
       }
     }
   }

@@ -4,31 +4,24 @@ defineProps<{
   size?: 'small' | 'medium'
 }>()
 
-const statusConfig = {
-  draft: { label: '草稿', color: '#6b7280', bg: '#f3f4f6' },
-  pending: { label: '等待中', color: '#6b7280', bg: '#f3f4f6' },
-  queued: { label: '队列中', color: '#3b82f6', bg: '#dbeafe' },
-  generating: { label: '生成中', color: '#3b82f6', bg: '#dbeafe' },
-  processing: { label: '制作中', color: '#3b82f6', bg: '#dbeafe' },
-  completed: { label: '已完成', color: '#10b981', bg: '#d1fae5' },
-  failed: { label: '失败', color: '#ef4444', bg: '#fee2e2' },
+const statusConfig: Record<string, { label: string; cls: string }> = {
+  draft: { label: '草稿', cls: 'status-badge--draft' },
+  pending: { label: '等待中', cls: 'status-badge--draft' },
+  queued: { label: '队列中', cls: 'status-badge--info' },
+  generating: { label: '生成中', cls: 'status-badge--info' },
+  processing: { label: '制作中', cls: 'status-badge--info' },
+  completed: { label: '已完成', cls: 'status-badge--success' },
+  failed: { label: '失败', cls: 'status-badge--error' }
 }
 
-const getConfig = (status: string) => {
-  return statusConfig[status as keyof typeof statusConfig] || statusConfig.draft
+function getConfig(status: string) {
+  return statusConfig[status] || statusConfig.draft
 }
 </script>
 
 <template>
-  <span
-    class="status-badge"
-    :class="[`status-badge--${size || 'small'}`]"
-    :style="{
-      color: getConfig(status).color,
-      backgroundColor: getConfig(status).bg,
-    }"
-  >
-    <span class="status-badge__dot" :style="{ backgroundColor: getConfig(status).color }"></span>
+  <span class="status-badge" :class="[`status-badge--${size || 'small'}`, getConfig(status).cls]">
+    <span class="status-badge__dot"></span>
     {{ getConfig(status).label }}
   </span>
 </template>
@@ -45,6 +38,11 @@ const getConfig = (status: string) => {
   white-space: nowrap;
 }
 
+.status-badge--small {
+  padding: 4px 10px;
+  font-size: var(--font-size-xs);
+}
+
 .status-badge--medium {
   padding: 6px 14px;
   font-size: var(--font-size-sm);
@@ -59,5 +57,38 @@ const getConfig = (status: string) => {
 .status-badge--medium .status-badge__dot {
   width: 8px;
   height: 8px;
+}
+
+/* 状态颜色 - 使用 CSS 变量 */
+.status-badge--draft {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-gray);
+}
+.status-badge--draft .status-badge__dot {
+  background-color: var(--color-text-secondary);
+}
+
+.status-badge--info {
+  color: var(--color-info);
+  background: var(--color-info-light);
+}
+.status-badge--info .status-badge__dot {
+  background-color: var(--color-info);
+}
+
+.status-badge--success {
+  color: var(--color-success);
+  background: var(--color-success-light);
+}
+.status-badge--success .status-badge__dot {
+  background-color: var(--color-success);
+}
+
+.status-badge--error {
+  color: var(--color-error);
+  background: var(--color-error-light);
+}
+.status-badge--error .status-badge__dot {
+  background-color: var(--color-error);
 }
 </style>

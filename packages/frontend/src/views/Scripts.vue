@@ -5,7 +5,6 @@ import {
   NCard,
   NButton,
   NSpace,
-  NInput,
   NTag,
   NTabs,
   NTabPane,
@@ -13,12 +12,13 @@ import {
   useMessage,
   useDialog
 } from 'naive-ui'
-import { SearchOutline, AddOutline } from '@vicons/ionicons5'
+import { AddOutline } from '@vicons/ionicons5'
 import { api } from '@/api'
 import type { Script } from '@dreamer/shared/types'
 import EmptyState from '@/components/EmptyState.vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
+import SearchFilterBar from '@/components/SearchFilterBar.vue'
 import { useAsyncState } from '@/composables/useAsyncState'
 
 const router = useRouter()
@@ -202,16 +202,7 @@ const contentPreview = (content: string) => {
       </div>
       <div class="scripts-header__actions">
         <NSpace>
-          <NInput
-            v-model:value="searchQuery"
-            placeholder="搜索剧本..."
-            clearable
-            style="width: 200px"
-          >
-            <template #prefix>
-              <NIcon :component="SearchOutline" :size="16" />
-            </template>
-          </NInput>
+          <SearchFilterBar v-model="searchQuery" placeholder="搜索剧本..." search-width="200px" />
           <NButton type="primary" @click="handleCreate" :loading="isCreating">
             <template #icon>
               <NIcon :component="AddOutline" :size="16" />

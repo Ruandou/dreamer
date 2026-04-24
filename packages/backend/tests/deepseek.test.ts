@@ -58,10 +58,10 @@ describe('DeepSeek Service', () => {
       expect(cost.inputTokens).toBe(1000)
       expect(cost.outputTokens).toBe(500)
       expect(cost.totalTokens).toBe(1500)
-      // 新定价：输入2元/百万tokens，输出3元/百万tokens
+      // DeepSeek V4 Flash 定价：输入(cache miss) 1.0元/百万tokens，输出 2.0元/百万tokens
       // 1000 tokens = 0.001百万tokens，500 tokens = 0.0005百万tokens
-      // 成本 = (0.001 * 2) + (0.0005 * 3) = 0.002 + 0.0015 = 0.0035元
-      expect(cost.costCNY).toBeCloseTo(0.0035, 4)
+      // 成本 = (0.001 * 1.0) + (0.0005 * 2.0) = 0.001 + 0.001 = 0.002元
+      expect(cost.costCNY).toBeCloseTo(0.002, 4)
     })
 
     it('should handle missing usage data', () => {

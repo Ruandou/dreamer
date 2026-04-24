@@ -11,6 +11,7 @@ const userSettingsSelect = {
   atlasApiUrl: true,
   arkApiKey: true,
   arkApiUrl: true,
+  modelPreferences: true,
   createdAt: true
 } satisfies Prisma.UserSelect
 
@@ -32,7 +33,8 @@ export class SettingsRepository {
         id: true,
         email: true,
         name: true,
-        apiKey: true
+        apiKey: true,
+        modelPreferences: true
       }
     })
   }

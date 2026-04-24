@@ -1,9 +1,97 @@
+<script setup lang="ts">
+import { computed, h } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import {
+  NLayoutSider,
+  NMenu,
+  NIcon,
+  NButton,
+  NAvatar,
+  NDropdown,
+  type MenuOption,
+  type DropdownOption
+} from 'naive-ui'
+import {
+  HomeOutline,
+  FolderOpenOutline,
+  DocumentTextOutline,
+  CreateOutline,
+  DownloadOutline,
+  TimeOutline,
+  BarChartOutline,
+  RadioOutline,
+  SettingsOutline
+} from '@vicons/ionicons5'
+import { useUIStore } from '../stores/ui'
+import SidebarBreadcrumb, { type BreadcrumbItem } from './SidebarBreadcrumb.vue'
+import { NAV_ICONS } from '../lib/nav-icons'
+
+export interface AppSidebarProps {
+  mode?: 'global' | 'project'
+  menuOptions?: MenuOption[]
+  breadcrumbs?: BreadcrumbItem[]
+}
+
+const props = withDefaults(defineProps<AppSidebarProps>(), {
+  mode: 'global',
+  menuOptions: () => [],
+  breadcrumbs: () => []
+})
+
+const router = useRouter()
+const route = useRoute()
+const uiStore = useUIStore()
+
+const currentRoute = computed(() => route.path)
+
+function renderIcon(component: any) {
+  return () => h(NIcon, { component, size: 20 })
+}
+
+const globalMenuOptions: MenuOption[] = [
+  { label: '工作台', key: '/dashboard', icon: renderIcon(HomeOutline) },
+  { label: '项目列表', key: '/projects', icon: renderIcon(FolderOpenOutline) },
+  { label: '剧本列表', key: '/scripts', icon: renderIcon(DocumentTextOutline) },
+  { label: 'AI 写作工作室', key: '/studio', icon: renderIcon(CreateOutline) },
+  { label: '导入剧本', key: '/import', icon: renderIcon(DownloadOutline) },
+  { label: '任务中心', key: '/jobs', icon: renderIcon(TimeOutline) },
+  { label: '统计分析', key: '/stats', icon: renderIcon(BarChartOutline) },
+  { label: '模型日志', key: '/model-calls', icon: renderIcon(RadioOutline) },
+  { label: '设置', key: '/settings', icon: renderIcon(SettingsOutline) }
+]
+
+const menuOptions = computed(() =>
+  props.mode === 'global' ? globalMenuOptions : props.menuOptions
+)
+const activeKey = computed(() => (props.mode === 'global' ? currentRoute.value : undefined))
+
+function handleMenuClick(key: string) {
+  router.push(key)
+}
+
+const userName = computed(() => uiStore.userName)
+const userMenuOptions: DropdownOption[] = [
+  { label: '设置', key: 'settings' },
+  { type: 'divider', key: 'd1' },
+  { label: '退出登录', key: 'logout' }
+]
+
+function handleUserMenu(key: string) {
+  if (key === 'logout') {
+    localStorage.removeItem('token')
+    router.push('/login')
+  } else if (key === 'settings') {
+    router.push('/settings')
+  }
+}
+</script>
+
 <template>
   <NLayoutSider
     bordered
     collapse-mode="width"
     :collapsed-width="64"
-    :width="220"
+    :width="260"
     :collapsed="uiStore.sidebarCollapsed"
     show-trigger
     @collapse="uiStore.toggleSidebar()"
@@ -19,62 +107,46 @@
         <span v-if="!uiStore.sidebarCollapsed" class="logo-text">AI短剧工作台</span>
       </div>
 
-      <!-- Menu -->
+      <!-- 项目面包屑（仅 project 模式） -->
+      <SidebarBreadcrumb
+        v-if="mode === 'project' && breadcrumbs.length > 0"
+        :crumbs="breadcrumbs"
+      />
+
+      <!-- 返回按钮（仅 project 模式） -->
+      <div v-if="mode === 'project' && !uiStore.sidebarCollapsed" class="sidebar-back">
+        <NButton text size="small" @click="router.push('/projects')">
+          <template #icon>
+            <NIcon :component="NAV_ICONS.back" :size="16" />
+          </template>
+          返回工作台
+        </NButton>
+      </div>
+
+      <!-- 导航菜单 -->
       <NMenu
-        :value="currentRoute"
+        :value="activeKey"
         :collapsed="uiStore.sidebarCollapsed"
         :collapsed-width="64"
         :collapsed-icon-size="22"
         :options="menuOptions"
         @update:value="handleMenuClick"
       />
+
+      <!-- 底部用户区 -->
+      <div class="sidebar-footer">
+        <NDropdown :options="userMenuOptions" @select="handleUserMenu" placement="top-start">
+          <div class="user-section">
+            <NAvatar round size="small" :style="{ backgroundColor: '#6366f1' }">
+              {{ userName.charAt(0) || 'U' }}
+            </NAvatar>
+            <span v-if="!uiStore.sidebarCollapsed" class="user-name">{{ userName }}</span>
+          </div>
+        </NDropdown>
+      </div>
     </div>
   </NLayoutSider>
 </template>
-
-<script setup lang="ts">
-import { computed, h } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { NLayoutSider, NMenu, NIcon, type MenuOption } from 'naive-ui'
-import {
-  HomeOutline,
-  FolderOpenOutline,
-  DocumentTextOutline,
-  CreateOutline,
-  DownloadOutline,
-  TimeOutline,
-  BarChartOutline,
-  RadioOutline,
-  SettingsOutline
-} from '@vicons/ionicons5'
-import { useUIStore } from '../stores/ui'
-
-const router = useRouter()
-const route = useRoute()
-const uiStore = useUIStore()
-
-const currentRoute = computed(() => route.path)
-
-function renderIcon(component: any) {
-  return () => h(NIcon, { component, size: 20 })
-}
-
-const menuOptions: MenuOption[] = [
-  { label: '工作台', key: '/dashboard', icon: renderIcon(HomeOutline) },
-  { label: '项目列表', key: '/projects', icon: renderIcon(FolderOpenOutline) },
-  { label: '剧本列表', key: '/scripts', icon: renderIcon(DocumentTextOutline) },
-  { label: 'AI 写作工作室', key: '/studio', icon: renderIcon(CreateOutline) },
-  { label: '导入剧本', key: '/import', icon: renderIcon(DownloadOutline) },
-  { label: '任务中心', key: '/jobs', icon: renderIcon(TimeOutline) },
-  { label: '统计分析', key: '/stats', icon: renderIcon(BarChartOutline) },
-  { label: '模型日志', key: '/model-calls', icon: renderIcon(RadioOutline) },
-  { label: '设置', key: '/settings', icon: renderIcon(SettingsOutline) }
-]
-
-function handleMenuClick(key: string) {
-  router.push(key)
-}
-</script>
 
 <style scoped>
 .app-sider {
@@ -115,5 +187,43 @@ function handleMenuClick(key: string) {
 .logo-text {
   white-space: nowrap;
   overflow: hidden;
+}
+
+.sidebar-back {
+  padding: 4px 16px 12px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+/* 底部用户区 */
+.sidebar-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-white);
+}
+
+.user-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.user-section:hover {
+  background: var(--color-bg-gray);
+}
+
+.user-name {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

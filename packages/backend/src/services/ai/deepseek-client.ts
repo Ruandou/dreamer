@@ -1,16 +1,13 @@
 /**
  * DeepSeek pricing calculator.
- *
- * Source: https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
- * Prices are in CNY per 1M tokens.
+ * @deprecated 请使用 llm/llm-model-catalog.ts 中的定价配置
+ * 保留此文件以兼容现有调用方
  */
 
-const DEEPSEEK_INPUT_COST_PER_1M_CACHE_HIT = 0.2
-const DEEPSEEK_INPUT_COST_PER_1M_CACHE_MISS = 2.0
-const DEEPSEEK_OUTPUT_COST_PER_1M = 3.0
+export { DeepSeekAuthError, DeepSeekRateLimitError } from './llm/providers/deepseek-provider.js'
 
-/** Number of tokens per million (for cost calculation). */
-const TOKENS_PER_MILLION = 1_000_000
+import { calculateTokenCost } from './core/cost-calculator.js'
+import { getDeepSeekPricing } from './llm/llm-model-catalog.js'
 
 export interface DeepSeekCost {
   inputTokens: number
@@ -20,20 +17,11 @@ export interface DeepSeekCost {
   cacheHit?: boolean
 }
 
-export class DeepSeekAuthError extends Error {
-  constructor(message = 'DeepSeek API 认证失败，请检查 API Key') {
-    super(message)
-    this.name = 'DeepSeekAuthError'
-  }
-}
+const TOKENS_PER_MILLION = 1_000_000
 
-export class DeepSeekRateLimitError extends Error {
-  constructor(message = 'DeepSeek API 请求过于频繁，请稍后重试') {
-    super(message)
-    this.name = 'DeepSeekRateLimitError'
-  }
-}
-
+/**
+ * @deprecated 请使用 llm/providers/deepseek-provider.ts 中的 calculateUsage
+ */
 export function calculateDeepSeekCost(usage: unknown, cacheHit = false): DeepSeekCost {
   const typedUsage = usage as {
     prompt_tokens?: number
@@ -44,19 +32,30 @@ export function calculateDeepSeekCost(usage: unknown, cacheHit = false): DeepSee
   const outputTokens = typedUsage?.completion_tokens ?? 0
   const totalTokens = typedUsage?.total_tokens ?? 0
 
-  const inputCostPerMillion = cacheHit
-    ? DEEPSEEK_INPUT_COST_PER_1M_CACHE_HIT
-    : DEEPSEEK_INPUT_COST_PER_1M_CACHE_MISS
+  // 尝试使用新定价配置
+  const pricing = getDeepSeekPricing('deepseek-v4-flash')
+  if (pricing) {
+    const result = calculateTokenCost(inputTokens, outputTokens, pricing, cacheHit)
+    return {
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      costCNY: result.costCNY,
+      cacheHit
+    }
+  }
 
+  // 回退到旧定价
+  const inputCostPerMillion = cacheHit ? 0.2 : 2.0
   const costCNY =
     (inputTokens / TOKENS_PER_MILLION) * inputCostPerMillion +
-    (outputTokens / TOKENS_PER_MILLION) * DEEPSEEK_OUTPUT_COST_PER_1M
+    (outputTokens / TOKENS_PER_MILLION) * 3.0
 
   return {
     inputTokens,
     outputTokens,
     totalTokens,
-    costCNY,
+    costCNY: Math.round(costCNY * 1_000_000) / 1_000_000,
     cacheHit
   }
 }

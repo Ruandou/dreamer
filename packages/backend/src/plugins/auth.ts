@@ -34,7 +34,12 @@ export const authPlugin = fp(async (fastify: FastifyInstance) => {
   })
 })
 
-export type AuthUser = { id: string; email: string; name: string | null }
+export type AuthUser = {
+  id: string
+  email: string
+  name: string | null
+  modelPreferences?: unknown
+}
 
 /** Extract authenticated user ID from request (set by authenticate preHandler) */
 export function getRequestUserId(request: FastifyRequest): string {

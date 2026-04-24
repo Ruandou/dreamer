@@ -18,6 +18,8 @@ model User {
   atlasApiUrl    String?
   arkApiKey      String?
   arkApiUrl      String?
+  /// 用户模型偏好配置 { llm?: { provider, model }, image?: { provider, model }, video?: { provider, model }, search?: { provider } }
+  modelPreferences Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -5,9 +5,7 @@ import {
   NCard,
   NButton,
   NSpace,
-  NEmpty,
   NTag,
-  NSpin,
   NDataTable,
   NTabs,
   NTabPane,
@@ -25,6 +23,8 @@ import {
 } from '@vicons/ionicons5'
 import { api } from '@/api'
 import { usePolling } from '@/composables/usePolling'
+import EmptyState from '@/components/EmptyState.vue'
+import SkeletonLoader from '@/components/SkeletonLoader.vue'
 
 const message = useMessage()
 
@@ -463,22 +463,28 @@ onUnmounted(() => {
       </NTabs>
 
       <div class="jobs-content">
-        <NSpin :show="isLoading && !jobs.length">
-          <NEmpty v-if="!filteredJobs.length && !isLoading" description="暂无任务">
-            <template #extra>
-              <NButton type="primary" @click="router.push('/projects')"> 去创建项目 </NButton>
-            </template>
-          </NEmpty>
-
-          <NDataTable
-            v-else
-            :columns="columns"
-            :data="filteredJobs"
-            :loading="isLoading"
-            :bordered="false"
-            :row-key="(row: Job) => row.id + row.type"
-          />
-        </NSpin>
+        <div v-if="isLoading && !jobs.length" class="jobs-loading">
+          <SkeletonLoader variant="table" :rows="5" />
+        </div>
+        <EmptyState
+          v-else-if="!filteredJobs.length"
+          title="暂无任务"
+          description="创建项目或生成内容后，任务会在这里显示"
+          icon="📋"
+          :icon-size="48"
+        >
+          <template #action>
+            <NButton type="primary" @click="router.push('/projects')"> 去创建项目 </NButton>
+          </template>
+        </EmptyState>
+        <NDataTable
+          v-else
+          :columns="columns"
+          :data="filteredJobs"
+          :loading="isLoading"
+          :bordered="false"
+          :row-key="(row: Job) => row.id + row.type"
+        />
       </div>
 
       <div
@@ -527,6 +533,10 @@ onUnmounted(() => {
 .jobs-content {
   margin-top: var(--spacing-lg);
   min-height: 300px;
+}
+
+.jobs-loading {
+  padding: var(--spacing-xl) 0;
 }
 
 .jobs-footer {

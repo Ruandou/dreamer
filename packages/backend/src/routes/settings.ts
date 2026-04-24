@@ -22,6 +22,7 @@ export async function settingsRoutes(fastify: FastifyInstance) {
         arkApiKey?: string
         arkApiUrl?: string
       }
+      modelPreferences?: Record<string, unknown>
     }
   }>('/me', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const user = getRequestUser(request)

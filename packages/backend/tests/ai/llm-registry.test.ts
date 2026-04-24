@@ -82,7 +82,7 @@ describe('LLMProviderRegistry', () => {
           provider: 'nonexistent-provider',
           apiKey: 'test-key'
         })
-      ).toThrow(/Unknown LLM provider: nonexistent-provider/)
+      ).toThrow(/Unknown provider: nonexistent-provider/)
     })
 
     it('should include available providers in error message', () => {
@@ -211,6 +211,6 @@ describe('LLMProvider (DeepSeek integration)', () => {
     expect(result.content).toBeDefined()
     expect(result.content.length).toBeGreaterThan(0)
     expect(result.usage.totalTokens).toBeGreaterThan(0)
-    expect(result.model).toBe('deepseek-chat')
+    expect(result.model).toBe('deepseek-v4-flash')
   })
 })

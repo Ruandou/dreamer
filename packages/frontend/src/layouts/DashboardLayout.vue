@@ -1,28 +1,10 @@
 <template>
   <NLayout has-sider class="dashboard-layout">
-    <!-- 左侧边栏 -->
-    <AppSidebar />
+    <!-- 左侧边栏（由路由 meta 决定内容） -->
+    <AppSidebar :mode="sidebarMode" :menu-options="projectMenuOptions" :breadcrumbs="breadcrumbs" />
 
-    <!-- 右侧内容区 -->
+    <!-- 右侧内容区（无 Header，直接贴顶） -->
     <NLayout class="dashboard-main">
-      <!-- 顶栏 -->
-      <NLayoutHeader class="dashboard-header">
-        <div class="header-content">
-          <div class="header-left"></div>
-          <div class="header-right">
-            <NDropdown :options="userMenuOptions" @select="handleUserMenu">
-              <NButton quaternary class="user-button">
-                <NAvatar round size="small" :style="{ backgroundColor: '#6366f1' }">
-                  {{ userName.charAt(0) || 'U' }}
-                </NAvatar>
-                <span class="user-name">{{ userName }}</span>
-              </NButton>
-            </NDropdown>
-          </div>
-        </div>
-      </NLayoutHeader>
-
-      <!-- 内容区 -->
       <NLayoutContent class="dashboard-content">
         <RouterView />
       </NLayoutContent>
@@ -31,37 +13,46 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import {
-  NLayout,
-  NLayoutHeader,
-  NLayoutContent,
-  NButton,
-  NAvatar,
-  NDropdown,
-  type DropdownOption
-} from 'naive-ui'
-import { useUIStore } from '../stores/ui'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { NLayout, NLayoutContent } from 'naive-ui'
 import AppSidebar from '../components/AppSidebar.vue'
+import type { BreadcrumbItem } from '../components/SidebarBreadcrumb.vue'
+import { useProjectStore } from '../stores/project'
 
-const router = useRouter()
-const uiStore = useUIStore()
+const route = useRoute()
+const projectStore = useProjectStore()
 
-const userName = computed(() => uiStore.userName)
+// 根据路由 meta 决定侧边栏模式
+const sidebarMode = computed(() => (route.meta.projectLayout ? 'project' : 'global'))
 
-onMounted(() => {
-  uiStore.fetchUserInfo()
+// 项目模式下的面包屑
+const breadcrumbs = computed<BreadcrumbItem[]>(() => {
+  if (sidebarMode.value !== 'project') return []
+
+  const projectId = route.params.id as string
+  const projectName = projectStore.currentProject?.name || '项目'
+  const crumbs: BreadcrumbItem[] = [{ label: projectName, path: `/project/${projectId}` }]
+
+  // 添加当前路由的面包屑
+  for (const matched of route.matched) {
+    if (matched.meta?.title && matched.path !== `/project/:id`) {
+      crumbs.push({
+        label: matched.meta.title as string,
+        path: matched.path.includes(':') ? undefined : matched.path
+      })
+    }
+  }
+
+  return crumbs
 })
 
-const userMenuOptions: DropdownOption[] = [{ label: '退出登录', key: 'logout' }]
-
-function handleUserMenu(key: string) {
-  if (key === 'logout') {
-    localStorage.removeItem('token')
-    router.push('/login')
-  }
-}
+// 项目模式下的菜单选项（由 ProjectDetail 提供）
+const projectMenuOptions = computed(() => {
+  // 这部分将由 ProjectDetail 通过 provide/inject 或其他方式提供
+  // 暂时返回空数组，后续在 ProjectDetail 改造时补充
+  return []
+})
 </script>
 
 <style scoped>
@@ -71,37 +62,6 @@ function handleUserMenu(key: string) {
 
 .dashboard-main {
   background: #f5f5f5;
-}
-
-.dashboard-header {
-  background: var(--color-bg-white);
-  border-bottom: 1px solid #e5e7eb;
-  height: 56px;
-}
-
-.header-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 100%;
-  padding: 0 24px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.user-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.user-name {
-  font-size: 14px;
-  color: var(--color-text-primary);
 }
 
 .dashboard-content {

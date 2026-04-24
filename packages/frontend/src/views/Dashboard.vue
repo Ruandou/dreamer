@@ -1,116 +1,131 @@
 <template>
   <div class="page-shell dashboard-page">
-    <!-- 欢迎问候 -->
-    <div class="dashboard-header">
-      <h1 class="greeting">{{ greeting }}，{{ uiStore.userName || '用户' }} 👋</h1>
-      <p class="sub-title">今天想做点什么？</p>
+    <!-- 加载态 -->
+    <div v-if="isLoading" class="dashboard-loading">
+      <SkeletonLoader :rows="3" variant="grid" :show-header="false" />
     </div>
 
-    <!-- 快捷操作 -->
-    <div class="dashboard-quick-actions">
-      <NCard hoverable class="action-card action-card--primary" @click="navigateTo('/projects')">
-        <div class="action-icon">
-          <NIcon :component="AddCircleOutline" :size="32" />
-        </div>
-        <h3>新建项目</h3>
-        <p>从零创建短剧项目</p>
-      </NCard>
-      <NCard hoverable class="action-card action-card--secondary" @click="navigateTo('/studio')">
-        <div class="action-icon">
-          <NIcon :component="CreateOutline" :size="32" />
-        </div>
-        <h3>AI 写作工作室</h3>
-        <p>AI 辅助剧本创作</p>
-      </NCard>
-      <NCard hoverable class="action-card action-card--tertiary" @click="navigateTo('/import')">
-        <div class="action-icon">
-          <NIcon :component="DownloadOutline" :size="32" />
-        </div>
-        <h3>导入剧本</h3>
-        <p>上传并解析现有剧本</p>
-      </NCard>
-    </div>
+    <!-- 错误态 -->
+    <NAlert v-else-if="hasError" type="error" class="dashboard-error">
+      加载数据失败
+      <NButton text @click="loadData">重试</NButton>
+    </NAlert>
 
-    <!-- 统计卡片 -->
-    <div class="dashboard-stats-row">
-      <NStatistic class="stat-card">
-        <template #label>本月项目</template>
-        <template #default>{{ stats.projectCount }}</template>
-      </NStatistic>
-      <NStatistic class="stat-card">
-        <template #label>完成任务</template>
-        <template #default>{{ stats.completedTasks }}</template>
-      </NStatistic>
-      <NStatistic class="stat-card">
-        <template #label>AI 成本 (¥)</template>
-        <template #default>{{ stats.aiCost }}</template>
-      </NStatistic>
-      <NStatistic class="stat-card">
-        <template #label>进行中任务</template>
-        <template #default>{{ stats.processingTasks }}</template>
-      </NStatistic>
-    </div>
+    <!-- 正常内容 -->
+    <template v-else>
+      <!-- 欢迎问候 -->
+      <div class="dashboard-header">
+        <h1 class="greeting">{{ greeting }}，{{ uiStore.userName || '用户' }}</h1>
+        <p class="sub-title">今天想做点什么？</p>
+      </div>
 
-    <!-- 双列内容区 -->
-    <div class="dashboard-grid">
-      <!-- 最近项目 -->
-      <NCard title="最近项目" :bordered="false" class="content-card">
-        <template #header-extra>
-          <NButton text @click="navigateTo('/projects')">查看全部</NButton>
-        </template>
-        <div v-if="recentProjects.length === 0" class="empty-hint">暂无项目</div>
-        <div v-else class="project-list">
-          <div
-            v-for="project in recentProjects"
-            :key="project.id"
-            class="project-item"
-            @click="navigateTo(`/project/${project.id}`)"
-          >
-            <div class="project-info">
-              <h4>{{ project.name }}</h4>
-              <p v-if="project.description">{{ project.description }}</p>
-              <span class="project-date">{{ formatDate(project.updatedAt) }}</span>
+      <!-- 快捷操作 -->
+      <div class="dashboard-quick-actions">
+        <NCard hoverable class="action-card action-card--primary" @click="navigateTo('/projects')">
+          <div class="action-icon">
+            <NIcon :component="AddCircleOutline" :size="32" />
+          </div>
+          <h3>新建项目</h3>
+          <p>从零创建短剧项目</p>
+        </NCard>
+        <NCard hoverable class="action-card action-card--secondary" @click="navigateTo('/studio')">
+          <div class="action-icon">
+            <NIcon :component="CreateOutline" :size="32" />
+          </div>
+          <h3>AI 写作工作室</h3>
+          <p>AI 辅助剧本创作</p>
+        </NCard>
+        <NCard hoverable class="action-card action-card--tertiary" @click="navigateTo('/import')">
+          <div class="action-icon">
+            <NIcon :component="DownloadOutline" :size="32" />
+          </div>
+          <h3>导入剧本</h3>
+          <p>上传并解析现有剧本</p>
+        </NCard>
+      </div>
+
+      <!-- 统计卡片 -->
+      <div class="dashboard-stats-row">
+        <NStatistic class="stat-card">
+          <template #label>本月项目</template>
+          <template #default>{{ stats.projectCount }}</template>
+        </NStatistic>
+        <NStatistic class="stat-card">
+          <template #label>完成任务</template>
+          <template #default>{{ stats.completedTasks }}</template>
+        </NStatistic>
+        <NStatistic class="stat-card">
+          <template #label>AI 成本 (¥)</template>
+          <template #default>{{ stats.aiCost }}</template>
+        </NStatistic>
+        <NStatistic class="stat-card">
+          <template #label>进行中任务</template>
+          <template #default>{{ stats.processingTasks }}</template>
+        </NStatistic>
+      </div>
+
+      <!-- 双列内容区 -->
+      <div class="dashboard-grid">
+        <!-- 最近项目 -->
+        <NCard title="最近项目" :bordered="false" class="content-card">
+          <template #header-extra>
+            <NButton text @click="navigateTo('/projects')">查看全部</NButton>
+          </template>
+          <div v-if="recentProjects.length === 0" class="empty-hint">暂无项目</div>
+          <div v-else class="project-list">
+            <div
+              v-for="project in recentProjects"
+              :key="project.id"
+              class="project-item"
+              @click="navigateTo(`/project/${project.id}`)"
+            >
+              <div class="project-info">
+                <h4>{{ project.name }}</h4>
+                <p v-if="project.description">{{ project.description }}</p>
+                <span class="project-date">{{ formatDate(project.updatedAt) }}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </NCard>
+        </NCard>
 
-      <!-- 最近任务 -->
-      <NCard title="最近任务" :bordered="false" class="content-card">
-        <template #header-extra>
-          <NButton text @click="navigateTo('/jobs')">查看全部</NButton>
-        </template>
-        <div v-if="recentTasks.length === 0" class="empty-hint">暂无任务</div>
-        <div v-else class="task-list">
-          <div v-for="task in recentTasks" :key="task.id" class="task-item">
-            <NTag
-              :type="
-                task.status === 'completed'
-                  ? 'success'
-                  : task.status === 'failed'
-                    ? 'error'
-                    : 'info'
-              "
-              size="small"
-            >
-              {{ task.status }}
-            </NTag>
-            <span class="task-type">{{ getTaskTypeLabel(task.type) }}</span>
-            <span class="task-date">{{ formatDate(task.createdAt) }}</span>
+        <!-- 最近任务 -->
+        <NCard title="最近任务" :bordered="false" class="content-card">
+          <template #header-extra>
+            <NButton text @click="navigateTo('/jobs')">查看全部</NButton>
+          </template>
+          <div v-if="recentTasks.length === 0" class="empty-hint">暂无任务</div>
+          <div v-else class="task-list">
+            <div v-for="task in recentTasks" :key="task.id" class="task-item">
+              <StatusBadge
+                :status="
+                  task.status === 'completed'
+                    ? 'completed'
+                    : task.status === 'failed'
+                      ? 'failed'
+                      : 'processing'
+                "
+                size="small"
+              />
+              <span class="task-type">{{ getTaskTypeLabel(task.type) }}</span>
+              <span class="task-date">{{ formatDate(task.createdAt) }}</span>
+            </div>
           </div>
-        </div>
-      </NCard>
-    </div>
+        </NCard>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NStatistic, NButton, NTag, NIcon } from 'naive-ui'
+import { NCard, NStatistic, NButton, NIcon, NAlert } from 'naive-ui'
 import { AddCircleOutline, CreateOutline, DownloadOutline } from '@vicons/ionicons5'
 import { useUIStore } from '../stores/ui'
 import { api } from '../api'
+import SkeletonLoader from '../components/SkeletonLoader.vue'
+import StatusBadge from '../components/StatusBadge.vue'
+import { formatDate } from '../lib/date-formatting'
 
 const router = useRouter()
 const uiStore = useUIStore()
@@ -124,6 +139,10 @@ const stats = ref({
   aiCost: 0,
   processingTasks: 0
 })
+
+// 加载状态
+const isLoading = ref(false)
+const hasError = ref(false)
 
 // 计算属性
 const greeting = computed(() => {
@@ -141,17 +160,6 @@ function navigateTo(path: string) {
   router.push(path)
 }
 
-function formatDate(dateStr: string) {
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  if (days === 0) return '今天'
-  if (days === 1) return '昨天'
-  if (days < 7) return `${days}天前`
-  return date.toLocaleDateString('zh-CN')
-}
-
 function getTaskTypeLabel(type: string) {
   const map: Record<string, string> = {
     video: '视频',
@@ -163,7 +171,9 @@ function getTaskTypeLabel(type: string) {
 }
 
 // 加载数据
-onMounted(async () => {
+async function loadData() {
+  isLoading.value = true
+  hasError.value = false
   try {
     const [projectsRes, statsRes, tasksRes] = await Promise.all([
       api.get('/projects'),
@@ -176,8 +186,14 @@ onMounted(async () => {
     stats.value.aiCost = statsRes.data?.totalCost || 0
     tasks.value = tasksRes.data?.jobs || []
   } catch {
-    // 静默失败
+    hasError.value = true
+  } finally {
+    isLoading.value = false
   }
+}
+
+onMounted(() => {
+  void loadData()
 })
 </script>
 
@@ -185,6 +201,14 @@ onMounted(async () => {
 .dashboard-page {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.dashboard-loading {
+  padding: var(--spacing-lg);
+}
+
+.dashboard-error {
+  margin: var(--spacing-lg);
 }
 
 .dashboard-header {
@@ -238,12 +262,12 @@ onMounted(async () => {
 }
 
 .action-card--secondary .action-icon {
-  background: rgba(139, 92, 246, 0.12);
+  background: var(--color-secondary-light);
   color: var(--color-secondary);
 }
 
 .action-card--tertiary .action-icon {
-  background: rgba(16, 185, 129, 0.12);
+  background: var(--color-success-light);
   color: var(--color-success);
 }
 
@@ -332,7 +356,7 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 8px 0;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .task-item:last-child {

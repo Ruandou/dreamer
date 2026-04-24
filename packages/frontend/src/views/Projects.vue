@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NButton, NSpace, NInput, NDropdown, NIcon, useMessage, useDialog } from 'naive-ui'
-import { SearchOutline, FilmOutline, EllipsisVerticalOutline } from '@vicons/ionicons5'
+import { NCard, NButton, NSpace, NDropdown, NIcon, useMessage, useDialog } from 'naive-ui'
+import { FilmOutline, EllipsisVerticalOutline } from '@vicons/ionicons5'
 import { useProjectStore } from '@/stores/project'
 import type { Project } from '@dreamer/shared/types'
 import { normalizeProjectName } from '@dreamer/shared'
@@ -12,6 +12,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
+import SearchFilterBar from '@/components/SearchFilterBar.vue'
 import { useAsyncState } from '@/composables/useAsyncState'
 import { useKeyboardShortcuts, commonShortcuts } from '@/composables/useKeyboardShortcuts'
 
@@ -216,18 +217,11 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         </p>
       </div>
       <div class="projects-header__actions">
-        <NSpace>
-          <NInput
-            v-model:value="searchQuery"
-            placeholder="搜索项目... (⌘K)"
-            clearable
-            style="width: 200px"
-          >
-            <template #prefix>
-              <NIcon :component="SearchOutline" :size="16" />
-            </template>
-          </NInput>
-        </NSpace>
+        <SearchFilterBar
+          v-model="searchQuery"
+          placeholder="搜索项目... (⌘K)"
+          search-width="200px"
+        />
       </div>
     </header>
 

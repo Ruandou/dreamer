@@ -10,11 +10,12 @@ import {
   NDataTable,
   NTag,
   NModal,
-  NSpin,
   useMessage,
   type DataTableColumns
 } from 'naive-ui'
 import { getModelApiCalls, type ModelApiCallRow } from '@/api'
+import EmptyState from '@/components/EmptyState.vue'
+import SkeletonLoader from '@/components/SkeletonLoader.vue'
 
 const router = useRouter()
 const message = useMessage()
@@ -109,7 +110,11 @@ const columns: DataTableColumns<ModelApiCallRow> = [
     width: 100,
     render(row) {
       const ok = row.status === 'completed'
-      return h(NTag, { type: ok ? 'success' : 'error', size: 'small' }, { default: () => row.status })
+      return h(
+        NTag,
+        { type: ok ? 'success' : 'error', size: 'small' },
+        { default: () => row.status }
+      )
     }
   },
   {
@@ -153,8 +158,8 @@ onMounted(load)
       <p class="model-calls-desc">
         与终端 <code>[model-api]</code> 同源落库；失败记录也会写入（状态为
         <code>failed</code>）。若页面上看不到任何失败，请看后端是否出现
-        <code>未写入 ModelApiCall：缺少 ModelCallLogContext</code>（表示调用未带审计上下文）。定场/定妆对应
-        <code>op=script_visual_enrichment</code>。
+        <code>未写入 ModelApiCall：缺少 ModelCallLogContext</code
+        >（表示调用未带审计上下文）。定场/定妆对应 <code>op=script_visual_enrichment</code>。
       </p>
     </header>
 
@@ -197,7 +202,7 @@ onMounted(load)
           <NButton
             secondary
             @click="
-              filterOp = 'script_visual_enrichment';
+              filterOp = 'script_visual_enrichment'
               load()
             "
           >
@@ -206,19 +211,21 @@ onMounted(load)
           <NButton
             secondary
             @click="
-              filterOp = 'import_parse_script';
+              filterOp = 'import_parse_script'
               load()
             "
           >
             导入解析
           </NButton>
-          <NButton @click="
-            filterOp = '';
-            filterProjectId = '';
-            filterModel = '';
-            filterStatus = null;
-            load()
-          ">
+          <NButton
+            @click="
+              filterOp = ''
+              filterProjectId = ''
+              filterModel = ''
+              filterStatus = null
+              load()
+            "
+          >
             清空条件
           </NButton>
           <NButton @click="router.push('/projects')">返回项目</NButton>
@@ -226,7 +233,10 @@ onMounted(load)
       </NSpace>
     </NCard>
 
-    <NSpin :show="loading">
+    <div v-if="loading && items.length === 0" class="model-calls-loading">
+      <SkeletonLoader variant="table" :rows="5" />
+    </div>
+    <div v-else>
       <NCard class="model-calls-table">
         <NDataTable
           :columns="columns"
@@ -236,9 +246,16 @@ onMounted(load)
           :row-key="(row: ModelApiCallRow) => row.id"
           size="small"
         />
-        <p v-if="!loading && items.length === 0" class="model-calls-empty">暂无记录</p>
+        <EmptyState
+          v-if="items.length === 0"
+          title="暂无调用记录"
+          description="执行模型调用后，日志会显示在这里"
+          icon="🔍"
+          :icon-size="48"
+          variant="compact"
+        />
       </NCard>
-    </NSpin>
+    </div>
 
     <NModal
       v-model:show="promptVisible"
@@ -277,14 +294,11 @@ onMounted(load)
 .model-calls-filters {
   margin-bottom: 16px;
 }
+.model-calls-loading {
+  padding: var(--spacing-xl) 0;
+}
 .model-calls-table {
   margin-top: 0;
-}
-.model-calls-empty {
-  margin: 16px 0 0;
-  text-align: center;
-  color: var(--n-text-color-3);
-  font-size: 14px;
 }
 .model-calls-prompt {
   margin: 0;
