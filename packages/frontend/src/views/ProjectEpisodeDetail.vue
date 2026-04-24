@@ -15,13 +15,14 @@ import type { DropdownOption } from 'naive-ui'
 import { CaretForwardOutline, ChevronDownOutline, HelpCircleOutline } from '@vicons/ionicons5'
 import { useEpisodeStore, type EpisodeDetailPayload } from '@/stores/episode'
 import { useEpisodeStoryboardPipelineJob } from '@/composables/useEpisodeStoryboardPipelineJob'
+import { useEpisodeScriptEditing } from '@/composables/useEpisodeScriptEditing'
 import { api } from '@/api'
-import { parseEditorDocToScene } from '@/lib/storyboard-editor/script-to-doc'
-import type { ScriptContent, ScriptScene, VideoModel } from '@dreamer/shared/types'
+import type { ScriptContent, VideoModel } from '@dreamer/shared/types'
 import { useSceneStore } from '@/stores/scene'
 import StoryboardScriptEditor from '@/components/storyboard/StoryboardScriptEditor.vue'
 import EpisodeVideoPreview from '@/components/episode/EpisodeVideoPreview.vue'
 import EpisodeAssetLibrary from '@/components/episode/EpisodeAssetLibrary.vue'
+import EpisodeSceneTimeline from '@/components/episode/EpisodeSceneTimeline.vue'
 import { useEpisodeVideoGeneration } from '@/composables/useEpisodeVideoGeneration'
 
 const route = useRoute()
@@ -38,8 +39,6 @@ const notFound = ref(false)
 const composingId = ref(false)
 const detail = ref<EpisodeDetailPayload | null>(null)
 const selectedSceneId = ref<string | null>(null)
-const scriptEditing = ref(false)
-const scriptSaving = ref(false)
 const selectedShotId = ref<string | null>(null)
 
 const episode = computed(() => detail.value?.episode ?? null)
@@ -102,6 +101,16 @@ const selectedScene = computed(() => {
   if (!id) return null
   return scenes.value.find((s) => s.id === id) ?? null
 })
+
+// Script editing composable
+const { scriptEditing, scriptSaving, onSaveScript, onCancelScriptEdit, onStartEdit } =
+  useEpisodeScriptEditing({
+    episodeScript: computed(() => episode.value?.script),
+    selectedSceneNum: computed(() => selectedScene.value?.sceneNum),
+    updateEpisode: (id, data) => episodeStore.updateEpisode(id, data),
+    reload: load,
+    episodeId
+  })
 
 // Video generation composable (must be after selectedScene)
 async function doGenerateVideo(sceneId: string, model: VideoModel) {
@@ -299,11 +308,11 @@ const editorScript = computed<ScriptContent | null>(() => {
   const o = script as Record<string, unknown>
 
   // 只显示当前选中场次
-  const scenes = Array.isArray(o.scenes) ? o.scenes : []
+  const sceneList = Array.isArray(o.scenes) ? o.scenes : []
   const currentSceneNum = selectedScene.value?.sceneNum
   const filteredScenes = currentSceneNum
-    ? scenes.filter((s: any) => s.sceneNum === currentSceneNum)
-    : scenes
+    ? sceneList.filter((s: any) => s.sceneNum === currentSceneNum)
+    : sceneList
 
   return {
     title: typeof o.title === 'string' ? o.title : '',
@@ -312,48 +321,6 @@ const editorScript = computed<ScriptContent | null>(() => {
     editorDoc: o.editorDoc as Record<string, unknown> | null
   }
 })
-
-async function onSaveScript(script: ScriptContent) {
-  scriptSaving.value = true
-  try {
-    // 合并回完整剧本：当前场次用编辑器内容，其他场次保留
-    const fullScript = episode.value?.script as ScriptContent | undefined
-    const currentSceneNum = selectedScene.value?.sceneNum
-    let finalScript = script
-
-    if (fullScript?.scenes?.length && currentSceneNum) {
-      // 解析编辑器内容，提取对话和镜头
-      const currentScene = fullScript.scenes.find((s) => s.sceneNum === currentSceneNum)
-      const parsedScene = parseEditorDocToScene(
-        script.editorDoc || null,
-        currentSceneNum,
-        currentScene || undefined
-      )
-
-      const otherScenes = fullScript.scenes.filter((s) => s.sceneNum !== currentSceneNum)
-      finalScript = {
-        ...fullScript,
-        editorDoc: script.editorDoc,
-        scenes: [...otherScenes, parsedScene as ScriptScene]
-      }
-    }
-
-    await episodeStore.updateEpisode(episodeId.value, { script: finalScript })
-    scriptEditing.value = false
-    await load()
-    message.success('分镜脚本已保存')
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { error?: string } } }
-    message.error(err?.response?.data?.error || '保存失败')
-  } finally {
-    scriptSaving.value = false
-  }
-}
-
-function onCancelScriptEdit() {
-  scriptEditing.value = false
-  void load()
-}
 </script>
 
 <template>
@@ -448,7 +415,7 @@ function onCancelScriptEdit() {
                           :fragment-title="
                             selectedScene ? `片段 ${selectedScene.sceneNum}` : '片段'
                           "
-                          @start-edit="scriptEditing = true"
+                          @start-edit="onStartEdit"
                           @cancel="onCancelScriptEdit"
                           @save="onSaveScript"
                         >
@@ -499,23 +466,11 @@ function onCancelScriptEdit() {
                       <span class="episode-detail__transport-hint">时间轴占位，成片以导出为准</span>
                     </div>
 
-                    <footer class="episode-detail__shot-rail">
-                      <button
-                        v-for="sc in scenes"
-                        :key="sc.id"
-                        type="button"
-                        class="episode-detail__rail-cell"
-                        :class="{ 'is-active': sc.id === selectedSceneId }"
-                        @click="selectedSceneId = sc.id"
-                      >
-                        <div class="episode-detail__rail-thumb">
-                          <span class="episode-detail__rail-num">{{ sc.sceneNum }}</span>
-                        </div>
-                        <span class="episode-detail__rail-dur">{{
-                          sc.status === 'processing' ? '生成中' : sc.status || '待生成'
-                        }}</span>
-                      </button>
-                    </footer>
+                    <EpisodeSceneTimeline
+                      :scenes="scenes"
+                      :selected-scene-id="selectedSceneId"
+                      @select="selectedSceneId = $event"
+                    />
                   </div>
                 </div>
               </div>
@@ -951,81 +906,6 @@ function onCancelScriptEdit() {
   margin-left: auto;
   font-size: 11px;
   opacity: 0.85;
-}
-.episode-detail__shot-rail {
-  display: flex;
-  gap: var(--spacing-sm);
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  padding: var(--spacing-sm) 0 var(--spacing-xs);
-  border-top: 1px solid var(--color-border-light);
-  flex-shrink: 0;
-}
-.episode-detail__rail-cell {
-  flex: 0 0 auto;
-  width: 100px;
-  border: 2px solid transparent;
-  border-radius: var(--radius-md);
-  padding: 6px;
-  background: var(--color-bg-gray);
-  cursor: pointer;
-  text-align: center;
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast);
-}
-.episode-detail__rail-cell.is-active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-light);
-}
-.episode-detail__rail-thumb {
-  position: relative;
-  height: 64px;
-  border-radius: 6px;
-  background: #e2e8f0;
-  background-size: cover;
-  background-position: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  margin-bottom: 4px;
-  font-size: 10px;
-  color: var(--color-text-tertiary);
-  overflow: hidden;
-}
-.episode-detail__rail-thumb.is-cover::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(15, 23, 42, 0.55), transparent 55%);
-  pointer-events: none;
-}
-.episode-detail__rail-num {
-  position: relative;
-  z-index: 1;
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
-}
-.episode-detail__rail-thumb.is-cover {
-  justify-content: flex-start;
-  align-items: stretch;
-}
-.episode-detail__rail-thumb.is-cover .episode-detail__rail-num {
-  align-self: flex-end;
-  margin: 4px 6px 0;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
-}
-.episode-detail__rail-ph {
-  font-size: 10px;
-}
-.episode-detail__rail-dur {
-  font-size: 11px;
-  color: var(--color-text-secondary);
 }
 .episode-detail__muted {
   color: var(--color-text-tertiary);
