@@ -43,13 +43,13 @@ onMounted(() => {
 
 const themeOverrides = {
   common: {
-    primaryColor: '#6366f1',
-    primaryColorHover: '#818cf8',
-    primaryColorPressed: '#4f46e5',
-    primaryColorSuppl: '#818cf8',
+    primaryColor: '#f4726a',
+    primaryColorHover: '#f8968e',
+    primaryColorPressed: '#e85d55',
+    primaryColorSuppl: '#f8968e',
 
-    borderRadius: '8px',
-    borderRadiusSmall: '6px',
+    borderRadius: '10px',
+    borderRadiusSmall: '8px',
 
     fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     fontFamilyMono: '"Fira Code", monospace',
@@ -63,61 +63,61 @@ const themeOverrides = {
     successColor: '#10b981',
     warningColor: '#f59e0b',
     errorColor: '#ef4444',
-    infoColor: '#3b82f6',
+    infoColor: '#60a5fa',
 
     // Text
-    textColorBase: '#111827',
-    textColor1: '#111827',
-    textColor2: '#6b7280',
-    textColor3: '#9ca3af',
+    textColorBase: '#1e1b18',
+    textColor1: '#1e1b18',
+    textColor2: '#78716c',
+    textColor3: '#a8a29e',
 
     // Background
-    bodyColor: '#f5f5f5',
+    bodyColor: '#faf8f6',
     cardColor: '#ffffff',
     modalColor: '#ffffff',
     popoverColor: '#ffffff',
 
     // Border
-    borderColor: '#e5e7eb',
-    dividerColor: '#e5e7eb'
+    borderColor: '#e7e5e4',
+    dividerColor: '#e7e5e4'
   },
   Button: {
-    fontWeight: '500',
-    borderRadiusMedium: '8px',
-    borderRadiusSmall: '6px',
-    borderRadiusLarge: '10px'
+    fontWeight: '600',
+    borderRadiusMedium: '10px',
+    borderRadiusSmall: '8px',
+    borderRadiusLarge: '12px'
   },
   Card: {
-    borderRadius: '12px',
-    paddingMedium: '20px',
-    paddingLarge: '24px'
+    borderRadius: '16px',
+    paddingMedium: '24px',
+    paddingLarge: '28px'
   },
   Input: {
-    borderRadius: '8px'
+    borderRadius: '10px'
   },
   Select: {
-    borderRadius: '8px'
+    borderRadius: '10px'
   },
   Modal: {
-    borderRadius: '16px'
+    borderRadius: '20px'
   },
   Menu: {
-    itemBorderRadius: '8px',
+    itemBorderRadius: '10px',
     horizontalPadding: '16px',
-    itemPadding: '0 12px'
+    itemPadding: '0 14px'
   },
   Tag: {
     borderRadius: '9999px'
   },
   DataTable: {
-    borderRadius: '12px',
-    thPadding: '12px 16px',
-    tdPadding: '12px 16px'
+    borderRadius: '16px',
+    thPadding: '14px 18px',
+    tdPadding: '14px 18px'
   },
   Tabs: {
-    tabTextColorLine: '#6b7280',
-    tabTextColorActiveLine: '#6366f1',
-    tabTextColorHoverLine: '#818cf8'
+    tabTextColorLine: '#78716c',
+    tabTextColorActiveLine: '#f4726a',
+    tabTextColorHoverLine: '#f8968e'
   }
 }
 </script>

@@ -9,6 +9,10 @@ interface Props {
   showBackground?: boolean
   /** Variant for styling */
   variant?: 'default' | 'compact' | 'large'
+  /** Whether to show illustration image instead of emoji */
+  showIllustration?: boolean
+  /** Illustration image size in pixels */
+  illustrationSize?: number
 }
 
 withDefaults(defineProps<Props>(), {
@@ -16,13 +20,23 @@ withDefaults(defineProps<Props>(), {
   icon: '📭',
   iconSize: 64,
   showBackground: false,
-  variant: 'default'
+  variant: 'default',
+  showIllustration: false,
+  illustrationSize: 140
 })
 </script>
 
 <template>
   <div :class="['empty-state', `empty-state--${variant}`, { 'empty-state--bg': showBackground }]">
+    <img
+      v-if="showIllustration"
+      src="/images/empty-state.png"
+      alt=""
+      class="empty-state__illustration"
+      :style="{ width: `${illustrationSize}px` }"
+    />
     <div
+      v-else
       class="empty-state__icon"
       role="img"
       :aria-label="title"
@@ -64,6 +78,13 @@ withDefaults(defineProps<Props>(), {
   background: var(--color-bg-white);
   border-radius: var(--radius-lg);
   border: 1px dashed var(--color-border);
+}
+
+.empty-state__illustration {
+  height: auto;
+  margin-bottom: var(--spacing-md);
+  opacity: 0.9;
+  animation: float 3s ease-in-out infinite;
 }
 
 .empty-state__icon {

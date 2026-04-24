@@ -18,7 +18,8 @@ import {
   VideocamOutline,
   FlameOutline,
   CheckmarkOutline,
-  ArrowBackOutline
+  ArrowBackOutline,
+  PersonOutline
 } from '@vicons/ionicons5'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 
@@ -201,145 +202,178 @@ const formatBalance = (amount: number) => {
     </div>
     <div v-else class="settings-content">
       <!-- Account Info -->
-      <NCard title="账户信息" class="settings-card">
-        <NForm label-placement="left" label-width="100">
-          <NFormItem label="用户名">
-            <NInput v-model:value="userName" placeholder="输入用户名" />
-          </NFormItem>
-        </NForm>
-      </NCard>
-
-      <!-- DeepSeek API -->
-      <NCard class="settings-card">
-        <template #header>
-          <NSpace :size="8" align="center">
-            <NIcon :component="KeyOutline" :size="18" />
-            <span>DeepSeek（AI 编剧）</span>
-          </NSpace>
-        </template>
-        <template #header-extra>
-          <NTag v-if="hasApiKey" type="success" size="small">已配置</NTag>
-          <NTag v-else type="warning" size="small">未配置</NTag>
-        </template>
-
-        <div v-if="hasApiKey && !apiKeyInput" class="api-key-display">
-          <NInput :value="apiKey" disabled placeholder="已配置的 API Key" />
-          <NButton @click="apiKeyInput = ''" type="primary" tertiary>更换</NButton>
-        </div>
-
-        <div v-else class="api-key-form">
-          <NAlert v-if="balanceError" type="warning" class="mb-4">
-            {{ balanceError }}
-          </NAlert>
-
-          <NAlert v-if="verifySuccess && balance" type="success" class="mb-4">
-            验证成功！余额：¥{{
-              formatBalance(
-                balance.balanceInfos.find((b: any) => b.currency === 'CNY')?.totalBalance || 0
-              )
-            }}
-          </NAlert>
-
-          <NAlert v-if="verifyError" type="error" class="mb-4">
-            {{ verifyError }}
-          </NAlert>
-
-          <NForm label-placement="left" label-width="100">
-            <NFormItem label="API Key">
-              <NInput
-                v-model:value="apiKeyInput"
-                type="password"
-                placeholder="sk-xxxxxxxxxxxxxxxx"
-                show-password-on="click"
-              />
-            </NFormItem>
-            <NFormItem label="API URL">
-              <NInput
-                v-model:value="deepseekApiUrl"
-                placeholder="https://api.deepseek.com/v1（可选）"
-              />
-            </NFormItem>
-          </NForm>
-
-          <div class="api-key-actions">
-            <NSpace>
-              <NButton @click="verifyApiKey" :loading="verifying" :disabled="!apiKeyInput">
-                验证
-              </NButton>
-              <NButton @click="apiKeyInput = ''" tertiary>取消</NButton>
-            </NSpace>
+      <div class="settings-section">
+        <div class="settings-section__header">
+          <div
+            class="settings-section__icon"
+            style="background: linear-gradient(135deg, #ffeaea 0%, #ffedd5 100%); color: #f4726a"
+          >
+            <NIcon :component="PersonOutline" :size="20" />
+          </div>
+          <div>
+            <h3 class="settings-section__title">账户信息</h3>
+            <p class="settings-section__desc">管理你的个人资料</p>
           </div>
         </div>
+        <NCard class="settings-card" :bordered="false">
+          <NForm label-placement="left" label-width="100">
+            <NFormItem label="用户名">
+              <NInput v-model:value="userName" placeholder="输入用户名" />
+            </NFormItem>
+          </NForm>
+        </NCard>
+      </div>
 
-        <template #footer>
+      <!-- DeepSeek API -->
+      <div class="settings-section">
+        <div class="settings-section__header">
+          <div
+            class="settings-section__icon"
+            style="background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%); color: #2563eb"
+          >
+            <NIcon :component="KeyOutline" :size="20" />
+          </div>
+          <div>
+            <h3 class="settings-section__title">DeepSeek</h3>
+            <p class="settings-section__desc">AI 编剧与对话模型</p>
+          </div>
+          <NTag v-if="hasApiKey" type="success" size="small" round style="margin-left: auto"
+            >已配置</NTag
+          >
+          <NTag v-else type="warning" size="small" round style="margin-left: auto">未配置</NTag>
+        </div>
+        <NCard class="settings-card" :bordered="false">
+          <div v-if="hasApiKey && !apiKeyInput" class="api-key-display">
+            <NInput :value="apiKey" disabled placeholder="已配置的 API Key" />
+            <NButton @click="apiKeyInput = ''" type="primary" secondary>更换</NButton>
+          </div>
+
+          <div v-else class="api-key-form">
+            <NAlert v-if="balanceError" type="warning" class="mb-4">
+              {{ balanceError }}
+            </NAlert>
+
+            <NAlert v-if="verifySuccess && balance" type="success" class="mb-4">
+              验证成功！余额：¥{{
+                formatBalance(
+                  balance.balanceInfos.find((b: any) => b.currency === 'CNY')?.totalBalance || 0
+                )
+              }}
+            </NAlert>
+
+            <NAlert v-if="verifyError" type="error" class="mb-4">
+              {{ verifyError }}
+            </NAlert>
+
+            <NForm label-placement="left" label-width="100">
+              <NFormItem label="API Key">
+                <NInput
+                  v-model:value="apiKeyInput"
+                  type="password"
+                  placeholder="sk-xxxxxxxxxxxxxxxx"
+                  show-password-on="click"
+                />
+              </NFormItem>
+              <NFormItem label="API URL">
+                <NInput
+                  v-model:value="deepseekApiUrl"
+                  placeholder="https://api.deepseek.com/v1（可选）"
+                />
+              </NFormItem>
+            </NForm>
+
+            <div class="api-key-actions">
+              <NSpace>
+                <NButton @click="verifyApiKey" :loading="verifying" :disabled="!apiKeyInput">
+                  验证
+                </NButton>
+                <NButton @click="apiKeyInput = ''" tertiary>取消</NButton>
+              </NSpace>
+            </div>
+          </div>
+
           <div class="balance-info" v-if="balance">
             <span class="balance-label">当前余额：</span>
             <span v-for="info in balance.balanceInfos" :key="info.currency" class="balance-item">
               {{ info.currency === 'CNY' ? '¥' : '$' }}{{ formatBalance(info.totalBalance) }}
             </span>
           </div>
-        </template>
-      </NCard>
+        </NCard>
+      </div>
 
       <!-- Atlas API (Wan 2.6) -->
-      <NCard class="settings-card">
-        <template #header>
-          <NSpace :size="8" align="center">
-            <NIcon :component="VideocamOutline" :size="18" />
-            <span>Atlas（视频生成 Wan 2.6）</span>
-          </NSpace>
-        </template>
-        <template #header-extra>
-          <NTag v-if="atlasApiKey" type="success" size="small">已配置</NTag>
-          <NTag v-else type="warning" size="small">未配置</NTag>
-        </template>
-
-        <NForm label-placement="left" label-width="120">
-          <NFormItem label="API Key">
-            <NInput
-              v-model:value="atlasApiKey"
-              type="password"
-              placeholder="Atlas API Key"
-              show-password-on="click"
-            />
-          </NFormItem>
-          <NFormItem label="API URL">
-            <NInput v-model:value="atlasApiUrl" placeholder="https://api.atlascloud.com" />
-          </NFormItem>
-        </NForm>
-      </NCard>
+      <div class="settings-section">
+        <div class="settings-section__header">
+          <div
+            class="settings-section__icon"
+            style="background: linear-gradient(135deg, #d1fae5 0%, #ccfbf1 100%); color: #059669"
+          >
+            <NIcon :component="VideocamOutline" :size="20" />
+          </div>
+          <div>
+            <h3 class="settings-section__title">Atlas</h3>
+            <p class="settings-section__desc">视频生成 Wan 2.6</p>
+          </div>
+          <NTag v-if="atlasApiKey" type="success" size="small" round style="margin-left: auto"
+            >已配置</NTag
+          >
+          <NTag v-else type="warning" size="small" round style="margin-left: auto">未配置</NTag>
+        </div>
+        <NCard class="settings-card" :bordered="false">
+          <NForm label-placement="left" label-width="120">
+            <NFormItem label="API Key">
+              <NInput
+                v-model:value="atlasApiKey"
+                type="password"
+                placeholder="Atlas API Key"
+                show-password-on="click"
+              />
+            </NFormItem>
+            <NFormItem label="API URL">
+              <NInput v-model:value="atlasApiUrl" placeholder="https://api.atlascloud.com" />
+            </NFormItem>
+          </NForm>
+        </NCard>
+      </div>
 
       <!-- Volcano Engine API (Seedance 2.0) -->
-      <NCard class="settings-card">
-        <template #header>
-          <NSpace :size="8" align="center">
-            <NIcon :component="FlameOutline" :size="18" />
-            <span>火山方舟（视频生成 Seedance 2.0）</span>
-          </NSpace>
-        </template>
-        <template #header-extra>
-          <NTag v-if="arkApiKey" type="success" size="small">已配置</NTag>
-          <NTag v-else type="warning" size="small">未配置</NTag>
-        </template>
-
-        <NForm label-placement="left" label-width="120">
-          <NFormItem label="API Key">
-            <NInput
-              v-model:value="arkApiKey"
-              type="password"
-              placeholder="火山方舟 API Key"
-              show-password-on="click"
-            />
-          </NFormItem>
-          <NFormItem label="API URL">
-            <NInput
-              v-model:value="arkApiUrl"
-              placeholder="https://ark.cn-beijing.volces.com/api/v3"
-            />
-            <template #feedback> 默认地址：https://ark.cn-beijing.volces.com/api/v3 </template>
-          </NFormItem>
-        </NForm>
-      </NCard>
+      <div class="settings-section">
+        <div class="settings-section__header">
+          <div
+            class="settings-section__icon"
+            style="background: linear-gradient(135deg, #fef3c7 0%, #ffedd5 100%); color: #d97706"
+          >
+            <NIcon :component="FlameOutline" :size="20" />
+          </div>
+          <div>
+            <h3 class="settings-section__title">火山方舟</h3>
+            <p class="settings-section__desc">视频生成 Seedance 2.0</p>
+          </div>
+          <NTag v-if="arkApiKey" type="success" size="small" round style="margin-left: auto"
+            >已配置</NTag
+          >
+          <NTag v-else type="warning" size="small" round style="margin-left: auto">未配置</NTag>
+        </div>
+        <NCard class="settings-card" :bordered="false">
+          <NForm label-placement="left" label-width="120">
+            <NFormItem label="API Key">
+              <NInput
+                v-model:value="arkApiKey"
+                type="password"
+                placeholder="火山方舟 API Key"
+                show-password-on="click"
+              />
+            </NFormItem>
+            <NFormItem label="API URL">
+              <NInput
+                v-model:value="arkApiUrl"
+                placeholder="https://ark.cn-beijing.volces.com/api/v3"
+              />
+              <template #feedback> 默认地址：https://ark.cn-beijing.volces.com/api/v3 </template>
+            </NFormItem>
+          </NForm>
+        </NCard>
+      </div>
 
       <!-- Save Button -->
       <div class="settings-actions">
@@ -371,15 +405,49 @@ const formatBalance = (amount: number) => {
 .settings-content {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-xl);
 }
 
 .settings-loading {
   padding: var(--spacing-xl) 0;
 }
 
+.settings-section__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.settings-section__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.settings-section__title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.settings-section__desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 2px 0 0;
+}
+
 .settings-card {
-  background: white;
+  background: var(--color-bg-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-sm);
 }
 
 .api-key-display {
@@ -408,18 +476,24 @@ const formatBalance = (amount: number) => {
   display: flex;
   gap: var(--spacing-md);
   align-items: center;
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border-light);
 }
 
 .balance-label {
   font-weight: 500;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 .balance-item {
   padding: 4px 12px;
   background: var(--color-primary-light);
-  border-radius: 4px;
+  border-radius: var(--radius-full);
   color: var(--color-primary);
   font-weight: 600;
+  font-size: var(--font-size-sm);
 }
 
 .settings-actions {

@@ -1,41 +1,48 @@
-/* Design System - Dreamer */
+/* Design System - Dreamer (ToC Refresh) */
 
 :root {
-  /* Primary Colors */
-  --color-primary: #6366f1;
-  --color-primary-hover: #818cf8;
-  --color-primary-pressed: #4f46e5;
-  --color-primary-light: #e0e7ff;
+  /* Primary Colors — warm coral/peach instead of cold indigo */
+  --color-primary: #f4726a;
+  --color-primary-hover: #f8968e;
+  --color-primary-pressed: #e85d55;
+  --color-primary-light: #ffeaea;
 
-  /* Secondary Colors */
-  --color-secondary: #8b5cf6;
-  --color-secondary-hover: #a78bfa;
-  --color-secondary-pressed: #7c3aed;
+  /* Secondary Colors — soft lavender */
+  --color-secondary: #a78bfa;
+  --color-secondary-hover: #c4b5fd;
+  --color-secondary-pressed: #8b5cf6;
+  --color-secondary-light: #f3e8ff;
 
-  /* Success/Error/Warning */
+  /* Accent — mint green for playful highlights */
+  --color-accent: #34d399;
+  --color-accent-hover: #6ee7b7;
+  --color-accent-light: #d1fae5;
+
+  /* Success/Error/Warning — warmer tones */
   --color-success: #10b981;
   --color-success-light: #d1fae5;
   --color-warning: #f59e0b;
   --color-warning-light: #fef3c7;
   --color-error: #ef4444;
   --color-error-light: #fee2e2;
-  --color-info: #3b82f6;
+  --color-info: #60a5fa;
   --color-info-light: #dbeafe;
 
-  /* Neutral Colors */
-  --color-bg-base: #f5f5f5;
+  /* Neutral Colors — warmer grays */
+  --color-bg-base: #faf8f6;
   --color-bg-white: #ffffff;
-  --color-bg-gray: #fafafa;
+  --color-bg-gray: #f5f3f0;
   --color-bg-dark: #1f2937;
+  --color-bg-cream: #fff7ed;
 
-  --color-text-primary: #111827;
-  --color-text-secondary: #6b7280;
-  --color-text-tertiary: #9ca3af;
-  --color-text-disabled: #d1d5db;
+  --color-text-primary: #1e1b18;
+  --color-text-secondary: #78716c;
+  --color-text-tertiary: #a8a29e;
+  --color-text-disabled: #d6d3d1;
 
-  --color-border: #e5e7eb;
-  --color-border-light: #f3f4f6;
-  --color-border-hover: #d1d5db;
+  --color-border: #e7e5e4;
+  --color-border-light: #f5f5f4;
+  --color-border-hover: #d6d3d1;
 
   /* Spacing */
   --spacing-xs: 4px;
@@ -52,11 +59,13 @@
   --radius-xl: 16px;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  /* Shadows — softer, colored glows */
+  --shadow-sm: 0 1px 3px 0 rgba(30, 27, 24, 0.04), 0 1px 2px -1px rgba(30, 27, 24, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(30, 27, 24, 0.08), 0 2px 6px -2px rgba(30, 27, 24, 0.04);
+  --shadow-lg: 0 12px 24px -4px rgba(30, 27, 24, 0.1), 0 4px 8px -4px rgba(30, 27, 24, 0.04);
+  --shadow-xl: 0 24px 48px -8px rgba(30, 27, 24, 0.12), 0 8px 16px -8px rgba(30, 27, 24, 0.04);
+  --shadow-glow-primary: 0 4px 20px -4px rgba(244, 114, 106, 0.35);
+  --shadow-glow-secondary: 0 4px 20px -4px rgba(167, 139, 250, 0.35);
 
   /* Typography */
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -100,14 +109,15 @@
 
 /* Dark theme */
 .dark {
-  --color-bg-base: #111827;
-  --color-bg-white: #1f2937;
-  --color-bg-gray: #374151;
+  --color-bg-base: #1c1917;
+  --color-bg-white: #292524;
+  --color-bg-gray: #44403c;
+  --color-bg-cream: #292524;
 
-  --color-text-primary: #f9fafb;
-  --color-text-secondary: #9ca3af;
-  --color-text-tertiary: #6b7280;
+  --color-text-primary: #fafaf9;
+  --color-text-secondary: #a8a29e;
+  --color-text-tertiary: #78716c;
 
-  --color-border: #374151;
-  --color-border-light: #4b5563;
+  --color-border: #44403c;
+  --color-border-light: #57534e;
 }

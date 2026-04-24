@@ -1,26 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, h, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  NCard,
-  NButton,
-  NSpace,
-  NTag,
-  NDataTable,
-  NTabs,
-  NTabPane,
-  NIcon,
-  NPagination,
-  type DataTableColumns,
-  useMessage
-} from 'naive-ui'
+import { NCard, NButton, NSpace, NTag, NIcon, NPagination } from 'naive-ui'
 import {
   VideocamOutline,
   DocumentTextOutline,
   LayersOutline,
   ImageOutline,
-  SyncOutline,
-  CopyOutline
+  SyncOutline
 } from '@vicons/ionicons5'
 import { api } from '@/api'
 import { usePolling } from '@/composables/usePolling'
@@ -28,7 +15,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import SearchFilterBar from '@/components/SearchFilterBar.vue'
 
-const message = useMessage()
+// message used in template via naive-ui
 const searchQuery = ref('')
 const page = ref(1)
 const pageSize = ref(10)
@@ -81,12 +68,6 @@ function imageKindLabel(kind: string | undefined): string {
   return k || '图片'
 }
 
-const typeTagMap: Record<string, { type: string; label: string; icon: any }> = {
-  video: { type: 'info', label: '视频', icon: VideocamOutline },
-  import: { type: 'warning', label: '导入', icon: DocumentTextOutline },
-  image: { type: 'success', label: '图片', icon: ImageOutline }
-}
-
 /** PipelineJob.jobType → 任务中心「类型」列（仅中文，避免与步骤英文 id 混排） */
 function pipelineSubtypeLabel(jobType: string | undefined): string {
   const t = (jobType || '').toLowerCase().trim()
@@ -96,17 +77,6 @@ function pipelineSubtypeLabel(jobType: string | undefined): string {
   if (t === 'episode-storyboard-script') return '分镜剧本'
   if (t === 'full-pipeline') return '完整流水线'
   return 'Pipeline'
-}
-
-// 计算任务运行时长
-function formatDuration(startTime: string, endTime?: string): string {
-  const start = new Date(startTime).getTime()
-  const end = endTime ? new Date(endTime).getTime() : Date.now()
-  const diff = Math.floor((end - start) / 1000)
-
-  if (diff < 60) return `${diff}秒`
-  if (diff < 3600) return `${Math.floor(diff / 60)}分${diff % 60}秒`
-  return `${Math.floor(diff / 3600)}时${Math.floor((diff % 3600) / 60)}分`
 }
 
 const router = useRouter()
@@ -140,227 +110,160 @@ const statusMap: Record<string, { type: string; label: string }> = {
   failed: { type: 'error', label: '失败' }
 }
 
-const columns: DataTableColumns<Job> = [
-  {
-    title: '类型',
-    key: 'type',
-    width: 118,
-    render(row) {
-      if (row.type === 'pipeline') {
-        return h(NTag, { type: 'info' as const, size: 'small' }, () =>
-          pipelineSubtypeLabel(row.jobType)
-        )
-      }
-      const config = typeTagMap[row.type] || typeTagMap.video
-      return h(NTag, { type: config.type as any, size: 'small' }, () =>
-        h('span', { style: { display: 'flex', alignItems: 'center', gap: '4px' } }, [
-          h(NIcon, { component: config.icon, size: 12 }),
-          config.label
-        ])
-      )
-    }
-  },
-  {
-    title: '状态',
-    key: 'status',
-    width: 100,
-    render(row) {
-      const config = statusMap[row.status] || statusMap.pending
-      return h(NTag, { type: config.type as any, size: 'small' }, () => config.label)
-    }
-  },
-  {
-    title: '描述',
-    key: 'description',
-    ellipsis: { tooltip: true },
-    render(row) {
-      if (row.type === 'video') {
-        return `场景 ${row.sceneNum}: ${(row.prompt || '').slice(0, 50)}${(row.prompt || '').length > 50 ? '...' : ''}`
-      }
-      if (row.type === 'image') {
-        const proj = row.projectName ? `${row.projectName} · ` : ''
-        return `${proj}${imageKindLabel(row.kind)}`
-      }
-      if (row.type === 'pipeline') {
-        const proj = row.projectName ? `项目：${row.projectName}` : '未关联项目'
-        const meta =
-          row.progressMeta && typeof row.progressMeta === 'object' ? row.progressMeta : null
-        if (row.jobType === 'episode-storyboard-script' && meta && 'episodeNum' in meta) {
-          const n = (meta as { episodeNum?: number }).episodeNum
-          return n != null ? `${proj} · 第 ${n} 集` : proj
-        }
-        const hint = meta && 'message' in meta && meta.message ? ` · ${String(meta.message)}` : ''
-        return `${proj}${hint}`
-      }
-      return (
-        row.contentPreview ||
-        (row.content || '').slice(0, 50) + ((row.content || '').length > 50 ? '...' : '')
-      )
-    }
-  },
-  {
-    title: '模型/格式',
-    key: 'model',
-    width: 100,
-    render(row) {
-      if (row.type === 'video') {
-        return row.model?.toUpperCase() || '-'
-      }
-      if (row.type === 'image') {
-        return imageKindLabel(row.kind)
-      }
-      if (row.type === 'pipeline') {
-        // 该列语义是视频模型 / 导入篇幅；Pipeline 不适用，避免「模型/格式」下出现进度造成误解
-        return '-'
-      }
-      return row.content ? row.content.length + ' 字符' : '-'
-    }
-  },
-  {
-    title: '结果',
-    key: 'result',
-    width: 150,
-    render(row) {
-      if (row.type === 'video' && row.status === 'completed') {
-        return row.cost ? `¥${row.cost.toFixed(4)}` : '-'
-      }
-      if (row.type === 'image' && row.status === 'completed') {
-        const rv = row.returnvalue as { imageCost?: number } | undefined
-        const c = rv && typeof rv.imageCost === 'number' ? rv.imageCost : null
-        return c != null ? `¥${c.toFixed(4)}` : '已完成'
-      }
-      if (row.type === 'image' && (row.status === 'processing' || row.status === 'queued')) {
-        return '生成中'
-      }
-      if (row.type === 'import' && row.status === 'completed') {
-        const r = row.result || {}
-        return `${r.episodesCreated || 0} 集, ${r.charactersCreated || 0} 角色`
-      }
-      if (row.type === 'pipeline' && row.status === 'completed') {
-        if (
-          row.jobType === 'episode-storyboard-script' &&
-          row.progressMeta &&
-          typeof row.progressMeta === 'object'
-        ) {
-          const m = row.progressMeta as { scenesCreated?: number; aiCost?: number }
-          if (m.scenesCreated != null && typeof m.aiCost === 'number') {
-            return `${m.scenesCreated} 场 · ¥${m.aiCost.toFixed(4)}`
-          }
-        }
-        return '已完成'
-      }
-      if (row.type === 'pipeline' && (row.status === 'processing' || row.status === 'pending')) {
-        const n = typeof row.progress === 'number' ? row.progress : 0
-        return n > 0 ? `进行中（${n}%）` : '进行中'
-      }
-      if (row.status === 'failed') {
-        const msg = row.errorMsg || '未知错误'
-        const shortMsg = msg.length > 20 ? msg.slice(0, 20) + '...' : msg
-        return h('div', { style: { display: 'flex', alignItems: 'center', gap: '4px' } }, [
-          h(
-            'span',
-            { style: { color: 'red', fontSize: '12px', title: msg }, title: msg },
-            shortMsg
-          ),
-          h(
-            NButton,
-            {
-              size: 'tiny',
-              quaternary: true,
-              onClick: (e: MouseEvent) => {
-                e.stopPropagation()
-                copyError(msg)
-              }
-            },
-            () => h(NIcon, { component: CopyOutline, size: 14 })
-          )
-        ])
-      }
-      return '-'
-    }
-  },
-  {
-    title: '开始时间',
-    key: 'createdAt',
-    width: 150,
-    render(row) {
-      return new Date(row.createdAt).toLocaleString('zh-CN', {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      })
-    }
-  },
-  {
-    title: '耗时',
-    key: 'duration',
-    width: 100,
-    render(row) {
-      if (row.status === 'completed' || row.status === 'failed') {
-        return formatDuration(row.createdAt, row.updatedAt)
-      }
-      if (row.status === 'processing' || row.status === 'queued' || row.status === 'pending') {
-        return h('span', { style: { color: '#18a058' } }, formatDuration(row.createdAt))
-      }
-      return '-'
-    }
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 120,
-    render(row) {
-      if (row.type === 'video') {
-        if (row.status === 'completed' && row.projectId) {
-          return h(
-            NButton,
-            {
-              size: 'small',
-              type: 'primary',
-              onClick: () => router.push(`/project/${row.projectId}/storyboard`)
-            },
-            () => '查看'
-          )
-        }
-      }
-      if (row.type === 'image' && row.projectId) {
-        return h(
-          NButton,
-          {
-            size: 'small',
-            type: 'primary',
-            onClick: () => router.push(`/project/${row.projectId}/characters`)
-          },
-          () => '查看项目'
-        )
-      }
-      if (row.type === 'import') {
-        if (row.status === 'completed' && row.result?.projectId) {
-          return h(
-            NButton,
-            {
-              size: 'small',
-              type: 'primary',
-              onClick: () => router.push(`/project/${row.result!.projectId}`)
-            },
-            () => '查看项目'
-          )
-        }
-        if (row.status === 'failed') {
-          return h(NButton, { size: 'small', onClick: () => handleRetry(row) }, () => '重试')
-        }
-      }
-      return '-'
-    }
-  }
-]
-
 const videoCount = computed(() => jobs.value.filter((j) => j.type === 'video').length)
 const importCount = computed(() => jobs.value.filter((j) => j.type === 'import').length)
 const pipelineCount = computed(() => jobs.value.filter((j) => j.type === 'pipeline').length)
 const imageCount = computed(() => jobs.value.filter((j) => j.type === 'image').length)
+
+const typeTabs = computed(() => [
+  {
+    name: 'all',
+    label: '全部',
+    count: jobs.value.length,
+    icon: LayersOutline,
+    bgColor: '#f5f3f0',
+    color: '#78716c'
+  },
+  {
+    name: 'video',
+    label: '视频',
+    count: videoCount.value,
+    icon: VideocamOutline,
+    bgColor: '#dbeafe',
+    color: '#2563eb'
+  },
+  {
+    name: 'import',
+    label: '导入',
+    count: importCount.value,
+    icon: DocumentTextOutline,
+    bgColor: '#fef3c7',
+    color: '#d97706'
+  },
+  {
+    name: 'pipeline',
+    label: '流水线',
+    count: pipelineCount.value,
+    icon: LayersOutline,
+    bgColor: '#ffeaea',
+    color: '#e85d55'
+  },
+  {
+    name: 'image',
+    label: '图片',
+    count: imageCount.value,
+    icon: ImageOutline,
+    bgColor: '#d1fae5',
+    color: '#059669'
+  }
+])
+
+function getJobTypeConfig(type: string, jobType?: string) {
+  if (type === 'pipeline') {
+    return {
+      label: pipelineSubtypeLabel(jobType),
+      icon: LayersOutline,
+      bgColor: '#ffeaea',
+      color: '#e85d55'
+    }
+  }
+  const map: Record<string, any> = {
+    video: { label: '视频生成', icon: VideocamOutline, bgColor: '#dbeafe', color: '#2563eb' },
+    import: { label: '剧本导入', icon: DocumentTextOutline, bgColor: '#fef3c7', color: '#d97706' },
+    image: { label: '图片生成', icon: ImageOutline, bgColor: '#d1fae5', color: '#059669' }
+  }
+  return map[type] || map.video
+}
+
+function getJobDescription(job: Job): string {
+  if (job.type === 'video') {
+    return `场景 ${job.sceneNum}: ${(job.prompt || '').slice(0, 40)}${(job.prompt || '').length > 40 ? '...' : ''}`
+  }
+  if (job.type === 'image') {
+    const proj = job.projectName ? `${job.projectName} · ` : ''
+    return `${proj}${imageKindLabel(job.kind)}`
+  }
+  if (job.type === 'pipeline') {
+    const proj = job.projectName ? `项目：${job.projectName}` : '未关联项目'
+    const meta = job.progressMeta && typeof job.progressMeta === 'object' ? job.progressMeta : null
+    if (job.jobType === 'episode-storyboard-script' && meta && 'episodeNum' in meta) {
+      const n = (meta as { episodeNum?: number }).episodeNum
+      return n != null ? `${proj} · 第 ${n} 集` : proj
+    }
+    const hint = meta && 'message' in meta && meta.message ? ` · ${String(meta.message)}` : ''
+    return `${proj}${hint}`
+  }
+  return (
+    job.contentPreview ||
+    (job.content || '').slice(0, 40) + ((job.content || '').length > 40 ? '...' : '')
+  )
+}
+
+function getJobResult(job: Job): string {
+  if (job.type === 'video' && job.status === 'completed') {
+    return job.cost ? `¥${job.cost.toFixed(4)}` : '已完成'
+  }
+  if (job.type === 'image' && job.status === 'completed') {
+    const rv = job.returnvalue as { imageCost?: number } | undefined
+    const c = rv && typeof rv.imageCost === 'number' ? rv.imageCost : null
+    return c != null ? `¥${c.toFixed(4)}` : '已完成'
+  }
+  if (job.type === 'image' && (job.status === 'processing' || job.status === 'queued')) {
+    return '生成中...'
+  }
+  if (job.type === 'import' && job.status === 'completed') {
+    const r = job.result || {}
+    return `${r.episodesCreated || 0} 集 · ${r.charactersCreated || 0} 角色`
+  }
+  if (job.type === 'pipeline' && job.status === 'completed') {
+    if (
+      job.jobType === 'episode-storyboard-script' &&
+      job.progressMeta &&
+      typeof job.progressMeta === 'object'
+    ) {
+      const m = job.progressMeta as { scenesCreated?: number; aiCost?: number }
+      if (m.scenesCreated != null && typeof m.aiCost === 'number') {
+        return `${m.scenesCreated} 场 · ¥${m.aiCost.toFixed(4)}`
+      }
+    }
+    return '已完成'
+  }
+  if (job.type === 'pipeline' && (job.status === 'processing' || job.status === 'pending')) {
+    const n = typeof job.progress === 'number' ? job.progress : 0
+    return n > 0 ? `进行中 ${n}%` : '进行中'
+  }
+  if (job.status === 'failed') {
+    return '失败'
+  }
+  return ''
+}
+
+function getJobAction(job: Job): { label: string; handler: () => void } | null {
+  if (job.type === 'video' && job.status === 'completed' && job.projectId) {
+    return { label: '查看', handler: () => router.push(`/project/${job.projectId}/storyboard`) }
+  }
+  if (job.type === 'image' && job.projectId) {
+    return { label: '查看项目', handler: () => router.push(`/project/${job.projectId}/characters`) }
+  }
+  if (job.type === 'import' && job.status === 'completed' && job.result?.projectId) {
+    return { label: '查看项目', handler: () => router.push(`/project/${job.result!.projectId}`) }
+  }
+  return null
+}
+
+function handleJobClick(job: Job) {
+  const action = getJobAction(job)
+  if (action) action.handler()
+}
+
+function formatTime(date: string) {
+  return new Date(date).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
 
 const filteredJobs = computed(() => {
   let list = jobs.value
@@ -406,19 +309,6 @@ const fetchJobs = async () => {
   }
 }
 
-const handleRetry = (job: Job) => {
-  console.info('[Jobs] Retry job:', job.id)
-}
-
-const copyError = async (msg: string) => {
-  try {
-    await navigator.clipboard.writeText(msg)
-    message.success('已复制到剪贴板')
-  } catch {
-    message.error('复制失败')
-  }
-}
-
 onMounted(() => {
   fetchJobs().then(() => {
     if (hasProcessingJobs.value) startPolling()
@@ -440,59 +330,31 @@ onUnmounted(() => {
     <header class="jobs-header">
       <div>
         <h1>任务中心</h1>
-        <p class="jobs-subtitle">查看所有任务进度和历史记录</p>
+        <p class="jobs-subtitle">追踪你的创作进度</p>
       </div>
       <SearchFilterBar v-model="searchQuery" placeholder="搜索任务..." search-width="200px" />
     </header>
 
-    <NCard class="jobs-card">
-      <NTabs v-model:value="activeTab" type="line" animated>
-        <NTabPane name="all" tab="全部任务">
-          <template #tab>
-            <NSpace :size="8">
-              <span>全部</span>
-              <NTag v-if="jobs.length" size="small" round>{{ jobs.length }}</NTag>
-            </NSpace>
-          </template>
-        </NTabPane>
-        <NTabPane name="video" tab="视频生成">
-          <template #tab>
-            <NSpace :size="8" align="center">
-              <NIcon :component="VideocamOutline" :size="14" />
-              <span>视频</span>
-              <NTag v-if="videoCount" size="small" round type="info">{{ videoCount }}</NTag>
-            </NSpace>
-          </template>
-        </NTabPane>
-        <NTabPane name="import" tab="剧本导入">
-          <template #tab>
-            <NSpace :size="8" align="center">
-              <NIcon :component="DocumentTextOutline" :size="14" />
-              <span>导入</span>
-              <NTag v-if="importCount" size="small" round type="warning">{{ importCount }}</NTag>
-            </NSpace>
-          </template>
-        </NTabPane>
-        <NTabPane name="pipeline" tab="Pipeline">
-          <template #tab>
-            <NSpace :size="8" align="center">
-              <NIcon :component="LayersOutline" :size="14" />
-              <span>Pipeline</span>
-              <NTag v-if="pipelineCount" size="small" round type="error">{{ pipelineCount }}</NTag>
-            </NSpace>
-          </template>
-        </NTabPane>
-        <NTabPane name="image" tab="图片生成">
-          <template #tab>
-            <NSpace :size="8" align="center">
-              <NIcon :component="ImageOutline" :size="14" />
-              <span>图片</span>
-              <NTag v-if="imageCount" size="small" round type="success">{{ imageCount }}</NTag>
-            </NSpace>
-          </template>
-        </NTabPane>
-      </NTabs>
+    <!-- 任务类型统计卡片 -->
+    <div class="jobs-type-cards">
+      <div
+        v-for="tab in typeTabs"
+        :key="tab.name"
+        :class="['type-card', { 'type-card--active': activeTab === tab.name }]"
+        @click="activeTab = tab.name"
+      >
+        <div class="type-card__icon" :style="{ background: tab.bgColor, color: tab.color }">
+          <NIcon :component="tab.icon" :size="20" />
+        </div>
+        <div class="type-card__info">
+          <span class="type-card__label">{{ tab.label }}</span>
+          <span class="type-card__count">{{ tab.count }}</span>
+        </div>
+        <div v-if="activeTab === tab.name" class="type-card__indicator" />
+      </div>
+    </div>
 
+    <NCard class="jobs-card" :bordered="false">
       <div class="jobs-content">
         <div v-if="isLoading && !jobs.length" class="jobs-loading">
           <SkeletonLoader variant="table" :rows="5" />
@@ -508,14 +370,59 @@ onUnmounted(() => {
             <NButton type="primary" @click="router.push('/projects')"> 去创建项目 </NButton>
           </template>
         </EmptyState>
-        <NDataTable
-          v-else
-          :columns="columns"
-          :data="paginatedJobs"
-          :loading="isLoading"
-          :bordered="false"
-          :row-key="(row: Job) => row.id + row.type"
-        />
+
+        <!-- 卡片式任务列表 -->
+        <div v-else class="jobs-card-list">
+          <div
+            v-for="job in paginatedJobs"
+            :key="job.id + job.type"
+            class="job-row"
+            @click="handleJobClick(job)"
+          >
+            <div class="job-row__left">
+              <div
+                class="job-row__icon"
+                :style="{
+                  background: getJobTypeConfig(job.type, job.jobType).bgColor,
+                  color: getJobTypeConfig(job.type, job.jobType).color
+                }"
+              >
+                <NIcon :component="getJobTypeConfig(job.type, job.jobType).icon" :size="18" />
+              </div>
+              <div class="job-row__info">
+                <div class="job-row__title">
+                  <span class="job-row__type">{{
+                    getJobTypeConfig(job.type, job.jobType).label
+                  }}</span>
+                  <span class="job-row__desc">{{ getJobDescription(job) }}</span>
+                </div>
+                <div class="job-row__meta">
+                  <NTag
+                    :type="(statusMap[job.status]?.type as any) || 'default'"
+                    size="small"
+                    round
+                  >
+                    {{ statusMap[job.status]?.label || job.status }}
+                  </NTag>
+                  <span class="job-row__time">{{ formatTime(job.createdAt) }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="job-row__right">
+              <span class="job-row__result">{{ getJobResult(job) }}</span>
+              <NButton
+                v-if="getJobAction(job)"
+                size="small"
+                type="primary"
+                secondary
+                @click.stop="getJobAction(job)!.handler()"
+              >
+                {{ getJobAction(job)!.label }}
+              </NButton>
+            </div>
+          </div>
+        </div>
+
         <div v-if="totalPages > 1 || pageSize !== 10" class="jobs-pagination">
           <NPagination
             v-model:page="page"
@@ -532,7 +439,7 @@ onUnmounted(() => {
         v-if="jobs.some((j) => j.status === 'processing' || j.status === 'queued')"
         class="jobs-footer"
       >
-        <NTag type="info" size="small">
+        <NTag type="info" size="small" round>
           <NSpace :size="4" align="center">
             <NIcon :component="SyncOutline" :size="12" class="spin-icon" />
             <span>实时更新中...</span>
@@ -552,6 +459,7 @@ onUnmounted(() => {
   padding: var(--spacing-md) var(--spacing-lg);
   background: var(--color-bg-white);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .jobs-header h1 {
@@ -567,17 +475,188 @@ onUnmounted(() => {
   margin-top: var(--spacing-xs);
 }
 
+/* Type filter cards */
+.jobs-type-cards {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: var(--spacing-lg);
+}
+
+.type-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--color-bg-white);
+  border-radius: var(--radius-lg);
+  border: 2px solid transparent;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  overflow: hidden;
+}
+
+.type-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.type-card--active {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-glow-primary);
+}
+
+.type-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.type-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.type-card__label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.type-card__count {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.type-card__indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--color-primary);
+  border-radius: 3px 3px 0 0;
+}
+
+/* Jobs card */
 .jobs-card {
   background: var(--color-bg-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-sm);
 }
 
 .jobs-content {
-  margin-top: var(--spacing-lg);
   min-height: 300px;
 }
 
 .jobs-loading {
   padding: var(--spacing-xl) 0;
+}
+
+/* Card list */
+.jobs-card-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.job-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border-light);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.job-row:last-child {
+  border-bottom: none;
+}
+
+.job-row:hover {
+  background: var(--color-bg-gray);
+}
+
+.job-row__left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.job-row__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.job-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.job-row__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.job-row__type {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+}
+
+.job-row__desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.job-row__time {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.job-row__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.job-row__result {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: 500;
 }
 
 .jobs-footer {
@@ -603,6 +682,27 @@ onUnmounted(() => {
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1024px) {
+  .jobs-type-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .jobs-type-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .job-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .job-row__right {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 </style>

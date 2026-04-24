@@ -230,4 +230,29 @@ function handleUserMenu(key: string) {
 .user-section :deep(.n-avatar) {
   flex-shrink: 0;
 }
+
+/* Override Naive UI menu styles for warmer look */
+.app-sider :deep(.n-menu .n-menu-item-content) {
+  border-radius: 10px;
+  margin: 2px 8px;
+  transition: all 0.2s ease;
+}
+
+.app-sider :deep(.n-menu .n-menu-item-content--selected) {
+  background: linear-gradient(135deg, #ffeaea 0%, #ffedd5 100%) !important;
+  color: #e85d55 !important;
+  font-weight: 600;
+}
+
+.app-sider :deep(.n-menu .n-menu-item-content--selected .n-menu-item-content__icon) {
+  color: #f4726a !important;
+}
+
+.app-sider :deep(.n-menu .n-menu-item-content:hover) {
+  background: var(--color-bg-gray);
+}
+
+.app-sider :deep(.n-menu .n-menu-item-content--selected:hover) {
+  background: linear-gradient(135deg, #ffeaea 0%, #ffedd5 100%) !important;
+}
 </style>
