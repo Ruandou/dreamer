@@ -7,6 +7,7 @@ import { buildSystemPrompt } from './chat-prompts.js'
 import { buildChatContext } from './chat-context-builder.js'
 import { streamChatResponse } from './chat-stream-service.js'
 import { recordModelApiCall } from '../ai/api-logger.js'
+import { getModelInfo } from '../ai/llm/llm-model-catalog.js'
 import { logInfo, logError } from '../../lib/error-logger.js'
 import { CHAT_STREAM_HEARTBEAT_MS, QUICK_COMMAND_MAP } from './chat.constants.js'
 
@@ -156,10 +157,11 @@ export async function handleStream(
     assistantMessageId: string
     scriptContent?: string
     scriptTitle?: string
+    model?: string
   },
   reply: FastifyReply
 ) {
-  const { conversationId, assistantMessageId, scriptContent, scriptTitle } = params
+  const { conversationId, assistantMessageId, scriptContent, scriptTitle, model } = params
 
   // Validate ownership
   const conversation = await chatRepository.findConversationById(conversationId)
@@ -218,7 +220,8 @@ export async function handleStream(
 
   try {
     const stream = streamChatResponse({
-      messages: contextMessages as Array<{ role: string; content: string }>
+      messages: contextMessages as Array<{ role: string; content: string }>,
+      model
     })
 
     for await (const event of stream) {
@@ -245,8 +248,8 @@ export async function handleStream(
         // Log model API call
         await recordModelApiCall({
           userId,
-          model: 'deepseek-chat',
-          provider: 'deepseek',
+          model: model || 'deepseek-chat',
+          provider: getModelInfo(model ?? '')?.provider || 'deepseek',
           prompt: fullContent.slice(0, 500),
           requestParams: { inputTokens: event.usage.inputTokens },
           status: 'completed',

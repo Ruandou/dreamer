@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { NScrollbar, NSpin, NIcon } from 'naive-ui'
 import { ChatbubblesOutline } from '@vicons/ionicons5'
 import type { ChatMessage } from '@dreamer/shared/types'
@@ -72,7 +72,16 @@ watch(
   () => scrollToBottom()
 )
 
-// Auto-scroll when streaming content updates
+// Auto-scroll when streaming content updates (last message content changes)
+const lastMessageContent = computed(() => {
+  const msgs = props.messages
+  if (msgs.length === 0) return ''
+  return msgs[msgs.length - 1]?.content || ''
+})
+
+watch(lastMessageContent, () => scrollToBottom())
+
+// Auto-scroll when streaming message ID changes
 watch(
   () => props.messages[props.messages.length - 1]?.id,
   () => scrollToBottom()

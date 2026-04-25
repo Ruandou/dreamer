@@ -54,16 +54,27 @@
         :is-streaming="chatStore.isStreaming"
         @send="handleSend"
         @abort="chatStore.abortCurrentStream"
-      />
+      >
+        <template #actions>
+          <NSelect
+            v-model:value="selectedModel"
+            :options="modelOptions"
+            size="tiny"
+            placeholder="选择模型"
+            class="inline-model-select"
+          />
+        </template>
+      </ChatInput>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
-import { NButton, NTabs, NTab, NIcon, NTooltip, useDialog } from 'naive-ui'
+import { onMounted, watch, computed } from 'vue'
+import { NButton, NTabs, NTab, NIcon, NTooltip, useDialog, NSelect } from 'naive-ui'
 import { AddOutline, CloseOutline } from '@vicons/ionicons5'
 import { useChatStore } from '../../stores/chat'
+import { useModelPreferenceStore } from '../../stores/model-preference'
 import type { ChatMessage } from '@dreamer/shared/types'
 import ChatMessageList from './ChatMessageList.vue'
 import QuickCommandBar from './QuickCommandBar.vue'
@@ -80,9 +91,22 @@ const emit = defineEmits<{
 }>()
 
 const chatStore = useChatStore()
+const modelStore = useModelPreferenceStore()
 const dialog = useDialog()
 
+const modelOptions = computed(() =>
+  modelStore.textModels.map((m) => ({ label: m.name, value: m.id }))
+)
+
+const selectedModel = computed<string | undefined>({
+  get: () => modelStore.currentTextModel || modelStore.defaultTextModel,
+  set: (val: string | undefined) => {
+    modelStore.currentTextModel = val
+  }
+})
+
 onMounted(async () => {
+  await modelStore.init()
   await chatStore.fetchConversations(props.scriptId)
 
   // Auto-create if no conversations
@@ -137,7 +161,8 @@ async function handleDeleteConversation(id: string) {
 function handleSend(content: string) {
   chatStore.sendMessage(content, {
     scriptContent: props.scriptContent,
-    scriptTitle: props.scriptTitle
+    scriptTitle: props.scriptTitle,
+    model: selectedModel.value
   })
 }
 
@@ -145,7 +170,8 @@ function handleQuickCommand(commandId: string) {
   chatStore.sendMessage('', {
     scriptContent: props.scriptContent,
     scriptTitle: props.scriptTitle,
-    quickCommand: commandId
+    quickCommand: commandId,
+    model: selectedModel.value
   })
 }
 
@@ -230,5 +256,13 @@ function handleApplyChanges(message: ChatMessage) {
   color: var(--color-error, #ef4444);
   background: var(--color-error-light, #fee2e2);
   opacity: 1;
+}
+
+.inline-model-select {
+  width: 120px;
+}
+
+.inline-model-select :deep(.n-base-selection) {
+  background: transparent;
 }
 </style>

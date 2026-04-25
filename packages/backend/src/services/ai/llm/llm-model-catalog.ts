@@ -131,22 +131,6 @@ export const ALL_LLM_MODELS: ModelInfo[] = [
     supportsStreaming: true,
     supportsVision: true
   },
-  // Claude
-  {
-    id: 'claude-3-5-sonnet-20241022',
-    name: 'Claude 3.5 Sonnet',
-    provider: 'claude',
-    supportsStreaming: true
-  },
-  {
-    id: 'claude-3-haiku-20240307',
-    name: 'Claude 3 Haiku',
-    provider: 'claude',
-    supportsStreaming: true
-  },
-  // Qwen
-  { id: 'qwen-max', name: 'Qwen Max', provider: 'qwen', supportsStreaming: true },
-  { id: 'qwen-plus', name: 'Qwen Plus', provider: 'qwen', supportsStreaming: true },
   // Ark
   { id: 'doubao-pro-32k-241215', name: 'Doubao Pro 32K', provider: 'ark', supportsStreaming: true },
   {
@@ -156,8 +140,6 @@ export const ALL_LLM_MODELS: ModelInfo[] = [
     supportsStreaming: true
   }
 ]
-
-/** 根据 provider 获取模型列表 */
 export function getModelsByProvider(provider: string): ModelInfo[] {
   return ALL_LLM_MODELS.filter((m) => m.provider === provider)
 }

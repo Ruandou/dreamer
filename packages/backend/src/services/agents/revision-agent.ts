@@ -3,7 +3,7 @@
  * 根据审核反馈自动修改剧本文稿
  */
 
-import { getDefaultProvider } from '../ai/llm-factory.js'
+import { getProviderForModel } from '../ai/llm/llm-factory.js'
 import { callLLMWithRetry, streamLLMWithRetry } from '../ai/llm-call-wrapper.js'
 import type { LLMMessage } from '../ai/llm-provider.js'
 import type { ScriptContent, AgentStreamEvent, AgentTokenEvent } from './types.js'
@@ -31,11 +31,12 @@ export class RevisionAgent {
     userId: string,
     draft: ScriptContent,
     critique: CritiqueResult,
-    _maxRetries: number = 3
+    _maxRetries: number = 3,
+    model?: string
   ): Promise<ScriptContent> {
     const userPrompt = this.buildUserPrompt(draft, critique)
 
-    const provider = getDefaultProvider()
+    const provider = getProviderForModel(model)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: REVISION_AGENT_SYSTEM_PROMPT },
@@ -48,7 +49,7 @@ export class RevisionAgent {
         messages,
         temperature: 0.7,
         maxTokens: 8000,
-        model: 'deepseek-chat',
+        model,
         modelLog: {
           userId,
           op: 'revision'
@@ -70,11 +71,12 @@ export class RevisionAgent {
   async *reviseStream(
     userId: string,
     draft: ScriptContent,
-    critique: CritiqueResult
+    critique: CritiqueResult,
+    model?: string
   ): AsyncGenerator<AgentStreamEvent> {
     const userPrompt = this.buildUserPrompt(draft, critique)
 
-    const provider = getDefaultProvider()
+    const provider = getProviderForModel(model)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: REVISION_AGENT_SYSTEM_PROMPT },
@@ -89,7 +91,7 @@ export class RevisionAgent {
         messages,
         temperature: 0.7,
         maxTokens: 8000,
-        model: 'deepseek-chat',
+        model,
         modelLog: {
           userId,
           op: 'revision'

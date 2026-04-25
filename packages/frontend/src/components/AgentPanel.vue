@@ -134,32 +134,47 @@
 
     <!-- Input -->
     <div class="agent-input">
-      <NInput
-        v-model:value="inputValue"
-        type="textarea"
-        placeholder="输入你的创作指令..."
-        :autosize="{ minRows: 2, maxRows: 6 }"
-        :disabled="isLoading"
-        @keydown="handleKeydown"
-      />
-      <NButton
-        type="primary"
-        :loading="isLoading"
-        :disabled="!inputValue.trim() || isLoading"
-        @click="handleSend"
-      >
-        <template #icon>
-          <NIcon :component="SendOutline" :size="16" />
-        </template>
-        {{ isLoading ? '处理中...' : '执行' }}
-      </NButton>
+      <div class="input-wrapper">
+        <NInput
+          v-model:value="inputValue"
+          type="textarea"
+          placeholder="输入你的创作指令..."
+          :autosize="{ minRows: 2, maxRows: 6 }"
+          :disabled="isLoading"
+          @keydown="handleKeydown"
+        />
+      </div>
+      <div class="input-actions">
+        <span class="input-hint"> Ctrl+Enter 发送 </span>
+        <div class="input-actions-right">
+          <NSelect
+            v-model:value="selectedModel"
+            :options="modelOptions"
+            size="tiny"
+            placeholder="选择模型"
+            class="inline-model-select"
+          />
+          <NButton
+            type="primary"
+            :loading="isLoading"
+            :disabled="!inputValue.trim() || isLoading"
+            size="small"
+            @click="handleSend"
+          >
+            <template #icon>
+              <NIcon :component="SendOutline" :size="16" />
+            </template>
+            {{ isLoading ? '处理中...' : '执行' }}
+          </NButton>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue'
-import { NButton, NIcon, NInput, NSpin, NTooltip, useMessage } from 'naive-ui'
+import { ref, nextTick, onMounted, computed } from 'vue'
+import { NButton, NIcon, NInput, NSpin, NTooltip, useMessage, NSelect } from 'naive-ui'
 import {
   ConstructOutline,
   PersonOutline,
@@ -173,6 +188,7 @@ import {
 } from '@vicons/ionicons5'
 import { api } from '../api'
 import { useAgentStream } from '../composables/useAgentStream'
+import { useModelPreferenceStore } from '../stores/model-preference'
 
 const props = defineProps<{
   scriptId: string
@@ -185,6 +201,18 @@ const emit = defineEmits<{
 const message = useMessage()
 const messagesContainer = ref<HTMLElement>()
 const { start: startStream } = useAgentStream()
+const modelStore = useModelPreferenceStore()
+
+const modelOptions = computed(() =>
+  modelStore.textModels.map((m) => ({ label: m.name, value: m.id }))
+)
+
+const selectedModel = computed<string | undefined>({
+  get: () => modelStore.currentTextModel || modelStore.defaultTextModel,
+  set: (val: string | undefined) => {
+    modelStore.currentTextModel = val
+  }
+})
 
 // Agent state
 interface AgentMessage {
@@ -218,7 +246,10 @@ const steps = ref([
   { key: 'complete', label: '完成', status: 'pending' as string }
 ])
 
-onMounted(() => {
+onMounted(async () => {
+  // Ensure model catalog is loaded for the selector
+  await modelStore.init()
+
   // Initialize with welcome message
   messages.value = [
     {
@@ -272,7 +303,7 @@ async function handleSend() {
     await startStream(
       props.scriptId,
       'agent/stream',
-      { command },
+      { command, model: selectedModel.value },
       {
         onStepStart: (data) => {
           updateStepProgress(data.stepNumber, data.totalSteps)
@@ -376,7 +407,7 @@ async function handleAction(action: { type: 'confirm' | 'revise' }) {
     await startStream(
       props.scriptId,
       'agent/confirm/stream',
-      { action: 'confirm' },
+      { action: 'confirm', model: selectedModel.value },
       {
         onStepStart: (data) => {
           updateStepProgress(data.stepNumber, data.totalSteps)
@@ -514,6 +545,7 @@ async function scrollToBottom() {
 
 .header-actions {
   display: flex;
+  align-items: center;
   gap: 4px;
 }
 
@@ -747,18 +779,43 @@ async function scrollToBottom() {
 
 /* Input */
 .agent-input {
-  display: flex;
-  gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--color-border-light, #e5e7eb);
   background: var(--color-bg-white, #fff);
 }
 
-.agent-input :deep(.n-input) {
-  flex: 1;
+.input-wrapper {
+  margin-bottom: 8px;
 }
 
-.agent-input :deep(.n-button) {
-  align-self: flex-end;
+.input-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.input-hint {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  user-select: none;
+}
+
+.input-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline-model-select {
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.inline-model-select :deep(.n-base-selection) {
+  background: transparent;
+}
+
+.inline-model-select :deep(.n-base-selection) {
+  background: transparent;
 }
 </style>

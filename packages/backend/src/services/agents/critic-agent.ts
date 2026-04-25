@@ -3,7 +3,7 @@
  * 对生成的草稿进行质量评估，不展示给用户
  */
 
-import { getDefaultProvider } from '../ai/llm-factory.js'
+import { getProviderForModel } from '../ai/llm/llm-factory.js'
 import {
   callLLMWithRetry,
   streamLLMWithRetry,
@@ -66,11 +66,12 @@ export class CriticAgent {
   async critique(
     userId: string,
     draft: ScriptContent,
-    outline: OutlineOutput
+    outline: OutlineOutput,
+    model?: string
   ): Promise<CritiqueResult> {
     const userPrompt = this.buildUserPrompt(draft, outline)
 
-    const provider = getDefaultProvider()
+    const provider = getProviderForModel(model)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: CRITIC_AGENT_SYSTEM_PROMPT },
@@ -84,7 +85,7 @@ export class CriticAgent {
           messages,
           temperature: 0.3,
           maxTokens: 2000,
-          model: 'deepseek-chat',
+          model,
           modelLog: {
             userId,
             op: 'critique'
@@ -123,11 +124,12 @@ export class CriticAgent {
   async *critiqueStream(
     userId: string,
     draft: ScriptContent,
-    outline: OutlineOutput
+    outline: OutlineOutput,
+    model?: string
   ): AsyncGenerator<AgentStreamEvent> {
     const userPrompt = this.buildUserPrompt(draft, outline)
 
-    const provider = getDefaultProvider()
+    const provider = getProviderForModel(model)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: CRITIC_AGENT_SYSTEM_PROMPT },
@@ -140,7 +142,7 @@ export class CriticAgent {
         messages,
         temperature: 0.3,
         maxTokens: 2000,
-        model: 'deepseek-chat',
+        model,
         modelLog: {
           userId,
           op: 'critique'

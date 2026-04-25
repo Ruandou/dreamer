@@ -17,6 +17,7 @@ export function useChatStream() {
       scriptContent?: string
       scriptTitle?: string
       quickCommand?: string
+      model?: string
     },
     callbacks: ChatStreamCallbacks
   ) {

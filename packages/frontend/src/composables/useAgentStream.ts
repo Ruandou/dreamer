@@ -70,11 +70,11 @@ export function useAgentStream() {
           const { event, data } = parsed
 
           // 分发事件到回调
-          if (event === 'agent-step-start') {
+          if (event === 'agent-step_start') {
             callbacks.onStepStart?.(data)
           } else if (event === 'agent-token') {
             callbacks.onToken?.(data)
-          } else if (event === 'agent-step-complete') {
+          } else if (event === 'agent-step_complete') {
             callbacks.onStepComplete?.(data)
           } else if (event === 'agent-done') {
             callbacks.onDone?.(data)

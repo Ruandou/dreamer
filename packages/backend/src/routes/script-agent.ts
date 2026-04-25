@@ -25,12 +25,13 @@ export async function scriptAgentRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string }
       const body = request.body as {
         command: string
+        model?: string
         context?: {
           selectedText?: string
           targetEpisode?: number
         }
       }
-      const { command } = body
+      const { command, model } = body
 
       // 验证剧本存在且属于当前用户
       const script = await prisma.script.findFirst({
@@ -44,7 +45,7 @@ export async function scriptAgentRoutes(fastify: FastifyInstance) {
       // 创建或获取协调器
       let orchestrator = orchestrators.get(id)
       if (!orchestrator) {
-        orchestrator = createWritingOrchestrator(id, userId)
+        orchestrator = createWritingOrchestrator(id, userId, model)
         orchestrators.set(id, orchestrator)
       }
 
@@ -245,8 +246,8 @@ export async function scriptAgentRoutes(fastify: FastifyInstance) {
       try {
         const userId = getRequestUserId(request)
         const { id } = request.params as { id: string }
-        const body = request.body as { command: string }
-        const { command } = body
+        const body = request.body as { command: string; model?: string }
+        const { command, model } = body
 
         const script = await prisma.script.findFirst({
           where: { id, userId }
@@ -256,11 +257,13 @@ export async function scriptAgentRoutes(fastify: FastifyInstance) {
           return reply.status(404).send({ error: '剧本不存在或无权访问' })
         }
 
-        // 创建或复用协调器
+        // 创建或复用协调器，始终更新模型
         let orchestrator = orchestrators.get(id)
         if (!orchestrator) {
-          orchestrator = createWritingOrchestrator(id, userId)
+          orchestrator = createWritingOrchestrator(id, userId, model)
           orchestrators.set(id, orchestrator)
+        } else if (model) {
+          orchestrator.setModel(model)
         }
 
         const raw = reply.raw

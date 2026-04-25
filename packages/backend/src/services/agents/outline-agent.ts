@@ -3,7 +3,7 @@
  * 基于用户意图和上下文生成结构化剧本大纲
  */
 
-import { getDefaultProvider } from '../ai/llm-factory.js'
+import { getProviderForModel } from '../ai/llm/llm-factory.js'
 import {
   callLLMWithRetry,
   streamLLMWithRetry,
@@ -48,7 +48,8 @@ export class OutlineAgent {
   async generate(
     userId: string,
     intent: ParsedIntent,
-    context: WritingContext
+    context: WritingContext,
+    model?: string
   ): Promise<OutlineOutput> {
     // 构建用户提示词
     const userPrompt = this.buildUserPrompt(intent, context)
@@ -58,7 +59,7 @@ export class OutlineAgent {
       { role: 'user', content: userPrompt }
     ]
 
-    const provider = getDefaultProvider()
+    const provider = getProviderForModel(model)
 
     try {
       const result = await callLLMWithRetry(
@@ -67,6 +68,7 @@ export class OutlineAgent {
           messages,
           temperature: 0.8,
           maxTokens: 4000,
+          model,
           modelLog: {
             userId,
             op: 'outline_generation'
@@ -93,7 +95,8 @@ export class OutlineAgent {
   async *generateStream(
     userId: string,
     intent: ParsedIntent,
-    context: WritingContext
+    context: WritingContext,
+    model?: string
   ): AsyncGenerator<AgentStreamEvent> {
     // 发送步骤开始事件
     yield {
@@ -111,7 +114,7 @@ export class OutlineAgent {
       { role: 'user', content: userPrompt }
     ]
 
-    const provider = getDefaultProvider()
+    const provider = getProviderForModel(model)
 
     try {
       const stream = streamLLMWithRetry({
@@ -119,6 +122,7 @@ export class OutlineAgent {
         messages,
         temperature: 0.8,
         maxTokens: 4000,
+        model,
         modelLog: {
           userId,
           op: 'outline_generation'

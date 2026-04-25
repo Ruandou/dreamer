@@ -3,7 +3,7 @@
  * 基于大纲和上下文生成完整剧本文稿
  */
 
-import { getDefaultProvider } from '../ai/llm-factory.js'
+import { getProviderForModel } from '../ai/llm/llm-factory.js'
 import { callLLMWithRetry, streamLLMWithRetry } from '../ai/llm-call-wrapper.js'
 import type { LLMMessage } from '../ai/llm-provider.js'
 import type {
@@ -48,7 +48,8 @@ export class DraftAgent {
     userId: string,
     outline: OutlineOutput,
     context: WritingContext,
-    targetEpisode?: number
+    targetEpisode?: number,
+    model?: string
   ): Promise<ScriptContent> {
     // 如果指定了集数，只生成该集
     const episodesToGenerate = targetEpisode
@@ -58,7 +59,7 @@ export class DraftAgent {
     // 构建用户提示词
     const userPrompt = this.buildUserPrompt(outline, context, episodesToGenerate)
 
-    const provider = getDefaultProvider()
+    const provider = getProviderForModel(model)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: DRAFT_AGENT_SYSTEM_PROMPT },
@@ -71,7 +72,7 @@ export class DraftAgent {
         messages,
         temperature: 0.9,
         maxTokens: 8000,
-        model: 'deepseek-chat',
+        model,
         modelLog: {
           userId,
           op: 'draft_generation'
@@ -95,7 +96,8 @@ export class DraftAgent {
     userId: string,
     outline: OutlineOutput,
     context: WritingContext,
-    targetEpisode?: number
+    targetEpisode?: number,
+    model?: string
   ): AsyncGenerator<AgentStreamEvent> {
     const episodesToGenerate = targetEpisode
       ? outline.episodes.filter((ep) => ep.episodeNum === targetEpisode)
@@ -103,7 +105,7 @@ export class DraftAgent {
 
     const userPrompt = this.buildUserPrompt(outline, context, episodesToGenerate)
 
-    const provider = getDefaultProvider()
+    const provider = getProviderForModel(model)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: DRAFT_AGENT_SYSTEM_PROMPT },
@@ -129,7 +131,7 @@ export class DraftAgent {
         messages,
         temperature: 0.9,
         maxTokens: 8000,
-        model: 'deepseek-chat',
+        model,
         modelLog: {
           userId,
           op: 'draft_generation'

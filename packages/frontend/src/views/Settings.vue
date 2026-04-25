@@ -17,11 +17,15 @@ import {
   VideocamOutline,
   FlameOutline,
   CheckmarkOutline,
-  PersonOutline
+  PersonOutline,
+  HardwareChipOutline
 } from '@vicons/ionicons5'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
+import { useModelPreferenceStore } from '../stores/model-preference.ts'
+import { NSelect } from 'naive-ui'
 
 const message = useMessage()
+const modelStore = useModelPreferenceStore()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -47,6 +51,8 @@ const verifySuccess = ref(false)
 onMounted(async () => {
   loading.value = true
   try {
+    await modelStore.init()
+
     const res = await fetch('/api/settings/me', {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -165,6 +171,9 @@ const saveSettings = async () => {
       apiKeyInput.value = ''
     }
 
+    // Save model preferences
+    await modelStore.savePreferences()
+
     message.success('设置已保存')
   } catch (error: any) {
     message.error('保存失败')
@@ -208,6 +217,34 @@ const formatBalance = (amount: number) => {
           <NForm label-placement="left" label-width="100">
             <NFormItem label="用户名">
               <NInput v-model:value="userName" placeholder="输入用户名" />
+            </NFormItem>
+          </NForm>
+        </NCard>
+      </div>
+
+      <!-- AI Model Preference -->
+      <div class="settings-section">
+        <div class="settings-section__header">
+          <div
+            class="settings-section__icon"
+            style="background: linear-gradient(135deg, #ede9fe 0%, #f3e8ff 100%); color: #7c3aed"
+          >
+            <NIcon :component="HardwareChipOutline" :size="20" />
+          </div>
+          <div>
+            <h3 class="settings-section__title">AI 模型</h3>
+            <p class="settings-section__desc">选择默认的文本生成模型</p>
+          </div>
+        </div>
+        <NCard class="settings-card" :bordered="false">
+          <NForm label-placement="left" label-width="100">
+            <NFormItem label="文本模型">
+              <NSelect
+                v-model:value="modelStore.currentTextModel"
+                :options="modelStore.textModels.map((m) => ({ label: m.name, value: m.id }))"
+                placeholder="选择默认文本模型"
+                clearable
+              />
             </NFormItem>
           </NForm>
         </NCard>

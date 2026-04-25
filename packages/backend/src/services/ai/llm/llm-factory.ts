@@ -14,6 +14,8 @@ import {
 import { DeepSeekProvider } from './providers/deepseek-provider.js'
 import { OpenAIProvider } from './providers/openai-provider.js'
 import { ArkLLMProvider } from './providers/ark-llm-provider.js'
+import { getModelInfo } from './llm-model-catalog.js'
+import type { LLMProvider } from './llm-provider.js'
 
 export type { LLMProvider } from './llm-provider.js'
 export type { LLMProviderConfig } from './llm-provider.js'
@@ -95,4 +97,66 @@ export function createArkLLMProvider(apiKey?: string, baseURL?: string) {
       'https://ark.cn-beijing.volces.com/api/v3',
     defaultModel: process.env.ARK_LLM_DEFAULT_MODEL || 'doubao-pro-32k-241215'
   })
+}
+
+/**
+ * 根据模型 ID 获取对应的 Provider
+ * 用于支持用户在创作时切换不同提供商的模型
+ */
+export function getProviderForModel(modelId?: string): LLMProvider {
+  if (!modelId) {
+    return getDefaultProvider()
+  }
+
+  const modelInfo = getModelInfo(modelId)
+  if (!modelInfo) {
+    console.warn(`[model-factory] 未知模型 ID "${modelId}"，使用默认 Provider`)
+    return getDefaultProvider()
+  }
+
+  const providerName = modelInfo.provider
+
+  // 尝试新环境变量格式
+  const envKeyPrefix = providerName.toUpperCase()
+  const apiKey = process.env[`${envKeyPrefix}_API_KEY`]
+
+  if (apiKey) {
+    return createLLMProvider({
+      provider: providerName,
+      apiKey,
+      baseURL: process.env[`${envKeyPrefix}_BASE_URL`] || undefined,
+      defaultModel: modelId
+    })
+  }
+
+  // 兼容旧版环境变量（但保留用户选择的模型）
+  if (providerName === 'deepseek' && process.env.DEEPSEEK_API_KEY) {
+    return createLLMProvider({
+      provider: 'deepseek',
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
+      defaultModel: modelId
+    })
+  }
+  if (providerName === 'openai' && process.env.OPENAI_API_KEY) {
+    return createLLMProvider({
+      provider: 'openai',
+      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+      defaultModel: modelId
+    })
+  }
+  if (providerName === 'ark' && (process.env.ARK_LLM_API_KEY || process.env.ARK_API_KEY)) {
+    return createLLMProvider({
+      provider: 'ark',
+      apiKey: process.env.ARK_LLM_API_KEY || process.env.ARK_API_KEY || '',
+      baseURL:
+        process.env.ARK_LLM_BASE_URL ||
+        process.env.ARK_API_URL ||
+        'https://ark.cn-beijing.volces.com/api/v3',
+      defaultModel: modelId
+    })
+  }
+
+  return getDefaultProvider()
 }

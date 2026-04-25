@@ -137,6 +137,7 @@ export const useChatStore = defineStore('chat', () => {
       scriptContent?: string
       scriptTitle?: string
       quickCommand?: string
+      model?: string
     } = {}
   ) {
     if (!activeConversationId.value || isStreaming.value) return
@@ -159,9 +160,9 @@ export const useChatStore = defineStore('chat', () => {
     const currentMessages = messages.value.get(convId) || []
     messages.value.set(convId, [...currentMessages, userMsg])
 
-    // Clear streaming state
+    // Clear streaming state and create streaming placeholder ID
     streamingContent.value = ''
-    streamingMessageId.value = null
+    streamingMessageId.value = `streaming-${Date.now()}`
 
     // Start streaming
     isStreaming.value = true
@@ -172,7 +173,8 @@ export const useChatStore = defineStore('chat', () => {
         content,
         scriptContent: options.scriptContent,
         scriptTitle: options.scriptTitle,
-        quickCommand: options.quickCommand
+        quickCommand: options.quickCommand,
+        model: options.model
       },
       {
         onToken: (token: string) => {

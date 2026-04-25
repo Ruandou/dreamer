@@ -15,18 +15,21 @@
         <NIcon :component="ReturnDownBackOutline" :size="12" />
         Enter 发送 · Shift+Enter 换行
       </span>
-      <NButton
-        :type="isStreaming ? 'error' : 'primary'"
-        :loading="isStreaming && !disabled"
-        :disabled="!inputValue.trim() && !isStreaming"
-        size="small"
-        @click="handleAction"
-      >
-        <template #icon>
-          <NIcon :component="isStreaming ? StopCircleOutline : SendOutline" :size="16" />
-        </template>
-        {{ isStreaming ? '停止' : sendLabel }}
-      </NButton>
+      <div class="input-actions-right">
+        <slot name="actions"></slot>
+        <NButton
+          :type="isStreaming ? 'error' : 'primary'"
+          :loading="isStreaming && !disabled"
+          :disabled="!inputValue.trim() && !isStreaming"
+          size="small"
+          @click="handleAction"
+        >
+          <template #icon>
+            <NIcon :component="isStreaming ? StopCircleOutline : SendOutline" :size="16" />
+          </template>
+          {{ isStreaming ? '停止' : sendLabel }}
+        </NButton>
+      </div>
     </div>
   </div>
 </template>
@@ -114,5 +117,11 @@ function handleAction() {
   font-size: 12px;
   color: var(--color-text-tertiary);
   user-select: none;
+}
+
+.input-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 </style>

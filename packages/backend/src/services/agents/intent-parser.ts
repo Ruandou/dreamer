@@ -3,7 +3,7 @@
  * 解析用户的自然语言指令，提取结构化的意图参数
  */
 
-import { getDefaultProvider } from '../ai/llm-factory.js'
+import { getProviderForModel } from '../ai/llm/llm-factory.js'
 import {
   callLLMWithRetry,
   streamLLMWithRetry,
@@ -42,7 +42,7 @@ export class IntentParser {
   /**
    * 解析用户指令
    */
-  async parse(command: string, context?: WritingContext): Promise<ParsedIntent> {
+  async parse(command: string, context?: WritingContext, model?: string): Promise<ParsedIntent> {
     const userId = context?.currentScript ? await this.getUserIdFromContext(context) : null
 
     if (!userId) {
@@ -59,7 +59,7 @@ export class IntentParser {
     ]
 
     try {
-      const provider = getDefaultProvider()
+      const provider = getProviderForModel(model)
 
       const result = await callLLMWithRetry(
         {
@@ -67,7 +67,7 @@ export class IntentParser {
           messages,
           temperature: 0.1, // 低温度确保输出稳定的 JSON
           maxTokens: 1000,
-          model: 'deepseek-chat',
+          model,
           modelLog: {
             userId,
             op: 'intent_parser'
@@ -92,7 +92,11 @@ export class IntentParser {
   /**
    * 解析用户指令（流式版本）
    */
-  async *parseStream(command: string, context?: WritingContext): AsyncGenerator<AgentStreamEvent> {
+  async *parseStream(
+    command: string,
+    context?: WritingContext,
+    model?: string
+  ): AsyncGenerator<AgentStreamEvent> {
     const userId = context?.currentScript ? await this.getUserIdFromContext(context) : null
 
     if (!userId) {
@@ -134,13 +138,13 @@ export class IntentParser {
     ]
 
     try {
-      const provider = getDefaultProvider()
+      const provider = getProviderForModel(model)
       const stream = streamLLMWithRetry({
         provider,
         messages,
         temperature: 0.1,
         maxTokens: 1000,
-        model: 'deepseek-chat',
+        model,
         modelLog: {
           userId,
           op: 'intent_parser'

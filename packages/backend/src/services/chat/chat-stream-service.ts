@@ -3,7 +3,7 @@
 import OpenAI from 'openai'
 import type { DeepSeekCost } from '../ai/deepseek-client.js'
 import { calculateDeepSeekCost } from '../ai/deepseek-client.js'
-import { getDefaultProvider } from '../ai/llm-factory.js'
+import { getProviderForModel } from '../ai/llm/llm-factory.js'
 import { CHAT_MAX_RESPONSE_TOKENS, CHAT_TEMPERATURE } from './chat.constants.js'
 
 export interface ChatStreamEventToken {
@@ -70,7 +70,8 @@ export async function* streamChatResponse(
   let rawUsage: unknown
 
   try {
-    const config = getDefaultProvider().getConfig()
+    const provider = getProviderForModel(model)
+    const config = provider.getConfig()
     const client = new OpenAI({
       apiKey: config.apiKey,
       baseURL: config.baseURL

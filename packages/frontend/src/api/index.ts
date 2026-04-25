@@ -368,3 +368,55 @@ export async function getConversationWithMessages(conversationId: string, limit 
 export async function deleteConversation(conversationId: string) {
   return api.delete(`/chat/conversations/${conversationId}`)
 }
+
+// ============ Model Preferences ============
+
+export interface LLMModelInfo {
+  id: string
+  name: string
+  provider: string
+  description?: string
+  contextWindow?: number
+  capabilities?: string[]
+}
+
+export interface ModelCatalog {
+  llm: {
+    providers: string[]
+    models: LLMModelInfo[]
+  }
+  image: {
+    providers: string[]
+    models: LLMModelInfo[]
+  }
+  video: {
+    providers: string[]
+    models: LLMModelInfo[]
+  }
+  search: {
+    providers: string[]
+    models: LLMModelInfo[]
+  }
+}
+
+export async function getModelCatalog() {
+  const res = await api.get<ModelCatalog>('/models')
+  return res.data
+}
+
+export interface ModelPreferences {
+  textModel?: string
+  imageModel?: string
+  videoModel?: string
+  searchModel?: string
+}
+
+export async function getModelPreferences() {
+  const res = await api.get<{ preferences: ModelPreferences }>('/models/preferences')
+  return res.data.preferences
+}
+
+export async function updateModelPreferences(preferences: ModelPreferences) {
+  const res = await api.put<{ preferences: ModelPreferences }>('/models/preferences', preferences)
+  return res.data.preferences
+}

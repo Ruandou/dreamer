@@ -39,6 +39,7 @@ export interface OrchestratorState {
   draft: ScriptContent | null
   critique: CritiqueResult | null
   memories: ScriptMemoryItem[]
+  model?: string
 }
 
 const CRITIQUE_THRESHOLD = 75 // 审核通过阈值
@@ -47,7 +48,7 @@ const MAX_REVISION_ROUNDS = 3 // 最大修改轮数
 export class WritingOrchestrator {
   private state: OrchestratorState
 
-  constructor(scriptId: string, userId: string) {
+  constructor(scriptId: string, userId: string, model?: string) {
     this.state = {
       scriptId,
       userId,
@@ -57,7 +58,8 @@ export class WritingOrchestrator {
       outline: null,
       draft: null,
       critique: null,
-      memories: []
+      memories: [],
+      model
     }
   }
 
@@ -66,6 +68,13 @@ export class WritingOrchestrator {
    */
   getState(): OrchestratorState {
     return { ...this.state }
+  }
+
+  /**
+   * 更新模型选择
+   */
+  setModel(model: string): void {
+    this.state.model = model
   }
 
   /**
@@ -79,7 +88,7 @@ export class WritingOrchestrator {
     this.state.context = context
 
     // 解析意图
-    const intent = await intentParser.parse(command, context)
+    const intent = await intentParser.parse(command, context, this.state.model)
     this.state.intent = intent
     this.state.currentStep = 'intent_parsed'
 
@@ -123,7 +132,8 @@ export class WritingOrchestrator {
     const outline = await outlineAgent.generate(
       this.state.userId,
       this.state.intent,
-      this.state.context
+      this.state.context,
+      this.state.model
     )
     this.state.outline = outline
     this.state.currentStep = 'outline_generated'
@@ -132,7 +142,8 @@ export class WritingOrchestrator {
     const memories = await memoryExtractor.extractFromOutline(
       this.state.userId,
       this.state.scriptId,
-      outline
+      outline,
+      this.state.model
     )
     this.state.memories = memories
 
@@ -173,7 +184,8 @@ export class WritingOrchestrator {
       this.state.userId,
       this.state.outline,
       this.state.context,
-      targetEpisode
+      targetEpisode,
+      this.state.model
     )
     this.state.draft = draft
 
@@ -181,13 +193,24 @@ export class WritingOrchestrator {
     let critique: CritiqueResult
     do {
       // 审核
-      critique = await criticAgent.critique(this.state.userId, draft, this.state.outline)
+      critique = await criticAgent.critique(
+        this.state.userId,
+        draft,
+        this.state.outline,
+        this.state.model
+      )
       this.state.critique = critique
       this.state.currentStep = 'critiqued'
 
       // 如果评分低于阈值，自动修改
       if (critique.overallScore < CRITIQUE_THRESHOLD && revisionCount < MAX_REVISION_ROUNDS) {
-        const revisedDraft = await revisionAgent.revise(this.state.userId, draft, critique)
+        const revisedDraft = await revisionAgent.revise(
+          this.state.userId,
+          draft,
+          critique,
+          3,
+          this.state.model
+        )
         this.state.draft = revisedDraft
         revisionCount++
         this.state.currentStep = 'revised'
@@ -200,7 +223,8 @@ export class WritingOrchestrator {
     const newMemories = await memoryExtractor.extractFromDraft(
       this.state.userId,
       this.state.scriptId,
-      draft
+      draft,
+      this.state.model
     )
     this.state.memories = [...this.state.memories, ...newMemories]
 
@@ -271,7 +295,13 @@ export class WritingOrchestrator {
       weaknesses: ''
     }
 
-    const revisedDraft = await revisionAgent.revise(this.state.userId, this.state.draft, critique)
+    const revisedDraft = await revisionAgent.revise(
+      this.state.userId,
+      this.state.draft,
+      critique,
+      3,
+      this.state.model
+    )
     this.state.draft = revisedDraft
 
     // 保存
@@ -346,7 +376,11 @@ export class WritingOrchestrator {
 
     // 步骤 2: 解析意图
     let intentConfirmed = false
-    for await (const event of intentParser.parseStream(command, this.state.context)) {
+    for await (const event of intentParser.parseStream(
+      command,
+      this.state.context,
+      this.state.model
+    )) {
       yield event
       if (event.type === 'step_complete') {
         this.state.intent = event.result.content as ParsedIntent
@@ -371,7 +405,8 @@ export class WritingOrchestrator {
     for await (const event of outlineAgent.generateStream(
       this.state.userId,
       this.state.intent,
-      this.state.context
+      this.state.context,
+      this.state.model
     )) {
       yield event
       if (event.type === 'step_complete') {
@@ -382,7 +417,8 @@ export class WritingOrchestrator {
         const memories = await memoryExtractor.extractFromOutline(
           this.state.userId,
           this.state.scriptId,
-          this.state.outline
+          this.state.outline,
+          this.state.model
         )
         this.state.memories = memories
       }
@@ -400,7 +436,8 @@ export class WritingOrchestrator {
       for await (const event of outlineAgent.generateStream(
         this.state.userId,
         this.state.intent,
-        this.state.context
+        this.state.context,
+        this.state.model
       )) {
         yield event
         if (event.type === 'step_complete') {
@@ -411,7 +448,8 @@ export class WritingOrchestrator {
           const memories = await memoryExtractor.extractFromOutline(
             this.state.userId,
             this.state.scriptId,
-            this.state.outline
+            this.state.outline,
+            this.state.model
           )
           this.state.memories = memories
         }
@@ -430,7 +468,8 @@ export class WritingOrchestrator {
       this.state.userId,
       this.state.outline,
       this.state.context,
-      targetEpisode
+      targetEpisode,
+      this.state.model
     )) {
       yield event
       if (event.type === 'step_complete') {
@@ -450,7 +489,8 @@ export class WritingOrchestrator {
       for await (const event of criticAgent.critiqueStream(
         this.state.userId,
         draft,
-        this.state.outline
+        this.state.outline,
+        this.state.model
       )) {
         yield event
         if (event.type === 'step_complete') {
@@ -474,7 +514,12 @@ export class WritingOrchestrator {
       }
 
       if (critique.overallScore < 75 && revisionCount < 3) {
-        for await (const event of revisionAgent.reviseStream(this.state.userId, draft, critique)) {
+        for await (const event of revisionAgent.reviseStream(
+          this.state.userId,
+          draft,
+          critique,
+          this.state.model
+        )) {
           yield event
           if (event.type === 'step_complete') {
             draft = event.result.content as ScriptContent
@@ -492,7 +537,8 @@ export class WritingOrchestrator {
     const newMemories = await memoryExtractor.extractFromDraft(
       this.state.userId,
       this.state.scriptId,
-      draft
+      draft,
+      this.state.model
     )
     this.state.memories = [...this.state.memories, ...newMemories]
 
@@ -512,6 +558,10 @@ export class WritingOrchestrator {
 }
 
 // 创建协调器的工厂函数
-export function createWritingOrchestrator(scriptId: string, userId: string): WritingOrchestrator {
-  return new WritingOrchestrator(scriptId, userId)
+export function createWritingOrchestrator(
+  scriptId: string,
+  userId: string,
+  model?: string
+): WritingOrchestrator {
+  return new WritingOrchestrator(scriptId, userId, model)
 }

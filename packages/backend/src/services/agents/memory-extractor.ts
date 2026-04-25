@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '../../lib/prisma.js'
-import { getDefaultProvider } from '../ai/llm-factory.js'
+import { getProviderForModel } from '../ai/llm/llm-factory.js'
 import { callLLMWithRetry, cleanMarkdownCodeBlocks } from '../ai/llm-call-wrapper.js'
 import type { LLMMessage } from '../ai/llm-provider.js'
 import type { OutlineOutput, ScriptContent, ScriptMemoryItem } from './types.js'
@@ -46,7 +46,8 @@ export class MemoryExtractor {
   async extractFromOutline(
     userId: string,
     scriptId: string,
-    outline: OutlineOutput
+    outline: OutlineOutput,
+    model?: string
   ): Promise<ScriptMemoryItem[]> {
     const outlineText = outline.episodes
       .map(
@@ -57,7 +58,7 @@ export class MemoryExtractor {
 
     const userPrompt = `请从以下剧本大纲中提取关键记忆点：\n\n剧本标题：${outline.title}\n总集数：${outline.episodeCount}\n\n${outlineText}`
 
-    const memories = await this.callExtractionAPI(userId, userPrompt)
+    const memories = await this.callExtractionAPI(userId, userPrompt, model)
 
     // 保存到数据库
     const savedMemories = await this.saveMemories(scriptId, memories)
@@ -71,13 +72,14 @@ export class MemoryExtractor {
   async extractFromDraft(
     userId: string,
     scriptId: string,
-    draft: ScriptContent
+    draft: ScriptContent,
+    model?: string
   ): Promise<ScriptMemoryItem[]> {
     // 限制内容长度
     const contentPreview = draft.content.substring(0, 8000)
     const userPrompt = `请从以下剧本内容中提取关键记忆点：\n\n剧本标题：${draft.title}\n\n${contentPreview}`
 
-    const memories = await this.callExtractionAPI(userId, userPrompt)
+    const memories = await this.callExtractionAPI(userId, userPrompt, model)
 
     // 保存到数据库
     const savedMemories = await this.saveMemories(scriptId, memories)
@@ -90,7 +92,8 @@ export class MemoryExtractor {
    */
   private async callExtractionAPI(
     userId: string,
-    userPrompt: string
+    userPrompt: string,
+    model?: string
   ): Promise<
     Array<{
       type: string
@@ -107,7 +110,7 @@ export class MemoryExtractor {
     ]
 
     try {
-      const provider = getDefaultProvider()
+      const provider = getProviderForModel(model)
 
       const result = await callLLMWithRetry(
         {
@@ -115,7 +118,7 @@ export class MemoryExtractor {
           messages,
           temperature: 0.3,
           maxTokens: 4000,
-          model: 'deepseek-chat',
+          model,
           modelLog: {
             userId,
             op: 'memory_extraction'
