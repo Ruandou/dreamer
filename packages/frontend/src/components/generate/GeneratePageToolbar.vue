@@ -6,14 +6,12 @@ defineProps<{
 }>()
 
 defineEmits<{
-  (e: 'back'): void
   (e: 'save-draft'): void
 }>()
 </script>
 
 <template>
   <div class="generate-toolbar">
-    <NButton quaternary @click="$emit('back')">← 返回项目列表</NButton>
     <h1 class="page-title-inline">生成大纲</h1>
     <NButton size="small" :disabled="isLoading" @click="$emit('save-draft')">保存草稿</NButton>
   </div>

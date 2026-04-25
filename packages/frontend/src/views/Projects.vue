@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NButton, NInput, NSpace, NDropdown, NIcon, useMessage, useDialog } from 'naive-ui'
+import { NButton, NSpace, NDropdown, NIcon, useMessage, useDialog } from 'naive-ui'
 import { EllipsisVerticalOutline } from '@vicons/ionicons5'
 import { useProjectStore } from '@/stores/project'
 import type { Project } from '@dreamer/shared/types'
@@ -289,12 +289,12 @@ const handleDropdownSelect = (key: string, projectId: string) => {
       @dragenter.prevent
     >
       <div class="quick-create__input-wrap">
-        <NInput
-          v-model:value="quickIdea"
-          type="textarea"
+        <textarea
+          v-model="quickIdea"
+          class="quick-create__textarea"
           placeholder="输入想法，快速创建短剧... 或 拖拽剧本文件到此处 (⌘N)"
-          :rows="3"
-          @keydown.enter.ctrl="handleQuickCreate"
+          rows="3"
+          @keydown.ctrl.enter="handleQuickCreate"
         />
       </div>
       <div class="quick-create__actions">
@@ -463,6 +463,34 @@ const handleDropdownSelect = (key: string, projectId: string) => {
 .quick-create__input-wrap {
   width: 100%;
   max-width: 640px;
+}
+
+.quick-create__textarea {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+  background: var(--color-bg-white);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  resize: vertical;
+  outline: none;
+  transition: all 0.25s ease;
+  font-family: inherit;
+}
+
+.quick-create__textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.quick-create__textarea:hover {
+  border-color: var(--color-primary-hover);
+}
+
+.quick-create__textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(244, 114, 106, 0.15);
 }
 
 .quick-create__actions {

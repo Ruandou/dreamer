@@ -68,18 +68,12 @@ function handleMenuClick(key: string) {
 }
 
 const userName = computed(() => uiStore.userName)
-const userMenuOptions: DropdownOption[] = [
-  { label: '设置', key: 'settings' },
-  { type: 'divider', key: 'd1' },
-  { label: '退出登录', key: 'logout' }
-]
+const userMenuOptions: DropdownOption[] = [{ label: '退出登录', key: 'logout' }]
 
 function handleUserMenu(key: string) {
   if (key === 'logout') {
     localStorage.removeItem('token')
     router.push('/login')
-  } else if (key === 'settings') {
-    router.push('/settings')
   }
 }
 </script>
@@ -95,6 +89,7 @@ function handleUserMenu(key: string) {
     @collapse="uiStore.toggleSidebar()"
     @expand="uiStore.toggleSidebar()"
     class="app-sider"
+    :data-collapsed="uiStore.sidebarCollapsed"
   >
     <div class="sider-content">
       <!-- Logo -->
@@ -162,12 +157,18 @@ function handleUserMenu(key: string) {
 .sider-logo {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
   padding: 12px 16px;
   margin-bottom: 8px;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
+}
+
+.app-sider[data-collapsed='true'] .sider-logo {
+  justify-content: center;
+  padding: 12px 0;
 }
 
 .logo-icon {
@@ -203,6 +204,12 @@ function handleUserMenu(key: string) {
   background: var(--color-bg-white);
 }
 
+.app-sider[data-collapsed='true'] .sidebar-footer {
+  padding: 12px 0;
+  display: flex;
+  justify-content: center;
+}
+
 .user-section {
   display: flex;
   align-items: center;
@@ -211,6 +218,11 @@ function handleUserMenu(key: string) {
   padding: 4px 8px;
   border-radius: var(--radius-md);
   transition: background var(--transition-fast);
+}
+
+.app-sider[data-collapsed='true'] .user-section {
+  padding: 4px;
+  justify-content: center;
 }
 
 .user-section:hover {
@@ -252,5 +264,24 @@ function handleUserMenu(key: string) {
 
 .app-sider :deep(.n-menu .n-menu-item-content--selected:hover) {
   background: linear-gradient(135deg, #ffeaea 0%, #ffedd5 100%) !important;
+}
+
+/* Collapsed sidebar: center all icons */
+.app-sider[data-collapsed='true'] :deep(.n-menu .n-menu-item-content) {
+  display: flex !important;
+  justify-content: center !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.app-sider[data-collapsed='true'] :deep(.n-menu .n-menu-item-content__icon) {
+  margin-right: 0 !important;
+  margin-left: 0 !important;
+}
+
+.app-sider[data-collapsed='true'] :deep(.n-menu .n-menu-item-content-header) {
+  display: none !important;
 }
 </style>

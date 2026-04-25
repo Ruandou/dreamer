@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import {
   NCard,
   NButton,
@@ -18,12 +17,10 @@ import {
   VideocamOutline,
   FlameOutline,
   CheckmarkOutline,
-  ArrowBackOutline,
   PersonOutline
 } from '@vicons/ionicons5'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 
-const router = useRouter()
 const message = useMessage()
 
 const loading = ref(false)
@@ -186,14 +183,6 @@ const formatBalance = (amount: number) => {
     <header class="settings-header">
       <div class="settings-header__left">
         <h1 class="settings-header__title">设置</h1>
-      </div>
-      <div class="settings-header__right">
-        <NButton @click="router.push('/projects')">
-          <template #icon>
-            <NIcon :component="ArrowBackOutline" :size="16" />
-          </template>
-          返回项目
-        </NButton>
       </div>
     </header>
 

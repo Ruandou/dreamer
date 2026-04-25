@@ -234,7 +234,6 @@ onMounted(load)
           <NButton secondary @click="filterByOp('script_visual_enrichment')"> 定场/定妆 </NButton>
           <NButton secondary @click="filterByOp('import_parse_script')"> 导入解析 </NButton>
           <NButton @click="clearFilters"> 清空条件 </NButton>
-          <NButton @click="router.push('/projects')">返回项目</NButton>
         </NSpace>
       </NSpace>
     </NCard>
