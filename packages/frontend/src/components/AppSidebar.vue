@@ -93,10 +93,8 @@ function handleUserMenu(key: string) {
   >
     <div class="sider-content">
       <!-- Logo -->
-      <div class="sider-logo">
-        <span class="logo-icon">
-          <NIcon :component="CreateOutline" :size="24" />
-        </span>
+      <div class="sider-logo" @click="router.push('/dashboard')">
+        <img src="/images/dreamer-logo.png" alt="Dreamer" class="logo-img" />
         <span v-if="!uiStore.sidebarCollapsed" class="logo-text">AI短剧工作台</span>
       </div>
 
@@ -164,6 +162,13 @@ function handleUserMenu(key: string) {
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.sider-logo:hover {
+  background: var(--color-bg-gray);
 }
 
 .app-sider[data-collapsed='true'] .sider-logo {
@@ -171,16 +176,17 @@ function handleUserMenu(key: string) {
   padding: 12px 0;
 }
 
-.logo-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.logo-img {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-md);
-  background: var(--color-primary-light);
-  color: var(--color-primary);
   flex-shrink: 0;
+  object-fit: cover;
+}
+
+.app-sider[data-collapsed='true'] .logo-img {
+  width: 36px;
+  height: 36px;
 }
 
 .logo-text {

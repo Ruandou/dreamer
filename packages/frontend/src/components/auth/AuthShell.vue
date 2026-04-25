@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import { NIcon } from 'naive-ui'
-import {
-  DocumentTextOutline,
-  VideocamOutline,
-  LayersOutline,
-  CutOutline
-} from '@vicons/ionicons5'
+import { DocumentTextOutline, VideocamOutline, LayersOutline, CutOutline } from '@vicons/ionicons5'
 import { AUTH_PLATFORM } from '@/lib/auth-platform'
 
 const iconMap = {
@@ -21,8 +16,13 @@ const iconMap = {
     <div class="auth-shell__bg" aria-hidden="true" />
     <div class="auth-shell__inner">
       <aside class="auth-intro" aria-labelledby="auth-platform-heading">
-        <p class="auth-intro__product">{{ AUTH_PLATFORM.product }}</p>
-        <h1 id="auth-platform-heading" class="auth-intro__title">{{ AUTH_PLATFORM.title }}</h1>
+        <div class="auth-intro__brand">
+          <img src="/images/dreamer-logo.png" alt="Dreamer" class="auth-intro__logo" />
+          <div>
+            <p class="auth-intro__product">{{ AUTH_PLATFORM.product }}</p>
+            <h1 id="auth-platform-heading" class="auth-intro__title">{{ AUTH_PLATFORM.title }}</h1>
+          </div>
+        </div>
         <p class="auth-intro__tagline">{{ AUTH_PLATFORM.tagline }}</p>
         <ul class="auth-intro__list">
           <li v-for="item in AUTH_PLATFORM.features" :key="item.key" class="auth-intro__item">
@@ -80,6 +80,21 @@ const iconMap = {
   color: rgba(255, 255, 255, 0.92);
 }
 
+.auth-intro__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.auth-intro__logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .auth-intro__product {
   margin: 0 0 0.35rem;
   font-size: 0.8125rem;
@@ -90,7 +105,7 @@ const iconMap = {
 }
 
 .auth-intro__title {
-  margin: 0 0 1rem;
+  margin: 0;
   font-size: clamp(1.65rem, 3.2vw, 2.25rem);
   font-weight: 700;
   line-height: 1.2;
