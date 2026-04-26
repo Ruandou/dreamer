@@ -94,10 +94,28 @@
             v-model="content"
             class="script-editor"
             @input="onContentChange"
+            @mouseup="onEditorSelect"
+            @keyup="onEditorSelect"
             placeholder="开始编写剧本..."
             spellcheck="false"
             aria-label="剧本编辑器"
           ></textarea>
+
+          <!-- 浮动引用按钮 -->
+          <transition name="fade">
+            <NButton
+              v-if="showRefButton && selectedText && !isPreview"
+              class="selection-ref-btn"
+              type="primary"
+              size="tiny"
+              @click="addReferenceToChat"
+            >
+              <template #icon>
+                <NIcon :component="ChatbubbleEllipsesOutline" :size="14" />
+              </template>
+              引用到对话
+            </NButton>
+          </transition>
         </div>
         <div v-else class="script-preview" v-html="renderedContent"></div>
       </div>
@@ -109,12 +127,16 @@
           :script-id="script?.id"
           :script-content="content"
           :script-title="script?.title"
+          :reference="currentReference"
           @apply-changes="handleApplyChanges"
+          @clear-reference="clearReference"
         />
         <AgentPanel
           v-else-if="panelMode === 'agent' && script?.id"
           :script-id="script.id"
+          :reference="currentReference"
           @apply-content="handleApplyContent"
+          @clear-reference="clearReference"
         />
       </div>
     </div>
@@ -169,7 +191,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, useMessage, NTag, NSpace, NIcon, NTooltip } from 'naive-ui'
 import {
@@ -207,6 +229,11 @@ const originalContent = ref('')
 const revisedContent = ref('')
 const editingTags = ref(false)
 const panelMode = ref<'chat' | 'agent'>('chat') // 面板模式切换
+
+// 选中引用
+const selectedText = ref<{ text: string; startLine: number; endLine: number } | null>(null)
+const showRefButton = ref(false)
+const currentReference = ref<{ text: string; startLine: number; endLine: number } | null>(null)
 
 const lineCount = computed(() => {
   if (!content.value) return 1
@@ -422,6 +449,52 @@ async function loadDraft() {
 }
 
 loadDraft()
+
+// 全局快捷键：Ctrl+Shift+E 引用选中文本
+function handleGlobalKeydown(e: KeyboardEvent) {
+  if (e.key === 'e' && (e.ctrlKey || e.metaKey) && e.shiftKey && selectedText.value) {
+    e.preventDefault()
+    addReferenceToChat()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleGlobalKeydown)
+})
+
+// 编辑器选择追踪
+function onEditorSelect() {
+  const el = document.querySelector('.script-editor') as HTMLTextAreaElement | null
+  if (!el) return
+  if (el.selectionStart === el.selectionEnd) {
+    selectedText.value = null
+    showRefButton.value = false
+    return
+  }
+  const text = content.value.substring(el.selectionStart, el.selectionEnd)
+  const textBefore = content.value.substring(0, el.selectionStart)
+  const startLine = textBefore.split('\n').length
+  const endLine = startLine + text.split('\n').length - 1
+
+  selectedText.value = { text, startLine, endLine }
+  showRefButton.value = true
+}
+
+function addReferenceToChat() {
+  if (selectedText.value) {
+    currentReference.value = { ...selectedText.value }
+    selectedText.value = null
+    showRefButton.value = false
+  }
+}
+
+function clearReference() {
+  currentReference.value = null
+}
 </script>
 
 <style scoped>
@@ -595,6 +668,25 @@ loadDraft()
   line-height: 1.6;
   overflow: auto;
   font-size: 14px;
+}
+
+/* 浮动引用按钮 */
+.selection-ref-btn {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .scene-title {

@@ -33,14 +33,30 @@
         </div>
       </template>
     </div>
+
+    <!-- Scroll to Bottom Button -->
+    <transition name="fade">
+      <NButton
+        v-if="showScrollButton"
+        class="scroll-to-bottom-btn"
+        size="tiny"
+        circle
+        @click="scrollToBottomNow"
+      >
+        <template #icon>
+          <NIcon :component="ArrowDownOutline" :size="14" />
+        </template>
+      </NButton>
+    </transition>
   </NScrollbar>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
-import { NScrollbar, NSpin, NIcon } from 'naive-ui'
-import { ChatbubblesOutline } from '@vicons/ionicons5'
+import { ref, watch, computed } from 'vue'
+import { NScrollbar, NSpin, NIcon, NButton } from 'naive-ui'
+import { ChatbubblesOutline, ArrowDownOutline } from '@vicons/ionicons5'
 import type { ChatMessage } from '@dreamer/shared/types'
+import { useSmartScroll } from '../../composables/useSmartScroll'
 import ChatMessageBubble from './ChatMessageBubble.vue'
 import TypingIndicator from './TypingIndicator.vue'
 
@@ -57,36 +73,39 @@ const emit = defineEmits<{
 
 const messagesRef = ref<HTMLDivElement | null>(null)
 
-function scrollToBottom() {
-  nextTick(() => {
-    const container = messagesRef.value?.parentElement
-    if (container) {
-      container.scrollTop = container.scrollHeight
-    }
-  })
-}
+// Smart scroll - use parent element of messagesRef (NScrollbar's inner scrollable div)
+const scrollContainer = computed(() => messagesRef.value?.parentElement as HTMLElement | null)
+const { scrollToBottom, scrollToBottomNow, showScrollButton } = useSmartScroll(scrollContainer)
 
-// Auto-scroll when messages change
-watch(
-  () => props.messages.length,
-  () => scrollToBottom()
-)
-
-// Auto-scroll when streaming content updates (last message content changes)
+// Consolidated auto-scroll: watch for message changes + streaming content
 const lastMessageContent = computed(() => {
   const msgs = props.messages
   if (msgs.length === 0) return ''
   return msgs[msgs.length - 1]?.content || ''
 })
 
-watch(lastMessageContent, () => scrollToBottom())
-
-// Auto-scroll when streaming message ID changes
 watch(
-  () => props.messages[props.messages.length - 1]?.id,
+  () =>
+    [
+      props.messages.length,
+      lastMessageContent.value,
+      props.messages[props.messages.length - 1]?.id
+    ] as const,
   () => scrollToBottom()
 )
 
+// Force-scroll on initial message load (transition from empty to populated)
+let hadMessages = false
+watch(
+  () => props.messages.length,
+  (len) => {
+    if (!hadMessages && len > 0) {
+      hadMessages = true
+      scrollToBottom(true)
+    }
+  },
+  { immediate: true }
+)
 function onApplyChanges(message: ChatMessage) {
   emit('apply-changes', message)
 }
@@ -96,6 +115,7 @@ function onApplyChanges(message: ChatMessage) {
 .chat-message-list {
   flex: 1;
   overflow: hidden;
+  position: relative;
 }
 
 .messages-container {
@@ -168,5 +188,24 @@ function onApplyChanges(message: ChatMessage) {
 .typing-wrapper {
   display: flex;
   padding-left: 34px;
+}
+
+/* Scroll to Bottom Button */
+.scroll-to-bottom-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

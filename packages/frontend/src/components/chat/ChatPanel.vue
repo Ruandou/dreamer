@@ -84,10 +84,12 @@ const props = defineProps<{
   scriptId?: string
   scriptContent?: string
   scriptTitle?: string
+  reference?: { text: string; startLine: number; endLine: number } | null
 }>()
 
 const emit = defineEmits<{
   (e: 'apply-changes', content: string): void
+  (e: 'clear-reference'): void
 }>()
 
 const chatStore = useChatStore()
@@ -159,7 +161,15 @@ async function handleDeleteConversation(id: string) {
 }
 
 function handleSend(content: string) {
-  chatStore.sendMessage(content, {
+  let messageContent = content
+  if (props.reference) {
+    messageContent =
+      `引用的内容 (L${props.reference.startLine}-L${props.reference.endLine}):\n\n` +
+      `\`\`\`\n${props.reference.text}\n\`\`\`\n\n` +
+      `请针对以上引用部分进行修改：\n${content}`
+    emit('clear-reference')
+  }
+  chatStore.sendMessage(messageContent, {
     scriptContent: props.scriptContent,
     scriptTitle: props.scriptTitle,
     model: selectedModel.value
@@ -264,5 +274,39 @@ function handleApplyChanges(message: ChatMessage) {
 
 .inline-model-select :deep(.n-base-selection) {
   background: transparent;
+}
+
+/* Reference Block */
+.reference-block {
+  margin: 8px 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--color-secondary, #f59e0b);
+  background: var(--color-secondary-light, #fef3c7);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.reference-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.reference-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-secondary, #d97706);
+}
+
+.reference-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text-primary);
+  max-height: 80px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 12px;
 }
 </style>

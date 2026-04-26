@@ -88,7 +88,24 @@
           <NIcon v-else :component="PersonOutline" :size="20" />
         </div>
         <div class="message-content">
-          <div class="message-text" v-html="formatMessage(message.content)"></div>
+          <div v-if="message.role === 'agent'" class="message-text">
+            <MarkdownRenderer :content="message.content" />
+            <span v-if="message.isStreaming" class="streaming-cursor"></span>
+          </div>
+          <div v-else class="message-text">{{ message.content }}</div>
+
+          <!-- Step Result (separate, not mixed in content) -->
+          <div v-if="message.stepResult" class="step-result-block">
+            <strong>结果摘要：</strong>
+            <MarkdownRenderer :content="message.stepResult" />
+          </div>
+
+          <!-- Step Transitions (rendered as chips, not in content) -->
+          <div v-if="message.stepTransitions?.length" class="step-transitions">
+            <span v-for="(step, si) in message.stepTransitions" :key="si" class="step-chip">
+              {{ step.label }}
+            </span>
+          </div>
 
           <!-- Action Buttons for Agent Messages -->
           <div v-if="message.actions" class="message-actions">
@@ -119,6 +136,21 @@
           </div>
         </div>
       </div>
+
+      <!-- Scroll to Bottom Button -->
+      <transition name="fade">
+        <NButton
+          v-if="showScrollButton"
+          class="scroll-to-bottom-btn"
+          size="tiny"
+          circle
+          @click="scrollToBottomNow"
+        >
+          <template #icon>
+            <NIcon :component="ArrowDownOutline" :size="14" />
+          </template>
+        </NButton>
+      </transition>
     </div>
 
     <!-- Error Message -->
@@ -155,16 +187,16 @@
             class="inline-model-select"
           />
           <NButton
-            type="primary"
-            :loading="isLoading"
-            :disabled="!inputValue.trim() || isLoading"
+            :type="isLoading ? 'error' : 'primary'"
+            :loading="isLoading && inputValue.trim() !== ''"
+            :disabled="!inputValue.trim() && !isLoading"
             size="small"
-            @click="handleSend"
+            @click="handleSendOrStop"
           >
             <template #icon>
-              <NIcon :component="SendOutline" :size="16" />
+              <NIcon :component="isLoading ? StopCircleOutline : SendOutline" :size="16" />
             </template>
-            {{ isLoading ? '处理中...' : '执行' }}
+            {{ isLoading ? '停止' : '执行' }}
           </NButton>
         </div>
       </div>
@@ -179,28 +211,35 @@ import {
   ConstructOutline,
   PersonOutline,
   SendOutline,
+  StopCircleOutline,
   CheckmarkCircleOutline,
   EllipsisHorizontalCircleOutline,
   RefreshOutline,
   AlertCircleOutline,
   CloseOutline,
-  BookOutline
+  BookOutline,
+  ArrowDownOutline
 } from '@vicons/ionicons5'
 import { api } from '../api'
 import { useAgentStream } from '../composables/useAgentStream'
+import { useSmartScroll } from '../composables/useSmartScroll'
 import { useModelPreferenceStore } from '../stores/model-preference'
+import MarkdownRenderer from './chat/MarkdownRenderer.vue'
 
 const props = defineProps<{
   scriptId: string
+  reference?: { text: string; startLine: number; endLine: number } | null
 }>()
 
 const emit = defineEmits<{
   (e: 'apply-content', content: string): void
+  (e: 'clear-reference'): void
 }>()
 
 const message = useMessage()
 const messagesContainer = ref<HTMLElement>()
-const { start: startStream } = useAgentStream()
+const { start: startStream, abort: abortStream } = useAgentStream()
+const { scrollToBottom, scrollToBottomNow, showScrollButton } = useSmartScroll(messagesContainer)
 const modelStore = useModelPreferenceStore()
 
 const modelOptions = computed(() =>
@@ -223,6 +262,8 @@ interface AgentMessage {
     label: string
     primary?: boolean
   }>
+  stepTransitions?: Array<{ label: string; atCharIndex: number }>
+  stepResult?: string
   step?: number
   totalSteps?: number
   isStreaming?: boolean
@@ -258,6 +299,9 @@ onMounted(async () => {
         '你好！我是 AI 编剧 Agent。你可以用自然语言告诉我你想创作什么样的剧本，我会帮你一步步完成从大纲到成稿的全过程。\n\n例如："写一个穿越剧，主角是现代人回到明朝当科学家"'
     }
   ]
+
+  // Scroll to bottom on initial load
+  nextTick(() => scrollToBottom(true))
 })
 
 /**
@@ -266,8 +310,26 @@ onMounted(async () => {
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault()
-    handleSend()
+    handleSendOrStop()
   }
+}
+
+/**
+ * 发送消息 或 停止当前流式输出
+ */
+function handleSendOrStop() {
+  if (isLoading.value) {
+    abortStream()
+    isLoading.value = false
+    // Mark the last agent message as completed with a note
+    const lastMsg = messages.value[messages.value.length - 1]
+    if (lastMsg && lastMsg.role === 'agent') {
+      lastMsg.isStreaming = false
+      if (!lastMsg.content) lastMsg.content = '（已取消）'
+    }
+    return
+  }
+  handleSend()
 }
 
 /**
@@ -276,9 +338,17 @@ function handleKeydown(event: KeyboardEvent) {
 async function handleSend() {
   if (!inputValue.value.trim() || isLoading.value) return
 
-  const command = inputValue.value.trim()
+  let command = inputValue.value.trim()
   inputValue.value = ''
   errorMessage.value = ''
+
+  if (props.reference) {
+    command =
+      `引用的内容 (L${props.reference.startLine}-L${props.reference.endLine}):\n\n` +
+      `\`\`\`\n${props.reference.text}\n\`\`\`\n\n` +
+      `请修改以上内容：\n${command}`
+    emit('clear-reference')
+  }
 
   // 添加用户消息
   messages.value.push({
@@ -286,7 +356,8 @@ async function handleSend() {
     content: command
   })
 
-  await scrollToBottom()
+  await nextTick()
+  scrollToBottom(true)
 
   // 创建流式消息占位符
   const agentMessageIndex = messages.value.length
@@ -307,7 +378,13 @@ async function handleSend() {
       {
         onStepStart: (data) => {
           updateStepProgress(data.stepNumber, data.totalSteps)
-          messages.value[agentMessageIndex].content += `\n[${data.stepLabel}]\n`
+          // Record step transition as structured data, not appended to content
+          const msg = messages.value[agentMessageIndex]
+          if (!msg.stepTransitions) msg.stepTransitions = []
+          msg.stepTransitions.push({
+            label: data.stepLabel,
+            atCharIndex: msg.content.length
+          })
         },
         onToken: (data) => {
           messages.value[agentMessageIndex].content += data.content
@@ -317,7 +394,7 @@ async function handleSend() {
           messages.value[agentMessageIndex].isStreaming = false
           // Set message content from result if available
           if (data.result?.summary) {
-            messages.value[agentMessageIndex].content = data.result.summary
+            messages.value[agentMessageIndex].stepResult = data.result.summary
           }
           if (data.requiresUserAction) {
             messages.value[agentMessageIndex].actions = [
@@ -332,7 +409,7 @@ async function handleSend() {
           isLoading.value = false
           // Set message content from result if available
           if (data.result?.summary) {
-            messages.value[agentMessageIndex].content = data.result.summary
+            messages.value[agentMessageIndex].stepResult = data.result.summary
           }
           if (data.requiresUserAction) {
             messages.value[agentMessageIndex].actions = [
@@ -343,6 +420,7 @@ async function handleSend() {
           }
         },
         onDone: (data) => {
+          messages.value[agentMessageIndex].isStreaming = false
           isLoading.value = false
           if (data.content) {
             emit('apply-content', data.content)
@@ -365,7 +443,7 @@ async function handleSend() {
     message.error(msg)
     isLoading.value = false
   } finally {
-    await scrollToBottom()
+    scrollToBottom()
   }
 }
 
@@ -411,7 +489,13 @@ async function handleAction(action: { type: 'confirm' | 'revise' }) {
       {
         onStepStart: (data) => {
           updateStepProgress(data.stepNumber, data.totalSteps)
-          messages.value[agentMessageIndex].content += `\n[${data.stepLabel}]\n`
+          // Record step transition as structured data, not appended to content
+          const msg = messages.value[agentMessageIndex]
+          if (!msg.stepTransitions) msg.stepTransitions = []
+          msg.stepTransitions.push({
+            label: data.stepLabel,
+            atCharIndex: msg.content.length
+          })
         },
         onToken: (data) => {
           messages.value[agentMessageIndex].content += data.content
@@ -451,7 +535,7 @@ async function handleAction(action: { type: 'confirm' | 'revise' }) {
     message.error(msg)
     isLoading.value = false
   } finally {
-    await scrollToBottom()
+    scrollToBottom()
   }
 }
 
@@ -493,24 +577,6 @@ async function resetSession() {
     })
   } catch (error) {
     message.error('重置失败')
-  }
-}
-
-/**
- * 格式化消息（简单的 markdown 处理）
- */
-function formatMessage(content: string): string {
-  // 换行转 <br>
-  return content.replace(/\n/g, '<br>')
-}
-
-/**
- * 滚动到底部
- */
-async function scrollToBottom() {
-  await nextTick()
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
   }
 }
 </script>
@@ -817,5 +883,100 @@ async function scrollToBottom() {
 
 .inline-model-select :deep(.n-base-selection) {
   background: transparent;
+}
+
+/* Streaming Cursor */
+.streaming-cursor {
+  display: inline-block;
+  animation: blink-cursor 0.8s step-end infinite;
+  color: var(--color-primary, #6366f1);
+  font-weight: bold;
+}
+
+@keyframes blink-cursor {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Step Transitions (chips) */
+.step-transitions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.step-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-light, #e8f5e9);
+  color: var(--color-primary, #18a058);
+  white-space: nowrap;
+}
+
+/* Agent Reference Block */
+.agent-reference-block {
+  margin: 8px 16px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--color-secondary, #f59e0b);
+  background: var(--color-secondary-light, #fef3c7);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.agent-reference-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.agent-reference-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-secondary, #d97706);
+}
+
+.agent-reference-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text-primary);
+  max-height: 80px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+/* Step Result Block */
+.step-result-block {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--color-primary, #18a058);
+  background: var(--color-bg-light, #f3f4f6);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.step-result-block :deep(.markdown-body) {
+  font-size: 13px;
+}
+
+/* Scroll To Bottom Button */
+.scroll-to-bottom-btn {
+  position: absolute;
+  bottom: 80px;
+  right: 20px;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 </style>

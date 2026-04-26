@@ -9,6 +9,11 @@ import {
 } from '../api'
 import { useChatStream } from '../composables/useChatStream'
 
+/** Strip [EDIT_SUGGESTION] JSON blocks from message content */
+function sanitizeContent(content: string): string {
+  return content.replace(/\[EDIT_SUGGESTION\][\s\S]*?\[\/EDIT_SUGGESTION\]/g, '').trim()
+}
+
 // Quick command labels
 const QUICK_COMMAND_LABELS: Record<string, string> = {
   continue: '续写',
@@ -186,7 +191,7 @@ export const useChatStore = defineStore('chat', () => {
             id: `assistant-${Date.now()}`,
             conversationId: convId,
             role: 'assistant',
-            content: fullContent,
+            content: sanitizeContent(fullContent),
             status: 'completed',
             metadata: metadata as ChatMessage['metadata'],
             createdAt: new Date().toISOString()

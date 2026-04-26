@@ -192,6 +192,8 @@ export interface AgentStepCompleteEvent extends AgentStreamEventBase {
     type: 'intent_confirm' | 'outline' | 'draft' | 'critique' | 'revision' | 'complete'
     content: string | ParsedIntent | OutlineOutput | ScriptContent
     summary: string
+    /** Optional structured critique data for downstream consumption */
+    critiqueData?: import('./critic-agent.js').CritiqueResult
   }
   /** 是否需要用户操作 */
   requiresUserAction: boolean

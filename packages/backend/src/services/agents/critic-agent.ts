@@ -162,12 +162,26 @@ export class CriticAgent {
         result: {
           type: 'critique',
           content: `评分：${critique.overallScore}/100\n反馈：${critique.feedback}`,
-          summary: `评分：${critique.overallScore}/100`
+          summary: `评分：${critique.overallScore}/100`,
+          critiqueData: critique
         },
         requiresUserAction: false,
         actionLabel: ''
       }
     } catch {
+      const fallback: CritiqueResult = {
+        scores: {
+          coherence: 70,
+          characterConsistency: 70,
+          sceneQuality: 70,
+          dramaticConflict: 70,
+          format: 70
+        },
+        overallScore: 70,
+        feedback: '审核失败，使用默认评分',
+        strengths: '内容已生成',
+        weaknesses: '需要人工审核'
+      }
       yield {
         type: 'step_complete',
         step: 'critique',
@@ -176,7 +190,8 @@ export class CriticAgent {
         result: {
           type: 'critique',
           content: '审核失败，使用默认评分',
-          summary: '审核失败'
+          summary: '审核失败',
+          critiqueData: fallback
         },
         requiresUserAction: false,
         actionLabel: ''

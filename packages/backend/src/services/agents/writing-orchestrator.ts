@@ -494,23 +494,36 @@ export class WritingOrchestrator {
       )) {
         yield event
         if (event.type === 'step_complete') {
-          this.state.critique = JSON.parse(event.result.content as string) as CritiqueResult
+          // Use structured critiqueData if available, otherwise fall back to defaults
+          this.state.critique = event.result.critiqueData ?? {
+            overallScore: 70,
+            scores: {
+              coherence: 70,
+              characterConsistency: 70,
+              sceneQuality: 70,
+              dramaticConflict: 70,
+              format: 70
+            },
+            feedback: '审核失败，使用默认评分',
+            strengths: '内容已生成',
+            weaknesses: '需要人工审核'
+          }
           this.state.currentStep = 'critiqued'
         }
       }
 
       critique = this.state.critique ?? {
-        overallScore: 0,
+        overallScore: 70,
         scores: {
-          coherence: 0,
-          characterConsistency: 0,
-          sceneQuality: 0,
-          dramaticConflict: 0,
-          format: 0
+          coherence: 70,
+          characterConsistency: 70,
+          sceneQuality: 70,
+          dramaticConflict: 70,
+          format: 70
         },
-        feedback: '',
-        strengths: '',
-        weaknesses: ''
+        feedback: '审核失败，使用默认评分',
+        strengths: '内容已生成',
+        weaknesses: '需要人工审核'
       }
 
       if (critique.overallScore < 75 && revisionCount < 3) {
