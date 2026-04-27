@@ -10,8 +10,9 @@ import {
 import { useChatStream } from '../composables/useChatStream'
 
 /** Strip [EDIT_SUGGESTION] JSON blocks from message content */
-function sanitizeContent(content: string): string {
-  return content.replace(/\[EDIT_SUGGESTION\][\s\S]*?\[\/EDIT_SUGGESTION\]/g, '').trim()
+export function sanitizeContent(content: string): string {
+  // Strip [EDIT_SUGGESTION]...[/EDIT_SUGGESTION] blocks (either closing form)
+  return content.replace(/\[EDIT_SUGGESTION\][\s\S]*?\[\/?EDIT_SUGGESTION\]/g, '').trim()
 }
 
 // Quick command labels
@@ -58,7 +59,7 @@ export const useChatStore = defineStore('chat', () => {
         id: streamingMessageId.value,
         conversationId: activeConversationId.value || '',
         role: 'assistant',
-        content: streamingContent.value,
+        content: sanitizeContent(streamingContent.value),
         status: 'streaming',
         createdAt: new Date().toISOString()
       })

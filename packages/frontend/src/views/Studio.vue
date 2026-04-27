@@ -108,6 +108,7 @@
               class="selection-ref-btn"
               type="primary"
               size="tiny"
+              :style="refBtnStyle"
               @click="addReferenceToChat"
             >
               <template #icon>
@@ -467,12 +468,23 @@ onUnmounted(() => {
 })
 
 // 编辑器选择追踪
-function onEditorSelect() {
+const refBtnPosition = ref<{ top: number; left: number } | null>(null)
+
+const refBtnStyle = computed(() => {
+  if (!refBtnPosition.value) return { top: '8px', right: '12px' }
+  return {
+    top: refBtnPosition.value.top + 'px',
+    left: refBtnPosition.value.left + 'px'
+  }
+})
+
+function onEditorSelect(event?: Event) {
   const el = document.querySelector('.script-editor') as HTMLTextAreaElement | null
   if (!el) return
   if (el.selectionStart === el.selectionEnd) {
     selectedText.value = null
     showRefButton.value = false
+    refBtnPosition.value = null
     return
   }
   const text = content.value.substring(el.selectionStart, el.selectionEnd)
@@ -482,6 +494,18 @@ function onEditorSelect() {
 
   selectedText.value = { text, startLine, endLine }
   showRefButton.value = true
+
+  // Position button near selection (relative to .editor-wrapper)
+  if (event instanceof MouseEvent) {
+    const wrapper = el.closest('.editor-wrapper')
+    if (wrapper) {
+      const wrapperRect = wrapper.getBoundingClientRect()
+      refBtnPosition.value = {
+        top: event.clientY - wrapperRect.top + 6,
+        left: event.clientX - wrapperRect.left
+      }
+    }
+  }
 }
 
 function addReferenceToChat() {
@@ -673,9 +697,8 @@ function clearReference() {
 /* 浮动引用按钮 */
 .selection-ref-btn {
   position: absolute;
-  top: 8px;
-  right: 12px;
   z-index: 10;
+  white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 

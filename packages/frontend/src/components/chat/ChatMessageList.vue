@@ -73,8 +73,14 @@ const emit = defineEmits<{
 
 const messagesRef = ref<HTMLDivElement | null>(null)
 
-// Smart scroll - use parent element of messagesRef (NScrollbar's inner scrollable div)
-const scrollContainer = computed(() => messagesRef.value?.parentElement as HTMLElement | null)
+// Smart scroll - get NScrollbar's actual scrollable container (.n-scrollbar-container)
+// NScrollbar DOM: .n-scrollbar > .n-scrollbar-container (scrollable) > .n-scrollbar-content > messagesRef
+const scrollContainer = computed(() => {
+  const contentEl = messagesRef.value?.parentElement as HTMLElement | null
+  if (!contentEl) return null
+  // contentEl is .n-scrollbar-content, its parent is .n-scrollbar-container (the scrollable element)
+  return contentEl.parentElement as HTMLElement | null
+})
 const { scrollToBottom, scrollToBottomNow, showScrollButton } = useSmartScroll(scrollContainer)
 
 // Consolidated auto-scroll: watch for message changes + streaming content

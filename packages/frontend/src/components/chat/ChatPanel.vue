@@ -52,8 +52,10 @@
       <!-- Input -->
       <ChatInput
         :is-streaming="chatStore.isStreaming"
+        :reference="reference"
         @send="handleSend"
         @abort="chatStore.abortCurrentStream"
+        @clear-reference="emit('clear-reference')"
       >
         <template #actions>
           <NSelect
@@ -166,7 +168,7 @@ function handleSend(content: string) {
     messageContent =
       `引用的内容 (L${props.reference.startLine}-L${props.reference.endLine}):\n\n` +
       `\`\`\`\n${props.reference.text}\n\`\`\`\n\n` +
-      `请针对以上引用部分进行修改：\n${content}`
+      `请针对以上引用部分进行修改：\n${messageContent}`
     emit('clear-reference')
   }
   chatStore.sendMessage(messageContent, {
@@ -177,6 +179,21 @@ function handleSend(content: string) {
 }
 
 function handleQuickCommand(commandId: string) {
+  if (props.reference) {
+    // Include reference when using quick commands too
+    const msg =
+      `引用的内容 (L${props.reference.startLine}-L${props.reference.endLine}):\n\n` +
+      `\`\`\`\n${props.reference.text}\n\`\`\`\n\n` +
+      `请针对以上引用部分进行操作`
+    chatStore.sendMessage(msg, {
+      scriptContent: props.scriptContent,
+      scriptTitle: props.scriptTitle,
+      quickCommand: commandId,
+      model: selectedModel.value
+    })
+    emit('clear-reference')
+    return
+  }
   chatStore.sendMessage('', {
     scriptContent: props.scriptContent,
     scriptTitle: props.scriptTitle,
@@ -274,39 +291,5 @@ function handleApplyChanges(message: ChatMessage) {
 
 .inline-model-select :deep(.n-base-selection) {
   background: transparent;
-}
-
-/* Reference Block */
-.reference-block {
-  margin: 8px 12px;
-  padding: 8px 12px;
-  border-left: 3px solid var(--color-secondary, #f59e0b);
-  background: var(--color-secondary-light, #fef3c7);
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.reference-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.reference-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-secondary, #d97706);
-}
-
-.reference-content {
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--color-text-primary);
-  max-height: 80px;
-  overflow-y: auto;
-  font-family: monospace;
-  font-size: 12px;
 }
 </style>

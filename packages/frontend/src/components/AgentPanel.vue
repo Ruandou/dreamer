@@ -89,15 +89,15 @@
         </div>
         <div class="message-content">
           <div v-if="message.role === 'agent'" class="message-text">
-            <MarkdownRenderer :content="message.content" />
+            <MarkdownRenderer :content="sanitizeContent(message.content)" />
             <span v-if="message.isStreaming" class="streaming-cursor"></span>
           </div>
-          <div v-else class="message-text">{{ message.content }}</div>
+          <div v-else class="message-text">{{ sanitizeContent(message.content) }}</div>
 
           <!-- Step Result (separate, not mixed in content) -->
           <div v-if="message.stepResult" class="step-result-block">
             <strong>结果摘要：</strong>
-            <MarkdownRenderer :content="message.stepResult" />
+            <MarkdownRenderer :content="sanitizeContent(message.stepResult)" />
           </div>
 
           <!-- Step Transitions (rendered as chips, not in content) -->
@@ -166,16 +166,15 @@
 
     <!-- Input -->
     <div class="agent-input">
-      <div class="input-wrapper">
-        <NInput
-          v-model:value="inputValue"
-          type="textarea"
-          placeholder="输入你的创作指令..."
-          :autosize="{ minRows: 2, maxRows: 6 }"
-          :disabled="isLoading"
-          @keydown="handleKeydown"
-        />
-      </div>
+      <ReferenceInput
+        ref="inputRef"
+        placeholder="输入你的创作指令..."
+        :disabled="isLoading"
+        :reference="reference"
+        send-modifier="ctrl"
+        @send="handleInputSend"
+        @clear-reference="emit('clear-reference')"
+      />
       <div class="input-actions">
         <span class="input-hint"> Ctrl+Enter 发送 </span>
         <div class="input-actions-right">
@@ -188,8 +187,7 @@
           />
           <NButton
             :type="isLoading ? 'error' : 'primary'"
-            :loading="isLoading && inputValue.trim() !== ''"
-            :disabled="!inputValue.trim() && !isLoading"
+            :loading="isLoading"
             size="small"
             @click="handleSendOrStop"
           >
@@ -206,7 +204,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted, computed } from 'vue'
-import { NButton, NIcon, NInput, NSpin, NTooltip, useMessage, NSelect } from 'naive-ui'
+import { NButton, NIcon, NSpin, NTooltip, useMessage, NSelect } from 'naive-ui'
 import {
   ConstructOutline,
   PersonOutline,
@@ -224,7 +222,9 @@ import { api } from '../api'
 import { useAgentStream } from '../composables/useAgentStream'
 import { useSmartScroll } from '../composables/useSmartScroll'
 import { useModelPreferenceStore } from '../stores/model-preference'
+import { sanitizeContent } from '../stores/chat'
 import MarkdownRenderer from './chat/MarkdownRenderer.vue'
+import ReferenceInput from './chat/ReferenceInput.vue'
 
 const props = defineProps<{
   scriptId: string
@@ -270,7 +270,7 @@ interface AgentMessage {
 }
 
 const messages = ref<AgentMessage[]>([])
-const inputValue = ref('')
+const inputRef = ref<InstanceType<typeof ReferenceInput> | null>(null)
 const isLoading = ref(false)
 const errorMessage = ref('')
 const currentStep = ref(0)
@@ -305,13 +305,21 @@ onMounted(async () => {
 })
 
 /**
- * 处理键盘事件
+ * 从 ReferenceInput DOM 中提取用户输入的文本
  */
-function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-    event.preventDefault()
-    handleSendOrStop()
-  }
+function getInputText(): string {
+  const el = inputRef.value?.$el as HTMLDivElement | null
+  if (!el) return ''
+  const clone = el.cloneNode(true) as HTMLElement
+  clone.querySelectorAll('.ref-chip').forEach((c) => c.remove())
+  return clone.innerText?.trim() || ''
+}
+
+/**
+ * ReferenceInput 的 send 事件 (Ctrl+Enter)
+ */
+function handleInputSend(text: string) {
+  doSend(text)
 }
 
 /**
@@ -321,7 +329,6 @@ function handleSendOrStop() {
   if (isLoading.value) {
     abortStream()
     isLoading.value = false
-    // Mark the last agent message as completed with a note
     const lastMsg = messages.value[messages.value.length - 1]
     if (lastMsg && lastMsg.role === 'agent') {
       lastMsg.isStreaming = false
@@ -329,18 +336,13 @@ function handleSendOrStop() {
     }
     return
   }
-  handleSend()
+  const text = getInputText()
+  if (!text) return
+  doSend(text)
 }
 
-/**
- * 发送消息（流式）
- */
-async function handleSend() {
-  if (!inputValue.value.trim() || isLoading.value) return
-
-  let command = inputValue.value.trim()
-  inputValue.value = ''
-  errorMessage.value = ''
+function doSend(text: string) {
+  let command = text
 
   if (props.reference) {
     command =
@@ -350,15 +352,28 @@ async function handleSend() {
     emit('clear-reference')
   }
 
+  // Clear the editor
+  const el = inputRef.value?.$el as HTMLDivElement | null
+  if (el) el.innerText = ''
+
+  errorMessage.value = ''
+
   // 添加用户消息
   messages.value.push({
     role: 'user',
     content: command
   })
 
-  await nextTick()
-  scrollToBottom(true)
+  nextTick(() => {
+    scrollToBottom(true)
+    startStreaming(command)
+  })
+}
 
+/**
+ * 启动流式 AI 生成
+ */
+async function startStreaming(command: string) {
   // 创建流式消息占位符
   const agentMessageIndex = messages.value.length
   messages.value.push({
@@ -378,7 +393,6 @@ async function handleSend() {
       {
         onStepStart: (data) => {
           updateStepProgress(data.stepNumber, data.totalSteps)
-          // Record step transition as structured data, not appended to content
           const msg = messages.value[agentMessageIndex]
           if (!msg.stepTransitions) msg.stepTransitions = []
           msg.stepTransitions.push({
@@ -392,7 +406,6 @@ async function handleSend() {
         },
         onStepComplete: (data) => {
           messages.value[agentMessageIndex].isStreaming = false
-          // Set message content from result if available
           if (data.result?.summary) {
             messages.value[agentMessageIndex].stepResult = data.result.summary
           }
@@ -407,7 +420,6 @@ async function handleSend() {
         onPause: (data) => {
           messages.value[agentMessageIndex].isStreaming = false
           isLoading.value = false
-          // Set message content from result if available
           if (data.result?.summary) {
             messages.value[agentMessageIndex].stepResult = data.result.summary
           }
@@ -464,7 +476,9 @@ async function loadMemories() {
  */
 async function handleAction(action: { type: 'confirm' | 'revise' }) {
   if (action.type === 'revise') {
-    inputValue.value = ''
+    // Clear input
+    const el = inputRef.value?.$el as HTMLDivElement | null
+    if (el) el.innerText = ''
     message.info('请输入你的修改要求')
     requiresUserAction.value = false
     return
@@ -850,8 +864,20 @@ async function resetSession() {
   background: var(--color-bg-white, #fff);
 }
 
-.input-wrapper {
+/* ReferenceInput border styling */
+.agent-input :deep(.reference-input) {
   margin-bottom: 8px;
+  border: 2px solid var(--color-border-light, #e5e7eb);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-white, #fff);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.agent-input :deep(.reference-input.is-focused) {
+  border-color: var(--color-primary, #18a058);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
 .input-actions {
@@ -875,10 +901,6 @@ async function resetSession() {
 .inline-model-select {
   width: 120px;
   flex-shrink: 0;
-}
-
-.inline-model-select :deep(.n-base-selection) {
-  background: transparent;
 }
 
 .inline-model-select :deep(.n-base-selection) {
@@ -920,40 +942,6 @@ async function resetSession() {
   background: var(--color-primary-light, #e8f5e9);
   color: var(--color-primary, #18a058);
   white-space: nowrap;
-}
-
-/* Agent Reference Block */
-.agent-reference-block {
-  margin: 8px 16px;
-  padding: 8px 12px;
-  border-left: 3px solid var(--color-secondary, #f59e0b);
-  background: var(--color-secondary-light, #fef3c7);
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.agent-reference-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.agent-reference-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-secondary, #d97706);
-}
-
-.agent-reference-content {
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--color-text-primary);
-  max-height: 80px;
-  overflow-y: auto;
-  font-family: monospace;
-  font-size: 12px;
 }
 
 /* Step Result Block */
