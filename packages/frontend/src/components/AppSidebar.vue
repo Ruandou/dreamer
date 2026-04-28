@@ -52,6 +52,7 @@ const globalMenuOptions: MenuOption[] = [
   { label: '项目列表', key: '/projects', icon: renderIcon(FolderOpenOutline) },
   { label: '剧本列表', key: '/scripts', icon: renderIcon(DocumentTextOutline) },
   { label: 'AI 写剧本', key: '/studio', icon: renderIcon(CreateOutline) },
+  { label: 'AI 剧本编辑器', key: '/editor', icon: renderIcon(CreateOutline) },
   { label: '任务中心', key: '/jobs', icon: renderIcon(TimeOutline) },
   { label: '统计分析', key: '/stats', icon: renderIcon(BarChartOutline) },
   { label: '模型日志', key: '/model-calls', icon: renderIcon(RadioOutline) },

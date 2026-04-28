@@ -75,6 +75,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'AI 写作工作室', icon: CreateOutline }
       },
       {
+        path: 'editor',
+        name: 'Editor',
+        component: () => import('@/views/EditorPage.vue'),
+        meta: { title: 'AI 剧本编辑器', icon: CreateOutline }
+      },
+      {
+        path: 'editor/:id',
+        name: 'EditorDetail',
+        component: () => import('@/views/EditorPage.vue'),
+        meta: { title: 'AI 剧本编辑器', icon: CreateOutline }
+      },
+      {
         path: 'import',
         name: 'Import',
         component: () => import('@/views/Import.vue'),
