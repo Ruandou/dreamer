@@ -13,9 +13,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, h } from 'vue'
 import { useRoute } from 'vue-router'
-import { NLayout, NLayoutContent } from 'naive-ui'
+import { NLayout, NLayoutContent, NIcon, type MenuOption } from 'naive-ui'
+import {
+  InformationCircleOutline,
+  PeopleOutline,
+  LocationOutline,
+  ListOutline,
+  FilmOutline,
+  GitBranchOutline,
+  DocumentTextOutline
+} from '@vicons/ionicons5'
 import AppSidebar from '../components/AppSidebar.vue'
 import type { BreadcrumbItem } from '../components/SidebarBreadcrumb.vue'
 import { useProjectStore } from '../stores/project'
@@ -25,6 +34,10 @@ const projectStore = useProjectStore()
 
 // 根据路由 meta 决定侧边栏模式
 const sidebarMode = computed(() => (route.meta.projectLayout ? 'project' : 'global'))
+
+function renderIcon(component: any) {
+  return () => h(NIcon, { component, size: 20 })
+}
 
 // 项目模式下的面包屑
 const breadcrumbs = computed<BreadcrumbItem[]>(() => {
@@ -36,7 +49,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => {
 
   // 添加当前路由的面包屑
   for (const matched of route.matched) {
-    if (matched.meta?.title && matched.path !== `/project/:id`) {
+    if (matched.meta?.title && matched.path !== 'project/:id') {
       crumbs.push({
         label: matched.meta.title as string,
         path: matched.path.includes(':') ? undefined : matched.path
@@ -47,11 +60,21 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => {
   return crumbs
 })
 
-// 项目模式下的菜单选项（由 ProjectDetail 提供）
-const projectMenuOptions = computed(() => {
-  // 这部分将由 ProjectDetail 通过 provide/inject 或其他方式提供
-  // 暂时返回空数组，后续在 ProjectDetail 改造时补充
-  return []
+// 项目模式下的菜单选项
+const projectMenuOptions = computed<MenuOption[]>(() => {
+  const projectId = route.params.id as string
+  if (!projectId) return []
+  const base = `/project/${projectId}`
+  return [
+    { label: '基础信息', key: `${base}/overview`, icon: renderIcon(InformationCircleOutline) },
+    { label: '剧本编辑', key: `${base}/script`, icon: renderIcon(DocumentTextOutline) },
+    { label: '角色库', key: `${base}/characters`, icon: renderIcon(PeopleOutline) },
+    { label: '场地库', key: `${base}/locations`, icon: renderIcon(LocationOutline) },
+    { label: '分集管理', key: `${base}/episodes`, icon: renderIcon(ListOutline) },
+    { label: '分镜脚本', key: `${base}/storyboard`, icon: renderIcon(FilmOutline) },
+    { label: '成片预览', key: `${base}/compose`, icon: renderIcon(FilmOutline) },
+    { label: '流水线', key: `${base}/pipeline`, icon: renderIcon(GitBranchOutline) }
+  ]
 })
 </script>
 

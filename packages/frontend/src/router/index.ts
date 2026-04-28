@@ -109,79 +109,79 @@ const routes: RouteRecordRaw[] = [
         name: 'Settings',
         component: () => import('@/views/Settings.vue'),
         meta: { title: '设置', icon: SettingsOutline }
-      }
-    ]
-  },
-  {
-    path: '/project/:id',
-    name: 'ProjectDetail',
-    component: () => import('@/views/ProjectDetail.vue'),
-    meta: { projectLayout: true },
-    children: [
-      {
-        path: '',
-        name: 'ProjectHome',
-        redirect: (to) => ({ name: 'ProjectOverview', params: { id: to.params.id } })
       },
       {
-        path: 'overview',
-        name: 'ProjectOverview',
-        component: () => import('@/views/ProjectOverview.vue'),
-        meta: { title: '基础信息', icon: InformationCircleOutline, projectLayout: true }
-      },
-      {
-        path: 'script',
-        name: 'ProjectScript',
-        component: () => import('@/views/ProjectScript.vue'),
-        meta: { title: '剧本编辑', icon: DocumentTextOutline, projectLayout: true }
-      },
-      {
-        path: 'characters',
-        name: 'ProjectCharacters',
-        component: () => import('@/views/ProjectCharacters.vue'),
-        meta: { title: '角色库', icon: PeopleOutline, projectLayout: true }
-      },
-      {
-        path: 'characters/:characterId',
-        name: 'ProjectCharacterDetail',
-        component: () => import('@/views/ProjectCharacterDetail.vue'),
-        meta: { title: '角色详情', icon: PeopleOutline, projectLayout: true }
-      },
-      {
-        path: 'locations',
-        name: 'ProjectLocations',
-        component: () => import('@/views/ProjectLocations.vue'),
-        meta: { title: '场地库', icon: LocationOutline, projectLayout: true }
-      },
-      {
-        path: 'episodes',
-        name: 'ProjectEpisodes',
-        component: () => import('@/views/ProjectEpisodes.vue'),
-        meta: { title: '分集管理', icon: ListOutline, projectLayout: true }
-      },
-      {
-        path: 'episodes/:episodeId',
-        name: 'ProjectEpisodeDetail',
-        component: () => import('@/views/ProjectEpisodeDetail.vue'),
-        meta: { title: '分集详情', icon: ListOutline, projectLayout: true }
-      },
-      {
-        path: 'storyboard',
-        name: 'ProjectStoryboard',
-        component: () => import('@/views/ProjectStoryboard.vue'),
-        meta: { title: '分镜脚本', icon: FilmOutline, projectLayout: true }
-      },
-      {
-        path: 'compose',
-        name: 'ProjectCompose',
-        component: () => import('@/views/ProjectCompose.vue'),
-        meta: { title: '成片预览', icon: FilmOutline, projectLayout: true }
-      },
-      {
-        path: 'pipeline',
-        name: 'ProjectPipeline',
-        component: () => import('@/views/ProjectPipeline.vue'),
-        meta: { title: '流水线', icon: GitBranchOutline, projectLayout: true }
+        path: 'project/:id',
+        name: 'ProjectDetail',
+        component: () => import('@/views/ProjectDetail.vue'),
+        meta: { projectLayout: true },
+        children: [
+          {
+            path: '',
+            name: 'ProjectHome',
+            redirect: (to) => ({ name: 'ProjectOverview', params: { id: to.params.id } })
+          },
+          {
+            path: 'overview',
+            name: 'ProjectOverview',
+            component: () => import('@/views/ProjectOverview.vue'),
+            meta: { title: '基础信息', icon: InformationCircleOutline, projectLayout: true }
+          },
+          {
+            path: 'script',
+            name: 'ProjectScript',
+            component: () => import('@/views/ProjectScript.vue'),
+            meta: { title: '剧本编辑', icon: DocumentTextOutline, projectLayout: true }
+          },
+          {
+            path: 'characters',
+            name: 'ProjectCharacters',
+            component: () => import('@/views/ProjectCharacters.vue'),
+            meta: { title: '角色库', icon: PeopleOutline, projectLayout: true }
+          },
+          {
+            path: 'characters/:characterId',
+            name: 'ProjectCharacterDetail',
+            component: () => import('@/views/ProjectCharacterDetail.vue'),
+            meta: { title: '角色详情', icon: PeopleOutline, projectLayout: true }
+          },
+          {
+            path: 'locations',
+            name: 'ProjectLocations',
+            component: () => import('@/views/ProjectLocations.vue'),
+            meta: { title: '场地库', icon: LocationOutline, projectLayout: true }
+          },
+          {
+            path: 'episodes',
+            name: 'ProjectEpisodes',
+            component: () => import('@/views/ProjectEpisodes.vue'),
+            meta: { title: '分集管理', icon: ListOutline, projectLayout: true }
+          },
+          {
+            path: 'episodes/:episodeId',
+            name: 'ProjectEpisodeDetail',
+            component: () => import('@/views/ProjectEpisodeDetail.vue'),
+            meta: { title: '分集详情', icon: ListOutline, projectLayout: true }
+          },
+          {
+            path: 'storyboard',
+            name: 'ProjectStoryboard',
+            component: () => import('@/views/ProjectStoryboard.vue'),
+            meta: { title: '分镜脚本', icon: FilmOutline, projectLayout: true }
+          },
+          {
+            path: 'compose',
+            name: 'ProjectCompose',
+            component: () => import('@/views/ProjectCompose.vue'),
+            meta: { title: '成片预览', icon: FilmOutline, projectLayout: true }
+          },
+          {
+            path: 'pipeline',
+            name: 'ProjectPipeline',
+            component: () => import('@/views/ProjectPipeline.vue'),
+            meta: { title: '流水线', icon: GitBranchOutline, projectLayout: true }
+          }
+        ]
       }
     ]
   }

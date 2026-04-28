@@ -1,15 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, provide, h } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NAlert, NProgress, NIcon, useMessage, type MenuOption } from 'naive-ui'
-import {
-  InformationCircleOutline,
-  PeopleOutline,
-  LocationOutline,
-  ListOutline,
-  FilmOutline,
-  GitBranchOutline
-} from '@vicons/ionicons5'
+import { NAlert, NProgress, useMessage } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
 import { pollPipelineJob, type PipelineJob } from '@/api'
 
@@ -55,53 +47,6 @@ onMounted(async () => {
     void pollParseJob(parseJobId.value)
   }
 })
-
-function renderIcon(component: any) {
-  return () => h(NIcon, { component, size: 20 })
-}
-
-// 项目导航菜单 - 通过 provide 传递给 AppSidebar
-const projectMenuOptions: MenuOption[] = [
-  {
-    label: '基础信息',
-    key: 'overview',
-    icon: renderIcon(InformationCircleOutline),
-    onClick: () => router.push(`/project/${projectId.value}/overview`)
-  },
-  {
-    label: '角色库',
-    key: 'characters',
-    icon: renderIcon(PeopleOutline),
-    onClick: () => router.push(`/project/${projectId.value}/characters`)
-  },
-  {
-    label: '场地库',
-    key: 'locations',
-    icon: renderIcon(LocationOutline),
-    onClick: () => router.push(`/project/${projectId.value}/locations`)
-  },
-  {
-    label: '分集管理',
-    key: 'episodes',
-    icon: renderIcon(ListOutline),
-    onClick: () => router.push(`/project/${projectId.value}/episodes`)
-  },
-  {
-    label: '成片预览',
-    key: 'compose',
-    icon: renderIcon(FilmOutline),
-    onClick: () => router.push(`/project/${projectId.value}/compose`)
-  },
-  {
-    label: '流水线',
-    key: 'pipeline',
-    icon: renderIcon(GitBranchOutline),
-    onClick: () => router.push(`/project/${projectId.value}/pipeline`)
-  }
-]
-
-// 提供菜单选项给父级组件（DashboardLayout 通过 AppSidebar 使用）
-provide('projectMenuOptions', projectMenuOptions)
 </script>
 
 <template>

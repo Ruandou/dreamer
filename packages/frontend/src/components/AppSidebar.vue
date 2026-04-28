@@ -61,7 +61,11 @@ const globalMenuOptions: MenuOption[] = [
 const menuOptions = computed(() =>
   props.mode === 'global' ? globalMenuOptions : props.menuOptions
 )
-const activeKey = computed(() => (props.mode === 'global' ? currentRoute.value : undefined))
+const activeKey = computed(() => {
+  if (props.mode === 'global') return currentRoute.value
+  // 项目模式：匹配当前路径到菜单项的 key
+  return currentRoute.value ?? undefined
+})
 
 function handleMenuClick(key: string) {
   router.push(key)
