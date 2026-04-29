@@ -11,7 +11,7 @@ import TaskItem from '@tiptap/extension-task-item'
 import Highlight from '@tiptap/extension-highlight'
 import { Extension } from '@tiptap/core'
 import { createDiffReviewPlugin } from '@/lib/diff-review/diff-review-plugin'
-import { scriptFormatExtensions } from '@/lib/editor/script-format-extension'
+import { createAutoScriptFormatPlugin } from '@/lib/editor/auto-script-format-plugin'
 
 const props = withDefaults(
   defineProps<{
@@ -40,6 +40,13 @@ const DiffReviewExtension = Extension.create({
   }
 })
 
+const AutoScriptFormatExtension = Extension.create({
+  name: 'autoScriptFormat',
+  addProseMirrorPlugins() {
+    return [createAutoScriptFormatPlugin()]
+  }
+})
+
 const editor = useEditor({
   content: props.modelValue,
   editable: props.editable && !props.isReviewing,
@@ -56,7 +63,7 @@ const editor = useEditor({
       placeholder: props.placeholder
     }),
     DiffReviewExtension,
-    ...scriptFormatExtensions,
+    AutoScriptFormatExtension,
     TaskList,
     TaskItem.configure({
       nested: true
@@ -153,15 +160,19 @@ onBeforeUnmount(() => {
 .editor-content {
   flex: 1;
   overflow: auto;
-  padding: 24px 32px;
+  padding: 24px 32px 200px 32px;
 }
 
 .editor-content :deep(.ProseMirror) {
   outline: none;
-  min-height: 100%;
+  min-height: calc(100vh - 56px - 48px);
   font-size: 15px;
   line-height: 1.7;
   color: var(--color-text-primary);
+}
+
+.editor-content :deep(.ProseMirror p:last-child) {
+  margin-bottom: 200px;
 }
 
 .editor-content :deep(.ProseMirror p.is-editor-empty:first-child::before) {
@@ -280,58 +291,61 @@ onBeforeUnmount(() => {
   text-decoration: underline;
 }
 
-/* ─── Script Format Nodes ─── */
+/* ─── Auto Script Format Styling (WYSIWYG) ─── */
 
 /* Scene Header: 内景/外景 · 地点 · 时间 */
-.editor-content :deep(.ProseMirror p[data-scene-header]) {
+.editor-content :deep(.ProseMirror p.script-sceneHeader) {
   font-weight: 600;
-  color: var(--color-text-primary);
-  background: var(--color-bg-secondary);
+  color: #1e3a5f;
+  background: linear-gradient(135deg, #e8f4fd 0%, #f0f9ff 100%);
   padding: 8px 12px;
   border-radius: var(--radius-md);
   margin: 1.25em 0 0.75em 0;
-  border-left: 3px solid var(--color-primary);
+  border-left: 3px solid #3b82f6;
 }
 
 /* Character Name */
-.editor-content :deep(.ProseMirror p[data-character-name]) {
+.editor-content :deep(.ProseMirror p.script-characterName) {
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: #7c3aed;
   text-align: center;
   margin: 1em 0 0.25em 0;
   font-size: 0.95em;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Dialogue */
-.editor-content :deep(.ProseMirror p[data-dialogue]) {
+.editor-content :deep(.ProseMirror p.script-dialogue) {
   color: var(--color-text-primary);
   margin: 0 2em 0.75em 2em;
   line-height: 1.8;
 }
 
 /* Parenthetical: (情绪/动作提示) */
-.editor-content :deep(.ProseMirror p[data-parenthetical]) {
-  color: var(--color-text-secondary);
+.editor-content :deep(.ProseMirror p.script-parenthetical) {
+  color: #6b7280;
   font-style: italic;
-  margin: 0 2.5em 0.25em 2.5em;
+  text-align: center;
+  margin: 0.25em 2.5em;
   font-size: 0.9em;
 }
 
-/* Action/Description */
-.editor-content :deep(.ProseMirror p[data-action]) {
+/* Action/Description (default) */
+.editor-content :deep(.ProseMirror p.script-action) {
   color: var(--color-text-primary);
   margin: 0.75em 0;
   line-height: 1.7;
 }
 
 /* Transition: 切至/淡入/淡出 */
-.editor-content :deep(.ProseMirror p[data-transition]) {
+.editor-content :deep(.ProseMirror p.script-transition) {
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: #92400e;
   text-align: right;
   margin: 1em 0;
   font-size: 0.9em;
   text-transform: uppercase;
+  letter-spacing: 1px;
 }
 </style>

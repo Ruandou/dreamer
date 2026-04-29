@@ -1,45 +1,56 @@
 <template>
   <div class="editor-page">
-    <!-- Left Sidebar: Script Outline -->
-    <div class="editor-sidebar" :class="{ collapsed: sidebarCollapsed }">
-      <div class="sidebar-header">
-        <span v-if="!sidebarCollapsed" class="sidebar-title">目录</span>
-        <button class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed">
-          <NIcon
-            :component="sidebarCollapsed ? ChevronForwardOutline : ChevronBackOutline"
-            :size="16"
-          />
-        </button>
-      </div>
-      <div v-if="!sidebarCollapsed" class="sidebar-content">
-        <div class="outline-tree">
-          <!-- Episode level -->
-          <div v-for="(episode, epIndex) in outlineTree" :key="epIndex" class="outline-episode">
-            <div class="outline-episode-header" @click="episode.collapsed = !episode.collapsed">
-              <NIcon
-                :component="episode.collapsed ? FolderOutline : FolderOpenOutline"
-                :size="14"
-              />
-              <span class="outline-episode-title">{{ episode.title }}</span>
-            </div>
-            <div v-if="!episode.collapsed" class="outline-episode-children">
-              <div v-for="(scene, scIndex) in episode.scenes" :key="scIndex" class="outline-scene">
-                <div class="outline-scene-header" @click="scene.collapsed = !scene.collapsed">
-                  <NIcon
-                    :component="scene.collapsed ? DocumentOutline : DocumentTextOutline"
-                    :size="13"
-                  />
-                  <span class="outline-scene-title">{{ scene.title }}</span>
-                </div>
-                <div v-if="!scene.collapsed" class="outline-scene-children">
-                  <div
-                    v-for="(shot, shIndex) in scene.shots"
-                    :key="shIndex"
-                    class="outline-shot"
-                    @click="jumpToLine(shot.lineIndex)"
-                  >
-                    <NIcon :component="VideocamOutline" :size="12" />
-                    <span>{{ shot.label }}</span>
+    <!-- Toolbar: full width on top -->
+    <EditorToolbar
+      :editor="editorRef?.editor"
+      :title="script?.title"
+      :save-status="saveStatus"
+      :is-reviewing="isReviewing"
+      :sidebar-collapsed="sidebarCollapsed"
+      @update:title="handleTitleUpdate"
+      @toggle-sidebar="sidebarCollapsed = !sidebarCollapsed"
+      @export="exportScript"
+      @save="autoSave"
+    />
+
+    <!-- Content area: sidebar + editor side by side -->
+    <div class="editor-content-area">
+      <!-- Left Sidebar: Script Outline -->
+      <div class="editor-sidebar" :class="{ collapsed: sidebarCollapsed }">
+        <div v-if="!sidebarCollapsed" class="sidebar-content">
+          <div class="outline-tree">
+            <!-- Episode level -->
+            <div v-for="(episode, epIndex) in outlineTree" :key="epIndex" class="outline-episode">
+              <div class="outline-episode-header" @click="episode.collapsed = !episode.collapsed">
+                <NIcon
+                  :component="episode.collapsed ? FolderOutline : FolderOpenOutline"
+                  :size="14"
+                />
+                <span class="outline-episode-title">{{ episode.title }}</span>
+              </div>
+              <div v-if="!episode.collapsed" class="outline-episode-children">
+                <div
+                  v-for="(scene, scIndex) in episode.scenes"
+                  :key="scIndex"
+                  class="outline-scene"
+                >
+                  <div class="outline-scene-header" @click="scene.collapsed = !scene.collapsed">
+                    <NIcon
+                      :component="scene.collapsed ? DocumentOutline : DocumentTextOutline"
+                      :size="13"
+                    />
+                    <span class="outline-scene-title">{{ scene.title }}</span>
+                  </div>
+                  <div v-if="!scene.collapsed" class="outline-scene-children">
+                    <div
+                      v-for="(shot, shIndex) in scene.shots"
+                      :key="shIndex"
+                      class="outline-shot"
+                      @click="jumpToLine(shot.lineIndex)"
+                    >
+                      <NIcon :component="VideocamOutline" :size="12" />
+                      <span>{{ shot.label }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -47,24 +58,8 @@
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Center: Editor + Floating Agent -->
-    <div class="editor-center">
-      <!-- Editor Toolbar -->
-      <EditorToolbar
-        :editor="editorRef?.editor"
-        :title="script?.title"
-        :save-status="saveStatus"
-        :is-reviewing="isReviewing"
-        :show-preview="showPreview"
-        @update:title="handleTitleUpdate"
-        @toggle-preview="showPreview = !showPreview"
-        @export="exportScript"
-        @save="autoSave"
-      />
-
-      <!-- Main Editor Area -->
+      <!-- Editor Area -->
       <div class="editor-main" :class="{ 'has-preview': showPreview }">
         <!-- Editor Pane -->
         <div class="editor-pane">
@@ -200,41 +195,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Preview Panel -->
-        <div v-if="showPreview" class="preview-pane">
-          <div class="preview-header">
-            <span class="preview-title">预览</span>
-          </div>
-          <div class="preview-content">
-            <div
-              v-for="(line, index) in parsedLines"
-              :key="index"
-              class="script-line"
-              :class="'script-line--' + line.type"
-            >
-              <template v-if="line.type === 'sceneHeader'">
-                <span class="scene-badge">场景</span>
-                <span class="scene-text">{{ line.text }}</span>
-              </template>
-              <template v-else-if="line.type === 'characterName'">
-                <span class="char-name">{{ line.text }}</span>
-              </template>
-              <template v-else-if="line.type === 'dialogue'">
-                <span class="dialogue-text">{{ line.text }}</span>
-              </template>
-              <template v-else-if="line.type === 'parenthetical'">
-                <span class="paren-text">{{ line.text }}</span>
-              </template>
-              <template v-else-if="line.type === 'transition'">
-                <span class="transition-text">{{ line.text }}</span>
-              </template>
-              <template v-else>
-                <span class="action-text">{{ line.text }}</span>
-              </template>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -245,8 +205,6 @@ import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { NIcon, useMessage } from 'naive-ui'
 import {
-  ChevronBackOutline,
-  ChevronForwardOutline,
   FolderOutline,
   FolderOpenOutline,
   DocumentOutline,
@@ -430,15 +388,6 @@ function jumpToLine(lineIndex: number) {
   editor.commands.focus()
   editor.commands.setTextSelection(pos)
 }
-
-// Parsed lines for preview
-const parsedLines = computed(() => {
-  if (!content.value) return []
-  return content.value.split('\n').map((text) => ({
-    ...detectScriptElementType(text),
-    text: text.trim() || ' '
-  }))
-})
 
 // Auto-save
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -675,9 +624,19 @@ onUnmounted(() => {
 <style scoped>
 .editor-page {
   display: flex;
+  flex-direction: column;
   height: calc(100vh - 56px);
   background: var(--color-bg-base);
   overflow: hidden;
+}
+
+/* Content area: sidebar + editor side by side, centered */
+.editor-content-area {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  min-height: 0;
 }
 
 /* ─── Left Sidebar ─── */
@@ -696,50 +655,10 @@ onUnmounted(() => {
 }
 
 .editor-sidebar.collapsed {
-  width: 32px;
-  min-width: 32px;
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.sidebar-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.sidebar-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 0;
+  min-width: 0;
   border: none;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text-tertiary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.sidebar-toggle:hover {
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
-}
-
-.sidebar-content {
-  flex: 1;
-  overflow: auto;
-  padding: 6px 0;
+  opacity: 0;
 }
 
 .outline-tree {
@@ -828,18 +747,10 @@ onUnmounted(() => {
   color: var(--color-text-primary);
 }
 
-/* ─── Center Area ─── */
-.editor-center {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-}
-
-/* Main editor area */
+/* Main editor area - fixed width, not flex grow */
 .editor-main {
-  flex: 1;
+  width: 900px;
+  min-width: 900px;
   display: flex;
   overflow: hidden;
   min-height: 0;
@@ -973,10 +884,8 @@ onUnmounted(() => {
   color: var(--color-text-primary);
 }
 
-/* When no preview, editor takes full width */
-.editor-main:not(.has-preview) .editor-pane {
-  max-width: 900px;
-  margin: 0 auto;
+/* Editor pane fills width */
+.editor-main .editor-pane {
   width: 100%;
 }
 

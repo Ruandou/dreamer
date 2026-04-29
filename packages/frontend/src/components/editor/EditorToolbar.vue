@@ -22,6 +22,10 @@
     </div>
 
     <div v-if="editor" class="toolbar-center">
+      <button class="toolbar-btn" @click="emit('toggle-sidebar')">
+        <NIcon :component="sidebarCollapsed ? MenuOutline : MenuCloseOutline" :size="16" />
+      </button>
+      <div class="toolbar-divider"></div>
       <div class="toolbar-group">
         <NDropdown :options="headingOptions" size="small" @select="onHeadingSelect">
           <button class="toolbar-btn heading-dropdown-btn">
@@ -122,11 +126,6 @@
     </div>
 
     <div class="toolbar-right">
-      <NButton quaternary size="small" @click="emit('toggle-preview')">
-        <template #icon>
-          <NIcon :component="showPreview ? EyeOffOutline : EyeOutline" :size="16" />
-        </template>
-      </NButton>
       <NButton quaternary size="small" @click="emit('export')">
         <template #icon>
           <NIcon :component="DownloadOutline" :size="16" />
@@ -162,13 +161,13 @@ import type { Editor } from '@tiptap/core'
 import {
   PencilOutline,
   Link as LinkIcon,
-  EyeOutline,
-  EyeOffOutline,
   DownloadOutline,
   SaveOutline,
   CheckmarkOutline,
   TimeOutline,
-  ChevronDownOutline
+  ChevronDownOutline,
+  MenuOutline,
+  CloseOutline as MenuCloseOutline
 } from '@vicons/ionicons5'
 import {
   FormatAlignLeftOutlined,
@@ -200,12 +199,12 @@ const props = defineProps<{
   title?: string
   saveStatus?: 'idle' | 'saving' | 'saved'
   isReviewing?: boolean
-  showPreview?: boolean
+  sidebarCollapsed?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:title': [title: string]
-  'toggle-preview': []
+  'toggle-sidebar': []
   export: []
   save: []
 }>()
