@@ -165,21 +165,15 @@ onBeforeUnmount(() => {
 
 .editor-content :deep(.ProseMirror) {
   outline: none;
-  min-height: calc(100vh - 56px - 48px);
   font-size: 15px;
   line-height: 1.7;
   color: var(--color-text-primary);
 }
 
-.editor-content :deep(.ProseMirror p:last-child) {
-  margin-bottom: 200px;
-}
-
 .editor-content :deep(.ProseMirror p.is-editor-empty:first-child::before) {
   color: var(--color-text-tertiary);
   content: attr(data-placeholder);
-  float: left;
-  height: 0;
+  position: absolute;
   pointer-events: none;
 }
 

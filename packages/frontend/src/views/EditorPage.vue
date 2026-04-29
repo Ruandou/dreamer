@@ -625,7 +625,7 @@ onUnmounted(() => {
 .editor-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 56px);
+  height: 100%;
   background: var(--color-bg-base);
   overflow: hidden;
 }

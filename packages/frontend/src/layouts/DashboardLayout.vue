@@ -88,6 +88,7 @@ const projectMenuOptions = computed<MenuOption[]>(() => {
 }
 
 .dashboard-content {
+  height: 100%;
   overflow: hidden;
 }
 </style>
