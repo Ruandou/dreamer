@@ -180,6 +180,12 @@ onBeforeUnmount(() => {
   margin-bottom: 0;
 }
 
+/* Highlight styles */
+.editor-content :deep(.ProseMirror mark) {
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
 .editor-content :deep(.ProseMirror h1) {
   font-size: 1.5em;
   font-weight: 600;
