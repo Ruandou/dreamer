@@ -1,175 +1,281 @@
 <template>
   <div class="editor-page">
-    <!-- Toolbar -->
-    <div class="editor-toolbar">
-      <div class="toolbar-left">
-        <div class="editor-brand">
-          <NIcon :component="CreateOutline" :size="20" />
-          <h2 class="editor-brand-title">AI 剧本编辑器</h2>
-        </div>
-        <div class="title-divider"></div>
-        <input
-          v-if="editingTitle"
-          v-model="titleInput"
-          class="title-input"
-          @blur="saveTitle"
-          @keyup.enter="saveTitle"
-          @keyup.escape="cancelEditTitle"
-          ref="titleInputRef"
-        />
-        <NTooltip v-else trigger="hover">
-          <template #trigger>
-            <span class="script-title" @click="startEditTitle">
-              {{ script?.title || '未命名剧本' }}
-              <NIcon :component="PencilOutline" :size="14" class="title-edit-icon" />
-            </span>
-          </template>
-          点击编辑标题
-        </NTooltip>
+    <!-- Left Sidebar: Script Outline -->
+    <div class="editor-sidebar" :class="{ collapsed: sidebarCollapsed }">
+      <div class="sidebar-header">
+        <span v-if="!sidebarCollapsed" class="sidebar-title">目录</span>
+        <button class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed">
+          <NIcon
+            :component="sidebarCollapsed ? ChevronForwardOutline : ChevronBackOutline"
+            :size="16"
+          />
+        </button>
       </div>
-      <div class="toolbar-right">
-        <NButton
-          :type="showPreview ? 'primary' : 'default'"
-          size="small"
-          @click="showPreview = !showPreview"
-        >
-          <template #icon>
-            <NIcon :component="showPreview ? EyeOffOutline : EyeOutline" :size="16" />
-          </template>
-          {{ showPreview ? '隐藏预览' : '预览' }}
-        </NButton>
-        <NButton secondary size="small" @click="router.push('/scripts')">
-          <template #icon>
-            <NIcon :component="ListOutline" :size="16" />
-          </template>
-          剧本列表
-        </NButton>
-        <NButton secondary size="small" @click="exportScript">
-          <template #icon>
-            <NIcon :component="DownloadOutline" :size="16" />
-          </template>
-          导出
-        </NButton>
-        <NButton
-          :type="saveStatus === 'saved' ? 'success' : 'default'"
-          :disabled="saveStatus === 'saving' || isReviewing"
-          size="small"
-          @click="autoSave"
-        >
-          <template #icon>
-            <NIcon
-              :component="
-                saveStatus === 'saving'
-                  ? TimeOutline
-                  : saveStatus === 'saved'
-                    ? CheckmarkOutline
-                    : SaveOutline
-              "
-              :size="16"
-            />
-          </template>
-          {{ saveStatus === 'saving' ? '保存中' : saveStatus === 'saved' ? '已保存' : '保存' }}
-        </NButton>
-      </div>
-    </div>
-
-    <!-- Diff Review Bar -->
-    <DiffReviewBar
-      :diff-state="diffReviewState"
-      @accept-all="handleAcceptAll"
-      @reject-all="handleRejectAll"
-      @cancel="handleCancelReview"
-    />
-
-    <!-- Main Content: Editor + Preview -->
-    <div class="editor-main" :class="{ 'has-preview': showPreview }">
-      <!-- Editor -->
-      <div class="editor-pane">
-        <TiptapEditor
-          ref="editorRef"
-          v-model="content"
-          :editable="!isReviewing"
-          :is-reviewing="isReviewing"
-          placeholder="开始编写剧本..."
-          @selection-change="handleSelectionChange"
-        />
-      </div>
-
-      <!-- Preview Panel -->
-      <div v-if="showPreview" class="preview-pane">
-        <div class="preview-header">
-          <span class="preview-title">预览</span>
-        </div>
-        <div class="preview-content">
-          <div
-            v-for="(line, index) in parsedLines"
-            :key="index"
-            class="script-line"
-            :class="'script-line--' + line.type"
-          >
-            <template v-if="line.type === 'sceneHeader'">
-              <span class="scene-badge">场景</span>
-              <span class="scene-text">{{ line.text }}</span>
-            </template>
-            <template v-else-if="line.type === 'characterName'">
-              <span class="char-name">{{ line.text }}</span>
-            </template>
-            <template v-else-if="line.type === 'dialogue'">
-              <span class="dialogue-text">{{ line.text }}</span>
-            </template>
-            <template v-else-if="line.type === 'parenthetical'">
-              <span class="paren-text">{{ line.text }}</span>
-            </template>
-            <template v-else-if="line.type === 'transition'">
-              <span class="transition-text">{{ line.text }}</span>
-            </template>
-            <template v-else>
-              <span class="action-text">{{ line.text }}</span>
-            </template>
+      <div v-if="!sidebarCollapsed" class="sidebar-content">
+        <div class="outline-tree">
+          <!-- Episode level -->
+          <div v-for="(episode, epIndex) in outlineTree" :key="epIndex" class="outline-episode">
+            <div class="outline-episode-header" @click="episode.collapsed = !episode.collapsed">
+              <NIcon
+                :component="episode.collapsed ? FolderOutline : FolderOpenOutline"
+                :size="14"
+              />
+              <span class="outline-episode-title">{{ episode.title }}</span>
+            </div>
+            <div v-if="!episode.collapsed" class="outline-episode-children">
+              <div v-for="(scene, scIndex) in episode.scenes" :key="scIndex" class="outline-scene">
+                <div class="outline-scene-header" @click="scene.collapsed = !scene.collapsed">
+                  <NIcon
+                    :component="scene.collapsed ? DocumentOutline : DocumentTextOutline"
+                    :size="13"
+                  />
+                  <span class="outline-scene-title">{{ scene.title }}</span>
+                </div>
+                <div v-if="!scene.collapsed" class="outline-scene-children">
+                  <div
+                    v-for="(shot, shIndex) in scene.shots"
+                    :key="shIndex"
+                    class="outline-shot"
+                    @click="jumpToLine(shot.lineIndex)"
+                  >
+                    <NIcon :component="VideocamOutline" :size="12" />
+                    <span>{{ shot.label }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- AI Command Bar -->
-    <AiCommandBar
-      :is-streaming="isStreaming"
-      :disabled="isReviewing"
-      placeholder="输入指令让 AI 编辑文档，例如：润色这段台词、增加冲突..."
-      @send="handleAiCommand"
-      @abort="handleAbort"
-      @quick-command="handleQuickCommand"
-    />
+    <!-- Center: Editor + Floating Agent -->
+    <div class="editor-center">
+      <!-- Editor Toolbar -->
+      <EditorToolbar
+        :editor="editorRef?.editor"
+        :title="script?.title"
+        :save-status="saveStatus"
+        :is-reviewing="isReviewing"
+        :show-preview="showPreview"
+        @update:title="handleTitleUpdate"
+        @toggle-preview="showPreview = !showPreview"
+        @export="exportScript"
+        @save="autoSave"
+      />
+
+      <!-- Main Editor Area -->
+      <div class="editor-main" :class="{ 'has-preview': showPreview }">
+        <!-- Editor Pane -->
+        <div class="editor-pane">
+          <TiptapEditor
+            ref="editorRef"
+            v-model="content"
+            :editable="!isReviewing"
+            :is-reviewing="isReviewing"
+            placeholder="开始编写剧本..."
+            @selection-change="handleSelectionChange"
+          />
+
+          <!-- Floating Agent UI -->
+          <div class="agent-float">
+            <!-- Inline Diff Review Status -->
+            <div v-if="isReviewing" class="agent-review-bar">
+              <div class="agent-review-info">
+                <NIcon :component="GitCompareOutline" :size="14" />
+                <span class="agent-review-text">{{ reviewPendingCount }} 处待审核</span>
+                <span v-if="reviewAdditions > 0" class="agent-review-add"
+                  >+{{ reviewAdditions }}</span
+                >
+                <span v-if="reviewDeletions > 0" class="agent-review-del"
+                  >-{{ reviewDeletions }}</span
+                >
+              </div>
+              <div class="agent-review-actions">
+                <button class="agent-review-btn agent-review-btn--reject" @click="handleRejectAll">
+                  <NIcon :component="CloseOutline" :size="13" />
+                  <span>拒绝</span>
+                </button>
+                <button class="agent-review-btn agent-review-btn--accept" @click="handleAcceptAll">
+                  <NIcon :component="CheckmarkOutline" :size="13" />
+                  <span>接受</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- AI Thread Popover -->
+            <div v-if="showThread" class="ai-thread">
+              <div class="ai-thread-header">
+                <div class="ai-thread-avatar">
+                  <NIcon :component="SparklesOutline" :size="14" />
+                </div>
+                <span class="ai-thread-title">AI 助手</span>
+                <button class="ai-thread-close" @click="showThread = false">
+                  <NIcon :component="CloseOutline" :size="14" />
+                </button>
+              </div>
+              <div class="ai-thread-body" ref="threadBodyRef">
+                <div
+                  v-for="(msg, index) in agentMessages"
+                  :key="index"
+                  class="thread-message"
+                  :class="{ 'thread-message--user': msg.role === 'user' }"
+                >
+                  {{ msg.content }}
+                </div>
+                <div v-if="isStreaming" class="thread-message thread-message--streaming">
+                  <div class="agent-typing">
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Floating Input Bar -->
+            <div class="agent-input-wrap">
+              <div class="agent-input-box">
+                <NIcon :component="SparklesOutline" :size="16" class="input-sparkle" />
+                <textarea
+                  ref="agentInputRef"
+                  v-model="agentInput"
+                  class="agent-float-input"
+                  :placeholder="isReviewing ? '请先接受或拒绝修改...' : '告诉 AI 还需要修改什么...'"
+                  :disabled="isStreaming || isReviewing"
+                  rows="1"
+                  @keydown="handleAgentKeydown"
+                  @input="autoResizeAgentInput"
+                />
+                <div class="agent-float-actions">
+                  <button
+                    class="float-btn"
+                    :disabled="isStreaming"
+                    @click="showModelSelector = !showModelSelector"
+                  >
+                    <NIcon :component="HardwareChipOutline" :size="15" />
+                  </button>
+                  <button
+                    class="float-btn float-btn--send"
+                    :class="{ 'is-streaming': isStreaming }"
+                    :disabled="(!agentInput.trim() && !isStreaming) || isReviewing"
+                    @click="handleAgentSend"
+                  >
+                    <NIcon
+                      :component="isStreaming ? StopCircleOutline : ArrowUpOutline"
+                      :size="15"
+                    />
+                  </button>
+                </div>
+              </div>
+              <div class="agent-float-toolbar">
+                <button
+                  v-for="cmd in quickCommands"
+                  :key="cmd.id"
+                  class="float-quick-btn"
+                  :disabled="isStreaming || isReviewing"
+                  @click="handleQuickCommand(cmd.id)"
+                >
+                  <NIcon :component="cmd.icon" :size="12" />
+                  <span>{{ cmd.label }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Model Selector Popover -->
+            <div
+              v-if="showModelSelector"
+              class="model-popover"
+              v-click-outside="() => (showModelSelector = false)"
+            >
+              <div
+                v-for="model in modelOptions"
+                :key="model.value"
+                class="model-option"
+                :class="{ active: selectedModel === model.value }"
+                @click="selectModel(model.value)"
+              >
+                {{ model.label }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview Panel -->
+        <div v-if="showPreview" class="preview-pane">
+          <div class="preview-header">
+            <span class="preview-title">预览</span>
+          </div>
+          <div class="preview-content">
+            <div
+              v-for="(line, index) in parsedLines"
+              :key="index"
+              class="script-line"
+              :class="'script-line--' + line.type"
+            >
+              <template v-if="line.type === 'sceneHeader'">
+                <span class="scene-badge">场景</span>
+                <span class="scene-text">{{ line.text }}</span>
+              </template>
+              <template v-else-if="line.type === 'characterName'">
+                <span class="char-name">{{ line.text }}</span>
+              </template>
+              <template v-else-if="line.type === 'dialogue'">
+                <span class="dialogue-text">{{ line.text }}</span>
+              </template>
+              <template v-else-if="line.type === 'parenthetical'">
+                <span class="paren-text">{{ line.text }}</span>
+              </template>
+              <template v-else-if="line.type === 'transition'">
+                <span class="transition-text">{{ line.text }}</span>
+              </template>
+              <template v-else>
+                <span class="action-text">{{ line.text }}</span>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { NButton, useMessage, NIcon, NTooltip } from 'naive-ui'
+import { useRoute } from 'vue-router'
+import { NIcon, useMessage } from 'naive-ui'
 import {
-  CreateOutline,
-  PencilOutline,
-  ListOutline,
-  DownloadOutline,
-  SaveOutline,
+  ChevronBackOutline,
+  ChevronForwardOutline,
+  FolderOutline,
+  FolderOpenOutline,
+  DocumentOutline,
+  DocumentTextOutline,
+  VideocamOutline,
+  SparklesOutline,
+  CloseOutline,
+  StopCircleOutline,
+  ArrowUpOutline,
+  HardwareChipOutline,
+  GitCompareOutline,
   CheckmarkOutline,
-  TimeOutline,
-  EyeOutline,
-  EyeOffOutline
+  CreateOutline as ContinueIcon,
+  ColorWandOutline,
+  ExpandOutline,
+  ContractOutline
 } from '@vicons/ionicons5'
 import { api } from '@/api'
 import TiptapEditor from '@/components/editor/TiptapEditor.vue'
-import AiCommandBar from '@/components/editor/AiCommandBar.vue'
-import DiffReviewBar from '@/components/editor/DiffReviewBar.vue'
+import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import { useEditorAi } from '@/composables/useEditorAi'
 import { diffReviewKey } from '@/lib/diff-review/diff-review-plugin'
 import { detectScriptElementType } from '@/lib/editor/script-format-extension'
+import { useModelPreferenceStore } from '@/stores/model-preference'
 import type { Script } from '@dreamer/shared/types'
 
 const message = useMessage()
 const route = useRoute()
-const router = useRouter()
+const modelStore = useModelPreferenceStore()
 
 // Editor ref
 const editorRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
@@ -177,11 +283,34 @@ const editorRef = ref<InstanceType<typeof TiptapEditor> | null>(null)
 // Script state
 const script = ref<Script | null>(null)
 const content = ref('')
-const titleInput = ref('')
-const editingTitle = ref(false)
-const titleInputRef = ref<HTMLInputElement | null>(null)
 const saveStatus = ref<'idle' | 'saving' | 'saved'>('idle')
-const showPreview = ref(true)
+const showPreview = ref(false)
+const sidebarCollapsed = ref(false)
+
+// Agent chat state
+const agentInput = ref('')
+const agentInputRef = ref<HTMLTextAreaElement | null>(null)
+const threadBodyRef = ref<HTMLDivElement | null>(null)
+const agentMessages = ref<{ role: 'user' | 'ai'; content: string }[]>([])
+const showModelSelector = ref(false)
+const showThread = ref(false)
+
+// Model selection
+const modelOptions = computed(() =>
+  modelStore.textModels.map((m) => ({ label: m.name, value: m.id }))
+)
+
+const selectedModel = computed<string | undefined>({
+  get: () => modelStore.currentTextModel || modelStore.defaultTextModel,
+  set: (val: string | undefined) => {
+    modelStore.currentTextModel = val
+  }
+})
+
+function selectModel(modelId: string) {
+  selectedModel.value = modelId
+  showModelSelector.value = false
+}
 
 // AI
 const editorAi = useEditorAi()
@@ -195,6 +324,112 @@ const diffReviewState = computed(() => {
 })
 
 const isReviewing = computed(() => diffReviewState.value?.isReviewing ?? false)
+
+// Review counts for inline status bar
+const reviewCounts = computed(() => {
+  if (!diffReviewState.value?.isReviewing) {
+    return { pending: 0, additions: 0, deletions: 0 }
+  }
+  const state = diffReviewState.value
+  const pending = state.changeGroups.filter(
+    (g) => !state.acceptedGroupIds.has(g.id) && !state.rejectedGroupIds.has(g.id)
+  ).length
+  let additions = 0
+  let deletions = 0
+  for (const g of state.changeGroups) {
+    if (g.proposedText) additions += g.proposedText.length
+    if (g.originalText) deletions += g.originalText.length
+  }
+  return { pending, additions, deletions }
+})
+
+const reviewPendingCount = computed(() => reviewCounts.value.pending)
+const reviewAdditions = computed(() => reviewCounts.value.additions)
+const reviewDeletions = computed(() => reviewCounts.value.deletions)
+
+// Quick commands
+const quickCommands = [
+  { id: 'continue', label: '续写', icon: ContinueIcon },
+  { id: 'polish', label: '润色', icon: ColorWandOutline },
+  { id: 'expand', label: '扩写', icon: ExpandOutline },
+  { id: 'shorten', label: '缩写', icon: ContractOutline }
+]
+
+// Hierarchical outline tree (集/场/镜头)
+const outlineTree = computed(() => {
+  if (!content.value) return []
+  const lines = content.value.split('\n')
+
+  // Build a simple hierarchical structure from detected elements
+  // For now, simulate episodes/scenes/shots from the content
+  const episodes: Array<{
+    title: string
+    collapsed: boolean
+    scenes: Array<{
+      title: string
+      collapsed: boolean
+      shots: Array<{ label: string; lineIndex: number }>
+    }>
+  }> = []
+
+  let currentEpisode: (typeof episodes)[0] | null = null
+  let currentScene: (typeof episodes)[0]['scenes'][0] | null = null
+  let shotCounter = 0
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    const detected = detectScriptElementType(trimmed)
+
+    if (detected.type === 'sceneHeader') {
+      // Start a new scene
+      if (!currentEpisode) {
+        currentEpisode = { title: '第1集', collapsed: false, scenes: [] }
+        episodes.push(currentEpisode)
+      }
+      currentScene = { title: trimmed.slice(0, 25), collapsed: false, shots: [] }
+      currentEpisode.scenes.push(currentScene)
+      shotCounter = 0
+    } else if (currentScene && detected.type === 'characterName') {
+      shotCounter++
+      currentScene.shots.push({ label: `${trimmed.slice(0, 15)}`, lineIndex: i })
+    }
+  }
+
+  // If no structure detected, create a default one
+  if (episodes.length === 0) {
+    const defaultScene: (typeof episodes)[0]['scenes'][0] = {
+      title: '正文',
+      collapsed: false,
+      shots: []
+    }
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim()
+      if (trimmed) {
+        defaultScene.shots.push({ label: trimmed.slice(0, 20), lineIndex: i })
+      }
+    }
+    episodes.push({ title: '剧本', collapsed: false, scenes: [defaultScene] })
+  }
+
+  return episodes
+})
+
+function jumpToLine(lineIndex: number) {
+  const editor = editorRef.value?.editor
+  if (!editor) return
+
+  const lines = content.value.split('\n')
+  let pos = 0
+  for (let i = 0; i < lineIndex && i < lines.length; i++) {
+    pos += lines[i].length + 1
+  }
+
+  editor.commands.focus()
+  editor.commands.setTextSelection(pos)
+}
 
 // Parsed lines for preview
 const parsedLines = computed(() => {
@@ -230,29 +465,10 @@ async function autoSave() {
   }
 }
 
-// Title editing
-function startEditTitle() {
-  editingTitle.value = true
-  titleInput.value = script.value?.title || ''
-  nextTick(() => titleInputRef.value?.focus())
-}
-
-async function saveTitle() {
+function handleTitleUpdate(newTitle: string) {
   if (!script.value) return
-  editingTitle.value = false
-  if (titleInput.value.trim() && titleInput.value !== script.value.title) {
-    try {
-      await api.put(`/scripts/${script.value.id}`, { title: titleInput.value.trim() })
-      script.value.title = titleInput.value.trim()
-      message.success('标题已更新')
-    } catch {
-      message.error('标题保存失败')
-    }
-  }
-}
-
-function cancelEditTitle() {
-  editingTitle.value = false
+  script.value.title = newTitle
+  autoSave()
 }
 
 // Export
@@ -274,24 +490,55 @@ function handleSelectionChange(selection: { from: number; to: number; text: stri
   currentSelection.value = selection
 }
 
-// AI commands
-async function handleAiCommand(command: string, model?: string) {
+// Agent chat
+function handleAgentKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    handleAgentSend()
+  }
+}
+
+function autoResizeAgentInput() {
+  const el = agentInputRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 80) + 'px'
+}
+
+async function handleAgentSend() {
+  if (isStreaming.value) {
+    editorAi.abort()
+    return
+  }
+
+  const text = agentInput.value.trim()
+  if (!text || isReviewing.value) return
+
+  agentMessages.value.push({ role: 'user', content: text })
+  agentInput.value = ''
+  nextTick(() => autoResizeAgentInput())
+  showThread.value = true
+  scrollThreadToBottom()
+
   const editor = editorRef.value?.editor
   if (!editor) return
 
-  let fullCommand = command
+  let fullCommand = text
   if (currentSelection.value) {
-    fullCommand = `选中的内容：\n\n${currentSelection.value.text}\n\n请针对以上内容进行操作：${command}`
+    fullCommand = `选中的内容：\n\n${currentSelection.value.text}\n\n请针对以上内容进行操作：${text}`
   }
 
   await editorAi.sendEditCommand(editor, fullCommand, {
-    model,
+    model: selectedModel.value,
     scriptContent: content.value,
     scriptTitle: script.value?.title
   })
+
+  agentMessages.value.push({ role: 'ai', content: '已生成修改建议，请在编辑器中审阅。' })
+  scrollThreadToBottom()
 }
 
-function handleQuickCommand(commandId: string, model?: string) {
+function handleQuickCommand(commandId: string) {
   const editor = editorRef.value?.editor
   if (!editor) return
 
@@ -309,16 +556,28 @@ function handleQuickCommand(commandId: string, model?: string) {
     command = `${command}：\n\n${content.value}`
   }
 
+  agentMessages.value.push({ role: 'user', content: commandMap[commandId] || commandId })
+  showThread.value = true
+  scrollThreadToBottom()
+
   editorAi.sendEditCommand(editor, command, {
-    model,
+    model: selectedModel.value,
     scriptContent: content.value,
     scriptTitle: script.value?.title,
     quickCommand: commandId
   })
+
+  agentMessages.value.push({ role: 'ai', content: '已生成修改建议，请在编辑器中审阅。' })
+  scrollThreadToBottom()
 }
 
-function handleAbort() {
-  editorAi.abort()
+function scrollThreadToBottom() {
+  nextTick(() => {
+    const el = threadBodyRef.value
+    if (el) {
+      el.scrollTop = el.scrollHeight
+    }
+  })
 }
 
 // Diff review actions
@@ -336,12 +595,6 @@ function handleRejectAll() {
   if (!editor) return
   editorAi.rejectAll(editor)
   message.info('已拒绝所有修改')
-}
-
-function handleCancelReview() {
-  const editor = editorRef.value?.editor
-  if (!editor) return
-  editorAi.endReview(editor)
 }
 
 // Widget event listeners
@@ -366,9 +619,29 @@ function handleWidgetCancel() {
   editorAi.endReview(editor)
 }
 
+// Click outside directive helper
+const vClickOutside = {
+  mounted(el: HTMLElement, binding: { value: () => void }) {
+    const handler = (e: MouseEvent) => {
+      if (!el.contains(e.target as Node)) {
+        binding.value()
+      }
+    }
+    document.addEventListener('click', handler)
+    ;(el as any).__clickOutsideHandler = handler
+  },
+  unmounted(el: HTMLElement) {
+    const handler = (el as any).__clickOutsideHandler
+    if (handler) {
+      document.removeEventListener('click', handler)
+    }
+  }
+}
+
 // Load draft
 async function loadDraft() {
   try {
+    await modelStore.init()
     const scriptId = route.params.id as string | undefined
     if (scriptId) {
       const res = await api.get<Script>(`/scripts/${scriptId}`)
@@ -402,90 +675,166 @@ onUnmounted(() => {
 <style scoped>
 .editor-page {
   display: flex;
-  flex-direction: column;
   height: calc(100vh - 56px);
   background: var(--color-bg-base);
   overflow: hidden;
 }
 
-.editor-toolbar {
+/* ─── Left Sidebar ─── */
+.editor-sidebar {
+  width: 180px;
+  min-width: 180px;
+  background: var(--color-bg-white);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition:
+    width 0.2s ease,
+    min-width 0.2s ease;
+  overflow: hidden;
+}
+
+.editor-sidebar.collapsed {
+  width: 32px;
+  min-width: 32px;
+}
+
+.sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-bg-white);
+  padding: 8px 10px;
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
-.toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.sidebar-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.editor-brand {
+.sidebar-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--color-primary);
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
-.editor-brand-title {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  margin: 0;
+.sidebar-toggle:hover {
+  background: var(--color-bg-secondary);
   color: var(--color-text-primary);
 }
 
-.title-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--color-border);
+.sidebar-content {
+  flex: 1;
+  overflow: auto;
+  padding: 6px 0;
 }
 
-.script-title {
-  display: inline-flex;
+.outline-tree {
+  display: flex;
+  flex-direction: column;
+}
+
+.outline-episode {
+  display: flex;
+  flex-direction: column;
+}
+
+.outline-episode-header {
+  display: flex;
   align-items: center;
   gap: 6px;
+  padding: 6px 10px;
   cursor: pointer;
-  padding: 4px 10px;
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+  font-size: 13px;
+  font-weight: 600;
   color: var(--color-text-primary);
-  transition: all var(--transition-fast);
-  border: 1px solid transparent;
+  transition: background var(--transition-fast);
 }
 
-.script-title:hover {
+.outline-episode-header:hover {
   background: var(--color-bg-secondary);
-  border-color: var(--color-border);
 }
 
-.script-title:hover .title-edit-icon {
-  opacity: 1;
+.outline-episode-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.title-edit-icon {
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-  color: var(--color-text-tertiary);
-}
-
-.title-input {
-  font-size: 15px;
-  padding: 4px 10px;
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-md);
-  outline: none;
-  font-weight: 500;
-  min-width: 200px;
-}
-
-.toolbar-right {
+.outline-episode-children {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+}
+
+.outline-scene {
+  display: flex;
+  flex-direction: column;
+}
+
+.outline-scene-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 22px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  transition: background var(--transition-fast);
+}
+
+.outline-scene-header:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.outline-scene-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-scene-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.outline-shot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 34px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  transition: all var(--transition-fast);
+}
+
+.outline-shot:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+/* ─── Center Area ─── */
+.editor-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Main editor area */
@@ -494,8 +843,8 @@ onUnmounted(() => {
   display: flex;
   overflow: hidden;
   min-height: 0;
-  padding: 12px 16px 0;
-  gap: 16px;
+  padding: 0;
+  gap: 0;
 }
 
 .editor-pane {
@@ -504,18 +853,18 @@ onUnmounted(() => {
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
+  position: relative;
 }
 
 /* Preview panel */
 .preview-pane {
-  width: 380px;
-  min-width: 300px;
-  max-width: 45%;
+  width: 320px;
+  min-width: 260px;
+  max-width: 40%;
   display: flex;
   flex-direction: column;
   background: var(--color-bg-white);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-left: 1px solid var(--color-border);
   overflow: hidden;
 }
 
@@ -629,6 +978,392 @@ onUnmounted(() => {
   max-width: 900px;
   margin: 0 auto;
   width: 100%;
+}
+
+/* ─── Floating Agent (inside editor pane) ─── */
+.agent-float {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(640px, calc(100% - 80px));
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.agent-float > * {
+  pointer-events: auto;
+}
+
+/* Inline diff review status bar */
+.agent-review-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--color-bg-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.agent-review-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.agent-review-text {
+  font-weight: 500;
+}
+
+.agent-review-add {
+  color: var(--color-success, #16a34a);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.agent-review-del {
+  color: var(--color-error, #dc2626);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.agent-review-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.agent-review-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-white);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.agent-review-btn--accept {
+  background: var(--color-success, #16a34a);
+  color: white;
+  border-color: var(--color-success, #16a34a);
+}
+
+.agent-review-btn--accept:hover {
+  background: #15803d;
+  border-color: #15803d;
+}
+
+.agent-review-btn--reject {
+  background: var(--color-bg-white);
+  color: var(--color-text-secondary);
+}
+
+.agent-review-btn--reject:hover {
+  background: var(--color-error, #dc2626);
+  color: white;
+  border-color: var(--color-error, #dc2626);
+}
+
+/* AI Thread Popover */
+.ai-thread {
+  background: var(--color-bg-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: slideUp 0.2s ease;
+}
+
+.ai-thread-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.ai-thread-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: white;
+}
+
+.ai-thread-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.ai-thread-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+
+.ai-thread-close:hover {
+  background: var(--color-bg-gray);
+  color: var(--color-text-primary);
+}
+
+.ai-thread-body {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thread-message {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  padding: 8px 10px;
+  background: var(--color-bg-secondary);
+  border-radius: 8px;
+  word-break: break-word;
+}
+
+.thread-message--user {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.thread-message--streaming .agent-typing {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+/* Floating Input Box */
+.agent-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-input-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--color-bg-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  transition: border-color var(--transition-fast);
+}
+
+.agent-input-box:focus-within {
+  border-color: var(--color-primary);
+}
+
+.input-sparkle {
+  color: var(--color-primary);
+  flex-shrink: 0;
+  margin-bottom: 6px;
+}
+
+.agent-float-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: none;
+  color: var(--color-text-primary);
+  min-height: 22px;
+  max-height: 80px;
+  font-family: inherit;
+}
+
+.agent-float-input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.agent-float-input:disabled {
+  color: var(--color-text-tertiary);
+}
+
+.agent-float-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.float-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.float-btn:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.float-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.float-btn--send {
+  background: var(--color-primary);
+  color: white;
+  border-radius: 50%;
+}
+
+.float-btn--send:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.float-btn--send.is-streaming {
+  background: var(--color-error);
+}
+
+.float-btn--send.is-streaming:hover:not(:disabled) {
+  background: var(--color-error-hover);
+}
+
+/* Quick command buttons below input */
+.agent-float-toolbar {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.float-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-white);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+
+.float-quick-btn:hover:not(:disabled) {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-dark);
+}
+
+.float-quick-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Typing animation */
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+  animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes typingBounce {
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+/* Model Selector Popover */
+.model-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: var(--color-bg-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  min-width: 180px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.model-option {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.model-option:hover {
+  background: var(--color-bg-secondary);
+}
+
+.model-option.active {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-weight: 500;
 }
 </style>
 
