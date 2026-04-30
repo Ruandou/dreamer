@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import SearchFilterBar from './SearchFilterBar.vue'
+import SearchFilterBar from '@/components/SearchFilterBar.vue'
 
 describe('SearchFilterBar', () => {
   it('renders search input', () => {

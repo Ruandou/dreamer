@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import SidebarBreadcrumb from './SidebarBreadcrumb.vue'
+import SidebarBreadcrumb from '@/components/SidebarBreadcrumb.vue'
 
 // Mock vue-router
 const mockPush = vi.fn()

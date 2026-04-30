@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.ts'],
+    include: ['tests/**/*.test.ts'],
     /** lint-staged 使用 `vitest related`；改动的 .vue 未必有邻接单测，避免无匹配时退出 1 阻塞提交 */
     passWithNoTests: true,
     coverage: {

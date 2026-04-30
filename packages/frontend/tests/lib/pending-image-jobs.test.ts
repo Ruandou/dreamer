@@ -3,7 +3,7 @@ import {
   inferImageJobBinding,
   buildInFlightImageJobsState,
   type ImageGenJobListItem
-} from './pending-image-jobs'
+} from '@/lib/pending-image-jobs'
 
 describe('inferImageJobBinding', () => {
   it('prefers explicit binding from API', () => {

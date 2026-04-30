@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scriptToEditorDoc } from './script-to-doc'
+import { scriptToEditorDoc } from '@/lib/storyboard-editor/script-to-doc'
 import type { ScriptContent } from '@dreamer/shared/types'
 
 describe('scriptToEditorDoc', () => {
