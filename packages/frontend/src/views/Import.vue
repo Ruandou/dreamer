@@ -1,7 +1,23 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NButton, NSpace, NUpload, NInput, NResult, NSpin, NText, NAlert, NModal, NDescriptions, NDescriptionsItem, NTag, NCollapse, NCollapseItem } from 'naive-ui'
+import {
+  NCard,
+  NButton,
+  NSpace,
+  NUpload,
+  NInput,
+  NResult,
+  NSpin,
+  NText,
+  NAlert,
+  NModal,
+  NDescriptions,
+  NDescriptionsItem,
+  NTag,
+  NCollapse,
+  NCollapseItem
+} from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
 import { importProject, getImportTaskStatus, previewImport, type PreviewResult } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -25,7 +41,8 @@ const handleFileChange = (options: { file: UploadFileInfo }) => {
 
   const reader = new FileReader()
   reader.onload = (e) => {
-    fileContent.value = e.target?.result as string
+    const text = e.target?.result as string
+    fileContent.value = text
     errorMsg.value = ''
     importResult.value = null
   }
@@ -196,9 +213,7 @@ onUnmounted(() => {
             @change="handleFileChange"
             @remove="handleReset"
           >
-            <NButton type="primary" size="large">
-              选择文件
-            </NButton>
+            <NButton type="primary" size="large"> 选择文件 </NButton>
           </NUpload>
           <NText depth="3" class="upload-hint">支持 .md, .txt, .json 格式</NText>
         </div>
@@ -237,11 +252,13 @@ onUnmounted(() => {
         v-model:show="showPreviewModal"
         preset="card"
         title="导入预览"
-        style="max-width: 700px;"
+        style="max-width: 700px"
       >
         <div v-if="previewData" class="preview-content">
           <NAlert type="info" class="preview-alert">
-            AI 解析预览，实际导入结果可能略有差异。预计 AI 成本：¥{{ previewData.aiCost.toFixed(4) }}
+            AI 解析预览，实际导入结果可能略有差异。预计 AI 成本：¥{{
+              previewData.aiCost.toFixed(4)
+            }}
           </NAlert>
 
           <NDescriptions label-placement="top" bordered>
@@ -271,9 +288,7 @@ onUnmounted(() => {
                 :title="`第${ep.episodeNum}集：${ep.title}`"
                 :name="ep.episodeNum"
               >
-                <template #header-extra>
-                  {{ ep.sceneCount }} 个场景
-                </template>
+                <template #header-extra> {{ ep.sceneCount }} 个场景 </template>
                 <div v-for="scene in ep.scenes" :key="scene.sceneNum" class="scene-item">
                   <span class="scene-num">场景 {{ scene.sceneNum }}</span>
                   <span class="scene-desc">{{ scene.description }}</span>
@@ -289,9 +304,7 @@ onUnmounted(() => {
         <template #footer>
           <NSpace justify="end">
             <NButton @click="showPreviewModal = false">取消</NButton>
-            <NButton type="primary" @click="confirmImport">
-              确认导入
-            </NButton>
+            <NButton type="primary" @click="confirmImport"> 确认导入 </NButton>
           </NSpace>
         </template>
       </NModal>

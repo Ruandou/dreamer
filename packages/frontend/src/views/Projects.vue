@@ -6,7 +6,7 @@ import { EllipsisVerticalOutline } from '@vicons/ionicons5'
 import { useProjectStore } from '@/stores/project'
 import type { Project } from '@dreamer/shared/types'
 import { normalizeProjectName } from '@dreamer/shared'
-import { api } from '@/api'
+import { api, importProject, getImportTaskStatus } from '@/api'
 import type { PipelineJob } from '@/api'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -24,6 +24,11 @@ const projectStore = useProjectStore()
 const searchQuery = ref('')
 const quickIdea = ref('')
 const isCreating = ref(false)
+const isImporting = ref(false)
+const importTaskId = ref<string | null>(null)
+const importTaskStatus = ref<'pending' | 'processing' | 'completed' | 'failed'>('pending')
+const importedProjectId = ref<string | null>(null)
+let pollTimer: ReturnType<typeof setInterval> | null = null
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
 // Async state management for loading and error handling
@@ -105,20 +110,85 @@ const handleDrop = (e: DragEvent) => {
   reader.readAsText(file)
 }
 
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+function startPolling(taskId: string) {
+  importTaskId.value = taskId
+  importTaskStatus.value = 'pending'
+  pollTimer = setInterval(async () => {
+    try {
+      const task = await getImportTaskStatus(taskId)
+      importTaskStatus.value = task.status
+
+      if (task.status === 'completed') {
+        stopPolling()
+        isImporting.value = false
+        const projectId = task.projectId || task.result?.projectId || null
+        importedProjectId.value = projectId
+        message.success('剧本导入成功')
+        if (projectId) {
+          router.push(`/project/${projectId}`)
+        }
+      } else if (task.status === 'failed') {
+        stopPolling()
+        isImporting.value = false
+        message.error(task.errorMsg || '导入失败')
+      }
+    } catch (error: any) {
+      stopPolling()
+      isImporting.value = false
+      message.error(error?.response?.data?.message || '查询任务状态失败')
+    }
+  }, 2000)
+}
+
+function isLikelyScriptContent(text: string): boolean {
+  const t = text.trim()
+  if (t.length > 500) return true
+  const scriptPatterns = [
+    /^#+\s*第[一二三四五六七八九十\d]+[集章]/m,
+    /^#+\s*.*[场景場景]/m,
+    /\n\s*角色[:：]/m,
+    /\n\s*人物[:：]/m,
+    /^\s*\w+[:：]\s*["""']/m,
+    /^\s*(INT|EXT|内景|外景)[\.\s]/m
+  ]
+  return scriptPatterns.some((p) => p.test(t))
+}
+
 const handleQuickCreate = async () => {
   if (!quickIdea.value.trim()) {
     message.warning('请输入剧本想法')
     return
   }
+
+  const idea = quickIdea.value.trim()
+
+  if (isLikelyScriptContent(idea)) {
+    isImporting.value = true
+    try {
+      const result = await importProject(idea, 'markdown')
+      startPolling(result.taskId)
+    } catch (e: any) {
+      isImporting.value = false
+      message.error(e.message || '导入失败')
+    }
+    return
+  }
+
   isCreating.value = true
   try {
-    const idea = quickIdea.value.trim()
     const name = normalizeProjectName(idea)
     const project = await projectStore.createProject({
       name,
       description: idea
     })
-    router.push(`/generate?projectId=${project.id}&autogen=1`)
+    router.push(`/project/${project.id}`)
   } catch (e: any) {
     message.error(e.message || '创建项目失败')
   } finally {
@@ -144,36 +214,8 @@ function hasAnyCharacter(project: Project | null | undefined): boolean {
  * 先拉 GET /projects/:id，避免列表里 characters 滞后（解析刚完成仍显示 0）。
  */
 const handleProjectClick = async (project: Project) => {
-  let fresh: Project | null = null
-  try {
-    const res = await api.get<Project>(`/projects/${project.id}`)
-    fresh = res.data
-  } catch {
-    fresh = null
-  }
-
-  if (hasAnyCharacter(fresh) || hasAnyCharacter(project)) {
-    router.push(`/project/${project.id}`)
-    return
-  }
-
-  try {
-    const res = await api.get<{ job: PipelineJob | null }>(
-      `/projects/${project.id}/outline-active-job`
-    )
-    const job = res.data?.job
-    if (
-      job &&
-      (job.status === 'pending' || job.status === 'running') &&
-      isParseScriptOutlineJob(job)
-    ) {
-      router.push(`/project/${project.id}?parseJobId=${job.id}`)
-      return
-    }
-  } catch {
-    /* ignore */
-  }
-  router.push(`/generate?projectId=${project.id}`)
+  // Always navigate to project detail; let the detail page handle empty states
+  router.push(`/project/${project.id}`)
 }
 
 const handleDelete = (id: string) => {
@@ -297,14 +339,25 @@ const handleDropdownSelect = (key: string, projectId: string) => {
           @keydown.ctrl.enter="handleQuickCreate"
         />
       </div>
+      <div v-if="isImporting" class="quick-create__importing">
+        <StatusBadge :status="importTaskStatus" />
+        <span class="quick-create__importing-text">
+          <span v-if="importTaskStatus === 'pending'">等待处理</span>
+          <span v-else-if="importTaskStatus === 'processing'">AI 正在解析剧本...</span>
+          <span v-else-if="importTaskStatus === 'completed'">导入完成</span>
+          <span v-else-if="importTaskStatus === 'failed'">导入失败</span>
+        </span>
+      </div>
       <div class="quick-create__actions">
         <NSpace justify="center">
-          <NButton secondary @click="handleFileInputClick">导入剧本</NButton>
+          <NButton secondary @click="handleFileInputClick" :disabled="isImporting"
+            >导入剧本</NButton
+          >
           <NButton
             type="primary"
             @click="handleQuickCreate"
-            :disabled="!quickIdea.trim()"
-            :loading="isCreating"
+            :disabled="!quickIdea.trim() || isImporting"
+            :loading="isCreating || isImporting"
           >
             生成大纲 →
           </NButton>
@@ -331,7 +384,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         variant="large"
       >
         <template #action>
-          <NButton type="primary" @click="router.push('/generate')"> 创建第一个项目 </NButton>
+          <NButton type="primary" @click="router.push('/import')"> 导入剧本 </NButton>
         </template>
       </EmptyState>
 
@@ -496,6 +549,14 @@ const handleDropdownSelect = (key: string, projectId: string) => {
 .quick-create__actions {
   display: flex;
   justify-content: center;
+}
+
+.quick-create__importing {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 .projects-grid {

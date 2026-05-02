@@ -10,12 +10,11 @@ import {
   BarChartOutline,
   RadioOutline,
   SettingsOutline,
-  InformationCircleOutline,
   PeopleOutline,
   LocationOutline,
   ListOutline,
-  FilmOutline,
-  GitBranchOutline
+  LibraryOutline,
+  ImagesOutline
 } from '@vicons/ionicons5'
 
 /** 仅允许站内相对路径，防止开放重定向 */
@@ -54,55 +53,86 @@ const routes: RouteRecordRaw[] = [
         path: 'projects',
         name: 'Projects',
         component: () => import('@/views/Projects.vue'),
-        meta: { title: '项目列表', icon: FolderOpenOutline }
+        meta: { title: '项目', icon: FolderOpenOutline }
       },
       {
-        path: 'scripts',
-        name: 'Scripts',
-        component: () => import('@/views/Scripts.vue'),
-        meta: { title: '剧本列表', icon: DocumentTextOutline }
+        path: 'project/:id',
+        name: 'ProjectDetail',
+        component: () => import('@/views/ProjectDetail.vue'),
+        meta: { projectLayout: true },
+        children: [
+          {
+            path: '',
+            name: 'ProjectHome',
+            redirect: (to) => ({ name: 'ProjectOutline', params: { id: to.params.id } })
+          },
+          {
+            path: 'outline',
+            name: 'ProjectOutline',
+            component: () => import('@/views/project/ProjectOutline.vue'),
+            meta: { title: '大纲', icon: ListOutline, projectLayout: true }
+          },
+          {
+            path: 'write',
+            name: 'ProjectWrite',
+            component: () => import('@/views/project/ProjectWrite.vue'),
+            meta: { title: '写作', icon: CreateOutline, projectLayout: true }
+          },
+          {
+            path: 'write/:episodeId',
+            name: 'ProjectWriteEpisode',
+            component: () => import('@/views/project/ProjectWrite.vue'),
+            meta: { title: '写作', icon: CreateOutline, projectLayout: true }
+          },
+          {
+            path: 'characters',
+            name: 'ProjectCharacters',
+            component: () => import('@/views/project/ProjectCharacters.vue'),
+            meta: { title: '角色', icon: PeopleOutline, projectLayout: true }
+          },
+          {
+            path: 'characters/:characterId',
+            name: 'ProjectCharacterDetail',
+            component: () => import('@/views/project/ProjectCharacterDetail.vue'),
+            meta: { title: '角色详情', icon: PeopleOutline, projectLayout: true }
+          },
+          {
+            path: 'locations',
+            name: 'ProjectLocations',
+            component: () => import('@/views/project/ProjectLocations.vue'),
+            meta: { title: '场地', icon: LocationOutline, projectLayout: true }
+          },
+          {
+            path: 'export',
+            name: 'ProjectExport',
+            component: () => import('@/views/project/ProjectExport.vue'),
+            meta: { title: '导出', icon: DocumentTextOutline, projectLayout: true }
+          }
+        ]
       },
       {
-        path: 'studio',
-        name: 'Studio',
-        component: () => import('@/views/Studio.vue'),
-        meta: { title: 'AI 写作工作室', icon: CreateOutline }
+        path: 'templates',
+        name: 'Templates',
+        component: () => import('@/views/Templates.vue'),
+        meta: { title: '模板库', icon: LibraryOutline }
       },
       {
-        path: 'studio/:id',
-        name: 'StudioDetail',
-        component: () => import('@/views/Studio.vue'),
-        meta: { title: 'AI 写作工作室', icon: CreateOutline }
-      },
-      {
-        path: 'editor',
-        name: 'Editor',
-        component: () => import('@/views/EditorPage.vue'),
-        meta: { title: 'AI 剧本编辑器', icon: CreateOutline }
-      },
-      {
-        path: 'editor/:id',
-        name: 'EditorDetail',
-        component: () => import('@/views/EditorPage.vue'),
-        meta: { title: 'AI 剧本编辑器', icon: CreateOutline }
+        path: 'assets',
+        name: 'Assets',
+        component: () => import('@/views/Assets.vue'),
+        meta: { title: '素材库', icon: ImagesOutline }
       },
       {
         path: 'import',
         name: 'Import',
         component: () => import('@/views/Import.vue'),
-        meta: { title: '导入剧本', icon: DownloadOutline }
-      },
-      {
-        path: 'generate',
-        name: 'Generate',
-        component: () => import('@/views/Generate.vue'),
-        meta: { title: '视频生成', icon: FilmOutline }
+        meta: { title: '导入', icon: DownloadOutline }
       },
       {
         path: 'stats',
         name: 'Stats',
         component: () => import('@/views/Stats.vue'),
-        meta: { title: '统计分析', icon: BarChartOutline }
+        meta: { title: '数据', icon: BarChartOutline }
       },
       {
         path: 'model-calls',
@@ -114,7 +144,7 @@ const routes: RouteRecordRaw[] = [
         path: 'jobs',
         name: 'Jobs',
         component: () => import('@/views/Jobs.vue'),
-        meta: { title: '任务中心', icon: TimeOutline }
+        meta: { title: '任务', icon: TimeOutline }
       },
       {
         path: 'settings',
@@ -122,78 +152,30 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Settings.vue'),
         meta: { title: '设置', icon: SettingsOutline }
       },
+      // 旧路由兼容重定向
       {
-        path: 'project/:id',
-        name: 'ProjectDetail',
-        component: () => import('@/views/ProjectDetail.vue'),
-        meta: { projectLayout: true },
-        children: [
-          {
-            path: '',
-            name: 'ProjectHome',
-            redirect: (to) => ({ name: 'ProjectOverview', params: { id: to.params.id } })
-          },
-          {
-            path: 'overview',
-            name: 'ProjectOverview',
-            component: () => import('@/views/ProjectOverview.vue'),
-            meta: { title: '基础信息', icon: InformationCircleOutline, projectLayout: true }
-          },
-          {
-            path: 'script',
-            name: 'ProjectScript',
-            component: () => import('@/views/ProjectScript.vue'),
-            meta: { title: '剧本编辑', icon: DocumentTextOutline, projectLayout: true }
-          },
-          {
-            path: 'characters',
-            name: 'ProjectCharacters',
-            component: () => import('@/views/ProjectCharacters.vue'),
-            meta: { title: '角色库', icon: PeopleOutline, projectLayout: true }
-          },
-          {
-            path: 'characters/:characterId',
-            name: 'ProjectCharacterDetail',
-            component: () => import('@/views/ProjectCharacterDetail.vue'),
-            meta: { title: '角色详情', icon: PeopleOutline, projectLayout: true }
-          },
-          {
-            path: 'locations',
-            name: 'ProjectLocations',
-            component: () => import('@/views/ProjectLocations.vue'),
-            meta: { title: '场地库', icon: LocationOutline, projectLayout: true }
-          },
-          {
-            path: 'episodes',
-            name: 'ProjectEpisodes',
-            component: () => import('@/views/ProjectEpisodes.vue'),
-            meta: { title: '分集管理', icon: ListOutline, projectLayout: true }
-          },
-          {
-            path: 'episodes/:episodeId',
-            name: 'ProjectEpisodeDetail',
-            component: () => import('@/views/ProjectEpisodeDetail.vue'),
-            meta: { title: '分集详情', icon: ListOutline, projectLayout: true }
-          },
-          {
-            path: 'storyboard',
-            name: 'ProjectStoryboard',
-            component: () => import('@/views/ProjectStoryboard.vue'),
-            meta: { title: '分镜脚本', icon: FilmOutline, projectLayout: true }
-          },
-          {
-            path: 'compose',
-            name: 'ProjectCompose',
-            component: () => import('@/views/ProjectCompose.vue'),
-            meta: { title: '成片预览', icon: FilmOutline, projectLayout: true }
-          },
-          {
-            path: 'pipeline',
-            name: 'ProjectPipeline',
-            component: () => import('@/views/ProjectPipeline.vue'),
-            meta: { title: '流水线', icon: GitBranchOutline, projectLayout: true }
-          }
-        ]
+        path: 'scripts',
+        redirect: '/projects'
+      },
+      {
+        path: 'studio',
+        redirect: '/projects'
+      },
+      {
+        path: 'studio/:id',
+        redirect: '/projects'
+      },
+      {
+        path: 'editor',
+        redirect: '/projects'
+      },
+      {
+        path: 'editor/:id',
+        redirect: '/projects'
+      },
+      {
+        path: 'generate',
+        redirect: '/projects'
       }
     ]
   }

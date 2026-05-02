@@ -171,7 +171,8 @@ describe('Import Queue Worker', () => {
     expect(mockMarkCompleted).toHaveBeenCalledWith('task-1', {
       characters: 1,
       episodes: 1,
-      scenes: 1
+      scenes: 1,
+      projectId: 'project-1'
     })
   })
 

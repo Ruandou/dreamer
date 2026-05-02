@@ -45,6 +45,15 @@ model Project {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  /// 关联爆款模板
+  templateId    String?
+  /// 目标集数（默认40集）
+  targetEpisodes Int    @default(40)
+  /// 题材标签
+  genreTags     String[] @default([])
+  /// 项目状态：outlining（大纲阶段）/ writing（写作中）/ final（定稿）/ ad（投流阶段）
+  status        String   @default("outlining")
+
   episodes     Episode[]
   characters   Character[]
   locations    Location[]
@@ -54,6 +63,7 @@ model Project {
   assets       ProjectAsset[]
   memories     MemoryItem[]
   memorySnapshots MemorySnapshot[]
+  outline      ProjectOutline?
 
   @@index([userId])
 }
@@ -65,13 +75,30 @@ model Episode {
   episodeNum Int
   title      String?
   synopsis   String?
+  /// 剧本内容（Fountain简化格式文本）
+  content    String?  @db.Text
+  /// 剧本结构化数据（场景、对白等）
   script     Json?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  /// 本集开头钩子
+  hook        String?
+  /// 本集结尾悬念
+  cliffhanger String?
+  /// 是否为付费卡点
+  isPaywall   Boolean  @default(false)
+  /// 情绪曲线数据 [{ timestamp, emotion, intensity }]
+  emotionCurve Json?
+  /// 冲突密度得分 1-10
+  conflictScore Int?
+  /// 写作完成状态：pending/writing/completed
+  writeStatus String   @default("pending")
+
   scenes       Scene[]
   compositions Composition[]
   memories     MemoryItem[]
+  score        EpisodeScore?
 
   @@unique([projectId, episodeNum])
   @@index([projectId])
@@ -532,6 +559,58 @@ model ScriptMemoryItem {
 
   @@index([scriptId, type])
   @@index([scriptId, isActive])
+}
+
+// 爆款短剧模板
+model DramaTemplate {
+  id          String   @id @default(cuid())
+  name        String   // "赘婿逆袭流"
+  category    String   // "男频/逆袭"
+  description String   // 模板说明
+  structure   Json     // 节拍结构
+  exampleOutline String? @db.Text // 示例大纲
+  isBuiltin   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+// 项目大纲
+model ProjectOutline {
+  id          String   @id @default(cuid())
+  projectId   String   @unique
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  templateId  String?
+  /// 大纲数据 [{ episodeNum, title, synopsis, hook, cliffhanger, isPaywall }]
+  episodes    Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// 钩子模板库
+model HookTemplate {
+  id          String   @id @default(cuid())
+  userId      String?  // null = 系统预设
+  category    String   // "悬念/威胁/反转/情感"
+  content     String   // 钩子文本模板
+  tags        String[] @default([])
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+// 分集质量评分
+model EpisodeScore {
+  id              String   @id @default(cuid())
+  episodeId       String   @unique
+  episode         Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  hookStrength    Int      // 钩子强度 1-10
+  conflictDensity Int      // 冲突密度 1-10
+  emotionVariance Int      // 情绪震荡 1-10
+  pacingScore     Int      // 节奏得分 1-10
+  paywallPotential Int     // 付费潜力 1-10
+  suggestions     String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // Agent 检查点（用于状态持久化和故障恢复）

@@ -290,8 +290,15 @@ export class EpisodeService {
       const storyboardCharacterCount = charIdsByEpisode.get(ep.id)?.size ?? 0
       const hasStoryboardScenes = storyboardSceneCount > 0
       const storyboardScriptJobCompleted = storyboardCompletedIds.has(ep.id)
+
+      // Compute writeStatus based on content length
+      const contentLen = (ep.content || '').replace(/\s/g, '').length
+      const computedWriteStatus =
+        contentLen > 500 ? 'completed' : contentLen > 0 ? 'writing' : 'pending'
+
       return {
         ...ep,
+        writeStatus: computedWriteStatus,
         listStats: {
           scriptSceneCount: sc.scriptSceneCount,
           scriptCharacterCount: sc.scriptCharacterCount,
@@ -342,17 +349,31 @@ export class EpisodeService {
 
   updateEpisode(
     episodeId: string,
-    body: { title?: string; synopsis?: string | null; script?: unknown }
+    body: {
+      title?: string
+      synopsis?: string | null
+      script?: unknown
+      content?: string
+      hook?: string
+      cliffhanger?: string
+      isPaywall?: boolean
+      writeStatus?: string
+    }
   ) {
-    const { title, synopsis, script } = body
+    const { title, synopsis, script, content, hook, cliffhanger, isPaywall, writeStatus } = body
 
-    return this.repo.update(episodeId, {
-      title,
+    const data: Prisma.EpisodeUpdateInput = {
+      ...(title !== undefined && { title }),
       ...(synopsis !== undefined && { synopsis }),
-      ...(script !== undefined && {
-        script: script as Prisma.InputJsonValue
-      })
-    })
+      ...(script !== undefined && { script: script as Prisma.InputJsonValue }),
+      ...(content !== undefined && { content }),
+      ...(hook !== undefined && { hook }),
+      ...(cliffhanger !== undefined && { cliffhanger }),
+      ...(isPaywall !== undefined && { isPaywall }),
+      ...(writeStatus !== undefined && { writeStatus })
+    }
+
+    return this.repo.update(episodeId, data)
   }
 
   async deleteEpisodeIfExists(episodeId: string): Promise<boolean> {

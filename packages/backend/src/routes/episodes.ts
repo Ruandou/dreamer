@@ -104,10 +104,19 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // Update episode (including script content)
+  // Update episode (including script content and new fields)
   fastify.put<{
     Params: { id: string }
-    Body: { title?: string; synopsis?: string | null; script?: unknown }
+    Body: {
+      title?: string
+      synopsis?: string | null
+      script?: unknown
+      content?: string
+      hook?: string
+      cliffhanger?: string
+      isPaywall?: boolean
+      writeStatus?: string
+    }
   }>('/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const userId = getRequestUserId(request)
     const episodeId = request.params.id
@@ -117,6 +126,25 @@ export async function episodeRoutes(fastify: FastifyInstance) {
     }
 
     return episodeService.updateEpisode(episodeId, request.body)
+  })
+
+  // Beacon save endpoint for page unload (no auth header, uses cookie/session)
+  fastify.post<{
+    Params: { id: string }
+    Body: {
+      content?: string
+      writeStatus?: string
+    }
+  }>('/:id/beacon-save', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const userId = getRequestUserId(request)
+    const episodeId = request.params.id
+
+    if (!(await verifyEpisodeOwnership(userId, episodeId))) {
+      return reply.status(403).send(permissionDeniedBody)
+    }
+
+    await episodeService.updateEpisode(episodeId, request.body)
+    return reply.status(204).send()
   })
 
   // Delete episode

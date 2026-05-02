@@ -28,25 +28,25 @@
 
       <!-- 快捷操作 — 更大更友好的卡片 -->
       <div class="dashboard-quick-actions">
-        <div class="action-card action-card--primary" @click="navigateTo('/projects')">
+        <div class="action-card action-card--primary" @click="navigateTo('/templates')">
           <div class="action-card__bg" />
           <div class="action-icon">
-            <NIcon :component="AddCircleOutline" :size="28" />
+            <NIcon :component="LibraryOutline" :size="28" />
           </div>
           <div class="action-card__text">
-            <h3>新建项目</h3>
-            <p>从零开始创作短剧</p>
+            <h3>从模板开始</h3>
+            <p>选择爆款模板，AI生成40集大纲</p>
           </div>
           <div class="action-card__arrow">→</div>
         </div>
-        <div class="action-card action-card--secondary" @click="navigateTo('/studio')">
+        <div class="action-card action-card--secondary" @click="navigateTo('/projects')">
           <div class="action-card__bg" />
           <div class="action-icon">
             <NIcon :component="CreateOutline" :size="28" />
           </div>
           <div class="action-card__text">
-            <h3>AI 写作工作室</h3>
-            <p>让 AI 帮你写剧本</p>
+            <h3>继续写作</h3>
+            <p>回到正在创作的项目</p>
           </div>
           <div class="action-card__arrow">→</div>
         </div>
@@ -127,6 +127,15 @@
               <div class="project-info">
                 <h4>{{ project.name }}</h4>
                 <p v-if="project.description">{{ project.description }}</p>
+                <div v-if="project.episodes" class="project-progress">
+                  <div class="project-progress-track">
+                    <div
+                      class="project-progress-fill"
+                      :style="{ width: getProjectProgress(project) + '%' }"
+                    />
+                  </div>
+                  <span class="project-progress-text"> {{ getProjectProgress(project) }}% </span>
+                </div>
                 <span class="project-date">{{ formatDate(project.updatedAt) }}</span>
               </div>
             </div>
@@ -171,7 +180,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NCard, NButton, NIcon, NAlert } from 'naive-ui'
 import {
-  AddCircleOutline,
+  LibraryOutline,
   CreateOutline,
   DownloadOutline,
   FolderOpenOutline,
@@ -239,6 +248,12 @@ const coverGradients = [
 function getProjectCoverStyle(projectId: string) {
   const index = projectId.charCodeAt(0) % coverGradients.length
   return { background: coverGradients[index] }
+}
+
+function getProjectProgress(project: any): number {
+  if (!project.episodes || project.episodes.length === 0) return 0
+  const completed = project.episodes.filter((ep: any) => ep.writeStatus === 'completed').length
+  return Math.round((completed / project.episodes.length) * 100)
 }
 
 // 加载数据
@@ -616,6 +631,35 @@ onMounted(() => {
 .project-date {
   font-size: 11px;
   color: var(--color-text-tertiary);
+}
+
+.project-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.project-progress-track {
+  flex: 1;
+  height: 4px;
+  background: var(--color-bg-gray);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.project-progress-fill {
+  height: 100%;
+  background: var(--color-success);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.project-progress-text {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  min-width: 32px;
+  text-align: right;
 }
 
 /* Task List */

@@ -317,10 +317,12 @@ export function cleanMarkdownCodeBlocks(content: string): string {
 }
 
 /**
- * 尝试修复常见的 JSON 格式问题
+ * 尝试修复常见的 JSON 格式问题，包括截断处理
  */
 function tryFixJson(json: string): string {
   let fixed = json.replace(/,\s*([}\]])/g, '$1')
+
+  // 修复未闭合的字符串：逐行检查引号数量
   const lines = fixed.split('\n')
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
@@ -336,10 +338,51 @@ function tryFixJson(json: string): string {
     }
   }
   fixed = lines.join('\n')
+
+  // 处理整体截断：找到最后一个完整的 JSON 结构边界
   const lastBrace = Math.max(fixed.lastIndexOf('}'), fixed.lastIndexOf(']'))
   if (lastBrace !== -1 && lastBrace < fixed.length - 1) {
     fixed = fixed.substring(0, lastBrace + 1)
   }
+
+  // 如果 JSON 在字符串中被截断，尝试关闭未闭合的字符串和结构
+  // 统计未闭合的引号（考虑转义）
+  let inString = false
+  let escapeNext = false
+  for (let i = 0; i < fixed.length; i++) {
+    const ch = fixed[i]
+    if (escapeNext) {
+      escapeNext = false
+      continue
+    }
+    if (ch === '\\') {
+      escapeNext = true
+      continue
+    }
+    if (ch === '"') {
+      inString = !inString
+    }
+  }
+
+  // 如果还在字符串中，关闭它并补全结构
+  if (inString) {
+    fixed = fixed + '"'
+  }
+
+  // 补全未闭合的对象/数组
+  const openBraces = (fixed.match(/\{/g) || []).length
+  const closeBraces = (fixed.match(/\}/g) || []).length
+  const openBrackets = (fixed.match(/\[/g) || []).length
+  const closeBrackets = (fixed.match(/\]/g) || []).length
+
+  // 从末尾开始，补全缺少的闭合符号
+  for (let i = 0; i < openBraces - closeBraces; i++) {
+    fixed = fixed + '}'
+  }
+  for (let i = 0; i < openBrackets - closeBrackets; i++) {
+    fixed = fixed + ']'
+  }
+
   return fixed
 }
 

@@ -33,6 +33,10 @@ import { tasksUnifiedRoutes } from './routes/tasks-unified.js'
 import { scriptsRoutes } from './routes/scripts.js'
 import { chatRoutes } from './routes/chat.js'
 import { scriptAgentRoutes } from './routes/script-agent.js'
+import { templateRoutes } from './routes/templates.js'
+import { hookRoutes } from './routes/hooks.js'
+import { outlineRoutes } from './routes/outlines.js'
+import { aiDramaRoutes } from './routes/ai-drama.js'
 
 export { prisma } from './lib/prisma.js'
 
@@ -133,6 +137,10 @@ async function start() {
     await fastify.register(scriptsRoutes, { prefix: '/api/scripts' })
     await fastify.register(chatRoutes, { prefix: '/api/chat' })
     await fastify.register(scriptAgentRoutes, { prefix: '/api/scripts' })
+    await fastify.register(templateRoutes, { prefix: '/api/templates' })
+    await fastify.register(hookRoutes, { prefix: '/api/hooks' })
+    await fastify.register(outlineRoutes, { prefix: '/api/outlines' })
+    await fastify.register(aiDramaRoutes, { prefix: '/api' })
 
     // Health check
     fastify.get('/health', async () => ({ status: 'ok' }))

@@ -72,6 +72,9 @@ export const importWorker = new Worker<ImportJobData>(
       // Import to database
       const results = await importParsedData(targetProjectId, parsed)
 
+      // Include projectId in result so frontend can navigate to it
+      const resultWithProjectId = { ...results, projectId: targetProjectId }
+
       const episodes = await projectRepository.findManyEpisodesOrdered(targetProjectId)
       if (episodes.length > 0) {
         const merged = mergeEpisodesToScriptContent(
@@ -80,7 +83,7 @@ export const importWorker = new Worker<ImportJobData>(
         await applyScriptVisualEnrichment(targetProjectId, merged)
       }
 
-      await importWorkerService.markCompleted(taskId, results)
+      await importWorkerService.markCompleted(taskId, resultWithProjectId)
 
       logInfo('import-worker', 'Import job completed successfully', { bullJobId: job.id })
     } catch (error: unknown) {

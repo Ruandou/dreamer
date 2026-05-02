@@ -17,12 +17,10 @@ import { computed, h } from 'vue'
 import { useRoute } from 'vue-router'
 import { NLayout, NLayoutContent, NIcon, type MenuOption } from 'naive-ui'
 import {
-  InformationCircleOutline,
+  ListOutline,
+  CreateOutline,
   PeopleOutline,
   LocationOutline,
-  ListOutline,
-  FilmOutline,
-  GitBranchOutline,
   DocumentTextOutline
 } from '@vicons/ionicons5'
 import AppSidebar from '../components/AppSidebar.vue'
@@ -60,20 +58,17 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => {
   return crumbs
 })
 
-// 项目模式下的菜单选项
+// 项目模式下的菜单选项（重组后：大纲 / 写作 / 角色 / 场地 / 导出）
 const projectMenuOptions = computed<MenuOption[]>(() => {
   const projectId = route.params.id as string
   if (!projectId) return []
   const base = `/project/${projectId}`
   return [
-    { label: '基础信息', key: `${base}/overview`, icon: renderIcon(InformationCircleOutline) },
-    { label: '剧本编辑', key: `${base}/script`, icon: renderIcon(DocumentTextOutline) },
-    { label: '角色库', key: `${base}/characters`, icon: renderIcon(PeopleOutline) },
-    { label: '场地库', key: `${base}/locations`, icon: renderIcon(LocationOutline) },
-    { label: '分集管理', key: `${base}/episodes`, icon: renderIcon(ListOutline) },
-    { label: '分镜脚本', key: `${base}/storyboard`, icon: renderIcon(FilmOutline) },
-    { label: '成片预览', key: `${base}/compose`, icon: renderIcon(FilmOutline) },
-    { label: '流水线', key: `${base}/pipeline`, icon: renderIcon(GitBranchOutline) }
+    { label: '大纲', key: `${base}/outline`, icon: renderIcon(ListOutline) },
+    { label: '写作', key: `${base}/write`, icon: renderIcon(CreateOutline) },
+    { label: '角色', key: `${base}/characters`, icon: renderIcon(PeopleOutline) },
+    { label: '场地', key: `${base}/locations`, icon: renderIcon(LocationOutline) },
+    { label: '导出', key: `${base}/export`, icon: renderIcon(DocumentTextOutline) }
   ]
 })
 </script>

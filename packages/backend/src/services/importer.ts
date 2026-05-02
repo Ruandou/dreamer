@@ -14,6 +14,69 @@ export interface ImportResults {
   scenesCreated: number
 }
 
+/**
+ * 将解析后的剧本数据转换为纯文本 content，供写作页面显示
+ */
+function buildEpisodeContent(episodeData: ParsedScript['episodes'][0]): string {
+  const lines: string[] = []
+
+  if (episodeData.title) {
+    lines.push(`# ${episodeData.title}`)
+    lines.push('')
+  }
+
+  const script = episodeData.script as Record<string, unknown> | undefined
+  const scenes = (script?.scenes ?? []) as Array<{
+    sceneNum?: number
+    location?: string
+    timeOfDay?: string
+    characters?: string[]
+    description?: string
+    dialogues?: Array<{ character?: string; text?: string } | unknown>
+    actions?: string[]
+  }>
+
+  for (const sc of scenes) {
+    const location = sc.location || ''
+    const timeOfDay = sc.timeOfDay || ''
+    if (location || timeOfDay) {
+      lines.push(`## 场景 ${sc.sceneNum || ''} ${location} ${timeOfDay}`.trim())
+      lines.push('')
+    }
+
+    if (sc.description) {
+      lines.push(sc.description)
+      lines.push('')
+    }
+
+    if (sc.actions && sc.actions.length > 0) {
+      for (const action of sc.actions) {
+        lines.push(`[${action}]`)
+      }
+      lines.push('')
+    }
+
+    if (sc.dialogues && sc.dialogues.length > 0) {
+      for (const d of sc.dialogues) {
+        if (typeof d === 'object' && d !== null) {
+          const char = (d as Record<string, unknown>).character || ''
+          const text = (d as Record<string, unknown>).text || ''
+          if (char && text) {
+            lines.push(`${char}：${text}`)
+          } else if (text) {
+            lines.push(text as string)
+          }
+        } else if (typeof d === 'string') {
+          lines.push(d)
+        }
+      }
+      lines.push('')
+    }
+  }
+
+  return lines.join('\n').trim()
+}
+
 async function createCharacterImagesForCharacter(characterId: string, char: ParsedCharacter) {
   const [normalized] = normalizeParsedCharacterList([char])
   const images = normalized.images || []
@@ -94,9 +157,15 @@ export async function importParsedData(
       episodeData.episodeNum
     )
 
+    const content = buildEpisodeContent(episodeData)
+
     if (existing) {
       await episodeRepository.update(existing.id, {
         title: episodeData.title,
+        synopsis: episodeData.synopsis || undefined,
+        hook: episodeData.hook || undefined,
+        cliffhanger: episodeData.cliffhanger || undefined,
+        content,
         script: episodeData.script as object
       })
 
@@ -128,6 +197,10 @@ export async function importParsedData(
         projectId,
         episodeNum: episodeData.episodeNum,
         title: episodeData.title,
+        synopsis: episodeData.synopsis || undefined,
+        hook: episodeData.hook || undefined,
+        cliffhanger: episodeData.cliffhanger || undefined,
+        content,
         script: episodeData.script as object
       })
 
