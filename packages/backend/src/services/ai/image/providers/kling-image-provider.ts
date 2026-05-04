@@ -10,7 +10,7 @@ import type {
   ImageGenerationResult
 } from '../image-provider.js'
 import { calculatePerCallCost } from '../../core/cost-calculator.js'
-import { generateKlingToken, type KlingCredentials } from '../../core/kling-jwt.js'
+import { generateKlingToken } from '../../core/kling-jwt.js'
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 
 const s3Client = new S3Client({

@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma.js'
 import { getRequestUserId } from '../plugins/auth.js'
 import { logInfo, logError } from '../lib/error-logger.js'
 import { callLLMWithRetry } from '../services/ai/llm/llm-call-wrapper.js'
-import { createArkLLMProvider } from '../services/ai/llm/llm-factory.js'
+import { getProviderForUser } from '../services/ai/llm/llm-factory.js'
 import {
   ArkLLMAuthError,
   ArkLLMRateLimitError
@@ -249,17 +249,8 @@ Scene 2. 破旧屋内 - 夜
           return reply.status(404).send({ error: '剧本不存在或无权访问' })
         }
 
-        // 调用 DeepSeek API
-        const { arkApiKey, arkApiUrl } = await prisma.user.findUniqueOrThrow({
-          where: { id: userId },
-          select: { arkApiKey: true, arkApiUrl: true }
-        })
-
-        if (!arkApiKey) {
-          return reply.status(400).send({ error: '请先在设置中配置方舟 API Key' })
-        }
-
-        const provider = createArkLLMProvider(arkApiKey, arkApiUrl || undefined)
+        // 使用用户偏好的模型提供商
+        const provider = await getProviderForUser(userId)
 
         const result = await callLLMWithRetry(
           {
@@ -277,7 +268,6 @@ Scene 2. 破旧屋内 - 夜
             ],
             temperature: 0.7,
             maxTokens: 4000,
-            model: 'deepseek-v3',
             modelLog: { userId, op: 'script_ai_revise' }
           },
           (content) => content

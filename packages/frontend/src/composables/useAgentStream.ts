@@ -6,12 +6,12 @@
 import { ref } from 'vue'
 
 export interface AgentStreamCallbacks {
-  onStepStart?: (data: any) => void
-  onToken?: (data: any) => void
-  onStepComplete?: (data: any) => void
-  onDone?: (data: any) => void
-  onError?: (data: any) => void
-  onPause?: (data: any) => void
+  onStepStart?: (data: unknown) => void
+  onToken?: (data: unknown) => void
+  onStepComplete?: (data: unknown) => void
+  onDone?: (data: unknown) => void
+  onError?: (data: unknown) => void
+  onPause?: (data: unknown) => void
 }
 
 export function useAgentStream() {
@@ -111,7 +111,7 @@ export function useAgentStream() {
 /**
  * 解析 SSE 事件
  */
-function parseSSEEvent(eventText: string): { event: string; data: any } | null {
+function parseSSEEvent(eventText: string): { event: string; data: unknown } | null {
   const lines = eventText.split('\n')
   let event = 'message'
   let dataStr = ''

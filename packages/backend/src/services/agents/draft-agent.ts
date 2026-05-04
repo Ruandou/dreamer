@@ -3,7 +3,7 @@
  * 基于大纲和上下文生成完整剧本文稿
  */
 
-import { getProviderForModel } from '../ai/llm/llm-factory.js'
+import { getProviderForModel, getProviderForUser } from '../ai/llm/llm-factory.js'
 import { callLLMWithRetry, streamLLMWithRetry } from '../ai/llm-call-wrapper.js'
 import type { LLMMessage } from '../ai/llm-provider.js'
 import type {
@@ -59,7 +59,7 @@ export class DraftAgent {
     // 构建用户提示词
     const userPrompt = this.buildUserPrompt(outline, context, episodesToGenerate)
 
-    const provider = getProviderForModel(model)
+    const provider = model ? getProviderForModel(model) : await getProviderForUser(userId)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: DRAFT_AGENT_SYSTEM_PROMPT },
@@ -105,7 +105,7 @@ export class DraftAgent {
 
     const userPrompt = this.buildUserPrompt(outline, context, episodesToGenerate)
 
-    const provider = getProviderForModel(model)
+    const provider = model ? getProviderForModel(model) : await getProviderForUser(userId)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: DRAFT_AGENT_SYSTEM_PROMPT },

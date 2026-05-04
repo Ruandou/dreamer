@@ -3,7 +3,7 @@
  * 解析用户的自然语言指令，提取结构化的意图参数
  */
 
-import { getProviderForModel } from '../ai/llm/llm-factory.js'
+import { getProviderForModel, getProviderForUser } from '../ai/llm/llm-factory.js'
 import {
   callLLMWithRetry,
   streamLLMWithRetry,
@@ -59,7 +59,7 @@ export class IntentParser {
     ]
 
     try {
-      const provider = getProviderForModel(model)
+      const provider = model ? getProviderForModel(model) : await getProviderForUser(userId)
 
       const result = await callLLMWithRetry(
         {
@@ -138,7 +138,7 @@ export class IntentParser {
     ]
 
     try {
-      const provider = getProviderForModel(model)
+      const provider = model ? getProviderForModel(model) : await getProviderForUser(userId)
       const stream = streamLLMWithRetry({
         provider,
         messages,

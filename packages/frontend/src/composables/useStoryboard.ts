@@ -55,7 +55,7 @@ export function useStoryboard() {
     }
     const fromQuery = route.query.episodeId as string | undefined
     const valid = fromQuery && episodeStore.episodes.some((e) => e.id === fromQuery)
-    const id = valid ? fromQuery! : episodeStore.episodes[0].id
+    const id = valid && fromQuery ? fromQuery : episodeStore.episodes[0].id
     currentEpisodeId.value = id
     if (!valid) {
       await router.replace({ query: { ...route.query, episodeId: id } })

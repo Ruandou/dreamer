@@ -4,7 +4,8 @@
  */
 
 import { prisma } from '../../lib/prisma.js'
-import { getProviderForModel } from '../ai/llm/llm-factory.js'
+import type { MemoryType } from '@prisma/client'
+import { getProviderForModel, getProviderForUser } from '../ai/llm/llm-factory.js'
 import { callLLMWithRetry, cleanMarkdownCodeBlocks } from '../ai/llm-call-wrapper.js'
 import type { LLMMessage } from '../ai/llm-provider.js'
 import type { OutlineOutput, ScriptContent, ScriptMemoryItem } from './types.js'
@@ -110,7 +111,7 @@ export class MemoryExtractor {
     ]
 
     try {
-      const provider = getProviderForModel(model)
+      const provider = model ? getProviderForModel(model) : await getProviderForUser(userId)
 
       const result = await callLLMWithRetry(
         {
@@ -158,7 +159,7 @@ export class MemoryExtractor {
         const created = await prisma.scriptMemoryItem.create({
           data: {
             scriptId,
-            type: memory.type as any, // MemoryType enum
+            type: memory.type as MemoryType,
             title: memory.title,
             content: memory.content,
             category: memory.category,
@@ -175,7 +176,7 @@ export class MemoryExtractor {
           category: created.category,
           title: created.title,
           content: created.content,
-          metadata: created.metadata as any,
+          metadata: created.metadata as Record<string, unknown> | null,
           tags: created.tags,
           importance: created.importance,
           isActive: created.isActive,

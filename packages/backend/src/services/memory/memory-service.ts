@@ -7,6 +7,7 @@ import { buildEpisodeWritingContext, buildStoryboardContext } from './context-bu
 import type { ScriptContent } from '@dreamer/shared/types'
 import type { ModelCallLogContext } from '../ai/model-call-log.js'
 import { prisma } from '../../lib/prisma.js'
+import type { MemoryType, Prisma } from '@prisma/client'
 
 export class MemoryService {
   constructor(private repo: MemoryRepository) {}
@@ -123,7 +124,7 @@ export class MemoryService {
       const existing = await prisma.memoryItem.findFirst({
         where: {
           projectId,
-          type: sm.type as any,
+          type: sm.type as MemoryType,
           title: sm.title
         }
       })
@@ -134,7 +135,7 @@ export class MemoryService {
           where: { id: existing.id },
           data: {
             content: sm.content,
-            metadata: sm.metadata as any,
+            metadata: sm.metadata as Prisma.InputJsonValue | undefined,
             tags: sm.tags,
             importance: sm.importance,
             category: sm.category,
@@ -146,10 +147,10 @@ export class MemoryService {
         await prisma.memoryItem.create({
           data: {
             projectId,
-            type: sm.type as any,
+            type: sm.type as MemoryType,
             title: sm.title,
             content: sm.content,
-            metadata: sm.metadata as any,
+            metadata: sm.metadata as Prisma.InputJsonValue | undefined,
             tags: sm.tags,
             importance: sm.importance,
             category: sm.category,

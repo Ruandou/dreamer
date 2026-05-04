@@ -81,9 +81,16 @@ export function useCharacterDetail() {
         generatingByImageId.value = next
       }
       if (p.status === 'completed' && p.characterImageId) {
-        loadCharacter().catch((e: any) => {
+        loadCharacter().catch((e: unknown) => {
           console.error('[character-detail] SSE loadCharacter failed', e)
-          message.error(e?.response?.data?.error || '刷新角色数据失败')
+          const errMsg =
+            e instanceof Error
+              ? e.message
+              : typeof e === 'object' && e !== null && 'response' in e
+                ? ((e as { response?: { data?: { error?: string } } }).response?.data?.error ??
+                  '刷新角色数据失败')
+                : '刷新角色数据失败'
+          message.error(errMsg)
         })
         message.success('形象图已更新')
       }
@@ -154,8 +161,9 @@ export function useCharacterDetail() {
         selectedImage.value = null
         promptDraft.value = ''
       }
-    } catch (e: any) {
-      message.error(e?.response?.data?.error || '加载角色数据失败')
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : '加载角色数据失败'
+      message.error(errMsg)
       throw e
     } finally {
       isLoading.value = false
@@ -180,10 +188,8 @@ export function useCharacterDetail() {
     if (!character.value?.images) return []
 
     const images = character.value.images
-    const imageMap = new Map<
-      string,
-      { key: string; label: string; data: CharacterImage; children: any[] }
-    >()
+    type TreeNode = { key: string; label: string; data: CharacterImage; children: TreeNode[] }
+    const imageMap = new Map<string, TreeNode>()
     images.forEach((img) => {
       imageMap.set(img.id, {
         key: img.id,
@@ -203,19 +209,22 @@ export function useCharacterDetail() {
         .filter((i) => i.parentId === parentId)
         .sort(sortImagesByOrder)
         .map((i) => {
-          const raw = imageMap.get(i.id)!
+          const raw = imageMap.get(i.id)
+          if (!raw) throw new Error(`Image ${i.id} not found in map`)
           return { ...raw, children: subtree(i.id) }
         })
     }
 
     const bases = getDisplayBaseImages(images)
     return bases.map((base) => {
-      const raw = imageMap.get(base.id)!
+      const raw = imageMap.get(base.id)
+      if (!raw) throw new Error(`Base image ${base.id} not found in map`)
       const topLevel = getDisplayDerivedImages(images, base.id).map((img) => {
-        const n = imageMap.get(img.id)!
+        const n = imageMap.get(img.id)
+        if (!n) throw new Error(`Derived image ${img.id} not found in map`)
         return { ...n, children: subtree(img.id) }
       })
-      topLevel.sort((a, b) => sortImagesByOrder(a.data as CharacterImage, b.data as CharacterImage))
+      topLevel.sort((a, b) => sortImagesByOrder(a.data, b.data))
       return { ...raw, children: topLevel }
     })
   })
@@ -287,9 +296,14 @@ export function useCharacterDetail() {
       await characterStore.uploadCharacterImageAvatar(characterId.value, selectedImage.value.id, f)
       message.success('已上传')
       await loadCharacter()
-    } catch (e: any) {
-      const err = e?.response?.data?.error
-      message.error(typeof err === 'string' ? err : e?.message || '上传失败')
+    } catch (e: unknown) {
+      const err =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'object' && e !== null && 'response' in e
+            ? (e as { response?: { data?: { error?: string } } }).response?.data?.error
+            : '上传失败'
+      message.error(typeof err === 'string' ? err : '上传失败')
     } finally {
       uploadingAvatar.value = false
     }
@@ -346,8 +360,9 @@ export function useCharacterDetail() {
       selectedFile.value = null
       message.success('已创建槽位，可编辑提示词后点「AI生成」')
       await loadCharacter()
-    } catch (e: any) {
-      message.error(e?.response?.data?.error || '创建失败')
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : '创建失败'
+      message.error(errMsg)
     } finally {
       addByAiLoading.value = false
     }
@@ -367,8 +382,9 @@ export function useCharacterDetail() {
       if (!silent) message.success('已保存')
       await loadCharacter()
       return true
-    } catch (e: any) {
-      message.error(e?.response?.data?.error || '保存失败')
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : '保存失败'
+      message.error(errMsg)
       return false
     }
   }
@@ -388,11 +404,12 @@ export function useCharacterDetail() {
       const p = promptDraft.value.trim()
       await characterStore.queueCharacterImageGenerate(id, p ? { prompt: p } : undefined)
       message.info('已提交生成，请稍候…')
-    } catch (e: any) {
+    } catch (e: unknown) {
       const next = { ...generatingByImageId.value }
       delete next[id]
       generatingByImageId.value = next
-      message.error(e?.response?.data?.error || '提交失败')
+      const errMsg = e instanceof Error ? e.message : '提交失败'
+      message.error(errMsg)
     }
   }
 

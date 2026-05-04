@@ -3,7 +3,7 @@
  * 根据审核反馈自动修改剧本文稿
  */
 
-import { getProviderForModel } from '../ai/llm/llm-factory.js'
+import { getProviderForModel, getProviderForUser } from '../ai/llm/llm-factory.js'
 import { callLLMWithRetry, streamLLMWithRetry } from '../ai/llm-call-wrapper.js'
 import type { LLMMessage } from '../ai/llm-provider.js'
 import type { ScriptContent, AgentStreamEvent, AgentTokenEvent } from './types.js'
@@ -36,7 +36,7 @@ export class RevisionAgent {
   ): Promise<ScriptContent> {
     const userPrompt = this.buildUserPrompt(draft, critique)
 
-    const provider = getProviderForModel(model)
+    const provider = model ? getProviderForModel(model) : await getProviderForUser(userId)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: REVISION_AGENT_SYSTEM_PROMPT },
@@ -76,7 +76,7 @@ export class RevisionAgent {
   ): AsyncGenerator<AgentStreamEvent> {
     const userPrompt = this.buildUserPrompt(draft, critique)
 
-    const provider = getProviderForModel(model)
+    const provider = model ? getProviderForModel(model) : await getProviderForUser(userId)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: REVISION_AGENT_SYSTEM_PROMPT },

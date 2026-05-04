@@ -178,10 +178,8 @@ export async function getProviderForUser(userId: string): Promise<LLMProvider> {
     const preferences = user?.modelPreferences as
       | { textModel?: string; imageModel?: string; videoModel?: string }
       | undefined
-    const textModel = preferences?.textModel
-
-    if (textModel) {
-      return getProviderForModel(textModel)
+    if (preferences?.textModel) {
+      return getProviderForModel(preferences.textModel)
     }
   } catch (e) {
     console.warn('[model-factory] 读取用户模型偏好失败，使用默认 Provider:', e)

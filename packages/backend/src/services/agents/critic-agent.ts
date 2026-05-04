@@ -3,7 +3,7 @@
  * 对生成的草稿进行质量评估，不展示给用户
  */
 
-import { getProviderForModel } from '../ai/llm/llm-factory.js'
+import { getProviderForModel, getProviderForUser } from '../ai/llm/llm-factory.js'
 import {
   callLLMWithRetry,
   streamLLMWithRetry,
@@ -71,7 +71,7 @@ export class CriticAgent {
   ): Promise<CritiqueResult> {
     const userPrompt = this.buildUserPrompt(draft, outline)
 
-    const provider = getProviderForModel(model)
+    const provider = model ? getProviderForModel(model) : await getProviderForUser(userId)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: CRITIC_AGENT_SYSTEM_PROMPT },
@@ -129,7 +129,7 @@ export class CriticAgent {
   ): AsyncGenerator<AgentStreamEvent> {
     const userPrompt = this.buildUserPrompt(draft, outline)
 
-    const provider = getProviderForModel(model)
+    const provider = model ? getProviderForModel(model) : await getProviderForUser(userId)
 
     const messages: LLMMessage[] = [
       { role: 'system', content: CRITIC_AGENT_SYSTEM_PROMPT },

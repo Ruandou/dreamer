@@ -4,6 +4,8 @@
  */
 
 import { prisma } from '../../lib/prisma.js'
+import type { MemoryType } from '@prisma/client'
+import type { Prisma } from '@prisma/client'
 import type { WritingContext, ScriptMemoryItem, ProjectMemoryItem } from './types.js'
 
 export class ContextLoader {
@@ -118,10 +120,10 @@ export class ContextLoader {
       })
 
       context.previousEpisodes = previousEpisodes
-        .filter((ep) => ep.synopsis)
+        .filter((ep): ep is typeof ep & { synopsis: string } => !!ep.synopsis)
         .map((ep) => ({
           episodeNum: ep.episodeNum,
-          synopsis: ep.synopsis!
+          synopsis: ep.synopsis
         }))
     }
 
@@ -159,11 +161,11 @@ export class ContextLoader {
     const memory = await prisma.scriptMemoryItem.create({
       data: {
         scriptId: data.scriptId,
-        type: data.type as any, // MemoryType enum
+        type: data.type as MemoryType,
         title: data.title,
         content: data.content,
         category: data.category,
-        metadata: data.metadata as any,
+        metadata: data.metadata as Prisma.InputJsonValue | undefined,
         tags: data.tags || [],
         importance: data.importance ?? 3
       }

@@ -56,11 +56,20 @@ export function useComposeTimeline() {
     timelineSegments.value.reduce((sum, seg) => sum + (Number(seg.duration) || 5), 0)
   )
 
-  const handleSelectComposition = async (composition: any) => {
+  interface CompositionScene {
+    sceneId: string
+    takeId: string
+    order?: number
+    take?: { duration?: number }
+    videoUrl?: string
+    thumbnailUrl?: string
+  }
+
+  const handleSelectComposition = async (composition: { id: string }) => {
     await compositionStore.getComposition(composition.id)
-    const comp: any = compositionStore.currentComposition
+    const comp = compositionStore.currentComposition as { scenes?: CompositionScene[] } | undefined
     if (comp?.scenes?.length) {
-      timelineSegments.value = comp.scenes.map((row: any) => ({
+      timelineSegments.value = comp.scenes.map((row) => ({
         sceneId: row.sceneId,
         takeId: row.takeId,
         order: row.order,

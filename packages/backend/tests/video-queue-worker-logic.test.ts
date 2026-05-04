@@ -86,11 +86,12 @@ vi.mock('../src/services/ai/api-logger.js', () => ({
 const originalFetch = global.fetch
 beforeAll(() => {
   global.fetch = vi.fn(() =>
-    Promise.resolve({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
-      headers: { get: () => 'image/jpeg' }
-    } as Response)
+    Promise.resolve(
+      new Response(new ArrayBuffer(8), {
+        status: 200,
+        headers: { 'Content-Type': 'image/jpeg' }
+      })
+    )
   )
 })
 

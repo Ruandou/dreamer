@@ -3,7 +3,7 @@
  * 基于用户意图和上下文生成结构化剧本大纲
  */
 
-import { getProviderForModel } from '../ai/llm/llm-factory.js'
+import { getProviderForModel, getProviderForUser } from '../ai/llm/llm-factory.js'
 import {
   callLLMWithRetry,
   streamLLMWithRetry,
@@ -59,7 +59,7 @@ export class OutlineAgent {
       { role: 'user', content: userPrompt }
     ]
 
-    const provider = getProviderForModel(model)
+    const provider = model ? getProviderForModel(model) : await getProviderForUser(userId)
 
     try {
       const result = await callLLMWithRetry(
@@ -114,7 +114,7 @@ export class OutlineAgent {
       { role: 'user', content: userPrompt }
     ]
 
-    const provider = getProviderForModel(model)
+    const provider = model ? getProviderForModel(model) : await getProviderForUser(userId)
 
     try {
       const stream = streamLLMWithRetry({

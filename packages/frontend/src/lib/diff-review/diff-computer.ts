@@ -90,22 +90,30 @@ export function computeChangeGroups(original: string, revised: string): ChangeGr
  * @param textOffset - Character offset in the flat textContent
  * @returns ProseMirror document position
  */
-export function mapTextPosToDocPos(doc: any, textOffset: number): number {
+interface ProseMirrorNode {
+  isText: boolean
+  text?: string
+  isBlock: boolean
+  descendants(fn: (node: ProseMirrorNode, pos: number) => boolean | void): void
+}
+
+export function mapTextPosToDocPos(doc: ProseMirrorNode, textOffset: number): number {
   let pos = 1 // Start inside the doc node
   let accumulated = 0
 
-  doc.descendants((node: any, nodePos: number) => {
+  doc.descendants((node, nodePos) => {
     if (accumulated >= textOffset) return false
 
     if (node.isText) {
-      const nodeEnd = accumulated + node.text.length
+      const text = node.text ?? ''
+      const nodeEnd = accumulated + text.length
       if (textOffset <= nodeEnd) {
         pos = nodePos + (textOffset - accumulated)
         accumulated = textOffset
         return false
       }
       accumulated = nodeEnd
-      pos = nodePos + node.text.length
+      pos = nodePos + text.length
     } else if (node.isBlock) {
       pos = nodePos + 1 // Enter the block
     }
@@ -119,7 +127,10 @@ export function mapTextPosToDocPos(doc: any, textOffset: number): number {
  * Convert all `from`/`to` offsets in change groups from flat text positions
  * to ProseMirror document positions.
  */
-export function mapChangeGroupsToDocPositions(doc: any, groups: ChangeGroup[]): ChangeGroup[] {
+export function mapChangeGroupsToDocPositions(
+  doc: ProseMirrorNode,
+  groups: ChangeGroup[]
+): ChangeGroup[] {
   return groups.map((g) => ({
     ...g,
     from: mapTextPosToDocPos(doc, g.from),

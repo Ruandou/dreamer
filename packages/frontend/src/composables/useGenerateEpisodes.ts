@@ -3,6 +3,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useMessage, useDialog } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
 import { api, pollPipelineJob, type PipelineJob } from '@/api'
+import type { Episode, ScriptScene } from '@dreamer/shared/types'
 
 const MIN_TARGET_EPISODES = 1
 const MAX_TARGET_EPISODES = 200
@@ -30,15 +31,15 @@ export function useGenerateEpisodes() {
   const parseOutlineProgress = ref<PipelineJob | null>(null)
 
   const projectId = computed(() => (route.query.projectId as string) || '')
-  const project = computed(() => projectStore.currentProject as any)
+  const project = computed(() => projectStore.currentProject)
 
   const EPISODE_PRESETS = [1, 24, 60, 80, 100] as const
 
-  function epNum(e: any): number {
+  function epNum(e: Episode | undefined): number {
     return Number(e?.episodeNum)
   }
 
-  function scenesFromRaw(raw: unknown): any[] {
+  function scenesFromRaw(raw: unknown): ScriptScene[] {
     let o: unknown = raw
     if (typeof raw === 'string') {
       try {
@@ -48,11 +49,11 @@ export function useGenerateEpisodes() {
       }
     }
     if (!o || typeof o !== 'object') return []
-    const s = (o as any).scenes
-    return Array.isArray(s) ? s : []
+    const s = (o as Record<string, unknown>).scenes
+    return Array.isArray(s) ? (s as ScriptScene[]) : []
   }
 
-  const episode1 = computed(() => project.value?.episodes?.find((e: any) => epNum(e) === 1))
+  const episode1 = computed(() => project.value?.episodes?.find((e) => epNum(e) === 1))
 
   const effectiveTarget = computed(() =>
     Math.max(
@@ -65,7 +66,7 @@ export function useGenerateEpisodes() {
     const te = effectiveTarget.value
     const eps = project.value?.episodes || []
     for (let n = 1; n <= te; n++) {
-      const e = eps.find((x: any) => epNum(x) === n)
+      const e = eps.find((x) => epNum(x) === n)
       if (!e || !scenesFromRaw(e.script).length) return false
     }
     return true
@@ -99,15 +100,15 @@ export function useGenerateEpisodes() {
   const episodesWithScript = computed(() => {
     const eps = project.value?.episodes || []
     return [...eps]
-      .filter((e: any) => scenesFromRaw(e.script).length > 0)
-      .sort((a: any, b: any) => epNum(a) - epNum(b))
+      .filter((e) => scenesFromRaw(e.script).length > 0)
+      .sort((a, b) => epNum(a) - epNum(b))
   })
 
   const activePreviewEpisode = computed(() => {
     const eps = episodesWithScript.value
-    if (!eps.length) return episode1.value as any
-    const match = eps.find((e: any) => epNum(e) === previewEpisodeNum.value)
-    return (match || episode1.value) as any
+    if (!eps.length) return episode1.value
+    const match = eps.find((e) => epNum(e) === previewEpisodeNum.value)
+    return match || episode1.value
   })
 
   const previewScenes = computed(() => {
@@ -124,7 +125,7 @@ export function useGenerateEpisodes() {
     const eps = project.value?.episodes || []
     let max = 0
     for (const e of eps) {
-      if (scenesFromRaw((e as any).script).length > 0) {
+      if (scenesFromRaw(e.script).length > 0) {
         const n = epNum(e)
         if (n > max) max = n
       }
@@ -134,9 +135,9 @@ export function useGenerateEpisodes() {
 
   async function loadProject(id: string) {
     await projectStore.getProject(id)
-    const p = projectStore.currentProject as any
+    const p = projectStore.currentProject
     try {
-      const { data } = await api.get<any[]>(`/episodes?projectId=${id}`)
+      const { data } = await api.get<Episode[]>(`/episodes?projectId=${id}`)
       if (p && Array.isArray(data) && data.length > 0) {
         p.episodes = data
       }
@@ -149,8 +150,8 @@ export function useGenerateEpisodes() {
     const id = projectId.value
     if (!id) return
     await api.put(`/projects/${id}`, {
-      description: (project.value as any)?.description,
-      synopsis: (project.value as any)?.synopsis
+      description: project.value?.description,
+      synopsis: project.value?.synopsis
     })
     message.success('已保存')
     await loadProject(id)
@@ -167,7 +168,7 @@ export function useGenerateEpisodes() {
       message.warning('解析任务进行中，请完成后再生成第一集')
       return
     }
-    const ep = episode1.value as any
+    const ep = episode1.value
     const hasScript = ep?.script && scenesFromRaw(ep.script).length > 0
     if (hasScript) return
     isGeneratingFirst.value = true
@@ -176,12 +177,13 @@ export function useGenerateEpisodes() {
       await api.post(`/projects/${id}/episodes/generate-first`, {})
       await loadProject(id)
 
-      const updatedEp = episode1.value as any
+      const updatedEp = episode1.value
       if (updatedEp?.script && scenesFromRaw(updatedEp.script).length > 0) {
         message.success('第一集剧本已生成')
       }
-    } catch (e: any) {
-      message.error(e?.message || '生成第一集失败')
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : '生成第一集失败'
+      message.error(errMsg)
     } finally {
       isGeneratingFirst.value = false
       generatingStatus.value = ''
@@ -191,7 +193,7 @@ export function useGenerateEpisodes() {
   async function afterBatchSuccess(id: string) {
     await loadProject(id)
     await nextTick()
-    const nums = episodesWithScript.value.map((e: any) => epNum(e))
+    const nums = episodesWithScript.value.map((e) => epNum(e))
     if (nums.length && !nums.includes(previewEpisodeNum.value)) {
       previewEpisodeNum.value = Math.min(...nums.filter((n) => n >= 1))
     }
@@ -230,8 +232,9 @@ export function useGenerateEpisodes() {
       )
       message.success('剩余集剧本已生成')
       await afterBatchSuccess(id)
-    } catch (e: any) {
-      message.error(e?.message || '批量生成失败')
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : '批量生成失败'
+      message.error(errMsg)
     } finally {
       isBatching.value = false
       batchProgress.value = null
@@ -261,8 +264,9 @@ export function useGenerateEpisodes() {
         )
         message.success('剩余集剧本已生成')
         await afterBatchSuccess(pid)
-      } catch (e: any) {
-        message.error(e?.message || '批量生成失败')
+      } catch (e: unknown) {
+        const errMsg = e instanceof Error ? e.message : '批量生成失败'
+        message.error(errMsg)
       } finally {
         isBatching.value = false
         batchProgress.value = null
@@ -281,8 +285,9 @@ export function useGenerateEpisodes() {
         )
         message.success('解析完成')
         await loadProject(pid)
-      } catch (e: any) {
-        message.error(e?.message || '解析失败')
+      } catch (e: unknown) {
+        const errMsg = e instanceof Error ? e.message : '解析失败'
+        message.error(errMsg)
       } finally {
         isParseOutlineRunning.value = false
         parseOutlineProgress.value = null
@@ -294,8 +299,9 @@ export function useGenerateEpisodes() {
         await pollPipelineJob(job.id, undefined, 600000, 2500)
         message.success('第一集剧本已生成')
         await loadProject(pid)
-      } catch (e: any) {
-        message.error(e?.message || '生成第一集失败')
+      } catch (e: unknown) {
+        const errMsg = e instanceof Error ? e.message : '生成第一集失败'
+        message.error(errMsg)
       } finally {
         isGeneratingFirst.value = false
         generatingStatus.value = ''
@@ -318,7 +324,7 @@ export function useGenerateEpisodes() {
       message.warning('批量生成进行中，请完成后再解析')
       return
     }
-    const ep = episode1.value as any
+    const ep = episode1.value
     if (!ep?.script || scenesFromRaw(ep.script).length === 0) {
       message.warning('请先生成第一集剧本')
       return
@@ -333,8 +339,9 @@ export function useGenerateEpisodes() {
         targetEpisodes: te
       })
       router.push(`/project/${id}?parseJobId=${data.jobId}`)
-    } catch (e: any) {
-      message.error(e?.response?.data?.error || e?.message || '解析失败')
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : '解析失败'
+      message.error(errMsg)
     } finally {
       isParsing.value = false
     }
@@ -399,8 +406,8 @@ export function useGenerateEpisodes() {
         await runGenerateFirstEpisode()
         await router.replace({ path: '/generate', query: { projectId: pid } })
       }
-    } catch (e: any) {
-      error.value = e?.message || '加载项目失败'
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : '加载项目失败'
     } finally {
       isLoading.value = false
     }
