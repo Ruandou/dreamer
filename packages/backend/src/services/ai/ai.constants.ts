@@ -51,8 +51,8 @@ export const DEEPSEEK_MAX_TOKENS = {
   SCRIPT_IMPROVEMENT: 4000,
   /** 剧本扩展 */
   SCRIPT_EXPAND: 4000,
-  /** 解析 - 需要更多 token（DeepSeek 支持 1M 上下文） */
-  PARSER: 32000,
+  /** 解析 - 需要更多 token（DeepSeek 支持 1M 上下文；36 集剧本 JSON 响应可达 ~50K tokens） */
+  PARSER: 64000,
   /** 角色身份合并 */
   CHARACTER_MERGE: 6000,
   /** 视觉丰富 */

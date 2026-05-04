@@ -172,7 +172,7 @@ describe('Import Queue Worker', () => {
 
       expect(mockImportTaskUpdate).toHaveBeenCalledWith({
         where: { id: 'task-123' },
-        data: { status: 'processing' }
+        data: { status: 'processing', errorMsg: null }
       })
     })
 

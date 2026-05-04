@@ -75,6 +75,25 @@ describe('Character Templates', () => {
       expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain('不要使用英文')
     })
 
+    it('system prompt contains anti-celebrity guard', () => {
+      expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain('原创虚构的面部特征')
+      expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain(
+        '避免与任何现实人物或公众人物相似'
+      )
+      expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain('禁止使用常见明星特征')
+    })
+
+    it('system prompt requires explicit gender and age in output', () => {
+      expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain('性别+年龄')
+      expect(CHARACTER_BASE_PROMPT_TEMPLATE.systemPrompt).toContain('每条输出必须以')
+    })
+
+    it('user prompt requires explicit gender and age section', () => {
+      expect(CHARACTER_BASE_PROMPT_TEMPLATE.userPromptTemplate).toContain('性别与年龄')
+      expect(CHARACTER_BASE_PROMPT_TEMPLATE.userPromptTemplate).toContain('从角色设定中严格提取')
+      expect(CHARACTER_BASE_PROMPT_TEMPLATE.userPromptTemplate).toContain('不可省略')
+    })
+
     it('user prompt contains base-specific rules', () => {
       const engine = PromptTemplateEngine.getInstance()
       engine.register(CHARACTER_BASE_PROMPT_TEMPLATE)
@@ -126,6 +145,18 @@ describe('Character Templates', () => {
       expect(CHARACTER_OUTFIT_PROMPT_TEMPLATE.systemPrompt).toContain('发型')
       expect(CHARACTER_OUTFIT_PROMPT_TEMPLATE.systemPrompt).toContain('标志性细节完全不变')
       expect(CHARACTER_OUTFIT_PROMPT_TEMPLATE.systemPrompt).toContain('仅更换服装')
+    })
+
+    it('system prompt contains anti-celebrity guard', () => {
+      expect(CHARACTER_OUTFIT_PROMPT_TEMPLATE.systemPrompt).toContain('原创虚构的面部特征')
+      expect(CHARACTER_OUTFIT_PROMPT_TEMPLATE.systemPrompt).toContain(
+        '避免与任何现实人物或公众人物相似'
+      )
+    })
+
+    it('system prompt requires explicit gender and age in output', () => {
+      expect(CHARACTER_OUTFIT_PROMPT_TEMPLATE.systemPrompt).toContain('性别+年龄')
+      expect(CHARACTER_OUTFIT_PROMPT_TEMPLATE.systemPrompt).toContain('每条输出必须以')
     })
 
     it('user prompt contains outfit-specific rules', () => {
@@ -205,6 +236,18 @@ describe('Character Templates', () => {
     it('system prompt emphasizes identity consistency', () => {
       expect(CHARACTER_EXPRESSION_PROMPT_TEMPLATE.systemPrompt).toContain('保持人物身份一致')
       expect(CHARACTER_EXPRESSION_PROMPT_TEMPLATE.systemPrompt).toContain('仅变化')
+    })
+
+    it('system prompt contains anti-celebrity guard', () => {
+      expect(CHARACTER_EXPRESSION_PROMPT_TEMPLATE.systemPrompt).toContain('原创虚构的面部特征')
+      expect(CHARACTER_EXPRESSION_PROMPT_TEMPLATE.systemPrompt).toContain(
+        '避免与任何现实人物或公众人物相似'
+      )
+    })
+
+    it('system prompt requires explicit gender and age in output', () => {
+      expect(CHARACTER_EXPRESSION_PROMPT_TEMPLATE.systemPrompt).toContain('性别+年龄')
+      expect(CHARACTER_EXPRESSION_PROMPT_TEMPLATE.systemPrompt).toContain('每条输出必须以')
     })
 
     it('user prompt contains derivative rules', () => {

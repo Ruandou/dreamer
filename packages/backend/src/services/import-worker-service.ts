@@ -4,7 +4,7 @@ import { projectRepository } from '../repositories/project-repository.js'
 
 export const importWorkerService = {
   markProcessing(taskId: string) {
-    return importRepository.update(taskId, { status: 'processing' })
+    return importRepository.update(taskId, { status: 'processing', errorMsg: null })
   },
 
   createProjectForImport(data: { name: string; description: string; userId: string }) {

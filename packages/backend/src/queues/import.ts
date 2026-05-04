@@ -88,9 +88,18 @@ export const importWorker = new Worker<ImportJobData>(
       logInfo('import-worker', 'Import job completed successfully', { bullJobId: job.id })
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : '未知错误'
-      logError('import-worker', error, { bullJobId: job.id, taskId })
+      logError('import-worker', error, { bullJobId: job.id, taskId, attempt: job.attemptsMade })
 
-      await importWorkerService.markFailed(taskId, message)
+      // markFailed 可能因为 DB 连接问题失败，用 try-catch 保证不会二次抛错
+      try {
+        await importWorkerService.markFailed(taskId, message)
+      } catch (markError: unknown) {
+        logError('import-worker', 'markFailed also failed', {
+          bullJobId: job.id,
+          taskId,
+          error: markError instanceof Error ? markError.message : String(markError)
+        })
+      }
 
       throw error
     }
@@ -106,7 +115,21 @@ importWorker.on('completed', (job) => {
 })
 
 importWorker.on('failed', (job, err) => {
-  logWarning('import-worker', 'Job failed', { bullJobId: job?.id, error: err.message })
+  logWarning('import-worker', 'Job failed (all retries exhausted)', {
+    bullJobId: job?.id,
+    taskId: job?.data?.taskId,
+    error: err.message,
+    attemptsMade: job?.attemptsMade
+  })
+  // 保险机制：通过 BullMQ failed hook 双重确保 markFailed 被调用
+  if (job?.data?.taskId) {
+    importWorkerService.markFailed(job.data.taskId, err.message).catch((e: unknown) => {
+      logError('import-worker', 'fallback markFailed also failed', {
+        taskId: job.data.taskId,
+        error: e instanceof Error ? e.message : String(e)
+      })
+    })
+  }
 })
 
 // Graceful shutdown
