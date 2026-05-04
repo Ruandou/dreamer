@@ -19,7 +19,8 @@ vi.mock('../src/services/ai/json-repair.js', () => ({
 }))
 
 vi.mock('../src/services/ai/llm-factory.js', () => ({
-  getDefaultProvider: () => mockGetDefaultProvider()
+  getDefaultProvider: () => mockGetDefaultProvider(),
+  getProviderForUser: () => mockGetDefaultProvider()
 }))
 
 vi.mock('../src/lib/error-logger.js', () => ({

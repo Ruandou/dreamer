@@ -8,7 +8,6 @@ import {
   cleanMarkdownCodeBlocks,
   type LLMCallOptions
 } from './ai/llm-call-wrapper.js'
-import { getDefaultProvider } from './ai/llm-factory.js'
 import { PromptRegistry } from './prompts/registry.js'
 import {
   parseScriptResponse,
@@ -48,12 +47,9 @@ export async function writeScriptFromIdea(
   idea: string,
   options?: ScriptWriterOptions
 ): Promise<ScriptWriterResult> {
-  const provider = getDefaultProvider()
   const userPrompt = buildUserPrompt(idea, options)
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: SCRIPT_WRITER_PROMPT },
       { role: 'user', content: userPrompt }
@@ -81,7 +77,6 @@ export async function writeEpisodeForProject(
   seriesTitle: string,
   modelLog?: ModelCallLogContext
 ): Promise<ScriptWriterResult> {
-  const provider = getDefaultProvider()
   const userPrompt = `剧名：${seriesTitle}
 全剧梗概：${seriesSynopsis}
 前情与已发生剧情摘要：${rollingContext || '（首集后的连续剧情）'}
@@ -89,8 +84,6 @@ export async function writeEpisodeForProject(
 请只写第 ${episodeNum} 集的剧本 JSON。`
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: EPISODE_WRITER_PROMPT },
       { role: 'user', content: userPrompt }
@@ -116,8 +109,6 @@ export async function expandScript(
   additionalScenes: number = 3,
   options?: ScriptWriterOptions
 ): Promise<ScriptWriterResult> {
-  const provider = getDefaultProvider()
-
   const userPrompt = `请为以下剧本扩展${additionalScenes}个新场景：
 
 当前剧本：
@@ -133,8 +124,6 @@ ${JSON.stringify(script, null, 2)}
 直接返回JSON格式的完整剧本（包括原有场景+新场景）。`
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: SCRIPT_WRITER_PROMPT },
       { role: 'user', content: userPrompt }
@@ -160,8 +149,6 @@ export async function improveScript(
   feedback: string,
   options?: ScriptWriterOptions
 ): Promise<ScriptWriterResult> {
-  const provider = getDefaultProvider()
-
   const userPrompt = `请根据以下反馈改进剧本：
 
 当前剧本：
@@ -175,8 +162,6 @@ ${feedback}
 直接返回JSON格式的完整剧本。`
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: SCRIPT_WRITER_PROMPT },
       { role: 'user', content: userPrompt }
@@ -206,8 +191,6 @@ export async function optimizeSceneDescription(
   },
   modelLog?: ModelCallLogContext
 ): Promise<string> {
-  const provider = getDefaultProvider()
-
   const contextStr = sceneContext
     ? `场景上下文：\n- 地点：${sceneContext.location || '未指定'}\n- 时间：${sceneContext.timeOfDay || '未指定'}\n- 角色：${sceneContext.characters?.join(', ') || '未指定'}`
     : ''
@@ -228,8 +211,6 @@ ${contextStr}
 直接返回优化后的描述文字，不要其他内容。`
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: '你是一个专业的AI视频提示词优化专家。' },
       { role: 'user', content: userPrompt }
@@ -273,7 +254,6 @@ export async function generateEpisodeOutline(
   seriesSynopsis: string,
   modelLog?: ModelCallLogContext
 ): Promise<string> {
-  const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
   const rendered = registry.render('episode-outline', {
@@ -283,8 +263,6 @@ export async function generateEpisodeOutline(
   })
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: rendered.systemPrompt },
       { role: 'user', content: rendered.userPrompt }
@@ -309,7 +287,6 @@ export async function showrunnerReviewOutlines(
   outlines: Map<number, string>,
   modelLog?: ModelCallLogContext
 ): Promise<{ approved: boolean; feedback: string }> {
-  const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
   const outlinesList = formatOutlinesList(outlines)
@@ -321,8 +298,6 @@ export async function showrunnerReviewOutlines(
   })
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: rendered.systemPrompt },
       { role: 'user', content: rendered.userPrompt }
@@ -350,7 +325,6 @@ export async function formatScriptToJSON(
   originalScript: string,
   modelLog?: ModelCallLogContext
 ): Promise<ScriptContent> {
-  const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
   const rendered = registry.render('script-formatter', {
@@ -358,8 +332,6 @@ export async function formatScriptToJSON(
   })
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: rendered.systemPrompt },
       { role: 'user', content: rendered.userPrompt }
@@ -392,7 +364,6 @@ export async function expandEpisodeFromOutline(
   outlineContent: string,
   modelLog?: ModelCallLogContext
 ): Promise<ScriptContent> {
-  const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
   const rendered = registry.render('episode-expand', {
@@ -402,8 +373,6 @@ export async function expandEpisodeFromOutline(
   })
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: rendered.systemPrompt },
       { role: 'user', content: rendered.userPrompt }
@@ -435,7 +404,6 @@ export async function reviseOutlinesBasedOnFeedback(
   reviewFeedback: string,
   modelLog?: ModelCallLogContext
 ): Promise<Map<number, string>> {
-  const provider = getDefaultProvider()
   const registry = PromptRegistry.getInstance()
 
   const outlinesList = formatOutlinesList(outlines)
@@ -448,8 +416,6 @@ export async function reviseOutlinesBasedOnFeedback(
   })
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: rendered.systemPrompt },
       { role: 'user', content: rendered.userPrompt }

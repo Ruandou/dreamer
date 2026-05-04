@@ -155,9 +155,6 @@ export async function hookRoutes(fastify: FastifyInstance) {
     }
 
     const { callLLMWithRetry } = await import('../services/ai/llm-call-wrapper.js')
-    const { getDefaultProvider } = await import('../services/ai/llm-factory.js')
-
-    const provider = getDefaultProvider()
 
     const prompt = `请为以下短剧集生成${count}个结尾钩子方案：
 
@@ -174,7 +171,6 @@ ${content}
     try {
       const result = await callLLMWithRetry(
         {
-          provider,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.8,
           modelLog: { userId, op: 'generate_hooks' }

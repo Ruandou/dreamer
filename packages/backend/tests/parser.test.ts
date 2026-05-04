@@ -22,9 +22,66 @@ vi.mock('../src/services/ai/api-logger.js', async (importOriginal) => {
   }
 })
 
+const { mockComplete } = vi.hoisted(() => ({
+  mockComplete: vi.fn()
+}))
+
+// Mock llm-factory to provide getProviderForUser
+vi.mock('../src/services/ai/llm-factory.js', () => ({
+  getDefaultProvider: vi.fn().mockReturnValue({
+    name: 'deepseek',
+    getConfig: () => ({ defaultModel: 'deepseek-chat' }),
+    complete: (...args: unknown[]) => mockComplete(...args)
+  }),
+  getProviderForUser: vi.fn().mockReturnValue({
+    name: 'deepseek',
+    getConfig: () => ({ defaultModel: 'deepseek-chat' }),
+    complete: (...args: unknown[]) => mockComplete(...args)
+  })
+}))
+
 describe('Parser Service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Wire mockComplete to delegate to mockCreate (OpenAI) and return provider-compatible shape
+    mockComplete.mockImplementation(async (messages, options) => {
+      try {
+        const completion = await mockCreate({
+          model: 'deepseek-chat',
+          messages,
+          temperature: options?.temperature ?? 0.7,
+          max_tokens: options?.maxTokens ?? 4000
+        })
+        const content = completion.choices[0]?.message?.content || ''
+        const usage = completion.usage || {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0
+        }
+        return {
+          content,
+          usage: {
+            costCNY: (usage.prompt_tokens * 0.001 + usage.completion_tokens * 0.002) / 1000,
+            inputTokens: usage.prompt_tokens,
+            outputTokens: usage.completion_tokens,
+            totalTokens: usage.total_tokens
+          },
+          model: 'deepseek-chat',
+          rawResponse: completion
+        }
+      } catch (error: any) {
+        // Replicate DeepSeekProvider error handling
+        if (error?.status === 401 || error?.status === 403) {
+          const { DeepSeekAuthError } = await import('../src/services/ai/deepseek-client.js')
+          throw new DeepSeekAuthError()
+        }
+        if (error?.status === 429) {
+          const { DeepSeekRateLimitError } = await import('../src/services/ai/deepseek-client.js')
+          throw new DeepSeekRateLimitError()
+        }
+        throw error
+      }
+    })
   })
 
   describe('parseScriptDocument', () => {

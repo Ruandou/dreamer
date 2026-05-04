@@ -7,7 +7,6 @@ import {
   normalizeParsedCharacterList
 } from './parsed-script-types.js'
 import { callLLMWithRetry, parseJsonResponse, type LLMCallOptions } from './llm-call-wrapper.js'
-import { getDefaultProvider } from './llm-factory.js'
 
 export type { ParsedCharacter }
 export { DeepSeekAuthError, DeepSeekRateLimitError } from './deepseek-client.js'
@@ -123,7 +122,6 @@ export async function parseScriptDocument(
 
   // Markdown 格式，调用 AI 解析
   const userMessage = `请解析以下剧本文档：\n\n${content}`
-  const provider = getDefaultProvider()
 
   // Parser function for the wrapper
   const parseResponse = (response: string): ParsedScript => {
@@ -133,8 +131,6 @@ export async function parseScriptDocument(
   }
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: PARSER_SYSTEM_PROMPT },
       { role: 'user', content: userMessage }

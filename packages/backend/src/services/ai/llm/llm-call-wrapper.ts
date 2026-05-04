@@ -19,9 +19,11 @@ import {
   API_CALL_TIMEOUT_MS
 } from '../ai.constants.js'
 import { logInfo, logWarning, logError } from '../../../lib/error-logger.js'
+import { getProviderForUser, getDefaultProvider } from './llm-factory.js'
 
 export interface LLMCallOptions {
-  provider: LLMProvider
+  /** 显式指定 Provider；若未提供，则根据 modelLog.userId 自动解析用户偏好 */
+  provider?: LLMProvider
   messages: LLMMessage[]
   temperature?: number
   maxTokens?: number
@@ -47,7 +49,6 @@ export async function callLLMWithRetry<T>(
   parser: (content: string) => T | Promise<T>
 ): Promise<LLMCallResult<T>> {
   const {
-    provider,
     messages,
     temperature,
     maxTokens,
@@ -56,6 +57,11 @@ export async function callLLMWithRetry<T>(
     model,
     extra
   } = options
+
+  // 自动解析 Provider：显式传入 > 用户偏好 > 默认
+  const provider =
+    options.provider ??
+    (modelLog?.userId ? await getProviderForUser(modelLog.userId) : getDefaultProvider())
 
   let lastError: Error | null = null
   const userPrompt = messages.find((m) => m.role === 'user')?.content || ''
@@ -165,7 +171,6 @@ export async function* streamLLMWithRetry(
   options: LLMCallOptions
 ): AsyncGenerator<LLMStreamChunk & { accumulated: string }> {
   const {
-    provider,
     messages,
     temperature,
     maxTokens,
@@ -174,6 +179,11 @@ export async function* streamLLMWithRetry(
     model,
     extra
   } = options
+
+  // 自动解析 Provider：显式传入 > 用户偏好 > 默认
+  const provider =
+    options.provider ??
+    (modelLog?.userId ? await getProviderForUser(modelLog.userId) : getDefaultProvider())
 
   let lastError: Error | null = null
   const userPrompt = messages.find((m) => m.role === 'user')?.content || ''

@@ -4,7 +4,6 @@
  */
 
 import { callLLMWithRetry, parseJsonResponse } from './llm/llm-call-wrapper.js'
-import { getDefaultProvider } from './llm-factory.js'
 import { repairJsonWithAI } from './json-repair.js'
 import type { ModelCallLogContext } from './api-logger.js'
 import { logInfo, logWarning } from '../../lib/error-logger.js'
@@ -227,7 +226,6 @@ async function robustParseJson(
  * 生成短剧大纲
  */
 export async function generateOutline(options: GenerateOutlineOptions): Promise<EpisodeOutline[]> {
-  const provider = getDefaultProvider()
   const prompt = buildPrompt(options)
 
   logInfo('OutlineGen', '开始生成大纲', {
@@ -238,7 +236,6 @@ export async function generateOutline(options: GenerateOutlineOptions): Promise<
 
   const result = await callLLMWithRetry<{ episodes: unknown[] }>(
     {
-      provider,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.7,
       maxTokens: 8000,

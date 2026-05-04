@@ -6,7 +6,6 @@
 import type { VisualStyleConfig } from '@dreamer/shared'
 import { VISUAL_STYLE_PRESETS } from '@dreamer/shared'
 import { callLLMWithRetry } from './llm-call-wrapper.js'
-import { getDefaultProvider } from './llm-factory.js'
 import type { ModelCallLogContext } from './api-logger.js'
 import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
 
@@ -45,8 +44,6 @@ export async function generateVisualStyleConfig(
   },
   log?: ModelCallLogContext
 ): Promise<VisualStyleConfig> {
-  const provider = getDefaultProvider()
-
   const userInput = [
     `项目名称：${input.name}`,
     input.description ? `项目描述：${input.description}` : '',
@@ -63,7 +60,6 @@ export async function generateVisualStyleConfig(
 
   const result = await callLLMWithRetry<VisualStyleConfig>(
     {
-      provider,
       messages,
       temperature: DEEPSEEK_TEMPERATURE.VISUAL_STYLE,
       maxTokens: DEEPSEEK_MAX_TOKENS.VISUAL_STYLE,

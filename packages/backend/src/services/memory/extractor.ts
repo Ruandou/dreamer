@@ -1,5 +1,5 @@
 import { PromptRegistry } from '../prompts/registry.js'
-import { getDefaultProvider, type LLMProvider } from '../ai/llm-factory.js'
+import { type LLMProvider } from '../ai/llm-factory.js'
 import type { LLMMessage } from '../ai/llm-provider.js'
 import { callLLMWithRetry, type LLMCallOptions } from '../ai/llm-call-wrapper.js'
 import type { MemoryType } from '../../repositories/memory-repository.js'
@@ -31,7 +31,6 @@ export async function extractMemoriesWithLLM(
   modelLog?: ModelCallLogContext,
   provider?: LLMProvider
 ): Promise<MemoryExtractionResult> {
-  const llmProvider = provider || getDefaultProvider()
   const template = PromptRegistry.getInstance().getLatest('memory-extraction')
 
   // 将剧本对象转为可读的文本格式，而不是 JSON
@@ -78,7 +77,7 @@ export async function extractMemoriesWithLLM(
   }
 
   const options: LLMCallOptions = {
-    provider: llmProvider,
+    provider,
     messages,
     temperature: template.metadata.creativity,
     maxTokens: template.metadata.maxOutputTokens,

@@ -16,6 +16,7 @@ import { OpenAIProvider } from './providers/openai-provider.js'
 import { ArkLLMProvider } from './providers/ark-llm-provider.js'
 import { getModelInfo } from './llm-model-catalog.js'
 import type { LLMProvider } from './llm-provider.js'
+import { prisma } from '../../../lib/prisma.js'
 
 export type { LLMProvider } from './llm-provider.js'
 export type { LLMProviderConfig } from './llm-provider.js'
@@ -156,6 +157,34 @@ export function getProviderForModel(modelId?: string): LLMProvider {
         'https://ark.cn-beijing.volces.com/api/v3',
       defaultModel: modelId
     })
+  }
+
+  return getDefaultProvider()
+}
+
+/**
+ * 获取用户偏好的 LLM Provider
+ * 从数据库读取用户的 modelPreferences，优先使用用户选择的文本模型
+ * @param userId 用户 ID
+ * @returns 对应模型的 Provider，若用户未设置则返回默认 Provider
+ */
+export async function getProviderForUser(userId: string): Promise<LLMProvider> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { modelPreferences: true }
+    })
+
+    const preferences = user?.modelPreferences as
+      | { textModel?: string; imageModel?: string; videoModel?: string }
+      | undefined
+    const textModel = preferences?.textModel
+
+    if (textModel) {
+      return getProviderForModel(textModel)
+    }
+  } catch (e) {
+    console.warn('[model-factory] 读取用户模型偏好失败，使用默认 Provider:', e)
   }
 
   return getDefaultProvider()

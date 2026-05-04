@@ -28,11 +28,51 @@ vi.mock('../src/services/ai/api-logger.js', async (importOriginal) => {
   }
 })
 
+const { mockComplete } = vi.hoisted(() => ({
+  mockComplete: vi.fn()
+}))
+
+vi.mock('../src/services/ai/llm-factory.js', () => ({
+  getDefaultProvider: vi.fn().mockReturnValue({
+    name: 'deepseek',
+    getConfig: () => ({ defaultModel: 'deepseek-chat' }),
+    complete: (...args: unknown[]) => mockComplete(...args)
+  }),
+  getProviderForUser: vi.fn().mockReturnValue({
+    name: 'deepseek',
+    getConfig: () => ({ defaultModel: 'deepseek-chat' }),
+    complete: (...args: unknown[]) => mockComplete(...args)
+  })
+}))
+
 import { writeScriptFromIdea, optimizeSceneDescription } from '../src/services/script-writer.js'
 
 describe('Script Writer Service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockComplete.mockImplementation(async (messages, options) => {
+      const { default: OpenAI } = await import('openai')
+      const client = new OpenAI()
+      const completion = await client.chat.completions.create({
+        model: 'deepseek-chat',
+        messages,
+        temperature: options?.temperature ?? 0.7,
+        max_tokens: options?.maxTokens ?? 4000
+      })
+      const content = completion.choices[0]?.message?.content || ''
+      const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+      return {
+        content,
+        usage: {
+          costCNY: (usage.prompt_tokens * 0.001 + usage.completion_tokens * 0.002) / 1000,
+          inputTokens: usage.prompt_tokens,
+          outputTokens: usage.completion_tokens,
+          totalTokens: usage.total_tokens
+        },
+        model: 'deepseek-chat',
+        rawResponse: completion
+      }
+    })
   })
 
   describe('writeScriptFromIdea', () => {

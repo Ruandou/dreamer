@@ -5,7 +5,6 @@ import { DEEPSEEK_TEMPERATURE, DEEPSEEK_MAX_TOKENS } from './ai.constants.js'
 import type { ParsedCharacter } from './parsed-script-types.js'
 import { normalizeParsedCharacterList } from './parsed-script-types.js'
 import { callLLMWithRetry, type LLMCallOptions } from './llm-call-wrapper.js'
-import { getDefaultProvider } from './llm-factory.js'
 interface CharacterIdentityMergeResult {
   characters: ParsedCharacter[]
   /** 非规范称谓 -> 规范名（含与自身相等的映射时可忽略） */
@@ -108,7 +107,6 @@ export async function fetchCharacterIdentityMerge(
   log?: ModelCallLogContext
 ): Promise<{ result: CharacterIdentityMergeResult; cost: DeepSeekCost }> {
   const user = buildMergeUserScript(script, uniqueNames)
-  const provider = getDefaultProvider()
 
   // Parser function for the wrapper
   const parseMergeResult = (text: string): CharacterIdentityMergeResult => {
@@ -118,8 +116,6 @@ export async function fetchCharacterIdentityMerge(
   }
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: CHARACTER_IDENTITY_MERGE_SYSTEM },
       { role: 'user', content: user }

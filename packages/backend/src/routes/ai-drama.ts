@@ -3,7 +3,6 @@ import { getRequestUserId } from '../plugins/auth.js'
 import { verifyEpisodeOwnership } from '../plugins/auth.js'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { callLLMWithRetry } from '../services/ai/llm-call-wrapper.js'
-import { getDefaultProvider } from '../services/ai/llm-factory.js'
 import {
   buildDramaPrompt,
   type DramaCommand,
@@ -58,12 +57,10 @@ export async function aiDramaRoutes(fastify: FastifyInstance) {
     }
 
     const prompt = buildDramaPrompt(command, context)
-    const provider = getDefaultProvider()
 
     try {
       const result = await callLLMWithRetry(
         {
-          provider,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.8,
           maxTokens: 4000,

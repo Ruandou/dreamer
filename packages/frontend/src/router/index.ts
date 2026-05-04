@@ -107,6 +107,18 @@ const routes: RouteRecordRaw[] = [
             name: 'ProjectExport',
             component: () => import('@/views/project/ProjectExport.vue'),
             meta: { title: '导出', icon: DocumentTextOutline, projectLayout: true }
+          },
+          {
+            path: 'tasks',
+            name: 'ProjectTasks',
+            component: () => import('@/views/project/ProjectTasks.vue'),
+            meta: { title: '任务', icon: TimeOutline, projectLayout: true }
+          },
+          {
+            path: 'model-calls',
+            name: 'ProjectModelCalls',
+            component: () => import('@/views/project/ProjectModelCalls.vue'),
+            meta: { title: '模型日志', icon: RadioOutline, projectLayout: true }
           }
         ]
       },

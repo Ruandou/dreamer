@@ -21,7 +21,9 @@ import {
   CreateOutline,
   PeopleOutline,
   LocationOutline,
-  DocumentTextOutline
+  DocumentTextOutline,
+  TimeOutline,
+  RadioOutline
 } from '@vicons/ionicons5'
 import AppSidebar from '../components/AppSidebar.vue'
 import type { BreadcrumbItem } from '../components/SidebarBreadcrumb.vue'
@@ -68,7 +70,9 @@ const projectMenuOptions = computed<MenuOption[]>(() => {
     { label: '写作', key: `${base}/write`, icon: renderIcon(CreateOutline) },
     { label: '角色', key: `${base}/characters`, icon: renderIcon(PeopleOutline) },
     { label: '场地', key: `${base}/locations`, icon: renderIcon(LocationOutline) },
-    { label: '导出', key: `${base}/export`, icon: renderIcon(DocumentTextOutline) }
+    { label: '导出', key: `${base}/export`, icon: renderIcon(DocumentTextOutline) },
+    { label: '任务', key: `${base}/tasks`, icon: renderIcon(TimeOutline) },
+    { label: '模型日志', key: `${base}/model-calls`, icon: renderIcon(RadioOutline) }
   ]
 })
 </script>

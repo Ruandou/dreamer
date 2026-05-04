@@ -12,7 +12,7 @@ import {
   isEpisodesResponse
 } from './deepseek-response-types.js'
 import { callLLMWithRetry, parseJsonResponse, type LLMCallOptions } from './llm-call-wrapper.js'
-import { getDefaultProvider, type LLMProvider } from './llm-factory.js'
+import { type LLMProvider } from './llm-factory.js'
 import { PromptRegistry } from '../prompts/registry.js'
 import type { LLMMessage } from './llm-provider.js'
 
@@ -98,7 +98,6 @@ export async function expandScript(
   log?: ModelCallLogContext,
   provider?: LLMProvider // 新增：可选的自定义提供者
 ): Promise<{ script: ScriptContent; cost: DeepSeekCost }> {
-  const llmProvider = provider || getDefaultProvider()
   const template = PromptRegistry.getInstance().getLatest('script-expand')
 
   const rendered = PromptRegistry.getInstance().render('script-expand', {
@@ -128,7 +127,7 @@ export async function expandScript(
   }
 
   const options: LLMCallOptions = {
-    provider: llmProvider,
+    provider,
     messages,
     temperature: template.metadata.creativity,
     maxTokens: template.metadata.maxOutputTokens,

@@ -8,7 +8,6 @@ import {
   cleanMarkdownCodeBlocks,
   type LLMCallOptions
 } from './llm-call-wrapper.js'
-import { getDefaultProvider } from './llm-factory.js'
 
 /** 与 Prisma Episode / shared Episode 兼容，用于分镜生成入参 */
 export interface EpisodeStoryboardInput {
@@ -112,7 +111,6 @@ export async function generateStoryboardScriptFromEpisode(
   hint?: string | null
 ): Promise<{ script: ScriptContent; cost: DeepSeekCost }> {
   const userPrompt = buildStoryboardUserPrompt(episode, projectContext, hint)
-  const provider = getDefaultProvider()
 
   // Parser function for the wrapper
   const parseStoryboard = (content: string): ScriptContent => {
@@ -128,8 +126,6 @@ export async function generateStoryboardScriptFromEpisode(
   }
 
   const callOptions: LLMCallOptions = {
-    provider,
-    model: 'deepseek-chat',
     messages: [
       { role: 'system', content: STORYBOARD_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt }

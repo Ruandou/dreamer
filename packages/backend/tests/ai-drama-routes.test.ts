@@ -24,7 +24,8 @@ vi.mock('../src/services/ai/llm/llm-call-wrapper.js', () => ({
 }))
 
 vi.mock('../src/services/ai/llm-factory.js', () => ({
-  getDefaultProvider: () => mockGetDefaultProvider()
+  getDefaultProvider: () => mockGetDefaultProvider(),
+  getProviderForUser: () => mockGetDefaultProvider()
 }))
 
 vi.mock('../src/lib/prisma.js', () => ({

@@ -5,7 +5,7 @@ import {
   cleanMarkdownCodeBlocks,
   type LLMCallOptions
 } from './llm-call-wrapper.js'
-import { getDefaultProvider, type LLMProvider } from './llm-factory.js'
+import { type LLMProvider } from './llm-factory.js'
 import { PromptRegistry } from '../prompts/registry.js'
 import type { LLMMessage } from './llm-provider.js'
 import type { VisualStyleConfig } from '@dreamer/shared'
@@ -102,7 +102,6 @@ export async function fetchScriptVisualEnrichmentJson(
   log?: ModelCallLogContext,
   provider?: LLMProvider // 新增：可选的自定义提供者
 ): Promise<{ jsonText: string; cost: DeepSeekCost }> {
-  const llmProvider = provider || getDefaultProvider()
   const projectVisualStyleLine = (input.projectVisualStyleLine || '').trim() || '（未指定）'
 
   const rendered = PromptRegistry.getInstance().render('visual-enrichment', {
@@ -127,7 +126,7 @@ export async function fetchScriptVisualEnrichmentJson(
   const template = PromptRegistry.getInstance().getLatest('visual-enrichment')
 
   const options: LLMCallOptions = {
-    provider: llmProvider,
+    provider,
     messages,
     temperature: template.metadata.creativity,
     maxTokens: template.metadata.maxOutputTokens,

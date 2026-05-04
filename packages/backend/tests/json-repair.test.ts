@@ -8,7 +8,8 @@ vi.mock('../src/services/ai/llm-call-wrapper.js', () => ({
 }))
 
 vi.mock('../src/services/ai/llm-factory.js', () => ({
-  getDefaultProvider: vi.fn().mockReturnValue({ name: 'deepseek' })
+  getDefaultProvider: vi.fn().mockReturnValue({ name: 'deepseek' }),
+  getProviderForUser: vi.fn().mockReturnValue({ name: 'deepseek' })
 }))
 
 describe('repairJsonWithAI', () => {
