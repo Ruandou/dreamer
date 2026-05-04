@@ -58,7 +58,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'project/:id',
         name: 'ProjectDetail',
-        component: () => import('@/views/ProjectDetail.vue'),
+        component: () => import('@/views/project/ProjectDetail.vue'),
         meta: { projectLayout: true },
         children: [
           {
