@@ -4,6 +4,7 @@ import type { ImageGenerationJobData } from '@dreamer/shared/types'
 import {
   generateTextToImageAndPersist,
   generateImageEditAndPersist,
+  getDefaultImageProvider,
   arkImageSizeFromProjectAspectRatio,
   imageJobPrompt,
   imageJobModel
@@ -48,6 +49,10 @@ const imageWorker = new Worker<ImageGenerationJobData>(
     const projectRow = await imageQueueService.getProjectAspectRatio(projectId)
     const imageSize = arkImageSizeFromProjectAspectRatio(projectRow?.aspectRatio)
 
+    // 获取当前默认图片 Provider，用于日志记录
+    const defaultProvider = getDefaultImageProvider()
+    const providerName = defaultProvider.name
+
     try {
       switch (data.kind) {
         case 'character_base_create': {
@@ -74,7 +79,7 @@ const imageWorker = new Worker<ImageGenerationJobData>(
           await recordModelApiCall({
             userId,
             model: imageJobModel(data),
-            provider: 'volcengine-ark',
+            provider: providerName,
             prompt: imageJobPrompt(data),
             requestParams: {
               op: 'image_generation_job',
@@ -109,7 +114,7 @@ const imageWorker = new Worker<ImageGenerationJobData>(
           await recordModelApiCall({
             userId,
             model: imageJobModel(data),
-            provider: 'volcengine-ark',
+            provider: providerName,
             prompt: imageJobPrompt(data),
             requestParams: {
               op: 'image_generation_job',
@@ -146,7 +151,7 @@ const imageWorker = new Worker<ImageGenerationJobData>(
           await recordModelApiCall({
             userId,
             model: imageJobModel(data),
-            provider: 'volcengine-ark',
+            provider: providerName,
             prompt: imageJobPrompt(data),
             requestParams: {
               op: 'image_generation_job',
@@ -189,7 +194,7 @@ const imageWorker = new Worker<ImageGenerationJobData>(
           await recordModelApiCall({
             userId,
             model: imageJobModel(data),
-            provider: 'volcengine-ark',
+            provider: providerName,
             prompt: imageJobPrompt(data),
             requestParams: {
               op: 'image_generation_job',
@@ -214,7 +219,7 @@ const imageWorker = new Worker<ImageGenerationJobData>(
             await recordModelApiCall({
               userId,
               model: imageJobModel(data),
-              provider: 'volcengine-ark',
+              provider: providerName,
               prompt: imageJobPrompt(data),
               requestParams: {
                 op: 'image_generation_job',
@@ -237,7 +242,7 @@ const imageWorker = new Worker<ImageGenerationJobData>(
           await recordModelApiCall({
             userId,
             model: imageJobModel(data),
-            provider: 'volcengine-ark',
+            provider: providerName,
             prompt: imageJobPrompt(data),
             requestParams: {
               op: 'image_generation_job',
@@ -256,7 +261,7 @@ const imageWorker = new Worker<ImageGenerationJobData>(
       await recordModelApiCall({
         userId,
         model: imageJobModel(data),
-        provider: 'volcengine-ark',
+        provider: providerName,
         prompt: imageJobPrompt(data),
         requestParams: {
           op: 'image_generation_job',

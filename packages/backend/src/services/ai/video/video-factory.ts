@@ -26,12 +26,16 @@ export function getDefaultVideoProvider() {
 
   // 尝试新环境变量格式
   const apiKey = process.env[`${defaultProvider.toUpperCase()}_VIDEO_API_KEY`]
-  if (apiKey) {
+  const ak = process.env.KLING_AK
+  const sk = process.env.KLING_SK
+  if (apiKey || (defaultProvider === 'kling' && ak && sk)) {
     return createVideoProvider({
       provider: defaultProvider,
-      apiKey,
+      apiKey: apiKey || '',
       baseURL: process.env[`${defaultProvider.toUpperCase()}_VIDEO_BASE_URL`] || undefined,
-      defaultModel: process.env[`${defaultProvider.toUpperCase()}_VIDEO_MODEL`] || undefined
+      defaultModel: process.env[`${defaultProvider.toUpperCase()}_VIDEO_MODEL`] || undefined,
+      accessKey: ak,
+      secretKey: sk
     })
   }
 
@@ -73,6 +77,8 @@ export function createKlingVideoProvider(apiKey?: string, baseURL?: string) {
     provider: 'kling',
     apiKey: apiKey || process.env.KLING_VIDEO_API_KEY || '',
     baseURL: baseURL || process.env.KLING_VIDEO_BASE_URL || 'https://api-beijing.klingai.com',
-    defaultModel: process.env.KLING_VIDEO_MODEL || 'kling-video-o1'
+    defaultModel: process.env.KLING_VIDEO_MODEL || 'kling-v3-omni',
+    accessKey: process.env.KLING_AK,
+    secretKey: process.env.KLING_SK
   })
 }

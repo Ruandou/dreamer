@@ -36,9 +36,12 @@ const mockArkImageSizeFromProjectAspectRatio = vi.fn()
 const mockImageJobPrompt = vi.fn()
 const mockImageJobModel = vi.fn()
 
+const mockGetDefaultImageProvider = vi.fn().mockReturnValue({ name: 'kling' })
+
 vi.mock('../src/services/ai/image-generation.js', () => ({
   generateTextToImageAndPersist: mockGenerateTextToImageAndPersist,
   generateImageEditAndPersist: mockGenerateImageEditAndPersist,
+  getDefaultImageProvider: mockGetDefaultImageProvider,
   arkImageSizeFromProjectAspectRatio: mockArkImageSizeFromProjectAspectRatio,
   imageJobPrompt: mockImageJobPrompt,
   imageJobModel: mockImageJobModel
@@ -89,6 +92,7 @@ describe('Image Queue Worker', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockGetDefaultImageProvider.mockReturnValue({ name: 'kling' })
   })
 
   afterEach(() => {
@@ -424,7 +428,7 @@ describe('Image Queue Worker', () => {
       expect.objectContaining({
         userId: 'user-1',
         model: 'doubao-seedream-4.0',
-        provider: 'volcengine-ark',
+        provider: 'kling',
         prompt: 'Beach scene',
         status: 'completed',
         cost: 0.045

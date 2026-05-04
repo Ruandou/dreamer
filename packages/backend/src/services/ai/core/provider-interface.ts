@@ -10,12 +10,16 @@ export type ProviderType = 'llm' | 'image' | 'video' | 'search'
 export interface ProviderConfig {
   /** 提供者标识名 */
   provider: string
-  /** API Key */
+  /** API Key (兼容 Bearer Token 模式) */
   apiKey: string
   /** API 基础 URL（可选） */
   baseURL?: string
   /** 默认模型名称（可选） */
   defaultModel?: string
+  /** Access Key（AK/SK 模式，如 Kling） */
+  accessKey?: string
+  /** Secret Key（AK/SK 模式，如 Kling） */
+  secretKey?: string
 }
 
 /** 所有 AI Provider 的基础接口 */

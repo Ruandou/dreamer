@@ -19,6 +19,7 @@ describe('image-generation edit & persist helpers', () => {
     prevKey = process.env.ARK_API_KEY
     prevEditB64 = process.env.ARK_IMAGE_EDIT_USE_BASE64
     process.env.ARK_API_KEY = 'test-key'
+    process.env.IMAGE_DEFAULT_PROVIDER = 'ark'
     /** `'0'` 时用 URL 直传编辑接口，避免再拉参考图 */
     process.env.ARK_IMAGE_EDIT_USE_BASE64 = '0'
   })
@@ -29,6 +30,7 @@ describe('image-generation edit & persist helpers', () => {
     else process.env.ARK_API_KEY = prevKey
     if (prevEditB64 === undefined) delete process.env.ARK_IMAGE_EDIT_USE_BASE64
     else process.env.ARK_IMAGE_EDIT_USE_BASE64 = prevEditB64
+    delete process.env.IMAGE_DEFAULT_PROVIDER
   })
 
   it('remoteImageUrlToDataUrl converts remote image to data url', async () => {

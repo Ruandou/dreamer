@@ -14,8 +14,7 @@ export {
   ArkImageError,
   normalizeArkImageSize,
   strengthToGuidanceScale,
-  imageEditModelUsesGuidanceScale,
-  persistRemoteImageToAssets
+  imageEditModelUsesGuidanceScale
 } from './image/providers/ark-image-provider.js'
 
 export {
@@ -24,6 +23,21 @@ export {
   createKlingImageProvider,
   createOpenAIImageProvider
 } from './image/image-factory.js'
+
+// 通用图片持久化（Provider 无关）
+export async function persistRemoteImageToAssets(remoteUrl: string): Promise<string> {
+  const storage = await import('../storage.js')
+  const res = await fetch(remoteUrl)
+  if (!res.ok) {
+    throw new Error(`拉取生成图失败: ${res.status}`)
+  }
+  const buf = Buffer.from(await res.arrayBuffer())
+  const ct = res.headers.get('content-type') || 'image/png'
+  const ext =
+    ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png'
+  const key = storage.generateFileKey('assets', `ai_gen_${Date.now()}.${ext}`)
+  return storage.uploadFile('assets', key, buf, ct)
+}
 
 // 兼容旧函数：通过默认 Provider 调用
 import { getDefaultImageProvider } from './image/image-factory.js'
@@ -61,7 +75,6 @@ export async function generateTextToImageAndPersist(
 ): Promise<GeneratedImagePersisted> {
   const provider = getDefaultImageProvider()
   const result = await provider.generateTextToImage(prompt, options)
-  const { persistRemoteImageToAssets } = await import('./image/providers/ark-image-provider.js')
   const persisted = await persistRemoteImageToAssets(result.url)
   return { url: persisted, imageCost: result.imageCost }
 }
@@ -86,16 +99,21 @@ export async function generateImageEditAndPersist(
 ): Promise<GeneratedImagePersisted> {
   const provider = getDefaultImageProvider()
   const result = await provider.generateImageEdit(referenceImageUrl, prompt, options)
-  const { persistRemoteImageToAssets } = await import('./image/providers/ark-image-provider.js')
   const persisted = await persistRemoteImageToAssets(result.url)
   return { url: persisted, imageCost: result.imageCost }
 }
 
-// 兼容旧常量
-export const DEFAULT_T2I_MODEL =
-  process.env.ARK_IMAGE_T2I_MODEL || 'doubao-seedream-5-0-lite-260128'
-export const DEFAULT_EDIT_MODEL =
-  process.env.ARK_IMAGE_EDIT_MODEL || 'doubao-seedream-5-0-lite-260128'
+// 兼容旧常量：根据默认 Provider 动态返回模型名
+function resolveDefaultModel(): string {
+  const provider = process.env.IMAGE_DEFAULT_PROVIDER || 'ark'
+  if (provider === 'kling') {
+    return process.env.KLING_IMAGE_T2I_MODEL || 'kling-v3-omni'
+  }
+  return process.env.ARK_IMAGE_T2I_MODEL || 'doubao-seedream-5-0-lite-260128'
+}
+
+export const DEFAULT_T2I_MODEL = resolveDefaultModel()
+export const DEFAULT_EDIT_MODEL = resolveDefaultModel()
 export const ARK_IMAGE_MIN_TOTAL_PIXELS = 3686400
 
 // 兼容 extractImageCostFromArkResponse

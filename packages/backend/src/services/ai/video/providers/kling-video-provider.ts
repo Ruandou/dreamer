@@ -10,6 +10,7 @@ import type {
   VideoStatusResponse
 } from '../video-provider.js'
 import type { ProviderConfig } from '../../core/provider-interface.js'
+import { generateKlingToken } from '../../core/kling-jwt.js'
 // calculateDurationCost available in cost-calculator when needed
 
 export class KlingVideoError extends Error {
@@ -34,10 +35,10 @@ export class KlingVideoProvider implements VideoProvider {
   }
 
   async submitGeneration(request: VideoGenerationRequest): Promise<VideoTaskResponse> {
-    const model = request.model || this.config.defaultModel || 'kling-video-o1'
+    const model = request.model || this.config.defaultModel || 'kling-v3-omni'
 
     const body = this.buildKlingRequest(request, model)
-    const res = await fetch(`${this.config.baseURL}/v1/videos/generations`, {
+    const res = await fetch(`${this.config.baseURL}/v1/videos/omni-video`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(body)
@@ -61,7 +62,7 @@ export class KlingVideoProvider implements VideoProvider {
   }
 
   async queryStatus(taskId: string): Promise<VideoStatusResponse> {
-    const res = await fetch(`${this.config.baseURL}/v1/videos/generations/${taskId}`, {
+    const res = await fetch(`${this.config.baseURL}/v1/videos/omni-video/${taskId}`, {
       method: 'GET',
       headers: this.getAuthHeaders()
     })
@@ -74,10 +75,15 @@ export class KlingVideoProvider implements VideoProvider {
     const data = (await res.json()) as Record<string, unknown>
     const taskData = data.data as Record<string, unknown>
 
+    // 从 task_result.videos[].url 提取视频 URL
+    const taskResult = taskData?.task_result as Record<string, unknown> | undefined
+    const videos = taskResult?.videos as Array<Record<string, unknown>> | undefined
+    const videoUrl = videos?.[0]?.url as string | undefined
+
     return {
       taskId,
       status: this.mapStatus(String(taskData?.task_status)),
-      videoUrl: (taskData?.video_url as string) || undefined,
+      videoUrl,
       thumbnailUrl: (taskData?.thumbnail_url as string) || undefined,
       error: (taskData?.task_status_msg as string) || undefined,
       progress: typeof taskData?.progress === 'number' ? taskData.progress : undefined
@@ -85,7 +91,7 @@ export class KlingVideoProvider implements VideoProvider {
   }
 
   async cancelTask(taskId: string): Promise<void> {
-    const res = await fetch(`${this.config.baseURL}/v1/videos/generations/${taskId}/cancel`, {
+    const res = await fetch(`${this.config.baseURL}/v1/videos/omni-video/${taskId}/cancel`, {
       method: 'POST',
       headers: this.getAuthHeaders()
     })
@@ -184,12 +190,24 @@ export class KlingVideoProvider implements VideoProvider {
   }
 
   private getAuthHeaders(): Record<string, string> {
-    if (!this.config.apiKey) {
+    const { apiKey, accessKey, secretKey } = this.config
+
+    // AK/SK 模式：使用 JWT Token
+    if (accessKey && secretKey) {
+      const token = generateKlingToken({ accessKey, secretKey })
+      return {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      }
+    }
+
+    // 兼容旧版 Bearer Token 模式
+    if (!apiKey) {
       throw new KlingVideoError('未配置 API Key，无法调用可灵视频接口')
     }
     return {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${this.config.apiKey}`
+      Authorization: `Bearer ${apiKey}`
     }
   }
 

@@ -35,12 +35,16 @@ export function getDefaultImageProvider() {
 
   // 尝试新环境变量格式
   const apiKey = process.env[`${defaultProvider.toUpperCase()}_IMAGE_API_KEY`]
-  if (apiKey) {
+  const ak = process.env.KLING_AK
+  const sk = process.env.KLING_SK
+  if (apiKey || (defaultProvider === 'kling' && ak && sk)) {
     return createImageProvider({
       provider: defaultProvider,
-      apiKey,
+      apiKey: apiKey || '',
       baseURL: process.env[`${defaultProvider.toUpperCase()}_IMAGE_BASE_URL`] || undefined,
-      defaultModel: process.env[`${defaultProvider.toUpperCase()}_IMAGE_T2I_MODEL`] || undefined
+      defaultModel: process.env[`${defaultProvider.toUpperCase()}_IMAGE_T2I_MODEL`] || undefined,
+      accessKey: ak,
+      secretKey: sk
     })
   }
 
@@ -82,7 +86,9 @@ export function createKlingImageProvider(apiKey?: string, baseURL?: string) {
     provider: 'kling',
     apiKey: apiKey || process.env.KLING_IMAGE_API_KEY || '',
     baseURL: baseURL || process.env.KLING_IMAGE_BASE_URL || 'https://api-beijing.klingai.com',
-    defaultModel: process.env.KLING_IMAGE_T2I_MODEL || 'kling-image-o1'
+    defaultModel: process.env.KLING_IMAGE_T2I_MODEL || 'kling-v3-omni',
+    accessKey: process.env.KLING_AK,
+    secretKey: process.env.KLING_SK
   })
 }
 

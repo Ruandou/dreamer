@@ -172,12 +172,14 @@ describe('image-generation', () => {
     beforeEach(() => {
       prevArkKey = process.env.ARK_API_KEY
       process.env.ARK_API_KEY = 'test-ark-key'
+      process.env.IMAGE_DEFAULT_PROVIDER = 'ark'
     })
 
     afterEach(() => {
       vi.unstubAllGlobals()
       if (prevArkKey === undefined) delete process.env.ARK_API_KEY
       else process.env.ARK_API_KEY = prevArkKey
+      delete process.env.IMAGE_DEFAULT_PROVIDER
     })
 
     it('returns url and cost from Ark images/generations JSON', async () => {
