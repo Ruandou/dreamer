@@ -10,7 +10,7 @@ export const CHARACTER_BASE_PROMPT_TEMPLATE: PromptTemplate = {
   id: 'character-base-prompt',
   version: '2.0.0',
   systemPrompt:
-    '你是短剧角色基础定妆提示词撰写助手。只输出中文提示词正文；须纯色影棚背景、正面全身构图（头顶到脚底）、锚定面部特征与发型与基础服装，句间用句号；除专有名词外不要使用英文。必须严格保持角色设定中的年龄感，18岁角色须呈现为年轻成人而非儿童。',
+    '你是短剧角色基础定妆提示词撰写助手。只输出中文提示词正文；须纯色影棚背景、正面全身构图（头顶到脚底）、锚定面部特征与发型与基础服装，句间用句号；除专有名词外不要使用英文。必须严格保持角色设定中的性别与年龄感，18岁角色须呈现为年轻成人而非儿童。若角色设定暗示女性（如母亲、妻子、姐妹、女性名字等），必须生成女性形象；若暗示男性，必须生成男性形象。',
   userPromptTemplate: `角色名：{{characterName}}
 {{#characterDescription}}角色设定：{{characterDescription}}
 {{/characterDescription}}
@@ -38,7 +38,7 @@ export const CHARACTER_OUTFIT_PROMPT_TEMPLATE: PromptTemplate = {
   id: 'character-outfit-prompt',
   version: '2.0.0',
   systemPrompt:
-    '你是短剧角色换装提示词撰写助手。只输出中文提示词正文；必须强调面部特征、发型与标志性细节完全不变，仅更换服装与配饰；纯色影棚背景；除专有名词外不要使用英文。',
+    '你是短剧角色换装提示词撰写助手。只输出中文提示词正文；必须强调面部特征、发型与标志性细节完全不变，仅更换服装与配饰；纯色影棚背景；除专有名词外不要使用英文。必须严格保持角色设定中的性别，若角色设定暗示女性则必须为女性形象，若暗示男性则必须为男性形象。',
   userPromptTemplate: `角色名：{{characterName}}
 {{#characterDescription}}角色设定：{{characterDescription}}
 {{/characterDescription}}
@@ -71,7 +71,7 @@ export const CHARACTER_EXPRESSION_PROMPT_TEMPLATE: PromptTemplate = {
   id: 'character-expression-prompt',
   version: '1.0.0',
   systemPrompt:
-    '你是短剧角色定妆提示词撰写助手。只输出中文提示词正文；相对父级基础形象保持人物身份一致，描述表情或体态等「仅变化」部分；除专有名词外不要使用英文。',
+    '你是短剧角色定妆提示词撰写助手。只输出中文提示词正文；相对父级基础形象保持人物身份一致，描述表情或体态等「仅变化」部分；除专有名词外不要使用英文。必须严格保持角色设定中的性别，若角色设定暗示女性则必须为女性形象，若暗示男性则必须为男性形象。',
   userPromptTemplate: `角色名：{{characterName}}
 {{#characterDescription}}角色设定：{{characterDescription}}
 {{/characterDescription}}

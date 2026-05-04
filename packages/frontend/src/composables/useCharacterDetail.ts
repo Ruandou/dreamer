@@ -81,7 +81,10 @@ export function useCharacterDetail() {
         generatingByImageId.value = next
       }
       if (p.status === 'completed' && p.characterImageId) {
-        void loadCharacter()
+        loadCharacter().catch((e: any) => {
+          console.error('[character-detail] SSE loadCharacter failed', e)
+          message.error(e?.response?.data?.error || '刷新角色数据失败')
+        })
         message.success('形象图已更新')
       }
       if (p.status === 'failed' && String(p.kind || '').startsWith('character')) {
@@ -132,8 +135,9 @@ export function useCharacterDetail() {
   async function loadCharacter() {
     isLoading.value = true
     try {
-      character.value = await characterStore.getCharacter(characterId.value)
-      const imgs = character.value?.images || []
+      const nextCharacter = await characterStore.getCharacter(characterId.value)
+      character.value = nextCharacter
+      const imgs = nextCharacter?.images || []
       const keep = selectedImageId.value && imgs.some((i) => i.id === selectedImageId.value)
       const id = keep ? selectedImageId.value : imgs[0]?.id
       if (id) {
@@ -141,6 +145,18 @@ export function useCharacterDetail() {
       } else {
         selectedImageId.value = null
       }
+      // 直接同步更新 selectedImage，避免 watch 异步触发导致的竞态或缓存引用问题
+      if (id && imgs.length) {
+        const img = imgs.find((i) => i.id === id) ?? null
+        selectedImage.value = img
+        promptDraft.value = img?.prompt || ''
+      } else {
+        selectedImage.value = null
+        promptDraft.value = ''
+      }
+    } catch (e: any) {
+      message.error(e?.response?.data?.error || '加载角色数据失败')
+      throw e
     } finally {
       isLoading.value = false
     }

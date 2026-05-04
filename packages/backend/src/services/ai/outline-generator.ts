@@ -7,7 +7,7 @@ import { callLLMWithRetry, parseJsonResponse } from './llm/llm-call-wrapper.js'
 import { getDefaultProvider } from './llm-factory.js'
 import { repairJsonWithAI } from './json-repair.js'
 import type { ModelCallLogContext } from './api-logger.js'
-import { logInfo, logWarning, logError } from '../../lib/error-logger.js'
+import { logInfo, logWarning } from '../../lib/error-logger.js'
 
 export interface EpisodeOutline {
   episodeNum: number
@@ -149,8 +149,9 @@ function alignEpisodes(
 
   // 填充缺失的集数
   for (let i = 1; i <= targetEpisodes; i++) {
-    if (map.has(i)) {
-      result.push(map.get(i)!)
+    const existing = map.get(i)
+    if (existing) {
+      result.push(existing)
     } else {
       // 用最后一集的结构循环填充
       const lastValid = episodes[episodes.length - 1] || result[result.length - 1]
@@ -235,7 +236,7 @@ export async function generateOutline(options: GenerateOutlineOptions): Promise<
     projectId: options.projectId
   })
 
-  const result = await callLLMWithRetry(
+  const result = await callLLMWithRetry<{ episodes: unknown[] }>(
     {
       provider,
       messages: [{ role: 'user', content: prompt }],
@@ -247,14 +248,12 @@ export async function generateOutline(options: GenerateOutlineOptions): Promise<
         op: 'generate_outline'
       }
     },
-    async (content) => {
-      const parsed = await robustParseJson(content, {
+    async (content) =>
+      robustParseJson(content, {
         userId: options.userId,
         projectId: options.projectId,
         op: 'generate_outline_parse'
       })
-      return parsed
-    }
   )
 
   const rawEpisodes = result.content.episodes || []

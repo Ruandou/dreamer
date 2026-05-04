@@ -189,6 +189,9 @@ interface RawEpisode {
   scenes?: unknown
   chapters?: unknown
   content?: unknown
+  synopsis?: unknown
+  hook?: unknown
+  cliffhanger?: unknown
 }
 
 function toStr(v: unknown): string {

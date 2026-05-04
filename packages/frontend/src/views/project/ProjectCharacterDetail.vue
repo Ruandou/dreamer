@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { toRefs } from 'vue'
 import { useDialog, NBackTop, NSpin, NButton } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { useCharacterDetail } from '@/composables/useCharacterDetail'
@@ -16,7 +15,6 @@ const dialog = useDialog()
 const characterStore = useCharacterStore()
 
 const cd = useCharacterDetail()
-const refs = toRefs(cd)
 
 function handleBack() {
   router.push(`/project/${cd.projectId.value}/characters`)
@@ -73,20 +71,20 @@ async function executeBatchGenerateThisCharacter() {
   <div class="character-detail-page">
     <!-- Header -->
     <CharacterDetailHeader
-      :character="refs.character.value"
-      :has-root-base="refs.characterHasRootBase.value"
+      :character="cd.character.value"
+      :has-root-base="cd.characterHasRootBase.value"
       @back="handleBack"
       @add-image="cd.openAddModal()"
     />
 
     <!-- Loading -->
-    <div v-if="refs.isLoading.value" class="detail-loading">
+    <div v-if="cd.isLoading.value" class="detail-loading">
       <NSpin size="large" />
     </div>
 
     <!-- Empty -->
     <EmptyState
-      v-else-if="!refs.character.value || refs.treeData.value.length === 0"
+      v-else-if="!cd.character.value || cd.treeData.value.length === 0"
       title="暂无形象"
       description="每角色仅一个基础定妆；添加后可在此管理衍生形象与提示词"
       icon="🎭"
@@ -100,23 +98,23 @@ async function executeBatchGenerateThisCharacter() {
     <div
       v-else
       class="detail-content"
-      :class="{ 'detail-content--with-rail': refs.showCharacterRail.value }"
+      :class="{ 'detail-content--with-rail': cd.showCharacterRail.value }"
     >
       <!-- Character Rail -->
       <CharacterRail
-        v-if="refs.showCharacterRail.value"
-        :characters="refs.projectCharactersInListOrder.value"
-        :active-character-id="refs.characterId.value"
+        v-if="cd.showCharacterRail.value"
+        :characters="cd.projectCharactersInListOrder.value"
+        :active-character-id="cd.characterId.value"
         @switch-character="switchProjectCharacter"
       />
 
       <!-- Tree View -->
       <CharacterImageTree
-        :tree-data="refs.treeData.value"
-        :selected-image-id="refs.selectedImageId.value"
-        :multiple-root-bases="refs.multipleRootBases.value"
-        :batch-generating="refs.batchGeneratingCharacter.value"
-        :character-exists="!!refs.character.value"
+        :tree-data="cd.treeData.value"
+        :selected-image-id="cd.selectedImageId.value"
+        :multiple-root-bases="cd.multipleRootBases.value"
+        :batch-generating="cd.batchGeneratingCharacter.value"
+        :character-exists="!!cd.character.value"
         @select-keys="cd.onTreeSelectedKeys($event)"
         @batch-generate="batchGenerateThisCharacter"
         @drop="cd.handleDrop($event)"
@@ -124,16 +122,16 @@ async function executeBatchGenerateThisCharacter() {
 
       <!-- Preview Panel -->
       <CharacterImagePreview
-        :selected-image="refs.selectedImage.value"
-        :prompt-draft="refs.promptDraft.value"
-        :generating="!!refs.generatingByImageId.value[refs.selectedImage.value?.id ?? '']"
-        :uploading-avatar="refs.uploadingAvatar.value"
-        :generate-disabled="refs.selectedImageGenerateDisabled.value"
-        :loose-primary="refs.selectedImageLoosePrimary.value"
-        :can-delete="refs.selectedImageCanDelete.value"
-        :parent-name="refs.selectedImageParentName.value"
-        :image-cost="refs.selectedImage.value?.imageCost"
-        @update:prompt-draft="refs.promptDraft.value = $event"
+        :selected-image="cd.selectedImage.value"
+        :prompt-draft="cd.promptDraft.value"
+        :generating="!!cd.generatingByImageId.value[cd.selectedImage.value?.id ?? '']"
+        :uploading-avatar="cd.uploadingAvatar.value"
+        :generate-disabled="cd.selectedImageGenerateDisabled.value"
+        :loose-primary="cd.selectedImageLoosePrimary.value"
+        :can-delete="cd.selectedImageCanDelete.value"
+        :parent-name="cd.selectedImageParentName.value"
+        :image-cost="cd.selectedImage.value?.imageCost"
+        @update:prompt-draft="cd.promptDraft.value = $event"
         @save-prompt="cd.savePromptDraft()"
         @queue-generate="cd.queueSelectedGenerate()"
         @avatar-upload="cd.handleAvatarUpload($event)"
@@ -144,13 +142,13 @@ async function executeBatchGenerateThisCharacter() {
 
     <!-- Add Image Modal -->
     <AddImageModal
-      :show="refs.showAddModal.value"
-      :form="refs.addForm.value"
-      :selected-file-name="refs.selectedFile.value?.name ?? null"
-      :is-uploading="refs.isUploading.value"
-      :add-by-ai-loading="refs.addByAiLoading.value"
-      @update:show="refs.showAddModal.value = $event"
-      @update:form="refs.addForm.value = $event"
+      :show="cd.showAddModal.value"
+      :form="cd.addForm.value"
+      :selected-file-name="cd.selectedFile.value?.name ?? null"
+      :is-uploading="cd.isUploading.value"
+      :add-by-ai-loading="cd.addByAiLoading.value"
+      @update:show="cd.showAddModal.value = $event"
+      @update:form="cd.addForm.value = $event"
       @file-change="cd.handleFileChange($event)"
       @confirm-add="cd.confirmAddImage()"
       @confirm-add-by-ai="cd.confirmAddImageByAi()"

@@ -44,8 +44,8 @@ export async function aiDramaRoutes(fastify: FastifyInstance) {
 
     const characters = episode.project.characters.map((c) => ({
       name: c.name,
-      personality: c.personality || undefined,
-      relationship: c.relationship || undefined
+      personality: c.description || undefined,
+      relationship: undefined
     }))
 
     const context: DramaPromptContext = {

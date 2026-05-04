@@ -44,7 +44,7 @@ export interface LLMCallResult<T> {
  */
 export async function callLLMWithRetry<T>(
   options: LLMCallOptions,
-  parser: (content: string) => T
+  parser: (content: string) => T | Promise<T>
 ): Promise<LLMCallResult<T>> {
   const {
     provider,
@@ -79,7 +79,7 @@ export async function callLLMWithRetry<T>(
         `LLM API 调用超时 (${API_CALL_TIMEOUT_MS / 1000 / 60}分钟)`
       )
 
-      const parsedContent = parser(completion.content)
+      const parsedContent = await parser(completion.content)
 
       const cost: CostResult = {
         costCNY: completion.usage.costCNY,

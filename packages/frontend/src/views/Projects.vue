@@ -6,8 +6,7 @@ import { EllipsisVerticalOutline } from '@vicons/ionicons5'
 import { useProjectStore } from '@/stores/project'
 import type { Project } from '@dreamer/shared/types'
 import { normalizeProjectName } from '@dreamer/shared'
-import { api, importProject, getImportTaskStatus } from '@/api'
-import type { PipelineJob } from '@/api'
+import { importProject, getImportTaskStatus } from '@/api'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
@@ -194,17 +193,6 @@ const handleQuickCreate = async () => {
   } finally {
     isCreating.value = false
   }
-}
-
-function isParseScriptOutlineJob(job: PipelineJob | null | undefined): boolean {
-  if (!job) return false
-  const jt = (job.jobType ?? '').toString().trim().toLowerCase()
-  const step = (job.currentStep ?? '').toString().trim().toLowerCase()
-  return jt === 'parse-script' || step === 'parse-script'
-}
-
-function hasAnyCharacter(project: Project | null | undefined): boolean {
-  return (project?.characters?.length ?? 0) > 0
 }
 
 /**
@@ -668,6 +656,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
   line-height: var(--line-height-normal);
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   min-height: 38px;

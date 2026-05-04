@@ -445,12 +445,12 @@ export async function templateRoutes(fastify: FastifyInstance) {
         where: { projectId },
         update: {
           templateId: id,
-          episodes: episodes as unknown[]
+          episodes: episodes as unknown[] as never
         },
         create: {
           projectId,
           templateId: id,
-          episodes: episodes as unknown[]
+          episodes: episodes as unknown[] as never
         }
       })
 
