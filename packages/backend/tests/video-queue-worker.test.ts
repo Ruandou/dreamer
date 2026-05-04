@@ -18,12 +18,6 @@ const {
   mockTakeFindUnique,
   mockTakeUpdate,
   mockSceneUpdate,
-  mockSubmitWan26Task,
-  mockWaitForWan26Completion,
-  mockCalculateWan26Cost,
-  mockSubmitSeedanceTask,
-  mockWaitForSeedanceCompletion,
-  mockCalculateSeedanceCost,
   mockUploadFile,
   mockGenerateFileKey,
   mockSendTaskUpdate,
@@ -32,17 +26,12 @@ const {
   mockQueueClose,
   mockLogApiCall,
   mockUpdateApiCall,
-  capturedProcessor
+  capturedProcessor,
+  mockProvider
 } = vi.hoisted(() => ({
   mockTakeFindUnique: vi.fn(),
   mockTakeUpdate: vi.fn(),
   mockSceneUpdate: vi.fn(),
-  mockSubmitWan26Task: vi.fn(),
-  mockWaitForWan26Completion: vi.fn(),
-  mockCalculateWan26Cost: vi.fn(),
-  mockSubmitSeedanceTask: vi.fn(),
-  mockWaitForSeedanceCompletion: vi.fn(),
-  mockCalculateSeedanceCost: vi.fn(),
   mockUploadFile: vi.fn(),
   mockGenerateFileKey: vi.fn(),
   mockSendTaskUpdate: vi.fn(),
@@ -51,7 +40,12 @@ const {
   mockQueueClose: vi.fn().mockResolvedValue(undefined),
   mockLogApiCall: vi.fn(),
   mockUpdateApiCall: vi.fn(),
-  capturedProcessor: { current: null as ((job: any) => Promise<any>) | null }
+  capturedProcessor: { current: null as ((job: any) => Promise<any>) | null },
+  mockProvider: {
+    name: 'atlas',
+    submitGeneration: vi.fn(),
+    queryStatus: vi.fn()
+  }
 }))
 
 vi.mock('ioredis', () => {
@@ -99,16 +93,11 @@ vi.mock('../src/plugins/sse.js', () => ({
   sendTaskUpdate: mockSendTaskUpdate
 }))
 
-vi.mock('../src/services/ai/wan26.js', () => ({
-  submitWan26Task: mockSubmitWan26Task,
-  waitForWan26Completion: mockWaitForWan26Completion,
-  calculateWan26Cost: mockCalculateWan26Cost
-}))
-
-vi.mock('../src/services/ai/seedance.js', () => ({
-  submitSeedanceTask: mockSubmitSeedanceTask,
-  waitForSeedanceCompletion: mockWaitForSeedanceCompletion,
-  calculateSeedanceCost: mockCalculateSeedanceCost
+vi.mock('../src/services/ai/video/video-factory.js', () => ({
+  getVideoProviderForUser: vi.fn().mockResolvedValue(mockProvider),
+  getDefaultVideoProvider: vi.fn().mockResolvedValue(mockProvider),
+  calculateSeedanceCost: vi.fn().mockReturnValue(1.0),
+  calculateWan26Cost: vi.fn().mockReturnValue(0.5)
 }))
 
 vi.mock('../src/services/storage.js', () => ({
@@ -144,7 +133,18 @@ describe('Video Queue Worker', () => {
     vi.clearAllMocks()
     mockTakeFindUnique.mockResolvedValue(defaultTake)
     ;(global.fetch as any).mockResolvedValue({
-      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(1024))
+      ok: true,
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(1024)),
+      headers: { get: () => 'image/jpeg' }
+    })
+
+    // Set up mock provider defaults
+    mockProvider.submitGeneration.mockResolvedValue({ taskId: 'ext-task-123', status: 'queued' })
+    mockProvider.queryStatus.mockResolvedValue({
+      taskId: 'ext-task-123',
+      status: 'completed',
+      videoUrl: 'https://cdn.example.com/video.mp4',
+      thumbnailUrl: 'https://cdn.example.com/thumb.jpg'
     })
   })
 
@@ -160,12 +160,6 @@ describe('Video Queue Worker', () => {
 
   describe('Worker processor', () => {
     it('should process wan2.6 job successfully', async () => {
-      mockSubmitWan26Task.mockResolvedValue({ taskId: 'wan-task-123' })
-      mockWaitForWan26Completion.mockResolvedValue({
-        videoUrl: 'https://cdn.example.com/video.mp4',
-        thumbnailUrl: 'https://cdn.example.com/thumb.jpg'
-      })
-      mockCalculateWan26Cost.mockReturnValue(0.5)
       mockUploadFile.mockResolvedValue('https://minio.example.com/videos/task-123.mp4')
       mockGenerateFileKey.mockReturnValue('videos/task-123.mp4')
       mockLogApiCall.mockResolvedValue({ id: 'api-call-123' })
@@ -189,18 +183,18 @@ describe('Video Queue Worker', () => {
         where: { id: 'task-123' },
         data: { status: 'processing' }
       })
-      expect(mockSubmitWan26Task).toHaveBeenCalled()
-      expect(mockWaitForWan26Completion).toHaveBeenCalledWith('wan-task-123')
+      expect(mockProvider.submitGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: 'A person walking',
+          duration: 5,
+          aspectRatio: '9:16'
+        })
+      )
+      expect(mockProvider.queryStatus).toHaveBeenCalledWith('ext-task-123')
       expect(mockUploadFile).toHaveBeenCalled()
     })
 
     it('should process seedance2.0 job successfully', async () => {
-      mockSubmitSeedanceTask.mockResolvedValue({ taskId: 'seedance-task-123' })
-      mockWaitForSeedanceCompletion.mockResolvedValue({
-        videoUrl: 'https://cdn.example.com/video.mp4',
-        thumbnailUrl: 'https://cdn.example.com/thumb.jpg'
-      })
-      mockCalculateSeedanceCost.mockReturnValue(1.0)
       mockUploadFile.mockResolvedValue('https://minio.example.com/videos/task-123.mp4')
       mockGenerateFileKey.mockReturnValue('videos/task-123.mp4')
       mockLogApiCall.mockResolvedValue({ id: 'api-call-456' })
@@ -220,16 +214,17 @@ describe('Video Queue Worker', () => {
         await capturedProcessor.current(mockJob)
       }
 
-      expect(mockSubmitSeedanceTask).toHaveBeenCalled()
-      expect(mockWaitForSeedanceCompletion).toHaveBeenCalledWith('seedance-task-123')
+      expect(mockProvider.submitGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: 'A car driving',
+          duration: 10,
+          aspectRatio: '9:16'
+        })
+      )
+      expect(mockProvider.queryStatus).toHaveBeenCalledWith('ext-task-123')
     })
 
     it('should use default duration when not provided', async () => {
-      mockSubmitWan26Task.mockResolvedValue({ taskId: 'wan-task-123' })
-      mockWaitForWan26Completion.mockResolvedValue({
-        videoUrl: 'https://cdn.example.com/video.mp4'
-      })
-      mockCalculateWan26Cost.mockReturnValue(0.25)
       mockUploadFile.mockResolvedValue('https://minio.example.com/videos/task-123.mp4')
       mockGenerateFileKey.mockReturnValue('videos/task-123.mp4')
 
@@ -247,15 +242,12 @@ describe('Video Queue Worker', () => {
         await capturedProcessor.current(mockJob)
       }
 
-      expect(mockSubmitWan26Task).toHaveBeenCalledWith(expect.objectContaining({ duration: 5 }))
+      expect(mockProvider.submitGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({ duration: 5 })
+      )
     })
 
     it('should send SSE notification on processing', async () => {
-      mockSubmitWan26Task.mockResolvedValue({ taskId: 'wan-task-123' })
-      mockWaitForWan26Completion.mockResolvedValue({
-        videoUrl: 'https://cdn.example.com/video.mp4'
-      })
-      mockCalculateWan26Cost.mockReturnValue(0.25)
       mockUploadFile.mockResolvedValue('https://minio.example.com/videos/task-123.mp4')
       mockGenerateFileKey.mockReturnValue('videos/task-123.mp4')
 
@@ -279,7 +271,7 @@ describe('Video Queue Worker', () => {
     })
 
     it('should handle job failure', async () => {
-      mockSubmitWan26Task.mockRejectedValue(new Error('API Error'))
+      mockProvider.submitGeneration.mockRejectedValue(new Error('API Error'))
       mockTakeUpdate.mockResolvedValue({ id: 'task-123' })
 
       const mockJob = {

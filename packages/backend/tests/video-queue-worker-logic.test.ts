@@ -53,27 +53,15 @@ vi.mock('../src/plugins/sse.js', () => ({
   sendTaskUpdate: mockSendTaskUpdate
 }))
 
-// Mock AI services
-const mockSubmitWan26Task = vi.fn()
-const mockWaitForWan26Completion = vi.fn()
-const mockCalculateWan26Cost = vi.fn()
+// Mock video factory
+const mockGetVideoProviderForUser = vi.fn()
+const mockGetDefaultVideoProvider = vi.fn()
 
-vi.mock('../src/services/ai/wan26.js', () => ({
-  submitWan26Task: mockSubmitWan26Task,
-  waitForWan26Completion: mockWaitForWan26Completion,
-  calculateWan26Cost: mockCalculateWan26Cost
-}))
-
-const mockSubmitSeedanceTask = vi.fn()
-const mockWaitForSeedanceCompletion = vi.fn()
-const mockCalculateSeedanceCost = vi.fn()
-const mockImageUrlsToBase64 = vi.fn()
-
-vi.mock('../src/services/ai/seedance.js', () => ({
-  submitSeedanceTask: mockSubmitSeedanceTask,
-  waitForSeedanceCompletion: mockWaitForSeedanceCompletion,
-  calculateSeedanceCost: mockCalculateSeedanceCost,
-  imageUrlsToBase64: mockImageUrlsToBase64
+vi.mock('../src/services/ai/video/video-factory.js', () => ({
+  getVideoProviderForUser: mockGetVideoProviderForUser,
+  getDefaultVideoProvider: mockGetDefaultVideoProvider,
+  calculateSeedanceCost: vi.fn().mockReturnValue(1.0),
+  calculateWan26Cost: vi.fn().mockReturnValue(0.35)
 }))
 
 // Mock storage
@@ -99,7 +87,9 @@ const originalFetch = global.fetch
 beforeAll(() => {
   global.fetch = vi.fn(() =>
     Promise.resolve({
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8))
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+      headers: { get: () => 'image/jpeg' }
     } as Response)
   )
 })
@@ -135,6 +125,12 @@ vi.mock('bullmq', () => {
 })
 
 describe('Video Queue Worker', () => {
+  const mockProvider = {
+    name: 'atlas',
+    submitGeneration: vi.fn(),
+    queryStatus: vi.fn()
+  }
+
   beforeAll(async () => {
     await import('../src/queues/video.js')
   })
@@ -143,6 +139,17 @@ describe('Video Queue Worker', () => {
     vi.clearAllMocks()
     // Reset fetch mock to avoid leaking call counts
     ;(global.fetch as any).mockClear?.()
+
+    // Set up mock provider defaults
+    mockProvider.submitGeneration.mockResolvedValue({ taskId: 'ext-task-123', status: 'queued' })
+    mockProvider.queryStatus.mockResolvedValue({
+      taskId: 'ext-task-123',
+      status: 'completed',
+      videoUrl: 'https://example.com/video.mp4',
+      thumbnailUrl: 'https://example.com/thumb.jpg'
+    })
+    mockGetVideoProviderForUser.mockResolvedValue(mockProvider)
+    mockGetDefaultVideoProvider.mockResolvedValue(mockProvider)
   })
 
   afterEach(() => {
@@ -167,12 +174,6 @@ describe('Video Queue Worker', () => {
     // Mock service responses
     mockGetProjectUserIdForTask.mockResolvedValue('user-1')
     mockLogApiCall.mockResolvedValue({ id: 'api-call-1' })
-    mockSubmitWan26Task.mockResolvedValue({ taskId: 'wan-task-123' })
-    mockWaitForWan26Completion.mockResolvedValue({
-      videoUrl: 'https://example.com/video.mp4',
-      thumbnailUrl: 'https://example.com/thumb.jpg'
-    })
-    mockCalculateWan26Cost.mockReturnValue(0.05)
     mockUploadFile.mockResolvedValue('https://storage.example.com/video.mp4')
     mockGenerateFileKey.mockReturnValue('videos/user-1/video.mp4')
 
@@ -186,13 +187,14 @@ describe('Video Queue Worker', () => {
       sceneId: 'scene-1'
     })
     expect(mockSetSceneGenerating).toHaveBeenCalledWith('scene-1')
-    expect(mockSubmitWan26Task).toHaveBeenCalledWith({
+    expect(mockProvider.submitGeneration).toHaveBeenCalledWith({
       prompt: 'A person walking',
-      referenceImage: undefined,
-      duration: 5
+      imageUrls: undefined,
+      duration: 5,
+      aspectRatio: '9:16'
     })
-    expect(mockSetTaskExternalTaskId).toHaveBeenCalledWith('task-1', 'wan-task-123')
-    expect(mockWaitForWan26Completion).toHaveBeenCalledWith('wan-task-123')
+    expect(mockSetTaskExternalTaskId).toHaveBeenCalledWith('task-1', 'ext-task-123')
+    expect(mockProvider.queryStatus).toHaveBeenCalledWith('ext-task-123')
     expect(mockSetTaskCompleted).toHaveBeenCalled()
     expect(mockSetSceneCompleted).toHaveBeenCalled()
     // Worker doesn't return a value
@@ -216,17 +218,12 @@ describe('Video Queue Worker', () => {
 
     mockGetProjectUserIdForTask.mockResolvedValue('user-1')
     mockLogApiCall.mockResolvedValue({ id: 'api-call-2' })
-    mockSubmitSeedanceTask.mockResolvedValue({ taskId: 'seedance-task-123' })
-    mockWaitForSeedanceCompletion.mockResolvedValue({
-      videoUrl: 'https://example.com/seedance-video.mp4'
-    })
-    mockCalculateSeedanceCost.mockReturnValue(0.08)
 
     await capturedVideoProcessor(mockJob)
 
-    expect(mockSubmitSeedanceTask).toHaveBeenCalledWith({
+    expect(mockProvider.submitGeneration).toHaveBeenCalledWith({
       prompt: 'A person running',
-      imageBase64: undefined,
+      imageUrls: undefined,
       duration: 10,
       aspectRatio: '9:16' // Default value
     })
@@ -247,7 +244,7 @@ describe('Video Queue Worker', () => {
 
     mockGetProjectUserIdForTask.mockResolvedValue('user-1')
     mockLogApiCall.mockResolvedValue({ id: 'api-call-3' })
-    mockSubmitWan26Task.mockRejectedValue(new Error('API rate limit exceeded'))
+    mockProvider.submitGeneration.mockRejectedValue(new Error('API rate limit exceeded'))
 
     await expect(capturedVideoProcessor(mockJob)).rejects.toThrow('API rate limit exceeded')
 
@@ -270,12 +267,13 @@ describe('Video Queue Worker', () => {
 
     mockGetProjectUserIdForTask.mockResolvedValue('user-1')
     mockLogApiCall.mockResolvedValue({ id: 'api-call-4' })
-    mockSubmitWan26Task.mockResolvedValue({ taskId: 'wan-task-456' })
-    mockWaitForWan26Completion.mockResolvedValue({
+    mockProvider.queryStatus.mockResolvedValue({
+      taskId: 'ext-task-456',
+      status: 'completed',
       videoUrl: null
     })
 
-    await expect(capturedVideoProcessor(mockJob)).rejects.toThrow('Wan 2.6 returned no video URL')
+    await expect(capturedVideoProcessor(mockJob)).rejects.toThrow('atlas returned no video URL')
   })
 
   it('should use default duration when not provided', async () => {
@@ -293,17 +291,14 @@ describe('Video Queue Worker', () => {
 
     mockGetProjectUserIdForTask.mockResolvedValue('user-1')
     mockLogApiCall.mockResolvedValue({ id: 'api-call-5' })
-    mockSubmitWan26Task.mockResolvedValue({ taskId: 'wan-task-789' })
-    mockWaitForWan26Completion.mockResolvedValue({
-      videoUrl: 'https://example.com/video.mp4'
-    })
 
     await capturedVideoProcessor(mockJob)
 
-    expect(mockSubmitWan26Task).toHaveBeenCalledWith({
+    expect(mockProvider.submitGeneration).toHaveBeenCalledWith({
       prompt: 'Test prompt',
-      referenceImage: undefined,
-      duration: 5 // Default duration
+      imageUrls: undefined,
+      duration: 5, // Default duration
+      aspectRatio: '9:16'
     })
   })
 
@@ -321,10 +316,6 @@ describe('Video Queue Worker', () => {
     }
 
     mockGetProjectUserIdForTask.mockResolvedValue(null)
-    mockSubmitWan26Task.mockResolvedValue({ taskId: 'wan-task-999' })
-    mockWaitForWan26Completion.mockResolvedValue({
-      videoUrl: 'https://example.com/video.mp4'
-    })
 
     await capturedVideoProcessor(mockJob)
 
@@ -350,17 +341,18 @@ describe('Video Queue Worker', () => {
 
     mockGetProjectUserIdForTask.mockResolvedValue('user-1')
     mockLogApiCall.mockResolvedValue({ id: 'api-call-6' })
-    mockImageUrlsToBase64.mockResolvedValue(['base64-1', 'base64-2'])
-    mockSubmitSeedanceTask.mockResolvedValue({ taskId: 'seedance-task-999' })
-    mockWaitForSeedanceCompletion.mockResolvedValue({
-      videoUrl: 'https://example.com/video.mp4'
-    })
 
     await capturedVideoProcessor(mockJob)
 
-    expect(mockImageUrlsToBase64).toHaveBeenCalledWith([
-      'https://example.com/img1.jpg',
-      'https://example.com/img2.jpg'
-    ])
+    // The worker converts image URLs to base64 internally via fetch
+    expect(global.fetch).toHaveBeenCalledWith('https://example.com/img1.jpg')
+    expect(global.fetch).toHaveBeenCalledWith('https://example.com/img2.jpg')
+    expect(mockProvider.submitGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: 'Test prompt',
+        duration: 8,
+        aspectRatio: '9:16'
+      })
+    )
   })
 })

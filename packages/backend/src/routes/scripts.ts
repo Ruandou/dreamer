@@ -2,7 +2,12 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../lib/prisma.js'
 import { getRequestUserId } from '../plugins/auth.js'
 import { logInfo, logError } from '../lib/error-logger.js'
-import { recordModelApiCall } from '../services/ai/api-logger.js'
+import { callLLMWithRetry } from '../services/ai/llm/llm-call-wrapper.js'
+import { createArkLLMProvider } from '../services/ai/llm/llm-factory.js'
+import {
+  ArkLLMAuthError,
+  ArkLLMRateLimitError
+} from '../services/ai/llm/providers/ark-llm-provider.js'
 
 interface CreateScriptBody {
   title?: string
@@ -254,16 +259,11 @@ Scene 2. 破旧屋内 - 夜
           return reply.status(400).send({ error: '请先在设置中配置方舟 API Key' })
         }
 
-        const apiUrl = arkApiUrl || 'https://ark.cn-beijing.volces.com/api/v3/chat/completions'
+        const provider = createArkLLMProvider(arkApiKey, arkApiUrl || undefined)
 
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${arkApiKey}`
-          },
-          body: JSON.stringify({
-            model: 'deepseek-v3',
+        const result = await callLLMWithRetry(
+          {
+            provider,
             messages: [
               {
                 role: 'system',
@@ -276,37 +276,23 @@ Scene 2. 破旧屋内 - 夜
               }
             ],
             temperature: 0.7,
-            max_tokens: 4000
-          })
-        })
+            maxTokens: 4000,
+            model: 'deepseek-v3',
+            modelLog: { userId, op: 'script_ai_revise' }
+          },
+          (content) => content
+        )
 
-        if (!response.ok) {
-          const errorText = await response.text()
-          logError('AI 修改 API 调用失败', { status: response.status, error: errorText })
-          return reply.status(response.status).send({ error: 'AI 修改失败' })
-        }
-
-        const data = await response.json()
-        const revisedContent = data.choices?.[0]?.message?.content
-
-        if (!revisedContent) {
-          return reply.status(500).send({ error: 'AI 返回内容为空' })
-        }
-
-        // 记录 ModelApiCall
         const duration = Date.now() - startTime
-        await recordModelApiCall({
-          userId,
-          model: 'deepseek-v3',
-          provider: 'ark',
-          prompt: instruction,
-          requestParams: { contentLength: content.length, duration },
-          status: 'completed'
-        }).catch(() => {}) // 静默失败，不影响主流程
-
         logInfo('Scripts', 'AI 修改成功', { userId, scriptId: id, duration })
-        return { revisedContent }
+        return { revisedContent: result.content }
       } catch (error) {
+        if (error instanceof ArkLLMAuthError) {
+          return reply.status(401).send({ error: 'AI 修改失败：API 认证错误' })
+        }
+        if (error instanceof ArkLLMRateLimitError) {
+          return reply.status(429).send({ error: 'AI 修改失败：请求过于频繁' })
+        }
         logError('Scripts', 'AI 修改异常', {
           error: error instanceof Error ? error.message : String(error)
         })

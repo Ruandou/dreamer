@@ -19,6 +19,7 @@ export {
 
 export {
   getDefaultImageProvider,
+  getImageProviderForUser,
   createArkImageProvider,
   createKlingImageProvider,
   createOpenAIImageProvider

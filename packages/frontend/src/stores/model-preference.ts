@@ -16,7 +16,7 @@ export const useModelPreferenceStore = defineStore('modelPreference', () => {
   const loading = ref(false)
   const loaded = ref(false)
 
-  // Getters
+  // Getters - Text Models
   const textModels = computed<LLMModelInfo[]>(() => catalog.value?.llm.models ?? [])
 
   const currentTextModel = computed<string | undefined>({
@@ -35,6 +35,46 @@ export const useModelPreferenceStore = defineStore('modelPreference', () => {
 
   const effectiveTextModel = computed(() => {
     return currentTextModel.value || defaultTextModel.value
+  })
+
+  // Getters - Image Models
+  const imageModels = computed<LLMModelInfo[]>(() => catalog.value?.image.models ?? [])
+
+  const currentImageModel = computed<string | undefined>({
+    get: () => preferences.value.imageModel,
+    set: (val: string | undefined) => {
+      preferences.value.imageModel = val
+    }
+  })
+
+  const defaultImageModel = computed(() => {
+    const models = imageModels.value
+    if (models.length === 0) return undefined
+    return models[0].id
+  })
+
+  const effectiveImageModel = computed(() => {
+    return currentImageModel.value || defaultImageModel.value
+  })
+
+  // Getters - Video Models
+  const videoModels = computed<LLMModelInfo[]>(() => catalog.value?.video.models ?? [])
+
+  const currentVideoModel = computed<string | undefined>({
+    get: () => preferences.value.videoModel,
+    set: (val: string | undefined) => {
+      preferences.value.videoModel = val
+    }
+  })
+
+  const defaultVideoModel = computed(() => {
+    const models = videoModels.value
+    if (models.length === 0) return undefined
+    return models[0].id
+  })
+
+  const effectiveVideoModel = computed(() => {
+    return currentVideoModel.value || defaultVideoModel.value
   })
 
   // Actions
@@ -74,10 +114,22 @@ export const useModelPreferenceStore = defineStore('modelPreference', () => {
     preferences,
     loading,
     loaded,
+    // Text
     textModels,
     currentTextModel,
     defaultTextModel,
     effectiveTextModel,
+    // Image
+    imageModels,
+    currentImageModel,
+    defaultImageModel,
+    effectiveImageModel,
+    // Video
+    videoModels,
+    currentVideoModel,
+    defaultVideoModel,
+    effectiveVideoModel,
+    // Actions
     fetchCatalog,
     fetchPreferences,
     savePreferences,

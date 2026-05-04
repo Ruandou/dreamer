@@ -3,7 +3,7 @@
  * 使用统一 CostResult，支持多提供商
  */
 
-import type { LLMProvider, LLMMessage, LLMStreamChunk } from './llm-provider.js'
+import type { LLMProvider, LLMMessage, LLMStreamChunk, LLMUsage } from './llm-provider.js'
 import type { CostResult } from '../core/provider-interface.js'
 import { DeepSeekAuthError, DeepSeekRateLimitError } from './providers/deepseek-provider.js'
 import { OpenAIAuthError, OpenAIRateLimitError } from './providers/openai-provider.js'
@@ -196,6 +196,7 @@ export async function* streamLLMWithRetry(
       })
 
       let accumulated = ''
+      let finalUsage: LLMUsage | undefined
 
       for await (const chunk of provider.stream(messages, {
         temperature,
@@ -204,12 +205,15 @@ export async function* streamLLMWithRetry(
         extra
       })) {
         accumulated += chunk.delta
+        if (chunk.usage) {
+          finalUsage = chunk.usage
+        }
         yield { ...chunk, accumulated }
       }
 
       await logLLMCall(modelLog, userPrompt, {
         status: 'completed',
-        cost: { costCNY: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        cost: finalUsage || { costCNY: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 },
         model: model || provider.getConfig().defaultModel,
         provider: provider.name
       }).catch(() => {})

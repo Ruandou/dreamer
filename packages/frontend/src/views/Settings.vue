@@ -233,7 +233,7 @@ const formatBalance = (amount: number) => {
           </div>
           <div>
             <h3 class="settings-section__title">AI 模型</h3>
-            <p class="settings-section__desc">选择默认的文本生成模型</p>
+            <p class="settings-section__desc">选择默认的 AI 生成模型</p>
           </div>
         </div>
         <NCard class="settings-card" :bordered="false">
@@ -243,6 +243,22 @@ const formatBalance = (amount: number) => {
                 v-model:value="modelStore.currentTextModel"
                 :options="modelStore.textModels.map((m) => ({ label: m.name, value: m.id }))"
                 placeholder="选择默认文本模型"
+                clearable
+              />
+            </NFormItem>
+            <NFormItem label="图片模型">
+              <NSelect
+                v-model:value="modelStore.currentImageModel"
+                :options="modelStore.imageModels.map((m) => ({ label: m.name, value: m.id }))"
+                placeholder="选择默认图片模型"
+                clearable
+              />
+            </NFormItem>
+            <NFormItem label="视频模型">
+              <NSelect
+                v-model:value="modelStore.currentVideoModel"
+                :options="modelStore.videoModels.map((m) => ({ label: m.name, value: m.id }))"
+                placeholder="选择默认视频模型"
                 clearable
               />
             </NFormItem>

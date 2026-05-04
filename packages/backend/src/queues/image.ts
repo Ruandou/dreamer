@@ -4,7 +4,7 @@ import type { ImageGenerationJobData } from '@dreamer/shared/types'
 import {
   generateTextToImageAndPersist,
   generateImageEditAndPersist,
-  getDefaultImageProvider,
+  getImageProviderForUser,
   arkImageSizeFromProjectAspectRatio,
   imageJobPrompt,
   imageJobModel
@@ -49,9 +49,9 @@ const imageWorker = new Worker<ImageGenerationJobData>(
     const projectRow = await imageQueueService.getProjectAspectRatio(projectId)
     const imageSize = arkImageSizeFromProjectAspectRatio(projectRow?.aspectRatio)
 
-    // 获取当前默认图片 Provider，用于日志记录
-    const defaultProvider = getDefaultImageProvider()
-    const providerName = defaultProvider.name
+    // 获取用户偏好的图片 Provider，若未设置则使用默认
+    const provider = await getImageProviderForUser(userId)
+    const providerName = provider.name
 
     try {
       switch (data.kind) {

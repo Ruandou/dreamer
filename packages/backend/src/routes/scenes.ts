@@ -3,6 +3,7 @@ import { verifySceneOwnership, verifyEpisodeOwnership, getRequestUserId } from '
 import type { VideoModel } from '@dreamer/shared/types'
 import { permissionDeniedBody } from '../lib/http-errors.js'
 import { sceneService } from '../services/scene-service.js'
+import { resolveVideoModelForUser } from '../services/ai/video/video-factory.js'
 
 export async function sceneRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { episodeId: string } }>(
@@ -100,7 +101,7 @@ export async function sceneRoutes(fastify: FastifyInstance) {
 
   fastify.post<{
     Params: { id: string }
-    Body: { model: VideoModel; referenceImage?: string; imageUrls?: string[]; duration?: number }
+    Body: { model?: VideoModel; referenceImage?: string; imageUrls?: string[]; duration?: number }
   }>('/:id/generate', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const userId = getRequestUserId(request)
     const sceneId = request.params.id
@@ -109,7 +110,12 @@ export async function sceneRoutes(fastify: FastifyInstance) {
       return reply.status(403).send(permissionDeniedBody)
     }
 
-    const result = await sceneService.enqueueVideoGenerate(sceneId, request.body)
+    const resolvedModel =
+      request.body.model ?? (await resolveVideoModelForUser(userId)) ?? 'seedance2.0'
+    const result = await sceneService.enqueueVideoGenerate(sceneId, {
+      ...request.body,
+      model: resolvedModel
+    })
 
     if (!result.ok) {
       return reply.status(400).send({ error: 'Scene has no prompt: add Shots or description' })
@@ -119,15 +125,16 @@ export async function sceneRoutes(fastify: FastifyInstance) {
   })
 
   fastify.post<{
-    Body: { sceneIds: string[]; model: VideoModel; referenceImage?: string; imageUrls?: string[] }
+    Body: { sceneIds: string[]; model?: VideoModel; referenceImage?: string; imageUrls?: string[] }
   }>('/batch-generate', { preHandler: [fastify.authenticate] }, async (request, _reply) => {
     const userId = getRequestUserId(request)
     const { sceneIds, model, referenceImage, imageUrls } = request.body
 
+    const resolvedModel = model ?? (await resolveVideoModelForUser(userId)) ?? 'seedance2.0'
     const results = await sceneService.batchEnqueueVideoGenerate(
       userId,
       sceneIds,
-      model,
+      resolvedModel,
       referenceImage,
       imageUrls,
       verifySceneOwnership

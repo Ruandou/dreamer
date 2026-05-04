@@ -1,9 +1,7 @@
-/** Chat streaming service — pipes OpenAI SDK stream to async generator */
+/** Chat streaming service — pipes LLM stream to async generator via streamLLMWithRetry */
 
-import OpenAI from 'openai'
-import type { DeepSeekCost } from '../ai/deepseek-client.js'
-import { calculateDeepSeekCost } from '../ai/deepseek-client.js'
-import { getProviderForModel } from '../ai/llm/llm-factory.js'
+import { streamLLMWithRetry } from '../ai/llm/llm-call-wrapper.js'
+import type { LLMUsage } from '../ai/llm/llm-provider.js'
 import { CHAT_MAX_RESPONSE_TOKENS, CHAT_TEMPERATURE } from './chat.constants.js'
 
 export interface ChatStreamEventToken {
@@ -14,7 +12,7 @@ export interface ChatStreamEventToken {
 export interface ChatStreamEventDone {
   type: 'done'
   fullContent: string
-  usage: DeepSeekCost
+  usage: LLMUsage
   suggestedEdit: { type: string; content: string; description: string } | null
 }
 
@@ -30,6 +28,7 @@ export interface StreamChatParams {
   temperature?: number
   maxTokens?: number
   model?: string
+  userId: string
 }
 
 /** Parse [EDIT_SUGGESTION] JSON blocks from the full response */
@@ -63,52 +62,41 @@ export async function* streamChatResponse(
     messages,
     temperature = CHAT_TEMPERATURE,
     maxTokens = CHAT_MAX_RESPONSE_TOKENS,
-    model
+    model,
+    userId
   } = params
 
   let fullContent = ''
-  let rawUsage: unknown
+  let finalUsage: LLMUsage | undefined
 
   try {
-    const provider = getProviderForModel(model)
-    const config = provider.getConfig()
-    const client = new OpenAI({
-      apiKey: config.apiKey,
-      baseURL: config.baseURL
-    })
-
-    const stream = await client.chat.completions.create({
-      model: model || config.defaultModel || 'deepseek-chat',
+    const stream = streamLLMWithRetry({
       messages: messages.map((m) => ({
         role: m.role as 'system' | 'user' | 'assistant',
         content: m.content
       })),
       temperature,
-      max_tokens: maxTokens,
-      stream: true
+      maxTokens,
+      model,
+      modelLog: { userId, op: 'chat_stream' }
     })
 
     for await (const chunk of stream) {
-      const delta = chunk.choices?.[0]?.delta?.content
-      if (delta) {
-        fullContent += delta
-        yield { type: 'token', content: delta }
+      fullContent = chunk.accumulated
+      if (chunk.delta) {
+        yield { type: 'token', content: chunk.delta }
       }
-
       if (chunk.usage) {
-        rawUsage = chunk.usage
+        finalUsage = chunk.usage
       }
     }
 
-    // Compute usage if not in the final chunk (some providers don't send usage in stream)
-    const usage: DeepSeekCost = rawUsage
-      ? calculateDeepSeekCost(rawUsage)
-      : {
-          inputTokens: 0,
-          outputTokens: 0,
-          totalTokens: 0,
-          costCNY: 0
-        }
+    const usage: LLMUsage = finalUsage || {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      costCNY: 0
+    }
 
     const suggestedEdit = parseSuggestedEdit(fullContent)
 

@@ -6,8 +6,6 @@ import { chatRepository } from '../../repositories/chat-repository.js'
 import { buildSystemPrompt } from './chat-prompts.js'
 import { buildChatContext } from './chat-context-builder.js'
 import { streamChatResponse } from './chat-stream-service.js'
-import { recordModelApiCall } from '../ai/api-logger.js'
-import { getModelInfo } from '../ai/llm/llm-model-catalog.js'
 import { logInfo, logError } from '../../lib/error-logger.js'
 import { CHAT_STREAM_HEARTBEAT_MS, QUICK_COMMAND_MAP } from './chat.constants.js'
 
@@ -221,7 +219,8 @@ export async function handleStream(
   try {
     const stream = streamChatResponse({
       messages: contextMessages as Array<{ role: string; content: string }>,
-      model
+      model,
+      userId
     })
 
     for await (const event of stream) {
@@ -244,17 +243,6 @@ export async function handleStream(
           costCNY: event.usage.costCNY,
           metadata
         })
-
-        // Log model API call
-        await recordModelApiCall({
-          userId,
-          model: model || 'deepseek-chat',
-          provider: getModelInfo(model ?? '')?.provider || 'deepseek',
-          prompt: fullContent.slice(0, 500),
-          requestParams: { inputTokens: event.usage.inputTokens },
-          status: 'completed',
-          cost: event.usage.costCNY
-        }).catch(() => {})
 
         const doneData: Record<string, unknown> = {
           fullContent,

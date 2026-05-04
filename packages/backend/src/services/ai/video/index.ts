@@ -20,8 +20,11 @@ export {
 
 export {
   getDefaultVideoProvider,
+  getVideoProviderForUser,
+  resolveVideoModelForUser,
   createArkVideoProvider,
-  createKlingVideoProvider
+  createKlingVideoProvider,
+  createAtlasVideoProvider
 } from './video-factory.js'
 
 export {
@@ -33,3 +36,9 @@ export {
 } from './providers/ark-video-provider.js'
 
 export { KlingVideoProvider, KlingVideoError } from './providers/kling-video-provider.js'
+
+export {
+  AtlasVideoProvider,
+  AtlasVideoError,
+  calculateWan26Cost
+} from './providers/atlas-video-provider.js'

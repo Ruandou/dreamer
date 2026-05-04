@@ -12,6 +12,7 @@ import {
 import { ArkImageProvider } from './providers/ark-image-provider.js'
 import { KlingImageProvider } from './providers/kling-image-provider.js'
 import { OpenAIImageProvider } from './providers/openai-image-provider.js'
+import { prisma } from '../../../lib/prisma.js'
 
 export type { ImageProvider } from './image-provider.js'
 export {
@@ -103,4 +104,78 @@ export function createOpenAIImageProvider(apiKey?: string, baseURL?: string) {
       'https://api.openai.com/v1',
     defaultModel: process.env.OPENAI_IMAGE_T2I_MODEL || 'dall-e-3'
   })
+}
+
+/**
+ * 获取用户偏好的 Image Provider
+ * 从数据库读取用户的 modelPreferences，优先使用用户选择的图片模型
+ * @param userId 用户 ID
+ * @returns 对应模型的 Provider，若用户未设置则返回默认 Provider
+ */
+export async function getImageProviderForUser(userId: string) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { modelPreferences: true }
+    })
+
+    const preferences = user?.modelPreferences as { imageModel?: string } | undefined
+    const imageModel = preferences?.imageModel
+
+    if (imageModel) {
+      // 根据模型 ID 解析 provider
+      const modelEntry = [
+        { id: 'doubao-seedream-5-0-lite', provider: 'ark' },
+        { id: 'kling-image-o1', provider: 'kling' },
+        { id: 'dall-e-3', provider: 'openai' }
+      ].find((m) => m.id === imageModel)
+
+      if (modelEntry) {
+        return createImageProviderForModel(modelEntry.provider, imageModel)
+      }
+    }
+  } catch (e) {
+    console.warn('[image-factory] 读取用户图片模型偏好失败，使用默认 Provider:', e)
+  }
+
+  return getDefaultImageProvider()
+}
+
+function createImageProviderForModel(providerName: string, modelId: string) {
+  const ak = process.env.KLING_AK
+  const sk = process.env.KLING_SK
+
+  switch (providerName) {
+    case 'ark':
+      return createImageProvider({
+        provider: 'ark',
+        apiKey: process.env.ARK_IMAGE_API_KEY || process.env.ARK_API_KEY || '',
+        baseURL:
+          process.env.ARK_IMAGE_BASE_URL ||
+          process.env.ARK_API_URL ||
+          'https://ark.cn-beijing.volces.com/api/v3',
+        defaultModel: modelId
+      })
+    case 'kling':
+      return createImageProvider({
+        provider: 'kling',
+        apiKey: process.env.KLING_IMAGE_API_KEY || '',
+        baseURL: process.env.KLING_IMAGE_BASE_URL || 'https://api-beijing.klingai.com',
+        defaultModel: modelId,
+        accessKey: ak,
+        secretKey: sk
+      })
+    case 'openai':
+      return createImageProvider({
+        provider: 'openai',
+        apiKey: process.env.OPENAI_IMAGE_API_KEY || process.env.OPENAI_API_KEY || '',
+        baseURL:
+          process.env.OPENAI_IMAGE_BASE_URL ||
+          process.env.OPENAI_BASE_URL ||
+          'https://api.openai.com/v1',
+        defaultModel: modelId
+      })
+    default:
+      return getDefaultImageProvider()
+  }
 }

@@ -30,18 +30,29 @@ vi.mock('../src/services/image-queue-service.js', () => ({
 }))
 
 // Mock AI services
-const mockGenerateTextToImageAndPersist = vi.fn()
-const mockGenerateImageEditAndPersist = vi.fn()
-const mockArkImageSizeFromProjectAspectRatio = vi.fn()
-const mockImageJobPrompt = vi.fn()
-const mockImageJobModel = vi.fn()
-
-const mockGetDefaultImageProvider = vi.fn().mockReturnValue({ name: 'kling' })
+const {
+  mockGenerateTextToImageAndPersist,
+  mockGenerateImageEditAndPersist,
+  mockArkImageSizeFromProjectAspectRatio,
+  mockImageJobPrompt,
+  mockImageJobModel,
+  mockGetDefaultImageProvider,
+  mockGetImageProviderForUser
+} = vi.hoisted(() => ({
+  mockGenerateTextToImageAndPersist: vi.fn(),
+  mockGenerateImageEditAndPersist: vi.fn(),
+  mockArkImageSizeFromProjectAspectRatio: vi.fn(),
+  mockImageJobPrompt: vi.fn(),
+  mockImageJobModel: vi.fn(),
+  mockGetDefaultImageProvider: vi.fn().mockReturnValue({ name: 'kling' }),
+  mockGetImageProviderForUser: vi.fn().mockResolvedValue({ name: 'kling' })
+}))
 
 vi.mock('../src/services/ai/image-generation.js', () => ({
   generateTextToImageAndPersist: mockGenerateTextToImageAndPersist,
   generateImageEditAndPersist: mockGenerateImageEditAndPersist,
   getDefaultImageProvider: mockGetDefaultImageProvider,
+  getImageProviderForUser: mockGetImageProviderForUser,
   arkImageSizeFromProjectAspectRatio: mockArkImageSizeFromProjectAspectRatio,
   imageJobPrompt: mockImageJobPrompt,
   imageJobModel: mockImageJobModel
@@ -93,6 +104,7 @@ describe('Image Queue Worker', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetDefaultImageProvider.mockReturnValue({ name: 'kling' })
+    mockGetImageProviderForUser.mockResolvedValue({ name: 'kling' })
   })
 
   afterEach(() => {

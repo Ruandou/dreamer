@@ -3,16 +3,11 @@ import IORedis from 'ioredis'
 import type { VideoJobData } from '@dreamer/shared/types'
 import { videoQueueService } from '../services/video-queue-service.js'
 import {
-  submitWan26Task,
-  waitForWan26Completion,
-  calculateWan26Cost
-} from '../services/ai/wan26.js'
-import {
-  submitSeedanceTask,
-  waitForSeedanceCompletion,
+  getVideoProviderForUser,
   calculateSeedanceCost,
-  imageUrlsToBase64
-} from '../services/ai/seedance.js'
+  calculateWan26Cost
+} from '../services/ai/video/video-factory.js'
+import type { VideoProvider, VideoStatusResponse } from '../services/ai/video/video-provider.js'
 import { uploadFile, generateFileKey } from '../services/storage.js'
 import { sendTaskUpdate } from '../plugins/sse.js'
 import { logApiCall, updateApiCall } from '../services/ai/api-logger.js'
@@ -33,12 +28,47 @@ export const videoQueue = new Queue<VideoJobData>('video-generation', {
   }
 })
 
+/** 通用轮询等待视频生成完成 */
+async function waitForVideoCompletion(
+  provider: VideoProvider,
+  taskId: string,
+  maxWaitMs = 600000
+): Promise<VideoStatusResponse> {
+  const startTime = Date.now()
+  const pollInterval = 5000
+
+  while (Date.now() - startTime < maxWaitMs) {
+    const status = await provider.queryStatus(taskId)
+
+    if (status.status === 'completed') {
+      return status
+    }
+    if (status.status === 'failed') {
+      throw new Error(`视频生成失败: ${status.error || '未知错误'}`)
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollInterval))
+  }
+
+  throw new Error('视频生成超时')
+}
+
+/** 根据 provider 名称计算成本 */
+function calculateCost(providerName: string, durationSeconds: number): number {
+  switch (providerName) {
+    case 'atlas':
+      return calculateWan26Cost(durationSeconds)
+    case 'ark':
+    default:
+      return calculateSeedanceCost(durationSeconds)
+  }
+}
+
 // Video Worker
 export const videoWorker = new Worker<VideoJobData>(
   'video-generation',
   async (job) => {
-    const { sceneId, taskId, prompt, model, referenceImage, imageUrls, duration, aspectRatio } =
-      job.data
+    const { sceneId, taskId, prompt, model, imageUrls, duration, aspectRatio } = job.data
 
     logInfo('video-worker', `Processing job for scene ${sceneId}`, {
       jobId: job.id,
@@ -49,6 +79,14 @@ export const videoWorker = new Worker<VideoJobData>(
 
     // Get userId for SSE notification
     const userId = await videoQueueService.getProjectUserIdForTask(taskId)
+
+    // 获取用户偏好的 Video Provider，若未设置则使用默认
+    const provider = userId
+      ? await getVideoProviderForUser(userId)
+      : await import('../services/ai/video/video-factory.js').then((m) =>
+          m.getDefaultVideoProvider()
+        )
+    const providerName = provider.name
 
     // 在try-catch外部声明变量，确保在catch块中可访问
     let videoUrl: string
@@ -69,128 +107,83 @@ export const videoWorker = new Worker<VideoJobData>(
       // Update scene status
       await videoQueueService.setSceneGenerating(sceneId)
 
-      if (model === 'wan2.6') {
-        // Wan 2.6 API call
-        logInfo('video-worker', 'Submitting Wan 2.6 task', { sceneId })
+      logInfo('video-worker', `Submitting ${providerName} task`, {
+        sceneId,
+        refImageCount: imageUrls?.length || 0
+      })
 
-        // Log API call
-        if (userId) {
-          const log = await logApiCall({
-            userId,
-            model: 'wan2.6',
-            provider: 'atlas',
-            prompt,
-            requestParams: { referenceImage, duration: effectiveDuration },
-            takeId: taskId
-          })
-          apiCallId = log.id
-        }
-
-        const response = await submitWan26Task({
+      // Log API call
+      if (userId) {
+        const log = await logApiCall({
+          userId,
+          model: model || providerName,
+          provider: providerName,
           prompt,
-          referenceImage,
+          requestParams: {
+            imageUrls: imageUrls ? `[${imageUrls.length} images]` : undefined,
+            duration: effectiveDuration,
+            aspectRatio
+          },
+          takeId: taskId
+        })
+        apiCallId = log.id
+      }
+
+      // 将图片 URL 转换为 base64（Seedance/Ark 需要）
+      const imageBase64 = imageUrls?.length
+        ? await Promise.all(
+            imageUrls.map(async (url) => {
+              const res = await fetch(url)
+              if (!res.ok) {
+                throw new Error(`Failed to fetch image: ${res.status}`)
+              }
+              const arrayBuffer = await res.arrayBuffer()
+              const buffer = Buffer.from(arrayBuffer)
+              const mimeType = res.headers.get('content-type') || 'image/jpeg'
+              return `data:${mimeType};base64,${buffer.toString('base64')}`
+            })
+          )
+        : undefined
+
+      const response = await provider.submitGeneration({
+        prompt,
+        imageUrls: imageBase64,
+        duration: effectiveDuration,
+        aspectRatio: aspectRatio ?? '9:16'
+      })
+
+      externalTaskId = response.taskId
+
+      // Save external task ID to both Take and ApiCall
+      await videoQueueService.setTaskExternalTaskId(taskId, externalTaskId)
+
+      if (apiCallId) {
+        await updateApiCall(externalTaskId, { status: 'processing' })
+      }
+
+      const result = await waitForVideoCompletion(provider, response.taskId)
+
+      if (!result.videoUrl) {
+        if (apiCallId) {
+          await updateApiCall(externalTaskId, {
+            status: 'failed',
+            errorMsg: 'No video URL returned'
+          })
+        }
+        throw new Error(`${providerName} returned no video URL`)
+      }
+
+      videoUrl = result.videoUrl
+      thumbnailUrl = result.thumbnailUrl || ''
+      cost = calculateCost(providerName, effectiveDuration)
+
+      if (apiCallId) {
+        await updateApiCall(externalTaskId, {
+          status: 'completed',
+          responseData: { videoUrl, thumbnailUrl },
+          cost,
           duration: effectiveDuration
         })
-
-        externalTaskId = response.taskId
-
-        // Save external task ID to both Take and ApiCall
-        await videoQueueService.setTaskExternalTaskId(taskId, externalTaskId)
-
-        if (apiCallId) {
-          await updateApiCall(externalTaskId, { status: 'processing' })
-        }
-
-        const result = await waitForWan26Completion(response.taskId)
-
-        if (!result.videoUrl) {
-          if (apiCallId) {
-            await updateApiCall(externalTaskId, {
-              status: 'failed',
-              errorMsg: 'No video URL returned'
-            })
-          }
-          throw new Error('Wan 2.6 returned no video URL')
-        }
-
-        videoUrl = result.videoUrl
-        thumbnailUrl = result.thumbnailUrl || ''
-        cost = calculateWan26Cost(effectiveDuration)
-
-        if (apiCallId) {
-          await updateApiCall(externalTaskId, {
-            status: 'completed',
-            responseData: { videoUrl, thumbnailUrl },
-            cost,
-            duration: effectiveDuration
-          })
-        }
-      } else {
-        // Seedance 2.0 API call
-        logInfo('video-worker', 'Submitting Seedance 2.0 task', {
-          sceneId,
-          refImageCount: imageUrls?.length || 0
-        })
-
-        // Log API call
-        if (userId) {
-          const log = await logApiCall({
-            userId,
-            model: 'seedance2.0',
-            provider: 'volcengine',
-            prompt,
-            requestParams: {
-              imageBase64: imageUrls ? '[converted to base64]' : undefined,
-              duration: effectiveDuration
-            },
-            takeId: taskId
-          })
-          apiCallId = log.id
-        }
-
-        // 将图片 URL 转换为 base64
-        const imageBase64 = imageUrls?.length ? await imageUrlsToBase64(imageUrls) : undefined
-
-        const response = await submitSeedanceTask({
-          prompt,
-          imageBase64,
-          duration: effectiveDuration,
-          aspectRatio: aspectRatio ?? '9:16'
-        })
-
-        externalTaskId = response.taskId
-
-        // Save external task ID to both Take and ApiCall
-        await videoQueueService.setTaskExternalTaskId(taskId, externalTaskId)
-
-        if (apiCallId) {
-          await updateApiCall(externalTaskId, { status: 'processing' })
-        }
-
-        const result = await waitForSeedanceCompletion(response.taskId)
-
-        if (!result.videoUrl) {
-          if (apiCallId) {
-            await updateApiCall(externalTaskId, {
-              status: 'failed',
-              errorMsg: 'No video URL returned'
-            })
-          }
-          throw new Error('Seedance 2.0 returned no video URL')
-        }
-
-        videoUrl = result.videoUrl
-        thumbnailUrl = result.thumbnailUrl || ''
-        cost = calculateSeedanceCost(effectiveDuration)
-
-        if (apiCallId) {
-          await updateApiCall(externalTaskId, {
-            status: 'completed',
-            responseData: { videoUrl, thumbnailUrl },
-            cost,
-            duration: effectiveDuration
-          })
-        }
       }
 
       // Download video and thumbnail in parallel, then upload to MinIO
