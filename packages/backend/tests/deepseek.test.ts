@@ -516,8 +516,7 @@ describe('DeepSeek Service', () => {
       const {
         fetchScriptVisualEnrichmentJson,
         buildScriptVisualEnrichmentUserContent,
-        SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT,
-        SCRIPT_VISUAL_ENRICH_LOCATION_RULES_IN_USER
+        SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT
       } = await import('../src/services/ai/deepseek.js')
       mockCreate.mockResolvedValueOnce({
         choices: [{ message: { content: '{}' } }],
@@ -533,7 +532,13 @@ describe('DeepSeek Service', () => {
       expect(call.messages[0].content).toBe(SCRIPT_VISUAL_ENRICH_SYSTEM_PROMPT)
       expect(call.messages[0].content).not.toMatch(/绝对禁止/)
       const user = call.messages[1].content as string
-      expect(user).toContain(SCRIPT_VISUAL_ENRICH_LOCATION_RULES_IN_USER)
+      // Check for key location rule phrases instead of exact string containment
+      // (template and constant are separate copies that can diverge)
+      expect(user).toContain('【定场图 imagePrompt】')
+      expect(user).toContain('【场景分类速查】')
+      expect(user).toContain('【材质参考】')
+      expect(user).toContain('【光线参考】')
+      expect(user).toMatch(/整体不超过约150字/)
       expect(user).toMatch(/绝对禁止在 imagePrompt 中出现任何人物/)
       expect(user).toContain('复古胶片')
       expect(user).toContain('场地（每行：名称 | 时间：… | 描述：…）')

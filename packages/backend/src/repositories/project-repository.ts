@@ -9,7 +9,13 @@ const projectWithEpisodesOrderedInclude = {
 type ProjectWithEpisodesOrdered = Prisma.ProjectGetPayload<typeof projectWithEpisodesOrderedInclude>
 
 const projectUserIdAndVisualStyleSelect = {
-  select: { userId: true, visualStyle: true, visualStyleConfig: true }
+  select: {
+    userId: true,
+    visualStyle: true,
+    visualStyleConfig: true,
+    genreTags: true,
+    synopsis: true
+  }
 } as const
 
 type ProjectUserIdAndVisualStyle = Prisma.ProjectGetPayload<

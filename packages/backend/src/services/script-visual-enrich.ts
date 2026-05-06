@@ -185,6 +185,16 @@ export async function applyScriptVisualEnrichment(
       return `${l.name} | 时间：${time} | 描述：${desc}`
     })
     .join('\n')
+  // 构建项目时代背景提示，帮助 AI 生成贴合时代的角色形象
+  const projectGenreTags = (projectRow as { genreTags?: string[] }).genreTags || []
+  const projectSynopsis = (projectRow as { synopsis?: string | null }).synopsis || ''
+  const eraHint = visualStyleConfig?.era
+    ? `时代背景：${visualStyleConfig.era}。`
+    : projectGenreTags.length > 0
+      ? `题材标签：${projectGenreTags.join('、')}。`
+      : ''
+  const synopsisHint = projectSynopsis ? `剧情梗概：${projectSynopsis.slice(0, 100)}。` : ''
+
   const characterLines = characters
     .map((c) => `${c.name} | ${(c.description || '').slice(0, 200)}`)
     .join('\n')
@@ -198,7 +208,7 @@ export async function applyScriptVisualEnrichment(
   try {
     const result = await fetchScriptVisualEnrichmentJson(
       {
-        scriptSummary: `${script.title}\n${script.summary}`,
+        scriptSummary: `${script.title}\n${script.summary}\n\n${eraHint}${synopsisHint}`,
         locationLines,
         characterLines,
         projectVisualStyleLine: '', // visualStyle已废弃
