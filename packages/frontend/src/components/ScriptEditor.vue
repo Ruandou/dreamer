@@ -1,42 +1,41 @@
 <template>
-  <div class="script-editor-wrapper" :class="{ 'has-diff': hasPendingDiff }">
-    <div ref="editorRef" class="codemirror-editor" />
-    <!-- Diff Overlay -->
-    <div v-if="hasPendingDiff" class="diff-overlay">
-      <div class="diff-header">
-        <span class="diff-title">AI 修改建议</span>
-        <span class="diff-stats">
-          <span class="stat-added">+{{ diffStats.additions }}</span>
-          <span class="stat-removed">-{{ diffStats.deletions }}</span>
-        </span>
+  <div class="script-editor-wrapper">
+    <!-- Diff Review Toolbar -->
+    <div v-if="hasPendingDiff" class="diff-toolbar">
+      <div class="diff-toolbar-left">
+        <NIcon :component="SparklesOutline" :size="14" class="diff-icon" />
+        <span class="diff-label">AI 修改建议</span>
+        <span class="diff-stat added">+{{ diffStats.additions }}</span>
+        <span class="diff-stat removed">-{{ diffStats.deletions }}</span>
       </div>
-      <div ref="diffViewRef" class="diff-content" />
-      <div class="diff-actions">
-        <NButton size="small" secondary @click="$emit('reject-diff')"
-          ><template #icon><NIcon :component="CloseOutline" :size="14" /></template>拒绝</NButton
-        >
-        <NButton size="small" type="primary" @click="$emit('accept-diff')"
-          ><template #icon><NIcon :component="CheckmarkOutline" :size="14" /></template
-          >接受修改</NButton
-        >
+      <div class="diff-toolbar-right">
+        <NButton size="tiny" secondary @click="$emit('reject-diff')">
+          <template #icon><NIcon :component="CloseOutline" :size="12" /></template>
+          拒绝
+        </NButton>
+        <NButton size="tiny" type="primary" @click="$emit('accept-diff')">
+          <template #icon><NIcon :component="CheckmarkOutline" :size="12" /></template>
+          接受修改
+        </NButton>
       </div>
     </div>
+
+    <div ref="editorRef" class="codemirror-editor" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, computed, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { NButton, NIcon } from 'naive-ui'
-import { CloseOutline, CheckmarkOutline } from '@vicons/ionicons5'
-import { EditorView, keymap, type ViewUpdate } from '@codemirror/view'
-import { EditorState } from '@codemirror/state'
+import { SparklesOutline, CloseOutline, CheckmarkOutline } from '@vicons/ionicons5'
+import { EditorView, keymap, type ViewUpdate, Decoration, WidgetType } from '@codemirror/view'
+import { EditorState, StateField, StateEffect, Compartment } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { computeDiff, getDiffStats } from '../composables/useDiff'
+import { diffLines } from 'diff'
 
 const props = defineProps<{
   modelValue: string
   placeholder?: string
-  isDropTarget?: boolean
   pendingEditContent?: string | null
 }>()
 
@@ -51,18 +50,117 @@ const emit = defineEmits<{
 }>()
 
 const editorRef = ref<HTMLDivElement>()
-const diffViewRef = ref<HTMLDivElement>()
 let view: EditorView | null = null
+const diffCompartment = new Compartment()
 
-const hasPendingDiff = computed(() => !!props.pendingEditContent)
+const hasPendingDiff = computed(
+  () => !!props.pendingEditContent && props.pendingEditContent !== props.modelValue
+)
 
 const diffStats = computed(() => {
   if (!props.pendingEditContent) return { additions: 0, deletions: 0 }
-  const lines = computeDiff(props.modelValue, props.pendingEditContent)
-  return getDiffStats(lines)
+  const changes = diffLines(props.modelValue, props.pendingEditContent)
+  let additions = 0,
+    deletions = 0
+  for (const ch of changes) {
+    const lines = ch.value.endsWith('\n') ? ch.value.slice(0, -1).split('\n') : ch.value.split('\n')
+    if (lines.length === 1 && lines[0] === '' && ch.value.endsWith('\n')) {
+      if (ch.added) additions++
+      else if (ch.removed) deletions++
+    } else {
+      const count = lines.filter((l) => l !== '' || ch.value.endsWith('\n')).length
+      if (ch.added) additions += count
+      else if (ch.removed) deletions += count
+    }
+  }
+  return { additions, deletions }
 })
 
-// Custom theme matching existing textarea style
+// --- Diff Decoration Effects ---
+const setDiffDecorations = StateEffect.define<DecorationSet>()
+
+const diffField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none
+  },
+  update(decorations, tr) {
+    decorations = decorations.map(tr.changes)
+    for (const e of tr.effects) {
+      if (e.is(setDiffDecorations)) decorations = e.value
+    }
+    return decorations
+  },
+  provide: (f) => EditorView.decorations.from(f)
+})
+
+class AddedLineWidget extends WidgetType {
+  constructor(readonly text: string) {
+    super()
+  }
+  eq(other: AddedLineWidget) {
+    return this.text === other.text
+  }
+  toDOM() {
+    const div = document.createElement('div')
+    div.className = 'cm-diff-added-line'
+    div.textContent = this.text || ' '
+    return div
+  }
+  ignoreEvent() {
+    return false
+  }
+}
+
+// Build diff decorations
+function buildDiffDecorations(
+  original: string,
+  revised: string,
+  editorView: EditorView
+): DecorationSet {
+  const changes = diffLines(original, revised)
+  const decorations: Decoration[] = []
+  let origLine = 1
+
+  for (const change of changes) {
+    const raw = change.value
+    const clean = raw.endsWith('\n') ? raw.slice(0, -1) : raw
+    const lines = clean === '' ? (raw.endsWith('\n') ? [''] : []) : clean.split('\n')
+
+    if (change.removed) {
+      for (let i = 0; i < lines.length; i++) {
+        if (origLine <= editorView.state.doc.lines) {
+          const line = editorView.state.doc.line(origLine)
+          decorations.push(
+            Decoration.mark({
+              attributes: { class: 'cm-diff-removed' }
+            }).range(line.from, line.to)
+          )
+        }
+        origLine++
+      }
+    } else if (change.added) {
+      for (let i = 0; i < lines.length; i++) {
+        const pos =
+          origLine <= editorView.state.doc.lines
+            ? editorView.state.doc.line(origLine).from
+            : editorView.state.doc.length
+        decorations.push(
+          Decoration.widget({
+            widget: new AddedLineWidget(lines[i]),
+            side: -1,
+            block: true
+          }).range(pos)
+        )
+      }
+    } else {
+      origLine += lines.length || (raw.endsWith('\n') ? 1 : 0)
+    }
+  }
+
+  return Decoration.set(decorations)
+}
+
+// Custom theme
 const customTheme = EditorView.theme({
   '&': {
     fontSize: '15px',
@@ -75,15 +173,9 @@ const customTheme = EditorView.theme({
     padding: '16px',
     caretColor: 'var(--color-primary, #6366f1)'
   },
-  '.cm-gutters': {
-    display: 'none'
-  },
-  '.cm-line': {
-    padding: '0'
-  },
-  '.cm-focused': {
-    outline: 'none'
-  },
+  '.cm-gutters': { display: 'none' },
+  '.cm-line': { padding: '0' },
+  '.cm-focused': { outline: 'none' },
   '.cm-cursor': {
     borderLeftColor: 'var(--color-primary, #6366f1)',
     borderLeftWidth: '2px'
@@ -98,6 +190,22 @@ const customTheme = EditorView.theme({
   '&.cm-editor.cm-focused': {
     borderColor: 'var(--color-primary, #6366f1)',
     boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.1)'
+  },
+  // Diff styles
+  '.cm-diff-removed': {
+    backgroundColor: 'var(--color-error-light, #fee2e2) !important',
+    textDecoration: 'line-through',
+    opacity: '0.6'
+  },
+  '.cm-diff-added-line': {
+    backgroundColor: 'var(--color-success-light, #dcfce7)',
+    padding: '0 16px',
+    color: 'var(--color-success, #16a34a)',
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontSize: '15px',
+    lineHeight: '1.7',
+    borderLeft: '3px solid var(--color-success, #16a34a)',
+    marginLeft: '-3px'
   }
 })
 
@@ -109,6 +217,7 @@ function createState(content: string): EditorState {
       history(),
       keymap.of(defaultKeymap),
       keymap.of(historyKeymap),
+      diffCompartment.of(diffField.init(() => Decoration.none)),
       EditorView.updateListener.of((update: ViewUpdate) => {
         if (update.docChanged) {
           const newValue = update.state.doc.toString()
@@ -120,17 +229,6 @@ function createState(content: string): EditorState {
       }),
       EditorView.domEventHandlers({
         drop(event) {
-          const text = event.dataTransfer?.getData('text/plain')
-          if (text && view) {
-            const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
-            if (pos != null) {
-              view.dispatch({
-                changes: { from: pos, to: pos, insert: text },
-                selection: { anchor: pos + text.length }
-              })
-              emit('input')
-            }
-          }
           emit('drop', event)
         },
         dragover(event) {
@@ -146,13 +244,10 @@ function createState(content: string): EditorState {
 
 onMounted(() => {
   if (!editorRef.value) return
-
   view = new EditorView({
     state: createState(props.modelValue),
     parent: editorRef.value
   })
-
-  // Disable native spellcheck to match textarea
   view.contentDOM.setAttribute('spellcheck', 'false')
 })
 
@@ -163,38 +258,46 @@ onBeforeUnmount(() => {
   }
 })
 
-// Sync external modelValue changes (e.g. accept diff, switch episode)
+// Sync external modelValue changes
 watch(
   () => props.modelValue,
   (newValue) => {
     if (view && newValue !== view.state.doc.toString()) {
       view.dispatch({
-        changes: {
-          from: 0,
-          to: view.state.doc.length,
-          insert: newValue
-        }
+        changes: { from: 0, to: view.state.doc.length, insert: newValue }
       })
     }
   },
   { immediate: true }
 )
 
-// Expose methods for parent component
+// Apply diff decorations when pendingEditContent changes
+watch(
+  () => props.pendingEditContent,
+  (newContent) => {
+    if (!view) return
+    if (!newContent || newContent === props.modelValue) {
+      view.dispatch({ effects: setDiffDecorations.of(Decoration.none) })
+    } else {
+      const decos = buildDiffDecorations(props.modelValue, newContent, view)
+      view.dispatch({ effects: setDiffDecorations.of(decos) })
+    }
+  },
+  { immediate: true }
+)
+
 defineExpose({
   focus() {
     view?.focus()
   },
-  getSelection(): { from: number; to: number } | null {
+  getSelection() {
     if (!view) return null
     const sel = view.state.selection.main
     return { from: sel.from, to: sel.to }
   },
   setSelection(anchor: number, head?: number) {
     if (!view) return
-    view.dispatch({
-      selection: { anchor, head: head ?? anchor }
-    })
+    view.dispatch({ selection: { anchor, head: head ?? anchor } })
     view.focus()
   },
   insertText(text: string) {
@@ -211,31 +314,6 @@ defineExpose({
     return view?.state.doc.toString() ?? ''
   }
 })
-
-// Render diff preview when pendingEditContent changes
-watch(
-  () => props.pendingEditContent,
-  (newContent) => {
-    nextTick(() => {
-      if (!diffViewRef.value || !newContent) return
-      const diffLines = computeDiff(props.modelValue, newContent)
-      diffViewRef.value.innerHTML = ''
-      diffLines.forEach((line) => {
-        const div = document.createElement('div')
-        div.className = `diff-row diff-row--${line.type}`
-        div.innerHTML = `<span class="diff-sign">${line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}</span><span class="diff-text">${escapeHtml(line.content || ' ')}</span>`
-        diffViewRef.value!.appendChild(div)
-      })
-    })
-  },
-  { immediate: true }
-)
-
-function escapeHtml(text: string): string {
-  const div = document.createElement('div')
-  div.textContent = text
-  return div.innerHTML
-}
 </script>
 
 <style scoped>
@@ -243,10 +321,10 @@ function escapeHtml(text: string): string {
   flex: 1;
   display: flex;
   flex-direction: column;
-  position: relative;
   min-height: 0;
   min-width: 0;
   width: 100%;
+  overflow: hidden;
 }
 
 .codemirror-editor {
@@ -264,114 +342,55 @@ function escapeHtml(text: string): string {
   overflow: auto;
 }
 
-/* Diff Overlay */
-.diff-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: var(--color-bg-white, #fff);
-  border: 1px solid var(--color-primary, #6366f1);
-  border-radius: 10px 10px 0 0;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
-  z-index: 20;
-  max-height: 45%;
-  display: flex;
-  flex-direction: column;
-}
-
-.diff-header {
+/* Diff Toolbar */
+.diff-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 6px 12px;
   background: var(--color-bg-light, #f0f9ff);
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
   flex-shrink: 0;
+  gap: 12px;
 }
 
-.diff-title {
+.diff-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diff-icon {
+  color: var(--color-primary, #6366f1);
+}
+
+.diff-label {
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-primary, #1f2937);
 }
 
-.diff-stats {
-  display: flex;
-  gap: 8px;
+.diff-stat {
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
-.stat-added {
+.diff-stat.added {
   color: var(--color-success, #16a34a);
-}
-
-.stat-removed {
-  color: var(--color-error, #dc2626);
-}
-
-.diff-content {
-  flex: 1;
-  overflow: auto;
-  padding: 8px 12px;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.diff-row {
-  display: flex;
-  align-items: flex-start;
-  min-height: 20px;
-  border-radius: 2px;
-  white-space: pre-wrap;
-}
-
-.diff-row--added {
   background: var(--color-success-light, #dcfce7);
 }
 
-.diff-row--removed {
+.diff-stat.removed {
+  color: var(--color-error, #dc2626);
   background: var(--color-error-light, #fee2e2);
 }
 
-.diff-sign {
-  flex-shrink: 0;
-  width: 16px;
-  text-align: center;
-  font-weight: 600;
-  user-select: none;
-  color: var(--color-text-tertiary, #9ca3af);
-}
-
-.diff-row--added .diff-sign {
-  color: var(--color-success, #16a34a);
-}
-
-.diff-row--removed .diff-sign {
-  color: var(--color-error, #dc2626);
-}
-
-.diff-text {
-  flex: 1;
-  word-break: break-all;
-}
-
-.diff-actions {
+.diff-toolbar-right {
   display: flex;
-  justify-content: flex-end;
   gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--color-border, #e5e7eb);
-  flex-shrink: 0;
-  background: var(--color-bg-white, #fff);
-}
-
-/* Drop target highlight */
-.script-editor-wrapper :deep(.cm-editor.drop-active) {
-  border-color: var(--color-primary, #6366f1);
-  border-style: dashed;
-  border-width: 2px;
 }
 </style>
