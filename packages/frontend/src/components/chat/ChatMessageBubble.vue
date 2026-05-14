@@ -24,8 +24,23 @@
           <MarkdownRenderer :content="message.content" />
           <div v-if="isStreaming" class="streaming-cursor"></div>
 
-          <div v-if="hasSuggestedEdit" class="suggested-edit-actions">
-            <ApplyChangesButton @apply="$emit('apply-changes')" />
+          <InlineEditCard
+            v-if="hasSuggestedEdit && isPendingEdit"
+            :message="message"
+            :original-content="originalContent || ''"
+            @accept="$emit('accept-edit', $event)"
+            @reject="$emit('reject-edit')"
+          />
+
+          <div
+            v-if="hasSuggestedEdit && !isPendingEdit"
+            class="edit-status"
+            :class="{
+              'edit-status--accepted': editState === 'accepted',
+              'edit-status--rejected': editState === 'rejected'
+            }"
+          >
+            {{ editState === 'accepted' ? '已接受' : '已拒绝' }}
           </div>
         </template>
       </div>
@@ -38,19 +53,27 @@ import { computed } from 'vue'
 import { NIcon } from 'naive-ui'
 import { VideocamOutline, PersonOutline } from '@vicons/ionicons5'
 import type { ChatMessage } from '@dreamer/shared/types'
+import { useChatStore } from '../../stores/chat'
 import MarkdownRenderer from './MarkdownRenderer.vue'
-import ApplyChangesButton from './ApplyChangesButton.vue'
+import InlineEditCard from './InlineEditCard.vue'
 
 const props = defineProps<{
   message: ChatMessage
   isStreaming?: boolean
+  originalContent?: string
 }>()
 
 defineEmits<{
-  'apply-changes': []
+  'accept-edit': [content: string]
+  'reject-edit': []
 }>()
 
+const chatStore = useChatStore()
+
 const isUser = computed(() => props.message.role === 'user')
+
+const editState = computed(() => chatStore.getEditReviewState(props.message.id))
+const isPendingEdit = computed(() => editState.value === 'pending')
 
 const hasSuggestedEdit = computed(() => {
   return (
@@ -180,9 +203,24 @@ function formatTime(dateStr: string): string {
   }
 }
 
-.suggested-edit-actions {
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 1px solid var(--color-border-light, #e5e7eb);
+.edit-status {
+  margin-top: 10px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.edit-status--accepted {
+  background: var(--color-success-light, #dcfce7);
+  color: var(--color-success, #16a34a);
+}
+
+.edit-status--rejected {
+  background: var(--color-error-light, #fee2e2);
+  color: var(--color-error, #dc2626);
 }
 </style>

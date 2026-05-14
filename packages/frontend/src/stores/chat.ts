@@ -38,6 +38,7 @@ export const useChatStore = defineStore('chat', () => {
   const isStreaming = ref(false)
   const isLoadingConversations = ref(false)
   const isLoadingMessages = ref(false)
+  const editReviewStates = ref<Map<string, 'pending' | 'accepted' | 'rejected'>>(new Map())
 
   const { start: startStream, abort: abortStream } = useChatStream()
 
@@ -69,11 +70,35 @@ export const useChatStore = defineStore('chat', () => {
 
   const hasConversations = computed(() => conversations.value.length > 0)
 
+  const pendingEditCount = computed(() => {
+    let count = 0
+    for (const state of editReviewStates.value.values()) {
+      if (state === 'pending') count++
+    }
+    return count
+  })
+
   const sortedConversations = computed(() =>
     [...conversations.value].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     )
   )
+
+  const latestPendingEdit = computed(() => {
+    const msgs = displayMessages.value
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i]
+      if (msg.role === 'assistant' && msg.metadata?.suggestedEdit) {
+        if (editReviewStates.value.get(msg.id) === 'pending') {
+          return {
+            messageId: msg.id,
+            ...msg.metadata.suggestedEdit
+          }
+        }
+      }
+    }
+    return null
+  })
 
   // Actions
   async function fetchConversations(scriptId?: string) {
@@ -203,6 +228,14 @@ export const useChatStore = defineStore('chat', () => {
           const msgs = messages.value.get(convId) || []
           messages.value.set(convId, [...msgs, assistantMsg])
 
+          // Track suggested edits for review
+          const edit = (metadata as Record<string, unknown>)?.suggestedEdit as
+            | { type: string; content: string; description: string }
+            | undefined
+          if (edit) {
+            editReviewStates.value.set(assistantMsg.id, 'pending')
+          }
+
           // Update conversation's updatedAt
           const conv = conversations.value.find((c) => c.id === convId)
           if (conv) {
@@ -237,6 +270,54 @@ export const useChatStore = defineStore('chat', () => {
     streamingContent.value = ''
     streamingMessageId.value = null
     isStreaming.value = false
+    editReviewStates.value.clear()
+  }
+
+  /** Get suggested edit content for a pending message */
+  function getPendingEdit(
+    messageId: string
+  ): { type: string; content: string; description: string } | undefined {
+    for (const [_, msgs] of messages.value) {
+      const msg = msgs.find((m) => m.id === messageId)
+      if (msg?.metadata?.suggestedEdit) {
+        return msg.metadata.suggestedEdit
+      }
+    }
+    return undefined
+  }
+
+  function acceptEdit(messageId: string) {
+    editReviewStates.value.set(messageId, 'accepted')
+    return getPendingEdit(messageId)
+  }
+
+  function rejectEdit(messageId: string) {
+    editReviewStates.value.set(messageId, 'rejected')
+  }
+
+  function acceptAllEdits(): { messageId: string; content: string }[] {
+    const result: { messageId: string; content: string }[] = []
+    for (const [id, state] of editReviewStates.value) {
+      if (state !== 'pending') continue
+      const edit = getPendingEdit(id)
+      if (edit) {
+        result.push({ messageId: id, content: edit.content })
+      }
+      editReviewStates.value.set(id, 'accepted')
+    }
+    return result
+  }
+
+  function rejectAllEdits() {
+    for (const [id, state] of editReviewStates.value) {
+      if (state === 'pending') {
+        editReviewStates.value.set(id, 'rejected')
+      }
+    }
+  }
+
+  function getEditReviewState(messageId: string): 'pending' | 'accepted' | 'rejected' {
+    return editReviewStates.value.get(messageId) || 'accepted'
   }
 
   return {
@@ -249,11 +330,14 @@ export const useChatStore = defineStore('chat', () => {
     isStreaming,
     isLoadingConversations,
     isLoadingMessages,
+    editReviewStates,
     // Getters
     activeConversation,
     activeMessages,
     displayMessages,
     hasConversations,
+    pendingEditCount,
+    latestPendingEdit,
     sortedConversations,
     // Actions
     fetchConversations,
@@ -263,6 +347,11 @@ export const useChatStore = defineStore('chat', () => {
     deleteConversation: deleteConversationItem,
     sendMessage,
     abortCurrentStream,
-    clearStore
+    clearStore,
+    acceptEdit,
+    rejectEdit,
+    acceptAllEdits,
+    rejectAllEdits,
+    getEditReviewState
   }
 })

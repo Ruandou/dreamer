@@ -37,13 +37,24 @@
         </NTooltip>
       </div>
 
+      <!-- Edit Review Bar -->
+      <div v-if="chatStore.pendingEditCount > 0" class="edit-review-bar">
+        <span class="review-text">待审阅修改 {{ chatStore.pendingEditCount }} 处</span>
+        <div class="review-actions">
+          <NButton size="tiny" secondary @click="handleRejectAll">全部拒绝</NButton>
+          <NButton size="tiny" type="primary" @click="handleAcceptAll">全部接受</NButton>
+        </div>
+      </div>
+
       <!-- Messages -->
       <ChatMessageList
         :messages="chatStore.displayMessages"
         :streaming-message-id="chatStore.streamingMessageId"
         :show-typing="chatStore.isStreaming && !chatStore.streamingContent"
         :is-loading="chatStore.isLoadingMessages"
-        @apply-changes="handleApplyChanges"
+        :original-content="scriptContent || ''"
+        @accept-edit="handleAcceptEdit"
+        @reject-edit="handleRejectEdit"
       />
 
       <!-- Quick Commands -->
@@ -206,11 +217,26 @@ function handleQuickCommand(commandId: string) {
   })
 }
 
-function handleApplyChanges(message: ChatMessage) {
-  const suggestedEdit = message.metadata?.suggestedEdit
-  if (suggestedEdit?.content) {
-    emit('apply-changes', suggestedEdit.content)
+function handleAcceptEdit(message: ChatMessage, content: string) {
+  chatStore.acceptEdit(message.id)
+  emit('apply-changes', content)
+}
+
+function handleRejectEdit(message: ChatMessage) {
+  chatStore.rejectEdit(message.id)
+}
+
+function handleAcceptAll() {
+  const edits = chatStore.acceptAllEdits()
+  if (edits.length > 0) {
+    // Accept the last one (most recent) as the final content
+    const last = edits[edits.length - 1]
+    emit('apply-changes', last.content)
   }
+}
+
+function handleRejectAll() {
+  chatStore.rejectAllEdits()
 }
 </script>
 
@@ -295,5 +321,26 @@ function handleApplyChanges(message: ChatMessage) {
 
 .inline-model-select :deep(.n-base-selection) {
   background: transparent;
+}
+
+.edit-review-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--color-bg-light, #f0f9ff);
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  flex-shrink: 0;
+}
+
+.review-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary, #1f2937);
+}
+
+.review-actions {
+  display: flex;
+  gap: 8px;
 }
 </style>

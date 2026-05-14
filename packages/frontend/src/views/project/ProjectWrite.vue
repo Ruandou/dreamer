@@ -118,16 +118,19 @@
 
         <!-- 中间编辑器 -->
         <div class="editor-main">
-          <textarea
+          <ScriptEditor
             ref="editorRef"
             v-model="episodeContent"
             class="script-editor"
-            :class="{ 'drop-active': isDropTarget }"
+            :is-drop-target="isDropTarget"
+            :pending-edit-content="pendingEditContent"
             placeholder="开始编写剧本...&#10;格式：&#10;# 第1场 场地 时间&#10;@角色名（情绪）&#10;对白内容&#10;&#10;[动作描写]"
             @input="onContentChange"
             @drop="handleDrop"
-            @dragover.prevent="handleDragOver"
+            @dragover="handleDragOver"
             @dragleave="handleDragLeave"
+            @accept-diff="handleAcceptDiff"
+            @reject-diff="handleRejectDiff"
           />
           <div class="editor-status">
             <span>字数: {{ wordCount }}</span>
@@ -173,10 +176,13 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { NInput, NCheckbox, NAvatar, NTabs, NTabPane, NButton, useMessage } from 'naive-ui'
 import { api } from '../../api'
+import { useChatStore } from '../../stores/chat'
 import ChatPanel from '@/components/chat/ChatPanel.vue'
+import ScriptEditor from '@/components/ScriptEditor.vue'
 
 const route = useRoute()
 const message = useMessage()
+const chatStore = useChatStore()
 
 const projectId = route.params.id as string
 const episodeIdFromRoute = route.params.episodeId as string | undefined
@@ -197,7 +203,9 @@ const lastSavedAt = ref<Date | null>(null)
 const hasUnsavedChanges = ref(false)
 const isDropTarget = ref(false)
 
-const editorRef = ref<HTMLTextAreaElement>()
+const editorRef = ref<InstanceType<typeof ScriptEditor> | null>(null)
+
+const pendingEditContent = computed(() => chatStore.latestPendingEdit?.content ?? null)
 
 const wordCount = computed(() => {
   if (!episodeContent.value) return 0
@@ -414,101 +422,35 @@ function handleDragLeave() {
 function handleDrop(e: DragEvent) {
   e.preventDefault()
   isDropTarget.value = false
-  const text = e.dataTransfer?.getData('text/plain')
-  if (text && editorRef.value) {
-    const start = editorRef.value.selectionStart
-    const end = editorRef.value.selectionEnd
-    const before = episodeContent.value.slice(0, start)
-    const after = episodeContent.value.slice(end)
-    episodeContent.value = before + text + after
-
-    // Focus and place cursor after inserted text
-    nextTick(() => {
-      if (editorRef.value) {
-        editorRef.value.focus()
-        const newPos = start + text.length
-        editorRef.value.setSelectionRange(newPos, newPos)
-        // Flash highlight inserted text
-        flashHighlightText(start, newPos)
-      }
-    })
-
-    onContentChange()
-  }
-}
-
-function flashHighlightText(start: number, end: number) {
-  const textarea = editorRef.value
-  if (!textarea) return
-  // Create a temporary overlay for flash effect
-  const overlay = document.createElement('div')
-  overlay.className = 'flash-highlight-overlay'
-  overlay.style.cssText = `
-    position: absolute;
-    pointer-events: none;
-    background: rgba(99, 102, 241, 0.2);
-    border-radius: 2px;
-    animation: flashHighlight 1s ease-out forwards;
-  `
-  const rect = textarea.getBoundingClientRect()
-  const lineHeight = parseInt(getComputedStyle(textarea).lineHeight) || 20
-  const charWidth = parseInt(getComputedStyle(textarea).fontSize) * 0.6 || 8
-  const padding = parseInt(getComputedStyle(textarea).padding) || 16
-
-  // Approximate position (simplified)
-  const textBefore = episodeContent.value.slice(0, start)
-  const lines = textBefore.split('\n')
-  const lineNum = lines.length - 1
-  const colNum = lines[lines.length - 1].length
-
-  overlay.style.left = `${rect.left + padding + colNum * charWidth}px`
-  overlay.style.top = `${rect.top + padding + lineNum * lineHeight}px`
-  overlay.style.width = `${(end - start) * charWidth}px`
-  overlay.style.height = `${lineHeight}px`
-
-  document.body.appendChild(overlay)
-  setTimeout(() => overlay.remove(), 1000)
+  // ScriptEditor now handles drop insertion internally
 }
 
 function insertAsset(type: 'character' | 'location', name: string) {
   if (!editorRef.value) return
   const formatted = formatAssetInsert(type, name)
-  const start = editorRef.value.selectionStart
-  const end = editorRef.value.selectionEnd
-  episodeContent.value =
-    episodeContent.value.slice(0, start) + formatted + episodeContent.value.slice(end)
-
-  nextTick(() => {
-    if (editorRef.value) {
-      editorRef.value.focus()
-      const newPos = start + formatted.length
-      editorRef.value.setSelectionRange(newPos, newPos)
-      flashHighlightText(start, newPos)
-    }
-  })
-
-  onContentChange()
+  editorRef.value.insertText(formatted)
 }
 
 function handleApplyChanges(content: string) {
   if (!editorRef.value) return
-  const start = editorRef.value.selectionStart
-  const end = editorRef.value.selectionEnd
-  const before = episodeContent.value.slice(0, start)
-  const after = episodeContent.value.slice(end)
-  episodeContent.value = before + '\n\n' + content + '\n\n' + after
-
-  nextTick(() => {
-    if (editorRef.value) {
-      editorRef.value.focus()
-      const newPos = start + content.length + 4
-      editorRef.value.setSelectionRange(newPos, newPos)
-      flashHighlightText(start, newPos)
-    }
-  })
-
-  onContentChange()
+  editorRef.value.insertText('\n\n' + content + '\n\n')
   message.success('已应用 AI 建议')
+}
+
+function handleAcceptDiff() {
+  const edit = chatStore.latestPendingEdit
+  if (edit) {
+    episodeContent.value = edit.content
+    chatStore.acceptEdit(edit.messageId)
+    message.success('已接受 AI 修改')
+  }
+}
+
+function handleRejectDiff() {
+  const edit = chatStore.latestPendingEdit
+  if (edit) {
+    chatStore.rejectEdit(edit.messageId)
+  }
 }
 
 onMounted(() => {
@@ -738,25 +680,7 @@ onUnmounted(() => {
 
 .script-editor {
   flex: 1;
-  padding: 16px;
-  border: 2px solid transparent;
-  outline: none;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 14px;
-  line-height: 1.8;
-  resize: none;
-  overflow: auto;
-  background: var(--color-bg-white);
-  color: var(--color-text-primary);
-  tab-size: 2;
-  transition:
-    border-color 0.2s,
-    background 0.2s;
-}
-
-.script-editor.drop-active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-light);
+  min-height: 0;
 }
 
 .editor-status {

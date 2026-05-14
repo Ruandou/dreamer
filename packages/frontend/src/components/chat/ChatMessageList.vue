@@ -25,7 +25,9 @@
           :key="msg.id"
           :message="msg"
           :is-streaming="msg.id === streamingMessageId"
-          @apply-changes="onApplyChanges(msg)"
+          :original-content="originalContent"
+          @accept-edit="onAcceptEdit(msg, $event)"
+          @reject-edit="onRejectEdit(msg)"
         />
 
         <div v-if="showTyping" class="typing-wrapper">
@@ -65,11 +67,21 @@ const props = defineProps<{
   streamingMessageId: string | null
   showTyping: boolean
   isLoading?: boolean
+  originalContent?: string
 }>()
 
 const emit = defineEmits<{
-  (e: 'apply-changes', message: ChatMessage): void
+  (e: 'accept-edit', message: ChatMessage, content: string): void
+  (e: 'reject-edit', message: ChatMessage): void
 }>()
+
+function onAcceptEdit(message: ChatMessage, content: string) {
+  emit('accept-edit', message, content)
+}
+
+function onRejectEdit(message: ChatMessage) {
+  emit('reject-edit', message)
+}
 
 const messagesRef = ref<HTMLDivElement | null>(null)
 
@@ -112,9 +124,6 @@ watch(
   },
   { immediate: true }
 )
-function onApplyChanges(message: ChatMessage) {
-  emit('apply-changes', message)
-}
 </script>
 
 <style scoped>
