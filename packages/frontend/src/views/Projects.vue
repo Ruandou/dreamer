@@ -372,7 +372,7 @@ const handleDropdownSelect = (key: string, projectId: string) => {
         variant="large"
       >
         <template #action>
-          <NButton type="primary" @click="router.push('/import')"> 导入剧本 </NButton>
+          <NButton type="primary" @click="handleFileInputClick"> 导入剧本 </NButton>
         </template>
       </EmptyState>
 
