@@ -245,12 +245,15 @@ function escapeHtml(text: string): string {
   flex-direction: column;
   position: relative;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
 }
 
 .codemirror-editor {
   flex: 1;
   overflow: hidden;
   border-radius: 10px;
+  width: 100%;
 }
 
 .codemirror-editor :deep(.cm-editor) {

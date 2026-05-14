@@ -89,7 +89,9 @@ export const useChatStore = defineStore('chat', () => {
     for (let i = msgs.length - 1; i >= 0; i--) {
       const msg = msgs[i]
       if (msg.role === 'assistant' && msg.metadata?.suggestedEdit) {
-        if (editReviewStates.value.get(msg.id) === 'pending') {
+        const state = editReviewStates.value.get(msg.id)
+        // No state recorded yet = treat as pending (freshly loaded message)
+        if (state === 'pending' || state === undefined) {
           return {
             messageId: msg.id,
             ...msg.metadata.suggestedEdit
@@ -317,7 +319,14 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function getEditReviewState(messageId: string): 'pending' | 'accepted' | 'rejected' {
-    return editReviewStates.value.get(messageId) || 'accepted'
+    const state = editReviewStates.value.get(messageId)
+    if (state) return state
+    // No state recorded yet: check if message has suggestedEdit
+    for (const [_, msgs] of messages.value) {
+      const msg = msgs.find((m) => m.id === messageId)
+      if (msg?.metadata?.suggestedEdit) return 'pending'
+    }
+    return 'accepted'
   }
 
   return {
