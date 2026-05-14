@@ -142,6 +142,7 @@ export const useChatStore = defineStore('chat', () => {
     options: {
       scriptContent?: string
       scriptTitle?: string
+      projectId?: string
       quickCommand?: string
       model?: string
     } = {}
@@ -179,6 +180,7 @@ export const useChatStore = defineStore('chat', () => {
         content,
         scriptContent: options.scriptContent,
         scriptTitle: options.scriptTitle,
+        projectId: options.projectId,
         quickCommand: options.quickCommand,
         model: options.model
       },

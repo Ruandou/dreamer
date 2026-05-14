@@ -21,6 +21,7 @@ interface SendMessageBody {
   scriptTitle?: string
   quickCommand?: string
   model?: string
+  projectId?: string
 }
 
 export async function chatRoutes(fastify: FastifyInstance) {
@@ -112,7 +113,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
     { preHandler: [fastify.authenticate] },
     async (request, reply) => {
       const { id } = request.params
-      const { content, scriptContent, scriptTitle, quickCommand, model } = request.body
+      const { content, scriptContent, scriptTitle, quickCommand, model, projectId } = request.body
 
       // Allow empty content if quickCommand is provided
       if (!content?.trim() && !quickCommand) {
@@ -127,7 +128,8 @@ export async function chatRoutes(fastify: FastifyInstance) {
           content,
           scriptContent,
           scriptTitle,
-          quickCommand
+          quickCommand,
+          projectId
         })
 
         if (!result) {
@@ -142,6 +144,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
             assistantMessageId: result.assistantMessageId,
             scriptContent,
             scriptTitle,
+            projectId,
             model
           },
           reply

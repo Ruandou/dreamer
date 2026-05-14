@@ -86,6 +86,7 @@ const props = defineProps<{
   scriptId?: string
   scriptContent?: string
   scriptTitle?: string
+  projectId?: string
   reference?: { text: string; startLine: number; endLine: number } | null
 }>()
 
@@ -174,6 +175,7 @@ function handleSend(content: string) {
   chatStore.sendMessage(messageContent, {
     scriptContent: props.scriptContent,
     scriptTitle: props.scriptTitle,
+    projectId: props.projectId,
     model: selectedModel.value
   })
 }
@@ -188,6 +190,7 @@ function handleQuickCommand(commandId: string) {
     chatStore.sendMessage(msg, {
       scriptContent: props.scriptContent,
       scriptTitle: props.scriptTitle,
+      projectId: props.projectId,
       quickCommand: commandId,
       model: selectedModel.value
     })
@@ -197,6 +200,7 @@ function handleQuickCommand(commandId: string) {
   chatStore.sendMessage('', {
     scriptContent: props.scriptContent,
     scriptTitle: props.scriptTitle,
+    projectId: props.projectId,
     quickCommand: commandId,
     model: selectedModel.value
   })

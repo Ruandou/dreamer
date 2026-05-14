@@ -113,19 +113,6 @@
                 </div>
               </div>
             </NTabPane>
-            <NTabPane name="hooks" tab="钩子库">
-              <div class="asset-list">
-                <div
-                  v-for="hook in hookTemplates"
-                  :key="hook.id"
-                  class="asset-item hook-item"
-                  @click="insertHook(hook.content)"
-                >
-                  <span class="asset-name">{{ hook.content }}</span>
-                  <NTag size="tiny" type="info">{{ hook.category }}</NTag>
-                </div>
-              </div>
-            </NTabPane>
           </NTabs>
         </div>
 
@@ -147,18 +134,6 @@
             <span v-if="conflictScore" class="conflict-badge"
               >冲突密度: {{ conflictScore }}/10</span
             >
-            <span v-if="hookWarning" class="hook-warning" :class="{ 'hook-missing': !hasHook }">
-              {{ hookWarning }}
-              <NButton
-                v-if="!hasHook && hookTemplates.length > 0"
-                text
-                size="tiny"
-                type="warning"
-                @click="insertRandomHook"
-              >
-                一键插入
-              </NButton>
-            </span>
             <span
               class="save-status"
               :class="{
@@ -182,6 +157,7 @@
             v-else
             :key="currentEpisode.id"
             class="ai-chat-panel"
+            :project-id="projectId"
             :script-content="episodeContent"
             :script-title="episodeTitle"
             @apply-changes="handleApplyChanges"
@@ -195,7 +171,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { NInput, NCheckbox, NAvatar, NTabs, NTabPane, NTag, NButton, useMessage } from 'naive-ui'
+import { NInput, NCheckbox, NAvatar, NTabs, NTabPane, NButton, useMessage } from 'naive-ui'
 import { api } from '../../api'
 import ChatPanel from '@/components/chat/ChatPanel.vue'
 
@@ -209,7 +185,6 @@ const episodes = ref<any[]>([])
 const currentEpisode = ref<any>(null)
 const characters = ref<any[]>([])
 const locations = ref<any[]>([])
-const hookTemplates = ref<any[]>([])
 
 const episodeTitle = ref('')
 const episodeHook = ref('')
@@ -254,45 +229,6 @@ const progressPercent = computed(() => {
   if (episodes.value.length === 0) return 0
   return Math.round((completedCount.value / episodes.value.length) * 100)
 })
-
-const HOOK_KEYWORDS = [
-  '是你',
-  '不可能',
-  '为什么',
-  '竟然',
-  '秘密',
-  '真相',
-  '到底',
-  '难道',
-  '究竟',
-  '原来',
-  '没想到',
-  '怎么会',
-  '到底是谁',
-  '到底是什么'
-]
-
-const hasHook = computed(() => {
-  if (!episodeContent.value) return false
-  const lines = episodeContent.value.trim().split('\n')
-  const lastLines = lines.slice(-3)
-  const text = lastLines.join('')
-  return HOOK_KEYWORDS.some((kw) => text.includes(kw))
-})
-
-const hookWarning = computed(() => {
-  if (!episodeContent.value || episodeContent.value.trim().length < 50) return ''
-  if (hasHook.value) return ''
-  return '⚠️ 本集结尾缺少钩子'
-})
-
-function insertRandomHook() {
-  if (hookTemplates.value.length === 0) return
-  const randomHook = hookTemplates.value[Math.floor(Math.random() * hookTemplates.value.length)]
-  if (randomHook) {
-    insertHook(randomHook.content)
-  }
-}
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 const LOCAL_STORAGE_KEY = 'dreamer_draft_backup'
@@ -422,17 +358,14 @@ function handleBeforeUnload(e: BeforeUnloadEvent) {
 
 async function loadData() {
   try {
-    const [epRes, charRes, locRes, hookRes] = await Promise.all([
+    const [epRes, charRes, locRes] = await Promise.all([
       api.get(`/episodes?projectId=${projectId}`),
       api.get(`/characters?projectId=${projectId}`),
-      api.get(`/locations?projectId=${projectId}`),
-      api.get('/hooks')
+      api.get(`/locations?projectId=${projectId}`)
     ])
     episodes.value = epRes.data
     characters.value = charRes.data
     locations.value = locRes.data
-    // Store builtin hooks as fallback
-    const builtinHooks = hookRes.data.builtin.slice(0, 10)
 
     if (episodeIdFromRoute) {
       const ep = episodes.value.find((e: any) => e.id === episodeIdFromRoute)
@@ -440,33 +373,8 @@ async function loadData() {
     } else if (episodes.value.length > 0) {
       await switchEpisode(episodes.value[0])
     }
-
-    // Generate context-aware hooks based on current episode content
-    await generateContextAwareHooks(builtinHooks)
   } catch {
     message.error('加载失败')
-  }
-}
-
-async function generateContextAwareHooks(fallbackHooks: any[]) {
-  const content = episodeContent.value.trim()
-  if (!content || content.length < 50) {
-    hookTemplates.value = fallbackHooks
-    return
-  }
-  try {
-    const res = await api.post('/hooks/generate', { content, count: 5 })
-    const generated = (res.data.hooks || []).map((h: any, i: number) => ({
-      id: `ai-hook-${i}`,
-      content: h.content,
-      category: h.category || 'AI生成',
-      potential: h.potential,
-      isBuiltin: false
-    }))
-    // Mix generated hooks with fallback
-    hookTemplates.value = [...generated, ...fallbackHooks].slice(0, 12)
-  } catch {
-    hookTemplates.value = fallbackHooks
   }
 }
 
@@ -576,24 +484,6 @@ function insertAsset(type: 'character' | 'location', name: string) {
       const newPos = start + formatted.length
       editorRef.value.setSelectionRange(newPos, newPos)
       flashHighlightText(start, newPos)
-    }
-  })
-
-  onContentChange()
-}
-
-function insertHook(content: string) {
-  if (!editorRef.value) return
-  const start = editorRef.value.selectionStart
-  const end = editorRef.value.selectionEnd
-  episodeContent.value =
-    episodeContent.value.slice(0, start) + content + episodeContent.value.slice(end)
-
-  nextTick(() => {
-    if (editorRef.value) {
-      editorRef.value.focus()
-      const newPos = start + content.length
-      editorRef.value.setSelectionRange(newPos, newPos)
     }
   })
 

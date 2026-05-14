@@ -3,6 +3,7 @@
 import type { FastifyReply } from 'fastify'
 import type { Prisma as PrismaTypes } from '@prisma/client'
 import { chatRepository } from '../../repositories/chat-repository.js'
+import { prisma } from '../../lib/prisma.js'
 import { buildSystemPrompt } from './chat-prompts.js'
 import { buildChatContext } from './chat-context-builder.js'
 import { streamChatResponse } from './chat-stream-service.js'
@@ -95,6 +96,7 @@ export async function sendMessage(
     scriptContent?: string
     scriptTitle?: string
     quickCommand?: string
+    projectId?: string
   }
 ): Promise<SendMessageResult | null> {
   // Validate ownership
@@ -155,11 +157,13 @@ export async function handleStream(
     assistantMessageId: string
     scriptContent?: string
     scriptTitle?: string
+    projectId?: string
     model?: string
   },
   reply: FastifyReply
 ) {
-  const { conversationId, assistantMessageId, scriptContent, scriptTitle, model } = params
+  const { conversationId, assistantMessageId, scriptContent, scriptTitle, projectId, model } =
+    params
 
   // Validate ownership
   const conversation = await chatRepository.findConversationById(conversationId)
@@ -173,11 +177,18 @@ export async function handleStream(
     limit: 40 // CHAT_MAX_HISTORY_MESSAGES
   })
 
+  // Build outline context if projectId is provided
+  let outlineContext: string | undefined
+  if (projectId) {
+    outlineContext = await buildOutlineContext(projectId)
+  }
+
   // Build system prompt
   const systemPrompt = buildSystemPrompt({
     scriptContent,
     scriptTitle,
-    quickCommand: undefined // quick command is embedded in the user message
+    quickCommand: undefined, // quick command is embedded in the user message
+    outlineContext
   })
 
   // Build context
@@ -290,4 +301,101 @@ export async function handleStream(
     assistantMessageId,
     error: finalError
   })
+}
+
+// === Outline Context Builder ===
+
+interface OutlineEpisode {
+  episodeNum: number
+  title?: string
+  synopsis?: string
+  hook?: string
+  cliffhanger?: string
+  isPaywall?: boolean
+}
+
+async function buildOutlineContext(projectId: string): Promise<string | undefined> {
+  try {
+    const [outline, episodes, characters] = await Promise.all([
+      prisma.projectOutline.findUnique({
+        where: { projectId }
+      }),
+      prisma.episode.findMany({
+        where: { projectId },
+        orderBy: { episodeNum: 'asc' },
+        select: {
+          episodeNum: true,
+          title: true,
+          synopsis: true,
+          hook: true,
+          cliffhanger: true,
+          isPaywall: true,
+          content: true
+        }
+      }),
+      prisma.character.findMany({
+        where: { projectId },
+        select: { name: true, description: true }
+      })
+    ])
+
+    const parts: string[] = []
+
+    // Project synopsis
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { synopsis: true, storyContext: true, name: true }
+    })
+    if (project?.synopsis || project?.storyContext) {
+      parts.push(`【项目简介】\n${project.synopsis || project.storyContext || ''}`)
+    }
+
+    // Characters
+    if (characters.length > 0) {
+      parts.push(
+        `【角色设定】\n${characters.map((c) => `- ${c.name}${c.description ? `：${c.description}` : ''}`).join('\n')}`
+      )
+    }
+
+    // Outline episodes
+    if (outline?.episodes) {
+      const outlineEps = outline.episodes as unknown as OutlineEpisode[]
+      parts.push(
+        `【分集大纲】\n${outlineEps
+          .map(
+            (ep) =>
+              `第${ep.episodeNum}集 ${ep.title || ''}${ep.isPaywall ? ' [付费点]' : ''}\n` +
+              `  简介：${ep.synopsis || ''}\n` +
+              `  开头钩子：${ep.hook || ''}\n` +
+              `  结尾悬念：${ep.cliffhanger || ''}`
+          )
+          .join('\n\n')}`
+      )
+    }
+
+    // Written episodes content (first 3 and last 2)
+    const writtenEpisodes = episodes.filter((ep) => ep.content && ep.content.trim().length > 0)
+    if (writtenEpisodes.length > 0) {
+      const firstFew = writtenEpisodes.slice(0, 3)
+      const lastFew = writtenEpisodes.slice(-2)
+      const relevant = writtenEpisodes.length <= 5 ? writtenEpisodes : [...firstFew, ...lastFew]
+
+      parts.push(
+        `【已写集数内容摘要】\n${relevant
+          .map(
+            (ep) =>
+              `--- 第${ep.episodeNum}集 ${ep.title || ''} ---\n` +
+              (ep.hook ? `开头钩子：${ep.hook}\n` : '') +
+              (ep.cliffhanger ? `结尾悬念：${ep.cliffhanger}\n` : '') +
+              `正文：\n${(ep.content || '').slice(0, 800)}`
+          )
+          .join('\n\n')}`
+      )
+    }
+
+    return parts.join('\n\n')
+  } catch (error) {
+    logError('Failed to build outline context', error)
+    return undefined
+  }
 }

@@ -6,10 +6,11 @@ export interface BuildSystemPromptOptions {
   scriptContent?: string
   scriptTitle?: string
   quickCommand?: string
+  outlineContext?: string
 }
 
 export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): string {
-  const { scriptContent, scriptTitle, quickCommand } = options
+  const { scriptContent, scriptTitle, quickCommand, outlineContext } = options
 
   const parts: string[] = []
 
@@ -18,6 +19,15 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): strin
     `你是一个专业的AI编剧助手，擅长短剧剧本创作和修改。你精通剧本格式、人物塑造、情节设计和台词创作。` +
       `请根据用户的需求，提供专业、有创意的编剧建议。`
   )
+
+  // Outline context
+  if (outlineContext) {
+    parts.push(
+      `\n---\n项目大纲与剧情脉络：\n\n${outlineContext}\n\n` +
+        '以上是大纲和已写集数的剧情脉络。请在续写或修改时严格围绕大纲推进，' +
+        '保持伏笔呼应、人物动机一致、情节前后连贯。'
+    )
+  }
 
   // Script context
   if (scriptContent) {
