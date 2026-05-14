@@ -85,7 +85,6 @@ pnpm dev:frontend
 
 ```bash
 pnpm docker:up    # 启动数据库
-pnpm db:push      # 同步 schema（只做增量更新）
 ```
 
 ### ⚠️ 禁止使用 --force-reset
@@ -95,6 +94,23 @@ pnpm db:push      # 同步 schema（只做增量更新）
 - 只用 `pnpm db:push` 进行增量同步
 - 如果需要添加新字段，先备份数据
 - 绝对不要在生产环境使用 `--force-reset`
+
+### 迁移工作流（多人协作）
+
+| 场景                   | 命令                         | 说明                         |
+| ---------------------- | ---------------------------- | ---------------------------- |
+| 本地改 schema 快速验证 | `pnpm db:push`               | 只用于开发机，不生成迁移文件 |
+| 功能完成，提交代码前   | `pnpm db:migrate`            | 生成命名迁移文件             |
+| 提交代码               | `git add prisma/migrations/` | 迁移文件和代码一起提交       |
+| 同事拉代码后 / 部署    | `pnpm db:migrate:deploy`     | 自动执行未应用的迁移         |
+
+**关键规则**：
+
+- `db:push` 仅用于本地快速验证，**不得用于多人协作/生产环境**
+- 每次改 `schema.prisma` 并验证通过后，必须 `db:migrate` 生成迁移文件
+- `prisma/migrations/` 目录**必须进 Git**
+- 提交代码时，迁移文件和代码变更**一起提交**
+- 同事拉代码后只需 `pnpm db:migrate:deploy` 即可对齐
 
 ## 测试要求
 
@@ -412,12 +428,29 @@ docs/plans/<计划名称>_<YYYYMMDD>.md
 ### Prisma：`migrations` 与版本管理、要记几条命令？
 
 - **`packages/backend/prisma/migrations/` 必须进 Git**，与 `schema.prisma` 一起作为「库结构变更」的唯一事实来源。仓库里曾误把该目录写进 `.gitignore`，已去掉；拉代码后同事用同一条迁移链即可对齐。
-- **当前迁移链**：单条 baseline `20260416120000_baseline_schema`（空库一次 `migrate deploy` 建全表；开头 `DROP TABLE IF EXISTS "OutlineJob"`，丢弃已下线大纲任务表）。在**已有数据**且此前只用 `db push`、从未对齐过本迁移的库上，请勿对生产库直接跑 baseline（会 `CREATE TABLE` 冲突）；应备份后用 `migrate diff` 生成增量，或新库 / `migrate reset` 后再 deploy。
+- **当前迁移链**：基线迁移为 `20260514120000_baseline_from_push`（包含当前完整 schema 的建表语句），其余为增量迁移。已在 `_prisma_migrations` 中标记为应用。
 - **日常部署 / 本地对齐结构，只需记一条**：`pnpm --filter @dreamer/backend run db:migrate:deploy`（读仓库根 `.env` 里的 `DATABASE_URL`）。
 - **其余脚本用途**（不必每次都用）：
   - `db:migrate` → `prisma migrate dev`，**本地改 schema 后生成新迁移**时用；
   - `db:push` → 无迁移历史或纯原型机时把 schema 推到库（与 migrate 二选一为主流程时，优先 migrate）；
   - `db:migrate:squash-drift-rows` → **仅**在「删改过已写入 `_prisma_migrations` 的旧迁移目录」这类补救场景用一次，不是流水线常规步骤。
+
+### Prisma：只用 `db:push` 后如何补救迁移历史
+
+若此前长期用 `db:push` 而从未生成迁移，现在需要补回迁移链（**有数据不能丢**）：
+
+```bash
+cd packages/backend
+# 1. 生成当前 schema 到空库的完整 SQL
+mkdir -p prisma/migrations/2026MMDD000000_baseline_from_push
+npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script \
+  > prisma/migrations/2026MMDD000000_baseline_from_push/migration.sql
+
+# 2. 标记为已应用（不实际执行，因为表已存在）
+npx prisma migrate resolve --applied 2026MMDD000000_baseline_from_push
+
+# 3. 之后正常用 db:migrate 增量生成新迁移
+```
 
 ### Prisma：合并迁移后本地库报「迁移目录缺少已记录迁移」
 
