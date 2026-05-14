@@ -174,21 +174,18 @@
 
         <!-- 右侧 AI 面板 -->
         <div class="ai-panel">
-          <div class="ai-header">AI 助手</div>
-          <div class="ai-commands">
-            <NButton size="small" @click="aiCommand('continue')">续写</NButton>
-            <NButton size="small" @click="aiCommand('polish')">润色</NButton>
-            <NButton size="small" type="primary" @click="aiCommand('hook')">生成钩子</NButton>
-            <NButton size="small" type="warning" @click="aiCommand('conflict')">冲突强化</NButton>
-            <NButton size="small" @click="aiCommand('ad')">投流文案</NButton>
+          <div v-if="!currentEpisode" class="ai-empty">
+            <span class="ai-empty-icon">🤖</span>
+            <span>选择一集开始对话</span>
           </div>
-          <div v-if="aiResult" class="ai-result">
-            <div class="ai-result-header">
-              <span>AI 建议</span>
-              <NButton text size="tiny" @click="applyAiResult">应用</NButton>
-            </div>
-            <pre class="ai-result-content">{{ aiResult }}</pre>
-          </div>
+          <ChatPanel
+            v-else
+            :key="currentEpisode.id"
+            class="ai-chat-panel"
+            :script-content="episodeContent"
+            :script-title="episodeTitle"
+            @apply-changes="handleApplyChanges"
+          />
         </div>
       </div>
     </div>
@@ -200,6 +197,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { NInput, NCheckbox, NAvatar, NTabs, NTabPane, NTag, NButton, useMessage } from 'naive-ui'
 import { api } from '../../api'
+import ChatPanel from '@/components/chat/ChatPanel.vue'
 
 const route = useRoute()
 const message = useMessage()
@@ -219,7 +217,6 @@ const episodeCliffhanger = ref('')
 const episodeIsPaywall = ref(false)
 const episodeContent = ref('')
 const conflictScore = ref<number | null>(null)
-const aiResult = ref('')
 const saveStatus = ref<'saved' | 'saving' | 'unsaved'>('saved')
 const lastSavedAt = ref<Date | null>(null)
 const hasUnsavedChanges = ref(false)
@@ -404,7 +401,6 @@ async function switchEpisode(ep: any) {
   episodeContent.value = ep.content || ''
   hasUnsavedChanges.value = false
   saveStatus.value = 'saved'
-  aiResult.value = ''
   // Restore offline backup if exists
   restoreOfflineBackup(ep.id)
 }
@@ -604,25 +600,25 @@ function insertHook(content: string) {
   onContentChange()
 }
 
-function applyAiResult() {
-  if (!aiResult.value) return
-  episodeContent.value += '\n\n' + aiResult.value
-  aiResult.value = ''
+function handleApplyChanges(content: string) {
+  if (!editorRef.value) return
+  const start = editorRef.value.selectionStart
+  const end = editorRef.value.selectionEnd
+  const before = episodeContent.value.slice(0, start)
+  const after = episodeContent.value.slice(end)
+  episodeContent.value = before + '\n\n' + content + '\n\n' + after
+
+  nextTick(() => {
+    if (editorRef.value) {
+      editorRef.value.focus()
+      const newPos = start + content.length + 4
+      editorRef.value.setSelectionRange(newPos, newPos)
+      flashHighlightText(start, newPos)
+    }
+  })
+
   onContentChange()
-}
-
-async function aiCommand(command: string) {
-  if (!currentEpisode.value) return
-  message.info('AI 思考中...')
-  try {
-    const res = await api.post(`/episodes/${currentEpisode.value.id}/ai-drama`, {
-      command
-    })
-
-    aiResult.value = res.data.content || 'AI 生成完成'
-  } catch {
-    message.error('AI 调用失败')
-  }
+  message.success('已应用 AI 建议')
 }
 
 onMounted(() => {
@@ -928,8 +924,8 @@ onUnmounted(() => {
 }
 
 .ai-panel {
-  width: 260px;
-  min-width: 260px;
+  width: 340px;
+  min-width: 340px;
   background: var(--color-bg-white);
   border-left: 1px solid var(--color-border);
   display: flex;
@@ -938,46 +934,24 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.ai-header {
-  padding: 10px 12px;
-  font-weight: 600;
-  font-size: 14px;
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.ai-commands {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 12px;
-  flex-shrink: 0;
-}
-
-.ai-result {
+.ai-empty {
   flex: 1;
-  overflow-y: auto;
-  padding: 10px 12px;
-  border-top: 1px solid var(--color-border);
-}
-
-.ai-result-header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 500;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  padding: 24px;
 }
 
-.ai-result-content {
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  background: var(--color-bg-gray);
-  padding: 10px;
-  border-radius: var(--radius-md);
-  margin: 0;
+.ai-empty-icon {
+  font-size: 32px;
+}
+
+.ai-chat-panel {
+  flex: 1;
+  min-height: 0;
 }
 </style>
