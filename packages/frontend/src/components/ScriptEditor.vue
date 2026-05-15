@@ -130,10 +130,12 @@ function buildDiffDecorations(
       for (let i = 0; i < lines.length; i++) {
         if (origLine <= editorView.state.doc.lines) {
           const line = editorView.state.doc.line(origLine)
+          // Mark decoration range must not be empty
+          const to = line.from === line.to ? line.to + 1 : line.to
           decorations.push(
             Decoration.mark({
               attributes: { class: 'cm-diff-removed' }
-            }).range(line.from, line.to)
+            }).range(line.from, to)
           )
         }
         origLine++
@@ -249,6 +251,12 @@ onMounted(() => {
     parent: editorRef.value
   })
   view.contentDOM.setAttribute('spellcheck', 'false')
+
+  // Apply initial diff decorations if pendingEditContent already exists
+  if (props.pendingEditContent && props.pendingEditContent !== props.modelValue) {
+    const decos = buildDiffDecorations(props.modelValue, props.pendingEditContent, view)
+    view.dispatch({ effects: setDiffDecorations.of(decos) })
+  }
 })
 
 onBeforeUnmount(() => {
@@ -264,7 +272,8 @@ watch(
   (newValue) => {
     if (view && newValue !== view.state.doc.toString()) {
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: newValue }
+        changes: { from: 0, to: view.state.doc.length, insert: newValue },
+        effects: setDiffDecorations.of(Decoration.none)
       })
     }
   },
