@@ -19,13 +19,14 @@ export class ChatRepository {
 
   findConversationsByUser(
     userId: string,
-    options?: { scriptId?: string; limit?: number; offset?: number }
+    options?: { scriptId?: string; projectId?: string; limit?: number; offset?: number }
   ) {
-    const { scriptId, limit = 50, offset = 0 } = options ?? {}
+    const { scriptId, projectId, limit = 50, offset = 0 } = options ?? {}
     return this.prisma.chatConversation.findMany({
       where: {
         userId,
-        ...(scriptId ? { scriptId } : {})
+        ...(scriptId ? { scriptId } : {}),
+        ...(projectId ? { script: { projectId } } : {})
       },
       include: {
         _count: { select: { messages: true } },

@@ -2,6 +2,8 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../lib/prisma.js'
 import { getRequestUser } from '../plugins/auth.js'
 import { generateOutline } from '../services/ai/outline-generator.js'
+import { pipelineRepository } from '../repositories/pipeline-repository.js'
+import { pipelineQueue } from '../queues/pipeline.js'
 
 const BUILTIN_TEMPLATES = [
   {
@@ -400,6 +402,7 @@ export async function templateRoutes(fastify: FastifyInstance) {
       coreConflict?: string
       targetAudience?: string
       targetEpisodes?: number
+      autoGenerateFirstEpisode?: boolean
     }
   }>('/:id/generate-outline', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const user = getRequestUser(request)
@@ -463,6 +466,52 @@ export async function templateRoutes(fastify: FastifyInstance) {
           status: 'outlining'
         }
       })
+
+      // 如果请求希望自动生成第一集，则创建 PipelineJob 并入队（非阻塞）
+      const autoGen = (request.body as { autoGenerateFirstEpisode?: boolean })
+        .autoGenerateFirstEpisode
+      if (autoGen) {
+        try {
+          // 避免与正在运行的大纲/剧本解析任务冲突
+          const concurrent = await pipelineRepository.countOutlineAsyncJobs(projectId)
+          if (concurrent > 0) {
+            return reply.status(409).send({
+              outline: episodes,
+              template: template.name,
+              error: '已有剧本生成或解析任务在运行，无法自动生成第一集'
+            })
+          }
+
+          // 创建 PipelineJob 记录（pending）
+          const job = await pipelineRepository.createPipelineJob({
+            projectId,
+            status: 'pending',
+            jobType: 'script-first',
+            currentStep: 'script-first',
+            progress: 0
+          })
+
+          // 将任务入队到 pipeline worker
+          await pipelineQueue.add('script-first', {
+            jobId: job.id,
+            jobType: 'script-first',
+            projectId,
+            userId: user.id
+          })
+
+          // 标记项目为 writing（生成中）以便前端能感知到下一步状态
+          await prisma.project.update({ where: { id: projectId }, data: { status: 'writing' } })
+
+          return { outline: episodes, template: template.name, jobId: job.id }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          return reply.status(500).send({
+            outline: episodes,
+            template: template.name,
+            warning: `自动入队生成第一集失败：${message}`
+          })
+        }
+      }
 
       // Create or update episode stubs
       const existingEpisodes = await prisma.episode.findMany({

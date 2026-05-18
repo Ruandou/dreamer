@@ -55,7 +55,7 @@
         }
       "
     >
-      <NForm :model="form" label-placement="left" label-width="100">
+      <NForm :model="form" label-placement="left" label-width="120">
         <NFormItem label="主角姓名">
           <NInput v-model:value="form.protagonistName" placeholder="例如：林婉儿" />
         </NFormItem>
@@ -78,6 +78,12 @@
             placeholder="不选则自动创建新项目"
             clearable
           />
+        </NFormItem>
+        <NFormItem label="自动生成第一集">
+          <label style="display: flex; align-items: center; gap: 8px">
+            <input type="checkbox" v-model="form.autoGenerateFirstEpisode" />
+            <span class="hint">生成大纲后自动生成并入队第一集（非阻塞）</span>
+          </label>
         </NFormItem>
       </NForm>
       <template #footer>
@@ -128,7 +134,8 @@ const form = ref({
   coreConflict: '',
   targetAudience: '下沉市场',
   targetEpisodes: 40,
-  projectId: ''
+  projectId: '',
+  autoGenerateFirstEpisode: false
 })
 
 const audienceOptions = [
@@ -208,7 +215,8 @@ async function generateOutline() {
       protagonistIdentity: form.value.protagonistIdentity || '普通人',
       coreConflict: form.value.coreConflict || '身份冲突',
       targetAudience: form.value.targetAudience,
-      targetEpisodes: form.value.targetEpisodes
+      targetEpisodes: form.value.targetEpisodes,
+      autoGenerateFirstEpisode: form.value.autoGenerateFirstEpisode
     })
     generateProgress.value = 100
     generateStatus.value = '生成完成！'

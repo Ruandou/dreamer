@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NAlert, NProgress, useMessage } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
+import { useChatStore } from '@/stores/chat'
 import { pollPipelineJob, type PipelineJob } from '@/api'
 
 const route = useRoute()
@@ -42,6 +43,9 @@ async function pollParseJob(jobId: string) {
 onMounted(async () => {
   if (projectId.value) {
     await projectStore.getProject(projectId.value)
+    // Load only conversations related to this project
+    const chatStore = useChatStore()
+    void chatStore.fetchConversations(undefined, projectId.value)
   }
   if (parseJobId.value) {
     void pollParseJob(parseJobId.value)

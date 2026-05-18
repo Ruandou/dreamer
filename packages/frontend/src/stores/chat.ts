@@ -103,10 +103,10 @@ export const useChatStore = defineStore('chat', () => {
   })
 
   // Actions
-  async function fetchConversations(scriptId?: string) {
+  async function fetchConversations(scriptId?: string, projectId?: string) {
     isLoadingConversations.value = true
     try {
-      const result = await getConversations(scriptId)
+      const result = await getConversations(scriptId, projectId)
       conversations.value = result.items
     } catch (error) {
       console.error('Failed to fetch conversations:', error)

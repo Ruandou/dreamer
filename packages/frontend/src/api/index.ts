@@ -341,9 +341,15 @@ export { api }
 
 import type { ChatConversation, ChatMessage } from '@dreamer/shared/types'
 
-export async function getConversations(scriptId?: string, limit = 50, offset = 0) {
+export async function getConversations(
+  scriptId?: string,
+  projectId?: string,
+  limit = 50,
+  offset = 0
+) {
   const params = new URLSearchParams()
   if (scriptId) params.set('scriptId', scriptId)
+  if (projectId) params.set('projectId', projectId)
   params.set('limit', String(limit))
   params.set('offset', String(offset))
   const res = await api.get<{ items: ChatConversation[]; total: number }>(

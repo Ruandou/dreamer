@@ -50,10 +50,11 @@ export async function chatRoutes(fastify: FastifyInstance) {
     try {
       const userId = getRequestUserId(request)
       const scriptId = (request.query as Record<string, string>)?.scriptId
+      const projectId = (request.query as Record<string, string>)?.projectId
       const limit = parseInt((request.query as Record<string, string>)?.limit || '50', 10)
       const offset = parseInt((request.query as Record<string, string>)?.offset || '0', 10)
 
-      const result = await listConversations(userId, { scriptId, limit, offset })
+      const result = await listConversations(userId, { scriptId, projectId, limit, offset })
       return result
     } catch (error) {
       logError('获取对话列表失败', error)

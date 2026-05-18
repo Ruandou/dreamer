@@ -103,6 +103,15 @@ export async function runGenerateFirstEpisodePipelineJob(
       currentStep: 'completed',
       progressMeta: { message: '第一集已生成' }
     })
+    try {
+      await projectRepository.update(projectId, { status: 'writing' })
+    } catch (err) {
+      // 不阻断主流程，仅记录日志
+      logWarning('RunGenerateFirstEpisode', '更新 project.status 失败', {
+        projectId,
+        error: err instanceof Error ? err.message : String(err)
+      })
+    }
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : '生成第一集失败'
     await updateJob(jobId, {
@@ -461,6 +470,15 @@ export async function runParseScriptJob(jobId: string, projectId: string, target
     })
 
     logInfo('ParseScript', '解析任务完成')
+    // 将项目标记为已完成阶段（final），以便前端进入后续编辑阶段
+    try {
+      await projectRepository.update(projectId, { status: 'final' })
+    } catch (err) {
+      logWarning('ParseScript', '更新 project.status 失败', {
+        projectId,
+        error: err instanceof Error ? err.message : String(err)
+      })
+    }
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : '解析失败'
     logError('ParseScript', '解析任务失败', {

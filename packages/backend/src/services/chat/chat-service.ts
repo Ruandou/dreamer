@@ -25,7 +25,7 @@ export async function createConversation(
 
 export async function listConversations(
   userId: string,
-  params: { scriptId?: string; limit?: number; offset?: number } = {}
+  params: { scriptId?: string; projectId?: string; limit?: number; offset?: number } = {}
 ) {
   const items = await chatRepository.findConversationsByUser(userId, params)
 
