@@ -26,7 +26,7 @@ export class ChatRepository {
       where: {
         userId,
         ...(scriptId ? { scriptId } : {}),
-        ...(projectId ? { script: { projectId } } : {})
+        ...(projectId ? { projectId } : {})
       },
       include: {
         _count: { select: { messages: true } },

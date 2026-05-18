@@ -115,9 +115,9 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function createNewConversation(scriptId?: string, title?: string) {
+  async function createNewConversation(scriptId?: string, title?: string, projectId?: string) {
     try {
-      const conversation = await createConversation({ scriptId, title })
+      const conversation = await createConversation({ scriptId, projectId, title })
       conversations.value.unshift(conversation)
       activeConversationId.value = conversation.id
       messages.value.set(conversation.id, [])

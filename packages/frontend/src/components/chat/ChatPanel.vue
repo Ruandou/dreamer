@@ -123,11 +123,11 @@ const selectedModel = computed<string | undefined>({
 
 onMounted(async () => {
   await modelStore.init()
-  await chatStore.fetchConversations(props.scriptId)
+  await chatStore.fetchConversations(props.scriptId, props.projectId)
 
   // Auto-create if no conversations
   if (chatStore.conversations.length === 0) {
-    await chatStore.createNewConversation(props.scriptId)
+    await chatStore.createNewConversation(props.scriptId, undefined, props.projectId)
   } else if (!chatStore.activeConversationId) {
     chatStore.selectConversation(chatStore.conversations[0].id)
   }
@@ -144,7 +144,7 @@ watch(
 )
 
 async function handleNewConversation() {
-  await chatStore.createNewConversation(props.scriptId)
+  await chatStore.createNewConversation(props.scriptId, undefined, props.projectId)
 }
 
 function handleSelectConversation(id: string) {

@@ -12,6 +12,7 @@ import {
 
 interface CreateConversationBody {
   scriptId?: string
+  projectId?: string
   title?: string
 }
 
@@ -34,7 +35,11 @@ export async function chatRoutes(fastify: FastifyInstance) {
         const userId = getRequestUserId(request)
         const { scriptId, title } = request.body
 
-        const conversation = await createConversation(userId, { scriptId, title })
+        const conversation = await createConversation(userId, {
+          scriptId,
+          projectId: request.body.projectId,
+          title
+        })
 
         logInfo('创建对话', `userId=${userId}`, { conversationId: conversation.id })
         return reply.status(201).send(conversation)

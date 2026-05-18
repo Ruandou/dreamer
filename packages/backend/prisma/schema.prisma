@@ -64,6 +64,7 @@ model Project {
   memories     MemoryItem[]
   memorySnapshots MemorySnapshot[]
   outline      ProjectOutline?
+  chatConversations ChatConversation[]
 
   @@index([userId])
 }
@@ -507,6 +508,8 @@ model ChatConversation {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   scriptId  String?
   script    Script?  @relation(fields: [scriptId], references: [id], onDelete: SetNull)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   title     String   @default("新对话")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -514,6 +517,7 @@ model ChatConversation {
 
   @@index([userId])
   @@index([scriptId])
+  @@index([projectId])
 }
 
 model ChatMessage {

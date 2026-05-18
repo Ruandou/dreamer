@@ -587,6 +587,7 @@ export interface PipelineResult {
 export interface ChatConversation {
   id: string
   scriptId?: string | null
+  projectId?: string | null
   title: string
   createdAt: string
   updatedAt: string

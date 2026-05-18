@@ -14,11 +14,12 @@ import { CHAT_STREAM_HEARTBEAT_MS, QUICK_COMMAND_MAP } from './chat.constants.js
 
 export async function createConversation(
   userId: string,
-  params: { scriptId?: string; title?: string } = {}
+  params: { scriptId?: string; projectId?: string; title?: string } = {}
 ) {
   return chatRepository.createConversation({
     userId,
     scriptId: params.scriptId || null,
+    projectId: params.projectId || null,
     title: params.title || '新对话'
   })
 }
@@ -33,6 +34,7 @@ export async function listConversations(
     items: items.map((c) => ({
       id: c.id,
       scriptId: c.scriptId,
+      projectId: c.projectId,
       title: c.title,
       createdAt: c.createdAt.toISOString(),
       updatedAt: c.updatedAt.toISOString()

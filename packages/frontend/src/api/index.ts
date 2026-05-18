@@ -358,7 +358,11 @@ export async function getConversations(
   return res.data
 }
 
-export async function createConversation(data: { scriptId?: string; title?: string }) {
+export async function createConversation(data: {
+  scriptId?: string
+  projectId?: string
+  title?: string
+}) {
   const res = await api.post<ChatConversation>('/chat/conversations', data)
   return res.data
 }
